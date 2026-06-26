@@ -454,6 +454,12 @@ window.addEventListener('popstate', async (e) => {
   }
 
   const page = state.page;
+
+  // Stop player when leaving player page
+  if (page !== 'player-page') {
+    document.getElementById('player-iframe').src = '';
+  }
+
   showPage(page);
 
   // Restore nav highlight
@@ -463,14 +469,29 @@ window.addEventListener('popstate', async (e) => {
   if (page === 'movies-page')  setNav('movies');
   if (page === 'search-page')  setNav('search');
 
-  // If going back to detail page, restore the item
+  // Restore detail page
   if (page === 'detail-page' && state.item) {
-    await openDetail(state.item, true); // true = restore only, don't push new history
+    await openDetail(state.item, true);
   }
 
-  // Stop player when going back
-  if (page !== 'player-page') {
-    document.getElementById('player-iframe').src = '';
+  // Restore player page
+  if (page === 'player-page' && state.item) {
+    currentItem   = state.item;
+    currentSeason = state.season;
+    currentEp     = state.ep;
+    currentLang   = state.lang || 'sub';
+    const isAnime = state.item.type === 'anime';
+    const isMovie = state.item.type === 'movie';
+    const sLabel  = allSeasons.length > 1 ? `S${allSeasons.indexOf(state.season)+1} · ` : '';
+    document.getElementById('player-title').textContent = state.item.title;
+    document.getElementById('player-subtitle').textContent = isMovie ? (state.item.year||'') : `${sLabel}Episode ${state.ep}`;
+    document.getElementById('player-lang-row').style.display = isAnime ? 'flex' : 'none';
+    document.getElementById('psub').classList.toggle('active', currentLang==='sub');
+    document.getElementById('pdub').classList.toggle('active', currentLang==='dub');
+    document.getElementById('server-name').textContent = isAnime ? 'MegaPlay' : 'VidSrc';
+    document.querySelector('.bottom-nav').style.display = 'none';
+    playStream();
+    updateEpNav();
   }
 });
 
@@ -1041,14 +1062,17 @@ function renderSimpleDetail(item, type) {
 // ═══════════════════════════════════════════
 function openPlayer(ep) {
   currentEp = ep;
-  navigateTo('player-page');
 
   const item = currentItem;
   const season = currentSeason;
   const isAnime = item.type === 'anime';
   const isMovie = item.type === 'movie';
 
-  // Title display
+  // Push player state to history
+  const hash = `player-${item.type}-${item.al_id||item.tmdb_id||item.id}-s${season?.season_number||1}-e${ep}`;
+  history.pushState({page:'player-page', item, season, ep, lang: currentLang}, '', `#${hash}`);
+  showPage('player-page');
+
   let subtitle = '';
   if (isMovie) subtitle = item.year || '';
   else {
@@ -1059,13 +1083,10 @@ function openPlayer(ep) {
   document.getElementById('player-title').textContent = item.title;
   document.getElementById('player-subtitle').textContent = subtitle;
 
-  // Show/hide lang toggle (anime only)
   const langRow = document.getElementById('player-lang-row');
   langRow.style.display = isAnime ? 'flex' : 'none';
   document.getElementById('psub').classList.toggle('active', currentLang==='sub');
   document.getElementById('pdub').classList.toggle('active', currentLang==='dub');
-
-  // Set server label
   document.getElementById('server-name').textContent = isAnime ? 'MegaPlay' : 'VidSrc';
 
   playStream();
@@ -1176,6 +1197,58 @@ async function initFromHash() {
       await openDetail(item, true);
     } else {
       // Fallback to home if fetch failed
+      showPage('home-page'); setNav('home');
+    }
+    return;
+  }
+
+  // Handle player page: #player-anime-12345-s1-e4
+  const playerMatch = hash.match(/^player-(anime|tv|movie)-(\d+)-s(\d+)-e(\d+)$/);
+  if (playerMatch) {
+    const type      = playerMatch[1];
+    const id        = parseInt(playerMatch[2]);
+    const seasonNum = parseInt(playerMatch[3]);
+    const ep        = parseInt(playerMatch[4]);
+
+    loadHome();
+    showPage('player-page');
+
+    // Fetch item then restore player
+    let item = null;
+    if (type === 'anime') {
+      const Q = `query($id:Int){Media(id:$id,type:ANIME){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format description}}`;
+      const r = await al(Q, {id});
+      if (r?.data?.Media) item = {...fromAL(r.data.Media), al_id: r.data.Media.id, mal_id: r.data.Media.idMal};
+    } else if (type === 'tv') {
+      const d = await tmdb(`/tv/${id}`);
+      if (d) item = fromTMDB(d, 'tv');
+    } else if (type === 'movie') {
+      const d = await tmdb(`/movie/${id}`);
+      if (d) item = fromTMDB(d, 'movie');
+    }
+
+    if (item) {
+      currentItem = item;
+      currentEp   = ep;
+      currentSeason = {
+        type, season_number: seasonNum,
+        mal_id: item.mal_id, tmdb_id: item.tmdb_id||item.id
+      };
+      allSeasons  = [currentSeason];
+      totalEps    = item.episodes || 1;
+
+      const isAnime = type === 'anime';
+      const isMovie = type === 'movie';
+      const sLabel  = seasonNum > 1 ? `S${seasonNum} · ` : '';
+
+      document.getElementById('player-title').textContent = item.title;
+      document.getElementById('player-subtitle').textContent = isMovie ? (item.year||'') : `${sLabel}Episode ${ep}`;
+      document.getElementById('player-lang-row').style.display = isAnime ? 'flex' : 'none';
+      document.getElementById('server-name').textContent = isAnime ? 'MegaPlay' : 'VidSrc';
+      document.querySelector('.bottom-nav').style.display = 'none';
+      playStream();
+      updateEpNav();
+    } else {
       showPage('home-page'); setNav('home');
     }
     return;
