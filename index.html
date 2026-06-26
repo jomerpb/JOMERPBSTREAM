@@ -72,10 +72,11 @@
     .grid-card{cursor:pointer;}
     .grid-card-img{border-radius:7px;overflow:hidden;border:1px solid var(--border);background:var(--card);aspect-ratio:2/3;position:relative;}
     .grid-card-img img{width:100%;height:100%;object-fit:cover;display:block;}
-    .grid-card-score{position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,0.85);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;}
-    .grid-card-type{position:absolute;top:4px;right:4px;font-size:8px;font-weight:700;padding:2px 5px;border-radius:4px;}
-    .grid-card-title{font-size:10px;font-weight:600;line-height:1.3;margin-top:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-    .grid-card-meta{font-size:9px;color:var(--muted);margin-top:3px;display:flex;gap:4px;align-items:center;flex-wrap:wrap;line-height:1.3;}
+    .grid-card-score{position:absolute;top:5px;left:5px;background:rgba(0,0,0,0.85);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;}
+    .grid-card-type{position:absolute;top:5px;right:5px;font-size:8px;font-weight:700;padding:2px 5px;border-radius:4px;}
+    .grid-card-overlay{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(0deg,rgba(0,0,0,0.92) 0%,rgba(0,0,0,0.5) 60%,transparent 100%);padding:20px 6px 6px;}
+    .grid-card-title{font-size:10px;font-weight:700;line-height:1.3;color:#fff;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    .grid-card-meta{font-size:8px;color:rgba(255,255,255,0.7);margin-top:3px;display:flex;gap:3px;align-items:center;flex-wrap:wrap;line-height:1.4;}
     .grid-card-meta span{white-space:nowrap;}
 
     /* CONTENT TABS */
@@ -771,22 +772,18 @@ function buildGridCard(item) {
   const typeColor = item.type==='anime'?'anime':item.type==='movie'?'movie':'tv';
   const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'FILM':'TV';
 
-  // Meta row: flag + year + genre + status
+  const statusMap = {
+    'Returning Series':'🟢','In Production':'🟢','Ended':'✅','Canceled':'⛔',
+    'RELEASING':'🟢','FINISHED':'✅','NOT_YET_RELEASED':'🔵','CANCELLED':'⛔',
+    'Currently Airing':'🟢','Finished Airing':'✅','Planned':'🔵',
+  };
+  const statusIcon = statusMap[item.status] || '';
+
   const metaParts = [];
   if (item.countryFlag) metaParts.push(`<span>${item.countryFlag}</span>`);
   if (item.year)        metaParts.push(`<span>${item.year}</span>`);
   if (item.genre)       metaParts.push(`<span>· ${item.genre}</span>`);
-  // Status
-  const statusMap = {
-    'Returning Series':'🟢 Ongoing', 'In Production':'🟢 Ongoing',
-    'Planned':'🔵 Upcoming',  'Pilot':'🔵 Upcoming',
-    'Ended':'✅ Completed',   'Canceled':'⛔ Canceled',
-    'RELEASING':'🟢 Ongoing', 'FINISHED':'✅ Completed',
-    'NOT_YET_RELEASED':'🔵 Upcoming', 'CANCELLED':'⛔ Canceled',
-    'Currently Airing':'🟢 Ongoing', 'Finished Airing':'✅ Completed',
-  };
-  const statusLabel = statusMap[item.status] || '';
-  if (statusLabel) metaParts.push(`<span>· ${statusLabel}</span>`);
+  if (statusIcon)       metaParts.push(`<span>${statusIcon}</span>`);
   const meta = metaParts.length ? `<div class="grid-card-meta">${metaParts.join('')}</div>` : '';
 
   c.innerHTML = `
@@ -794,9 +791,11 @@ function buildGridCard(item) {
       <img src="${item.img||''}" alt="${item.title}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;"/>
       ${item.score?`<div class="grid-card-score">⭐${item.score}</div>`:''}
       <div class="grid-card-type ${typeColor}">${typeLabel}</div>
-    </div>
-    <div class="grid-card-title">${item.title}</div>
-    ${meta}`;
+      <div class="grid-card-overlay">
+        <div class="grid-card-title">${item.title}</div>
+        ${meta}
+      </div>
+    </div>`;
   c.onclick = (e) => { e.preventDefault(); openDetail(item); };
   return c;
 }
@@ -878,7 +877,7 @@ async function loadHome() {
   const year = now.getFullYear();
 
   const [animeData, tvData, kdramaData, movieData] = await Promise.all([
-    al(`query{Page(perPage:15){media(type:ANIME,sort:TRENDING_DESC,isAdult:false){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format}}}`, {}),
+    al(`query{Page(perPage:15){media(type:ANIME,sort:TRENDING_DESC,isAdult:false){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format genres}}}`, {}),
     tmdb('/tv/popular'),
     tmdb('/discover/tv', {with_origin_country:'KR', sort_by:'popularity.desc'}),
     tmdb('/movie/popular'),
@@ -1056,7 +1055,7 @@ async function fetchSearch(q, type, page) {
   let results = [];
 
   if (type === 'all' || type === 'anime') {
-    const Q = `query($s:String,$page:Int){Page(page:$page,perPage:12){media(type:ANIME,search:$s,isAdult:false,sort:SEARCH_MATCH){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format}}}`;
+    const Q = `query($s:String,$page:Int){Page(page:$page,perPage:12){media(type:ANIME,search:$s,isAdult:false,sort:SEARCH_MATCH){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`;
     const d = await al(Q, {s:q, page});
     results = results.concat((d?.data?.Page?.media||[]).map(fromAL));
   }
@@ -1114,7 +1113,7 @@ async function openDetail(item, restore=false) {
 
 // ── ANIME DETAIL ──
 async function openAnimeDetail(item) {
-  const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:ANIME){id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description episodes averageScore status seasonYear format nextAiringEpisode{episode} genres relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format type nextAiringEpisode{episode}}}}}}`;
+  const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:ANIME){id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description episodes averageScore status seasonYear format nextAiringEpisode{episode} genres relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres type nextAiringEpisode{episode}}}}}}`;
   const vars = item.al_id ? {alId:item.al_id} : {malId:item.mal_id};
   const r = await al(Q, vars);
   const m = r?.data?.Media;
@@ -1317,7 +1316,7 @@ async function loadRecommendations(item) {
 
   if (type === 'anime') {
     // Row 1: AniList recommendations
-    const Q1 = `query($id:Int){Media(id:$id){recommendations(perPage:10,sort:RATING_DESC){nodes{mediaRecommendation{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format}}}}}`;
+    const Q1 = `query($id:Int){Media(id:$id){recommendations(perPage:10,sort:RATING_DESC){nodes{mediaRecommendation{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}}}`;
     const r1 = await al(Q1, {id: item.al_id});
     const recList = (r1?.data?.Media?.recommendations?.nodes||[])
       .map(n=>n.mediaRecommendation).filter(Boolean)
@@ -1325,12 +1324,12 @@ async function loadRecommendations(item) {
 
     // Row 2: Same genre anime
     const genre = item.genres?.[0] || null;
-    const Q2 = `query($genre:String){Page(perPage:10){media(type:ANIME,isAdult:false,genre:$genre,sort:POPULARITY_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format}}}`;
+    const Q2 = `query($genre:String){Page(perPage:10){media(type:ANIME,isAdult:false,genre:$genre,sort:POPULARITY_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`;
     const r2 = await al(Q2, {genre});
     const genreList = (r2?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(m=>({...fromAL(m),al_id:m.id}));
 
     // Row 3: Trending anime
-    const Q3 = `{Page(perPage:10){media(type:ANIME,isAdult:false,sort:TRENDING_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format}}}`;
+    const Q3 = `{Page(perPage:10){media(type:ANIME,isAdult:false,sort:TRENDING_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`;
     const r3 = await al(Q3);
     const trendList = (r3?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(m=>({...fromAL(m),al_id:m.id}));
 
@@ -1486,7 +1485,7 @@ function handleLiveSearch(q, source) {
 async function fetchLiveResults(q, dropdownId) {
   // Fetch anime + TV + movies in parallel, limit to 3 each = 9 max results
   const [animeData, tvData, movieData] = await Promise.all([
-    al(`query($s:String){Page(perPage:3){media(type:ANIME,search:$s,isAdult:false,sort:SEARCH_MATCH){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format}}}`, {s:q}),
+    al(`query($s:String){Page(perPage:3){media(type:ANIME,search:$s,isAdult:false,sort:SEARCH_MATCH){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`, {s:q}),
     tmdb('/search/tv',    {query:q, page:1}),
     tmdb('/search/movie', {query:q, page:1}),
   ]);
