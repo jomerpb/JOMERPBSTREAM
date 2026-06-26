@@ -1106,11 +1106,88 @@ document.getElementById('prev-ep').onclick = () => { if (currentEp > 1) openPlay
 document.getElementById('next-ep').onclick = () => { if (currentEp < totalEps) openPlayer(currentEp+1); };
 
 // ═══════════════════════════════════════════
-// INIT
+// INIT — read URL hash and restore page
 // ═══════════════════════════════════════════
-// Set initial history state so back gesture works from first page
-history.replaceState({page:'home-page'}, '', '#home');
-loadHome();
+async function initFromHash() {
+  const hash = window.location.hash.replace('#', '');
+
+  if (!hash || hash === 'home') {
+    history.replaceState({page:'home-page'}, '', '#home');
+    showPage('home-page');
+    setNav('home');
+    loadHome();
+    return;
+  }
+
+  if (hash === 'anime') {
+    history.replaceState({page:'anime-page'}, '', '#anime');
+    showPage('anime-page'); setNav('anime');
+    loadAnimeSub('trending', document.querySelector('#anime-tabs .ctab'));
+    loadHome(); return;
+  }
+
+  if (hash === 'tv') {
+    history.replaceState({page:'tv-page'}, '', '#tv');
+    showPage('tv-page'); setNav('tv');
+    loadTVSub('popular','', document.querySelector('#tv-tabs .ctab'));
+    loadHome(); return;
+  }
+
+  if (hash === 'movies') {
+    history.replaceState({page:'movies-page'}, '', '#movies');
+    showPage('movies-page'); setNav('movies');
+    loadMovieSub('popular', document.querySelector('#movie-tabs .ctab'));
+    loadHome(); return;
+  }
+
+  if (hash === 'search') {
+    history.replaceState({page:'search-page'}, '', '#search');
+    showPage('search-page'); setNav('search');
+    loadHome(); return;
+  }
+
+  // Handle detail page: #detail-anime-12345 or #detail-tv-12345 or #detail-movie-12345
+  const detailMatch = hash.match(/^detail-(anime|tv|movie)-(\d+)$/);
+  if (detailMatch) {
+    const type  = detailMatch[1];
+    const id    = parseInt(detailMatch[2]);
+
+    // Load home in background
+    loadHome();
+
+    // Show skeleton detail page immediately
+    showPage('detail-page');
+
+    // Fetch item data from API then open detail
+    let item = null;
+    if (type === 'anime') {
+      const Q = `query($id:Int){Media(id:$id,type:ANIME){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format description}}`;
+      const r = await al(Q, {id});
+      if (r?.data?.Media) item = {...fromAL(r.data.Media), al_id: r.data.Media.id, mal_id: r.data.Media.idMal};
+    } else if (type === 'tv') {
+      const d = await tmdb(`/tv/${id}`);
+      if (d) item = fromTMDB(d, 'tv');
+    } else if (type === 'movie') {
+      const d = await tmdb(`/movie/${id}`);
+      if (d) item = fromTMDB(d, 'movie');
+    }
+
+    if (item) {
+      await openDetail(item, true);
+    } else {
+      // Fallback to home if fetch failed
+      showPage('home-page'); setNav('home');
+    }
+    return;
+  }
+
+  // Unknown hash — go home
+  history.replaceState({page:'home-page'}, '', '#home');
+  showPage('home-page'); setNav('home');
+  loadHome();
+}
+
+initFromHash();
 </script>
 </body>
 </html>
