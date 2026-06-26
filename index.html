@@ -248,6 +248,7 @@
   </div>
   <div style="padding:12px 16px 0;">
     <div class="content-tabs" id="anime-tabs">
+      <div class="ctab" onclick="togglePageFilter('anime-filter')">⚙ Filter</div>
       <div class="ctab active" onclick="loadAnimeSub('trending',this)">Trending</div>
       <div class="ctab" onclick="loadAnimeSub('new',this)">New Season</div>
       <div class="ctab" onclick="loadAnimeSub('toprated',this)">Top Rated</div>
@@ -255,7 +256,6 @@
       <div class="ctab" onclick="loadAnimeSub('romance',this)">Romance</div>
       <div class="ctab" onclick="loadAnimeSub('isekai',this)">Isekai</div>
       <div class="ctab" onclick="loadAnimeSub('fantasy',this)">Fantasy</div>
-      <div class="ctab" onclick="togglePageFilter('anime-filter')">⚙ Filter</div>
     </div>
     <!-- Anime Filter Panel -->
     <div id="anime-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
@@ -325,6 +325,7 @@
   </div>
   <div style="padding:12px 16px 0;">
     <div class="content-tabs" id="tv-tabs">
+      <div class="ctab" onclick="togglePageFilter('tv-filter')">⚙ Filter</div>
       <div class="ctab active" onclick="loadTVSub('popular','',this)">All Popular</div>
       <div class="ctab" onclick="loadTVSub('popular','KR',this)">🇰🇷 K-Drama</div>
       <div class="ctab" onclick="loadTVSub('popular','JP',this)">🇯🇵 J-Drama</div>
@@ -332,7 +333,6 @@
       <div class="ctab" onclick="loadTVSub('popular','TH',this)">🇹🇭 Thai</div>
       <div class="ctab" onclick="loadTVSub('popular','PH',this)">🇵🇭 Filipino</div>
       <div class="ctab" onclick="loadTVSub('top_rated','',this)">Top Rated</div>
-      <div class="ctab" onclick="togglePageFilter('tv-filter')">⚙ Filter</div>
     </div>
     <!-- TV Filter Panel -->
     <div id="tv-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
@@ -409,11 +409,11 @@
   </div>
   <div style="padding:12px 16px 0;">
     <div class="content-tabs" id="movie-tabs">
+      <div class="ctab" onclick="togglePageFilter('movie-filter')">⚙ Filter</div>
       <div class="ctab active" onclick="loadMovieSub('popular',this)">Popular</div>
       <div class="ctab" onclick="loadMovieSub('top_rated',this)">Top Rated</div>
       <div class="ctab" onclick="loadMovieSub('now_playing',this)">Now Playing</div>
       <div class="ctab" onclick="loadMovieSub('upcoming',this)">Upcoming</div>
-      <div class="ctab" onclick="togglePageFilter('movie-filter')">⚙ Filter</div>
     </div>
     <!-- Movie Filter Panel -->
     <div id="movie-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
@@ -1262,8 +1262,8 @@ function renderSimpleDetail(item, type) {
 async function loadRecommendations(item) {
   // Hide all rows first
   document.getElementById('rec-section').style.display = 'none';
-  ['rec-row-1','rec-row-2','rec-row-3'].forEach(id => document.getElementById(id).style.display = 'none');
-  ['rec-grid-1','rec-grid-2','rec-grid-3'].forEach(id => document.getElementById(id).innerHTML = '');
+  ['rec-row-1','rec-row-2','rec-row-3'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display='none'; });
+  ['rec-grid-1','rec-grid-2','rec-grid-3'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=''; });
 
   const type = item.type;
 
@@ -1330,12 +1330,15 @@ async function loadRecommendations(item) {
 
 function renderRecRow(num, title, items) {
   if (!items?.length) return;
-  document.getElementById('rec-section').style.display = 'block';
-  document.getElementById(`rec-title-${num}`).textContent = title;
+  const row = document.getElementById(`rec-row-${num}`);
   const grid = document.getElementById(`rec-grid-${num}`);
+  const titleEl = document.getElementById(`rec-title-${num}`);
+  if (!row || !grid || !titleEl) return; // skip if row was removed
+  document.getElementById('rec-section').style.display = 'block';
+  titleEl.textContent = title;
   grid.innerHTML = '';
   items.forEach(item => grid.appendChild(buildSmCard(item)));
-  document.getElementById(`rec-row-${num}`).style.display = 'block';
+  row.style.display = 'block';
 }
 
 // ═══════════════════════════════════════════
