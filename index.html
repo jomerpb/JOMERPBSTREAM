@@ -255,6 +255,60 @@
       <div class="ctab" onclick="loadAnimeSub('romance',this)">Romance</div>
       <div class="ctab" onclick="loadAnimeSub('isekai',this)">Isekai</div>
       <div class="ctab" onclick="loadAnimeSub('fantasy',this)">Fantasy</div>
+      <div class="ctab" onclick="togglePageFilter('anime-filter')">⚙ Filter</div>
+    </div>
+    <!-- Anime Filter Panel -->
+    <div id="anime-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+      <div class="filter-section">
+        <div class="filter-label">Genre</div>
+        <div class="chips-row" id="af-genre">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-genre')">All</div>
+          <div class="chip" data-val="Action" onclick="pickPageChip(this,'af-genre')">Action</div>
+          <div class="chip" data-val="Adventure" onclick="pickPageChip(this,'af-genre')">Adventure</div>
+          <div class="chip" data-val="Comedy" onclick="pickPageChip(this,'af-genre')">Comedy</div>
+          <div class="chip" data-val="Drama" onclick="pickPageChip(this,'af-genre')">Drama</div>
+          <div class="chip" data-val="Fantasy" onclick="pickPageChip(this,'af-genre')">Fantasy</div>
+          <div class="chip" data-val="Horror" onclick="pickPageChip(this,'af-genre')">Horror</div>
+          <div class="chip" data-val="Mystery" onclick="pickPageChip(this,'af-genre')">Mystery</div>
+          <div class="chip" data-val="Romance" onclick="pickPageChip(this,'af-genre')">Romance</div>
+          <div class="chip" data-val="Sci-Fi" onclick="pickPageChip(this,'af-genre')">Sci-Fi</div>
+          <div class="chip" data-val="Slice of Life" onclick="pickPageChip(this,'af-genre')">Slice of Life</div>
+          <div class="chip" data-val="Supernatural" onclick="pickPageChip(this,'af-genre')">Supernatural</div>
+          <div class="chip" data-val="Isekai" onclick="pickPageChip(this,'af-genre')">Isekai</div>
+          <div class="chip" data-val="Shounen" onclick="pickPageChip(this,'af-genre')">Shounen</div>
+          <div class="chip" data-val="Psychological" onclick="pickPageChip(this,'af-genre')">Psychological</div>
+          <div class="chip" data-val="Mecha" onclick="pickPageChip(this,'af-genre')">Mecha</div>
+          <div class="chip" data-val="Sports" onclick="pickPageChip(this,'af-genre')">Sports</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Year / Era</div>
+        <div class="chips-row" id="af-year">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-year')">All</div>
+          <div class="chip" data-val="2026" onclick="pickPageChip(this,'af-year')">2026</div>
+          <div class="chip" data-val="2025" onclick="pickPageChip(this,'af-year')">2025</div>
+          <div class="chip" data-val="2024" onclick="pickPageChip(this,'af-year')">2024</div>
+          <div class="chip" data-val="2020s" onclick="pickPageChip(this,'af-year')">2020s</div>
+          <div class="chip" data-val="2010s" onclick="pickPageChip(this,'af-year')">2010s</div>
+          <div class="chip" data-val="2000s" onclick="pickPageChip(this,'af-year')">2000s</div>
+          <div class="chip" data-val="1990s" onclick="pickPageChip(this,'af-year')">1990s</div>
+          <div class="chip" data-val="1980s" onclick="pickPageChip(this,'af-year')">1980s</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Min Rating</div>
+        <div class="chips-row" id="af-rating">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-rating')">Any</div>
+          <div class="chip" data-val="90" onclick="pickPageChip(this,'af-rating')">9+</div>
+          <div class="chip" data-val="80" onclick="pickPageChip(this,'af-rating')">8+</div>
+          <div class="chip" data-val="70" onclick="pickPageChip(this,'af-rating')">7+</div>
+          <div class="chip" data-val="60" onclick="pickPageChip(this,'af-rating')">6+</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button onclick="applyAnimeFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
+        <button onclick="resetPageFilter('anime')" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:10px 16px;border-radius:10px;font-size:12px;cursor:pointer;">Clear</button>
+      </div>
     </div>
     <div class="results-grid" id="anime-grid"></div>
     <div id="anime-more" style="display:none;"><button class="load-more-btn" onclick="loadMoreAnime()">Load More</button></div>
@@ -278,6 +332,67 @@
       <div class="ctab" onclick="loadTVSub('popular','TH',this)">🇹🇭 Thai</div>
       <div class="ctab" onclick="loadTVSub('popular','PH',this)">🇵🇭 Filipino</div>
       <div class="ctab" onclick="loadTVSub('top_rated','',this)">Top Rated</div>
+      <div class="ctab" onclick="togglePageFilter('tv-filter')">⚙ Filter</div>
+    </div>
+    <!-- TV Filter Panel -->
+    <div id="tv-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+      <div class="filter-section">
+        <div class="filter-label">Country</div>
+        <div class="chips-row" id="tf-country">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-country')">All</div>
+          <div class="chip" data-val="KR" onclick="pickPageChip(this,'tf-country')">🇰🇷 Korea</div>
+          <div class="chip" data-val="JP" onclick="pickPageChip(this,'tf-country')">🇯🇵 Japan</div>
+          <div class="chip" data-val="CN" onclick="pickPageChip(this,'tf-country')">🇨🇳 China</div>
+          <div class="chip" data-val="TH" onclick="pickPageChip(this,'tf-country')">🇹🇭 Thailand</div>
+          <div class="chip" data-val="PH" onclick="pickPageChip(this,'tf-country')">🇵🇭 Philippines</div>
+          <div class="chip" data-val="US" onclick="pickPageChip(this,'tf-country')">🇺🇸 USA</div>
+          <div class="chip" data-val="GB" onclick="pickPageChip(this,'tf-country')">🇬🇧 UK</div>
+          <div class="chip" data-val="IN" onclick="pickPageChip(this,'tf-country')">🇮🇳 India</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Genre</div>
+        <div class="chips-row" id="tf-genre">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-genre')">All</div>
+          <div class="chip" data-val="18" onclick="pickPageChip(this,'tf-genre')">Drama</div>
+          <div class="chip" data-val="35" onclick="pickPageChip(this,'tf-genre')">Comedy</div>
+          <div class="chip" data-val="80" onclick="pickPageChip(this,'tf-genre')">Crime</div>
+          <div class="chip" data-val="10765" onclick="pickPageChip(this,'tf-genre')">Sci-Fi</div>
+          <div class="chip" data-val="10749" onclick="pickPageChip(this,'tf-genre')">Romance</div>
+          <div class="chip" data-val="28" onclick="pickPageChip(this,'tf-genre')">Action</div>
+          <div class="chip" data-val="9648" onclick="pickPageChip(this,'tf-genre')">Mystery</div>
+          <div class="chip" data-val="14" onclick="pickPageChip(this,'tf-genre')">Fantasy</div>
+          <div class="chip" data-val="27" onclick="pickPageChip(this,'tf-genre')">Horror</div>
+          <div class="chip" data-val="53" onclick="pickPageChip(this,'tf-genre')">Thriller</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Year / Era</div>
+        <div class="chips-row" id="tf-year">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-year')">All</div>
+          <div class="chip" data-val="2026" onclick="pickPageChip(this,'tf-year')">2026</div>
+          <div class="chip" data-val="2025" onclick="pickPageChip(this,'tf-year')">2025</div>
+          <div class="chip" data-val="2024" onclick="pickPageChip(this,'tf-year')">2024</div>
+          <div class="chip" data-val="2020s" onclick="pickPageChip(this,'tf-year')">2020s</div>
+          <div class="chip" data-val="2010s" onclick="pickPageChip(this,'tf-year')">2010s</div>
+          <div class="chip" data-val="2000s" onclick="pickPageChip(this,'tf-year')">2000s</div>
+          <div class="chip" data-val="1990s" onclick="pickPageChip(this,'tf-year')">1990s</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Min Rating</div>
+        <div class="chips-row" id="tf-rating">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-rating')">Any</div>
+          <div class="chip" data-val="9" onclick="pickPageChip(this,'tf-rating')">9+</div>
+          <div class="chip" data-val="8" onclick="pickPageChip(this,'tf-rating')">8+</div>
+          <div class="chip" data-val="7" onclick="pickPageChip(this,'tf-rating')">7+</div>
+          <div class="chip" data-val="6" onclick="pickPageChip(this,'tf-rating')">6+</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button onclick="applyTVFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
+        <button onclick="resetPageFilter('tv')" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:10px 16px;border-radius:10px;font-size:12px;cursor:pointer;">Clear</button>
+      </div>
     </div>
     <div class="results-grid" id="tv-grid"></div>
     <div id="tv-more" style="display:none;"><button class="load-more-btn" onclick="loadMoreTV()">Load More</button></div>
@@ -298,6 +413,55 @@
       <div class="ctab" onclick="loadMovieSub('top_rated',this)">Top Rated</div>
       <div class="ctab" onclick="loadMovieSub('now_playing',this)">Now Playing</div>
       <div class="ctab" onclick="loadMovieSub('upcoming',this)">Upcoming</div>
+      <div class="ctab" onclick="togglePageFilter('movie-filter')">⚙ Filter</div>
+    </div>
+    <!-- Movie Filter Panel -->
+    <div id="movie-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+      <div class="filter-section">
+        <div class="filter-label">Genre</div>
+        <div class="chips-row" id="mf-genre">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-genre')">All</div>
+          <div class="chip" data-val="28" onclick="pickPageChip(this,'mf-genre')">Action</div>
+          <div class="chip" data-val="12" onclick="pickPageChip(this,'mf-genre')">Adventure</div>
+          <div class="chip" data-val="35" onclick="pickPageChip(this,'mf-genre')">Comedy</div>
+          <div class="chip" data-val="18" onclick="pickPageChip(this,'mf-genre')">Drama</div>
+          <div class="chip" data-val="14" onclick="pickPageChip(this,'mf-genre')">Fantasy</div>
+          <div class="chip" data-val="27" onclick="pickPageChip(this,'mf-genre')">Horror</div>
+          <div class="chip" data-val="9648" onclick="pickPageChip(this,'mf-genre')">Mystery</div>
+          <div class="chip" data-val="10749" onclick="pickPageChip(this,'mf-genre')">Romance</div>
+          <div class="chip" data-val="878" onclick="pickPageChip(this,'mf-genre')">Sci-Fi</div>
+          <div class="chip" data-val="53" onclick="pickPageChip(this,'mf-genre')">Thriller</div>
+          <div class="chip" data-val="16" onclick="pickPageChip(this,'mf-genre')">Animation</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Year / Era</div>
+        <div class="chips-row" id="mf-year">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-year')">All</div>
+          <div class="chip" data-val="2026" onclick="pickPageChip(this,'mf-year')">2026</div>
+          <div class="chip" data-val="2025" onclick="pickPageChip(this,'mf-year')">2025</div>
+          <div class="chip" data-val="2024" onclick="pickPageChip(this,'mf-year')">2024</div>
+          <div class="chip" data-val="2020s" onclick="pickPageChip(this,'mf-year')">2020s</div>
+          <div class="chip" data-val="2010s" onclick="pickPageChip(this,'mf-year')">2010s</div>
+          <div class="chip" data-val="2000s" onclick="pickPageChip(this,'mf-year')">2000s</div>
+          <div class="chip" data-val="1990s" onclick="pickPageChip(this,'mf-year')">1990s</div>
+          <div class="chip" data-val="1980s" onclick="pickPageChip(this,'mf-year')">1980s</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Min Rating</div>
+        <div class="chips-row" id="mf-rating">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-rating')">Any</div>
+          <div class="chip" data-val="9" onclick="pickPageChip(this,'mf-rating')">9+</div>
+          <div class="chip" data-val="8" onclick="pickPageChip(this,'mf-rating')">8+</div>
+          <div class="chip" data-val="7" onclick="pickPageChip(this,'mf-rating')">7+</div>
+          <div class="chip" data-val="6" onclick="pickPageChip(this,'mf-rating')">6+</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button onclick="applyMovieFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
+        <button onclick="resetPageFilter('movie')" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:10px 16px;border-radius:10px;font-size:12px;cursor:pointer;">Clear</button>
+      </div>
     </div>
     <div class="results-grid" id="movies-grid"></div>
     <div id="movies-more" style="display:none;"><button class="load-more-btn" onclick="loadMoreMovies()">Load More</button></div>
@@ -371,14 +535,7 @@
         </div>
         <div class="row-scroll" style="padding:0;" id="rec-grid-1"></div>
       </div>
-      <!-- Row 2: Same Genre -->
-      <div id="rec-row-2" style="display:none;margin-bottom:20px;">
-        <div class="row-header" style="padding:0;margin-bottom:10px;">
-          <div class="row-title" id="rec-title-2"></div>
-        </div>
-        <div class="row-scroll" style="padding:0;" id="rec-grid-2"></div>
-      </div>
-      <!-- Row 3: Also Popular -->
+      <!-- Row 2: Also Popular -->
       <div id="rec-row-3" style="display:none;margin-bottom:20px;">
         <div class="row-header" style="padding:0;margin-bottom:10px;">
           <div class="row-title" id="rec-title-3"></div>
@@ -1335,6 +1492,124 @@ function closeDropdown() {
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.topbar-search')) closeDropdown();
 });
+
+// ═══════════════════════════════════════════
+// PAGE FILTERS — Anime / TV / Movies
+// ═══════════════════════════════════════════
+function togglePageFilter(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function pickPageChip(el, groupId) {
+  document.getElementById(groupId).querySelectorAll('.chip')
+    .forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function getChipVal(groupId) {
+  return document.getElementById(groupId)?.querySelector('.chip.active')?.dataset.val || '';
+}
+
+function getYearRange(val) {
+  if (!val) return {};
+  if (val.includes('s')) {
+    const d = parseInt(val);
+    return { gte: `${d}-01-01`, lte: `${d===1980?1989:d+9}-12-31` };
+  }
+  return { gte: `${val}-01-01`, lte: `${val}-12-31` };
+}
+
+function resetPageFilter(page) {
+  const prefix = page==='anime'?'af':page==='tv'?'tf':'mf';
+  ['genre','year','rating','country'].forEach(g => {
+    const el = document.getElementById(`${prefix}-${g}`);
+    if (el) el.querySelectorAll('.chip').forEach((c,i) => c.classList.toggle('active', i===0));
+  });
+}
+
+// ── ANIME FILTER ──
+async function applyAnimeFilter() {
+  document.getElementById('anime-filter').style.display = 'none';
+  document.getElementById('anime-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
+  document.getElementById('anime-more').style.display = 'none';
+
+  const genre   = getChipVal('af-genre');
+  const yearVal = getChipVal('af-year');
+  const rating  = getChipVal('af-rating');
+  const yr      = getYearRange(yearVal);
+  const minScore = rating ? parseInt(rating) : undefined;
+  const yGte = yr.gte ? parseInt(yr.gte.slice(0,4))*10000 : undefined;
+  const yLte = yr.lte ? parseInt(yr.lte.slice(0,4))*10000+1231 : undefined;
+
+  const Q = `query($genre:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int){
+    Page(perPage:24){media(type:ANIME,isAdult:false,genre:$genre,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore){
+      id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format
+    }}
+  }`;
+  const data = await al(Q, { genre:genre||undefined, sort:['POPULARITY_DESC'], yGte, yLte, minScore });
+  const list = (data?.data?.Page?.media||[]).map(fromAL);
+  renderGrid('anime-grid', list);
+  animePageState = {sub:'filter', page:1, hasMore:false};
+}
+
+// ── TV FILTER ──
+async function applyTVFilter() {
+  document.getElementById('tv-filter').style.display = 'none';
+  document.getElementById('tv-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
+  document.getElementById('tv-more').style.display = 'none';
+
+  const country = getChipVal('tf-country');
+  const genre   = getChipVal('tf-genre');
+  const yearVal = getChipVal('tf-year');
+  const rating  = getChipVal('tf-rating');
+  const yr      = getYearRange(yearVal);
+
+  const url = new URL(`${TMDB_BASE}/discover/tv`);
+  url.searchParams.set('api_key', TMDB_KEY);
+  url.searchParams.set('language', 'en-US');
+  url.searchParams.set('sort_by', 'popularity.desc');
+  if (country) url.searchParams.set('with_origin_country', country);
+  if (genre)   url.searchParams.set('with_genres', genre);
+  if (rating)  url.searchParams.set('vote_average.gte', rating);
+  if (yr.gte)  url.searchParams.set('first_air_date.gte', yr.gte);
+  if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
+
+  try {
+    const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
+    const d = await r.json();
+    renderGrid('tv-grid', (d?.results||[]).map(m=>fromTMDB(m,'tv')));
+  } catch { renderGrid('tv-grid', []); }
+  tvPageState = {sub:'filter', region:'', page:1, hasMore:false};
+}
+
+// ── MOVIE FILTER ──
+async function applyMovieFilter() {
+  document.getElementById('movie-filter').style.display = 'none';
+  document.getElementById('movies-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
+  document.getElementById('movies-more').style.display = 'none';
+
+  const genre   = getChipVal('mf-genre');
+  const yearVal = getChipVal('mf-year');
+  const rating  = getChipVal('mf-rating');
+  const yr      = getYearRange(yearVal);
+
+  const url = new URL(`${TMDB_BASE}/discover/movie`);
+  url.searchParams.set('api_key', TMDB_KEY);
+  url.searchParams.set('language', 'en-US');
+  url.searchParams.set('sort_by', 'popularity.desc');
+  if (genre)  url.searchParams.set('with_genres', genre);
+  if (rating) url.searchParams.set('vote_average.gte', rating);
+  if (yr.gte) url.searchParams.set('primary_release_date.gte', yr.gte);
+  if (yr.lte) url.searchParams.set('primary_release_date.lte', yr.lte);
+
+  try {
+    const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
+    const d = await r.json();
+    renderGrid('movies-grid', (d?.results||[]).map(m=>fromTMDB(m,'movie')));
+  } catch { renderGrid('movies-grid', []); }
+  moviePageState = {sub:'filter', page:1, hasMore:false};
+}
 
 // ═══════════════════════════════════════════
 // WATCH HISTORY — localStorage
