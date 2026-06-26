@@ -52,6 +52,21 @@
     .back-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:13px;flex-shrink:0;}
     .results-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
 
+    /* BROWSE / FILTER PAGE */
+    .filter-wrap{margin-bottom:20px;}
+    .filter-group{margin-bottom:16px;}
+    .filter-label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+    .filter-chips{display:flex;flex-wrap:wrap;gap:6px;}
+    .chip{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:20px;font-size:12px;cursor:pointer;transition:all 0.15s;}
+    .chip:hover{border-color:var(--accent2);color:var(--text);}
+    .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+    .browse-actions{display:flex;gap:8px;margin-bottom:20px;}
+    .browse-btn{background:var(--accent);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;flex:1;}
+    .browse-clear{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer;}
+    .load-more-wrap{text-align:center;margin:16px 0 32px;}
+    .load-more-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 28px;border-radius:8px;font-size:13px;cursor:pointer;transition:border-color 0.2s;}
+    .load-more-btn:hover{border-color:var(--accent);}
+
     /* DETAIL HERO */
     .detail-hero{display:flex;gap:16px;margin-bottom:20px;}
     .detail-poster{width:130px;min-width:130px;border-radius:10px;overflow:hidden;border:1px solid var(--border);}
@@ -146,6 +161,98 @@
   <div class="anime-grid" id="trending-grid"></div>
   <div class="section-title">⭐ TOP RATED ALL TIME</div>
   <div class="anime-grid" id="toprated-grid"></div>
+</div>
+
+<!-- BROWSE / FILTER PAGE -->
+<div id="browse-page" class="page">
+  <div class="results-header">
+    <button class="back-btn" onclick="goBack()">← Back</button>
+    <div class="section-title" style="margin:0">BROWSE ANIME</div>
+  </div>
+
+  <div class="filter-wrap">
+    <div class="filter-group">
+      <div class="filter-label">Type</div>
+      <div class="filter-chips" id="chips-type">
+        <div class="chip active" data-val="" onclick="toggleChip(this,'type')">All</div>
+        <div class="chip" data-val="tv" onclick="toggleChip(this,'type')">TV</div>
+        <div class="chip" data-val="movie" onclick="toggleChip(this,'type')">Movie</div>
+        <div class="chip" data-val="ova" onclick="toggleChip(this,'type')">OVA</div>
+        <div class="chip" data-val="ona" onclick="toggleChip(this,'type')">ONA</div>
+        <div class="chip" data-val="special" onclick="toggleChip(this,'type')">Special</div>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Status</div>
+      <div class="filter-chips" id="chips-status">
+        <div class="chip active" data-val="" onclick="toggleChip(this,'status')">All</div>
+        <div class="chip" data-val="airing" onclick="toggleChip(this,'status')">Airing</div>
+        <div class="chip" data-val="complete" onclick="toggleChip(this,'status')">Completed</div>
+        <div class="chip" data-val="upcoming" onclick="toggleChip(this,'status')">Upcoming</div>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Genre</div>
+      <div class="filter-chips" id="chips-genre">
+        <div class="chip active" data-val="" onclick="toggleChip(this,'genre')">All</div>
+        <div class="chip" data-val="1" onclick="toggleChip(this,'genre')">Action</div>
+        <div class="chip" data-val="2" onclick="toggleChip(this,'genre')">Adventure</div>
+        <div class="chip" data-val="4" onclick="toggleChip(this,'genre')">Comedy</div>
+        <div class="chip" data-val="8" onclick="toggleChip(this,'genre')">Drama</div>
+        <div class="chip" data-val="10" onclick="toggleChip(this,'genre')">Fantasy</div>
+        <div class="chip" data-val="14" onclick="toggleChip(this,'genre')">Horror</div>
+        <div class="chip" data-val="7" onclick="toggleChip(this,'genre')">Mystery</div>
+        <div class="chip" data-val="22" onclick="toggleChip(this,'genre')">Romance</div>
+        <div class="chip" data-val="24" onclick="toggleChip(this,'genre')">Sci-Fi</div>
+        <div class="chip" data-val="36" onclick="toggleChip(this,'genre')">Slice of Life</div>
+        <div class="chip" data-val="30" onclick="toggleChip(this,'genre')">Sports</div>
+        <div class="chip" data-val="37" onclick="toggleChip(this,'genre')">Supernatural</div>
+        <div class="chip" data-val="76" onclick="toggleChip(this,'genre')">Isekai</div>
+        <div class="chip" data-val="27" onclick="toggleChip(this,'genre')">Shounen</div>
+        <div class="chip" data-val="25" onclick="toggleChip(this,'genre')">Shoujo</div>
+        <div class="chip" data-val="42" onclick="toggleChip(this,'genre')">Seinen</div>
+        <div class="chip" data-val="43" onclick="toggleChip(this,'genre')">Josei</div>
+        <div class="chip" data-val="40" onclick="toggleChip(this,'genre')">Psychological</div>
+        <div class="chip" data-val="23" onclick="toggleChip(this,'genre')">School</div>
+        <div class="chip" data-val="58" onclick="toggleChip(this,'genre')">Mecha</div>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Decade / Era</div>
+      <div class="filter-chips" id="chips-decade">
+        <div class="chip active" data-val="" onclick="toggleChip(this,'decade')">All</div>
+        <div class="chip" data-val="2020" onclick="toggleChip(this,'decade')">2020s</div>
+        <div class="chip" data-val="2010" onclick="toggleChip(this,'decade')">2010s</div>
+        <div class="chip" data-val="2000" onclick="toggleChip(this,'decade')">2000s</div>
+        <div class="chip" data-val="1990" onclick="toggleChip(this,'decade')">1990s</div>
+        <div class="chip" data-val="1980" onclick="toggleChip(this,'decade')">1980s</div>
+        <div class="chip" data-val="1970" onclick="toggleChip(this,'decade')">1970s &amp; older</div>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Sort By</div>
+      <div class="filter-chips" id="chips-sort">
+        <div class="chip active" data-val="score" onclick="toggleChip(this,'sort')">Top Rated</div>
+        <div class="chip" data-val="popularity" onclick="toggleChip(this,'sort')">Most Popular</div>
+        <div class="chip" data-val="start_date" onclick="toggleChip(this,'sort')">Newest First</div>
+        <div class="chip" data-val="favorites" onclick="toggleChip(this,'sort')">Most Favorited</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="browse-actions">
+    <button class="browse-btn" onclick="applyFilters()">🔍 Show Results</button>
+    <button class="browse-clear" onclick="clearFilters()">Clear</button>
+  </div>
+
+  <div class="anime-grid" id="browse-grid"></div>
+  <div class="load-more-wrap" id="load-more-wrap" style="display:none">
+    <button class="load-more-btn" onclick="loadMoreBrowse()">Load More</button>
+  </div>
 </div>
 
 <!-- SEARCH RESULTS -->
@@ -328,19 +435,102 @@ async function loadHome() {
   renderGrid('toprated-grid', toprated?.data  || []);
 }
 
-// ── SEARCH — skeleton while searching ──
+// ── SEARCH ──
 async function doSearch() {
   const q = document.getElementById('search-input').value.trim();
-  if (!q) return;
+
+  // Empty search → open browse/filter page
+  if (!q) {
+    navigateTo('browse-page');
+    document.getElementById('browse-grid').innerHTML = '';
+    document.getElementById('load-more-wrap').style.display = 'none';
+    return;
+  }
+
   navigateTo('search-results-page');
   document.getElementById('results-title').textContent = `Results for "${q}"`;
   document.getElementById('results-grid').innerHTML = skeletonCards(8);
-  const data = await fetchJSON(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24&sfw=true`);
+
+  // No sfw filter — allows old anime like Flame of Recca, Yu Yu Hakusho
+  const data = await fetchJSON(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24`);
   renderGrid('results-grid', data?.data);
 }
 
 document.getElementById('search-btn').onclick = doSearch;
 document.getElementById('search-input').onkeydown = e => { if (e.key === 'Enter') doSearch(); };
+
+// ── BROWSE / FILTER ──
+const activeFilters = { type:'', status:'', genre:'', decade:'', sort:'score' };
+let browsePage = 1;
+let browseHasMore = false;
+
+function toggleChip(el, group) {
+  // In each group, only one chip active at a time
+  el.closest('.filter-chips').querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  activeFilters[group] = el.dataset.val;
+}
+
+function clearFilters() {
+  activeFilters.type = '';
+  activeFilters.status = '';
+  activeFilters.genre = '';
+  activeFilters.decade = '';
+  activeFilters.sort = 'score';
+
+  // Reset all chips to first (All/Top Rated)
+  ['chips-type','chips-status','chips-genre','chips-decade'].forEach(id => {
+    const chips = document.getElementById(id)?.querySelectorAll('.chip');
+    chips?.forEach((c,i) => c.classList.toggle('active', i===0));
+  });
+  const sortChips = document.getElementById('chips-sort')?.querySelectorAll('.chip');
+  sortChips?.forEach((c,i) => c.classList.toggle('active', i===0));
+
+  document.getElementById('browse-grid').innerHTML = '';
+  document.getElementById('load-more-wrap').style.display = 'none';
+}
+
+async function applyFilters(page=1) {
+  browsePage = page;
+  if (page === 1) {
+    document.getElementById('browse-grid').innerHTML = skeletonCards(12);
+    document.getElementById('load-more-wrap').style.display = 'none';
+  }
+
+  let url = `${JIKAN}/anime?limit=24&order_by=${activeFilters.sort || 'score'}&sort=desc&page=${page}`;
+
+  if (activeFilters.type)   url += `&type=${activeFilters.type}`;
+  if (activeFilters.status) url += `&status=${activeFilters.status}`;
+  if (activeFilters.genre)  url += `&genres=${activeFilters.genre}`;
+
+  // Decade filter → start_date range
+  if (activeFilters.decade) {
+    const start = activeFilters.decade;
+    const end   = activeFilters.decade === '1970' ? '1979' : String(parseInt(start) + 9);
+    const endYear = activeFilters.decade === '1970' ? '1969-12-31' : `${end}-12-31`;
+    const startYear = activeFilters.decade === '1970' ? '1900-01-01' : `${start}-01-01`;
+    url += `&start_date=${startYear}&end_date=${endYear}`;
+  }
+
+  const data = await fetchJSON(url);
+  const list = data?.data || [];
+
+  if (page === 1) {
+    renderGrid('browse-grid', list);
+  } else {
+    // Append to existing grid
+    const grid = document.getElementById('browse-grid');
+    list.forEach(a => grid.appendChild(buildCard(a)));
+  }
+
+  // Show load more if there are more pages
+  browseHasMore = data?.pagination?.has_next_page || false;
+  document.getElementById('load-more-wrap').style.display = browseHasMore ? 'block' : 'none';
+}
+
+async function loadMoreBrowse() {
+  await applyFilters(browsePage + 1);
+}
 
 // ── FETCH ALL SEASONS (cached, parallel where possible) ──
 async function fetchAllSeasons(rootId) {
