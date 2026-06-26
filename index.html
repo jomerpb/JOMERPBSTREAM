@@ -475,7 +475,10 @@ async function al(query, variables={}) {
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  document.querySelector('.bottom-nav').style.display = id === 'player-page' ? 'none' : 'flex';
+  const isPlayer = id === 'player-page';
+  document.querySelector('.bottom-nav').style.display = isPlayer ? 'none' : 'flex';
+  // Remove bottom padding on player page so fullscreen button isn't blocked
+  document.body.style.paddingBottom = isPlayer ? '0' : 'var(--nav-h)';
   window.scrollTo(0, 0);
 }
 
