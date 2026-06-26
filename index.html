@@ -308,6 +308,15 @@
           <div class="chip" data-val="60" onclick="pickPageChip(this,'af-rating')">6+</div>
         </div>
       </div>
+      <div class="filter-section">
+        <div class="filter-label">Status</div>
+        <div class="chips-row" id="af-status">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-status')">All</div>
+          <div class="chip" data-val="RELEASING" onclick="pickPageChip(this,'af-status')">Ongoing</div>
+          <div class="chip" data-val="FINISHED" onclick="pickPageChip(this,'af-status')">Completed</div>
+          <div class="chip" data-val="NOT_YET_RELEASED" onclick="pickPageChip(this,'af-status')">Upcoming</div>
+        </div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:4px;">
         <button onclick="applyAnimeFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
         <button onclick="resetPageFilter('anime')" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:10px 16px;border-radius:10px;font-size:12px;cursor:pointer;">Clear</button>
@@ -392,6 +401,16 @@
           <div class="chip" data-val="6" onclick="pickPageChip(this,'tf-rating')">6+</div>
         </div>
       </div>
+      <div class="filter-section">
+        <div class="filter-label">Status</div>
+        <div class="chips-row" id="tf-status">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-status')">All</div>
+          <div class="chip" data-val="returning" onclick="pickPageChip(this,'tf-status')">Ongoing</div>
+          <div class="chip" data-val="ended" onclick="pickPageChip(this,'tf-status')">Completed</div>
+          <div class="chip" data-val="planned" onclick="pickPageChip(this,'tf-status')">Upcoming</div>
+          <div class="chip" data-val="canceled" onclick="pickPageChip(this,'tf-status')">Canceled</div>
+        </div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:4px;">
         <button onclick="applyTVFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
         <button onclick="resetPageFilter('tv')" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:10px 16px;border-radius:10px;font-size:12px;cursor:pointer;">Clear</button>
@@ -459,6 +478,14 @@
           <div class="chip" data-val="8" onclick="pickPageChip(this,'mf-rating')">8+</div>
           <div class="chip" data-val="7" onclick="pickPageChip(this,'mf-rating')">7+</div>
           <div class="chip" data-val="6" onclick="pickPageChip(this,'mf-rating')">6+</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Status</div>
+        <div class="chips-row" id="mf-status">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-status')">All</div>
+          <div class="chip" data-val="released" onclick="pickPageChip(this,'mf-status')">Released</div>
+          <div class="chip" data-val="upcoming" onclick="pickPageChip(this,'mf-status')">Upcoming</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:4px;">
@@ -970,7 +997,7 @@ async function fetchAnime(sub, page) {
     Page(page:$page,perPage:24){
       pageInfo{hasNextPage}
       media(type:ANIME,isAdult:false,genre:$genre,sort:$sort${sub==='new'?',season:$season,seasonYear:$year':''}) {
-        id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format
+        id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres
       }
     }
   }`;
@@ -1599,7 +1626,7 @@ function getYearRange(val) {
 
 function resetPageFilter(page) {
   const prefix = page==='anime'?'af':page==='tv'?'tf':'mf';
-  ['genre','year','rating','country'].forEach(g => {
+  ['genre','year','rating','country','status'].forEach(g => {
     const el = document.getElementById(`${prefix}-${g}`);
     if (el) el.querySelectorAll('.chip').forEach((c,i) => c.classList.toggle('active', i===0));
   });
@@ -1614,17 +1641,18 @@ async function applyAnimeFilter() {
   const genre   = getChipVal('af-genre');
   const yearVal = getChipVal('af-year');
   const rating  = getChipVal('af-rating');
+  const status  = getChipVal('af-status');
   const yr      = getYearRange(yearVal);
   const minScore = rating ? parseInt(rating) : undefined;
   const yGte = yr.gte ? parseInt(yr.gte.slice(0,4))*10000 : undefined;
   const yLte = yr.lte ? parseInt(yr.lte.slice(0,4))*10000+1231 : undefined;
 
-  const Q = `query($genre:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int){
-    Page(perPage:24){media(type:ANIME,isAdult:false,genre:$genre,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore){
-      id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format
+  const Q = `query($genre:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$status:MediaStatus){
+    Page(perPage:24){media(type:ANIME,isAdult:false,genre:$genre,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status:$status){
+      id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres
     }}
   }`;
-  const data = await al(Q, { genre:genre||undefined, sort:['SCORE_DESC'], yGte, yLte, minScore });
+  const data = await al(Q, { genre:genre||undefined, sort:['SCORE_DESC'], yGte, yLte, minScore, status:status||undefined });
   const list = (data?.data?.Page?.media||[]).map(fromAL);
   renderGrid('anime-grid', list);
   animePageState = {sub:'filter', page:1, hasMore:false};
@@ -1640,6 +1668,7 @@ async function applyTVFilter() {
   const genre   = getChipVal('tf-genre');
   const yearVal = getChipVal('tf-year');
   const rating  = getChipVal('tf-rating');
+  const status  = getChipVal('tf-status');
   const yr      = getYearRange(yearVal);
 
   const url = new URL(`${TMDB_BASE}/discover/tv`);
@@ -1652,6 +1681,7 @@ async function applyTVFilter() {
   if (rating)  url.searchParams.set('vote_average.gte', rating);
   if (yr.gte)  url.searchParams.set('first_air_date.gte', yr.gte);
   if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
+  if (status)  url.searchParams.set('with_status', status);
 
   try {
     const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
@@ -1670,6 +1700,7 @@ async function applyMovieFilter() {
   const genre   = getChipVal('mf-genre');
   const yearVal = getChipVal('mf-year');
   const rating  = getChipVal('mf-rating');
+  const status  = getChipVal('mf-status');
   const yr      = getYearRange(yearVal);
 
   const url = new URL(`${TMDB_BASE}/discover/movie`);
@@ -1681,6 +1712,11 @@ async function applyMovieFilter() {
   if (rating) url.searchParams.set('vote_average.gte', rating);
   if (yr.gte) url.searchParams.set('primary_release_date.gte', yr.gte);
   if (yr.lte) url.searchParams.set('primary_release_date.lte', yr.lte);
+  if (status === 'upcoming') {
+    url.searchParams.set('primary_release_date.gte', new Date().toISOString().slice(0,10));
+  } else if (status === 'released') {
+    url.searchParams.set('primary_release_date.lte', new Date().toISOString().slice(0,10));
+  }
 
   try {
     const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
