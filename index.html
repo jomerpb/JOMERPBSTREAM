@@ -75,6 +75,8 @@
     .grid-card-score{position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,0.85);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;}
     .grid-card-type{position:absolute;top:4px;right:4px;font-size:8px;font-weight:700;padding:2px 5px;border-radius:4px;}
     .grid-card-title{font-size:10px;font-weight:600;line-height:1.3;margin-top:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    .grid-card-meta{font-size:9px;color:var(--muted);margin-top:3px;display:flex;gap:4px;align-items:center;flex-wrap:wrap;line-height:1.3;}
+    .grid-card-meta span{white-space:nowrap;}
 
     /* CONTENT TABS */
     .content-tabs{display:flex;gap:6px;padding:0 16px;margin-bottom:16px;overflow-x:auto;scrollbar-width:none;}
@@ -765,13 +767,22 @@ function buildGridCard(item) {
   c.style.cssText = 'text-decoration:none;color:inherit;display:block;';
   const typeColor = item.type==='anime'?'anime':item.type==='movie'?'movie':'tv';
   const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'FILM':'TV';
+
+  // Meta row: flag + year + genre
+  const metaParts = [];
+  if (item.countryFlag) metaParts.push(`<span>${item.countryFlag}</span>`);
+  if (item.year)        metaParts.push(`<span>${item.year}</span>`);
+  if (item.genre)       metaParts.push(`<span>· ${item.genre}</span>`);
+  const meta = metaParts.length ? `<div class="grid-card-meta">${metaParts.join('')}</div>` : '';
+
   c.innerHTML = `
     <div class="grid-card-img">
       <img src="${item.img||''}" alt="${item.title}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;"/>
       ${item.score?`<div class="grid-card-score">⭐${item.score}</div>`:''}
       <div class="grid-card-type ${typeColor}">${typeLabel}</div>
     </div>
-    <div class="grid-card-title">${item.title}</div>`;
+    <div class="grid-card-title">${item.title}</div>
+    ${meta}`;
   c.onclick = (e) => { e.preventDefault(); openDetail(item); };
   return c;
 }
@@ -799,34 +810,38 @@ function fromTMDB(m, type) {
   const title = m.title || m.name || 'Unknown';
   const year  = (m.release_date || m.first_air_date || '').slice(0,4);
   const score = m.vote_average ? m.vote_average.toFixed(1) : null;
+  // Map first genre_id to name
+  const genreMap = {28:'Action',12:'Adventure',16:'Animation',35:'Comedy',80:'Crime',18:'Drama',14:'Fantasy',27:'Horror',9648:'Mystery',10749:'Romance',878:'Sci-Fi',53:'Thriller',10765:'Sci-Fi',10759:'Action',10762:'Kids',10763:'News',10764:'Reality',10766:'Soap',10767:'Talk',10768:'War'};
+  const genre = m.genre_ids?.[0] ? (genreMap[m.genre_ids[0]] || '') : (m.genres?.[0]?.name || '');
+  const country = (m.origin_country?.[0] || m.production_countries?.[0]?.iso_3166_1 || '');
+  const countryFlag = {KR:'🇰🇷',JP:'🇯🇵',CN:'🇨🇳',TH:'🇹🇭',PH:'🇵🇭',US:'🇺🇸',GB:'🇬🇧',IN:'🇮🇳',FR:'🇫🇷',DE:'🇩🇪',IT:'🇮🇹',ES:'🇪🇸'}[country] || '';
   return {
-    type,
-    id: m.id,
-    title,
-    year,
-    score,
-    img:     m.poster_path   ? TMDB_IMG + m.poster_path   : '',
-    banner:  m.backdrop_path ? TMDB_BG  + m.backdrop_path : '',
+    type, id:m.id, title, year, score,
+    img:      m.poster_path   ? TMDB_IMG + m.poster_path   : '',
+    banner:   m.backdrop_path ? TMDB_BG  + m.backdrop_path : '',
     synopsis: m.overview || '',
-    seasons: m.number_of_seasons || null,
+    seasons:  m.number_of_seasons  || null,
     episodes: m.number_of_episodes || null,
-    // for TV series season details loaded later
-    tmdb_id: m.id,
+    tmdb_id:  m.id,
+    genre, country, countryFlag,
   };
 }
 
 function fromAL(m) {
+  const genre = m.genres?.[0] || '';
   return {
     type: 'anime',
-    al_id: m.id,
-    mal_id: m.idMal,
-    title: m.title?.english || m.title?.romaji || 'Unknown',
-    year: m.seasonYear || m.startDate?.year || '',
-    score: m.averageScore ? (m.averageScore/10).toFixed(1) : null,
-    img: m.coverImage?.large || m.coverImage?.medium || '',
-    banner: m.bannerImage || m.coverImage?.extraLarge || '',
-    synopsis: (m.description||'').replace(/<[^>]*>/g,''),
+    al_id:   m.id,
+    mal_id:  m.idMal,
+    title:   m.title?.english || m.title?.romaji || 'Unknown',
+    year:    m.seasonYear || m.startDate?.year || '',
+    score:   m.averageScore ? (m.averageScore/10).toFixed(1) : null,
+    img:     m.coverImage?.large  || m.coverImage?.medium || '',
+    banner:  m.bannerImage || m.coverImage?.extraLarge    || '',
+    synopsis:(m.description||'').replace(/<[^>]*>/g,''),
     episodes: m.episodes,
+    genre,
+    country: '🇯🇵', countryFlag: '🇯🇵',
   };
 }
 
