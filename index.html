@@ -1585,7 +1585,7 @@ async function applyAnimeFilter() {
       id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format
     }}
   }`;
-  const data = await al(Q, { genre:genre||undefined, sort:['POPULARITY_DESC'], yGte, yLte, minScore });
+  const data = await al(Q, { genre:genre||undefined, sort:['SCORE_DESC'], yGte, yLte, minScore });
   const list = (data?.data?.Page?.media||[]).map(fromAL);
   renderGrid('anime-grid', list);
   animePageState = {sub:'filter', page:1, hasMore:false};
@@ -1606,7 +1606,8 @@ async function applyTVFilter() {
   const url = new URL(`${TMDB_BASE}/discover/tv`);
   url.searchParams.set('api_key', TMDB_KEY);
   url.searchParams.set('language', 'en-US');
-  url.searchParams.set('sort_by', 'popularity.desc');
+  url.searchParams.set('sort_by', 'vote_average.desc');
+  url.searchParams.set('vote_count.gte', '100');
   if (country) url.searchParams.set('with_origin_country', country);
   if (genre)   url.searchParams.set('with_genres', genre);
   if (rating)  url.searchParams.set('vote_average.gte', rating);
@@ -1635,7 +1636,8 @@ async function applyMovieFilter() {
   const url = new URL(`${TMDB_BASE}/discover/movie`);
   url.searchParams.set('api_key', TMDB_KEY);
   url.searchParams.set('language', 'en-US');
-  url.searchParams.set('sort_by', 'popularity.desc');
+  url.searchParams.set('sort_by', 'vote_average.desc');
+  url.searchParams.set('vote_count.gte', '100');
   if (genre)  url.searchParams.set('with_genres', genre);
   if (rating) url.searchParams.set('vote_average.gte', rating);
   if (yr.gte) url.searchParams.set('primary_release_date.gte', yr.gte);
