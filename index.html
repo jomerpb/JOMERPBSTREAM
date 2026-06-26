@@ -329,15 +329,9 @@
   <div class="player-frame"><iframe id="player-iframe" allowfullscreen allow="autoplay;fullscreen;encrypted-media;picture-in-picture" frameborder="0" scrolling="no"></iframe></div>
   <div class="player-bar">
     <div class="server-label">Server: <b id="server-name">MegaPlay</b></div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <button id="open-browser-btn" onclick="openInBrowser()" style="display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:6px 11px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        Open in Browser
-      </button>
-      <div class="lang-row" id="player-lang-row" style="display:none;">
-        <button class="lbtn active" id="psub" onclick="switchLang('sub')">SUB</button>
-        <button class="lbtn" id="pdub" onclick="switchLang('dub')">DUB</button>
-      </div>
+    <div class="lang-row" id="player-lang-row" style="display:none;">
+      <button class="lbtn active" id="psub" onclick="switchLang('sub')">SUB</button>
+      <button class="lbtn" id="pdub" onclick="switchLang('dub')">DUB</button>
     </div>
   </div>
   <div class="ep-nav-row">
@@ -484,8 +478,11 @@ function skRow(n) {
 }
 
 function buildSmCard(item) {
-  const c = document.createElement('div');
+  const c = document.createElement('a');
   c.className = 'card-sm';
+  c.href = `#${item.type}-${item.al_id||item.id||item.tmdb_id}`;
+  c.style.textDecoration = 'none';
+  c.style.color = 'inherit';
   const img = item.img || '';
   const badge = item.score ? `<div class="card-sm-badge">⭐${item.score}</div>` : '';
   const typeBadge = `<div class="card-sm-type ${item.type}">${item.type==='anime'?'ANIME':item.type==='movie'?'MOVIE':'TV'}</div>`;
@@ -498,13 +495,17 @@ function buildSmCard(item) {
       <div class="card-sm-title">${item.title}</div>
       <div class="card-sm-sub">${item.year||''}</div>
     </div>`;
-  c.onclick = () => openDetail(item);
+  c.onclick = (e) => { e.preventDefault(); openDetail(item); };
   return c;
 }
 
 function buildGridCard(item) {
-  const c = document.createElement('div');
+  const c = document.createElement('a');
   c.className = 'grid-card';
+  c.href = `#${item.type}-${item.al_id||item.id||item.tmdb_id}`;
+  c.style.textDecoration = 'none';
+  c.style.color = 'inherit';
+  c.style.display = 'block';
   const typeColor = item.type==='anime'?'anime':item.type==='movie'?'movie':'tv';
   const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'FILM':'TV';
   c.innerHTML = `
@@ -514,7 +515,7 @@ function buildGridCard(item) {
       <div class="grid-card-type ${typeColor}">${typeLabel}</div>
     </div>
     <div class="grid-card-title">${item.title}</div>`;
-  c.onclick = () => openDetail(item);
+  c.onclick = (e) => { e.preventDefault(); openDetail(item); };
   return c;
 }
 
@@ -1049,26 +1050,6 @@ function playStream() {
   }
 
   document.getElementById('player-iframe').src = url;
-}
-
-function openInBrowser() {
-  const item = currentItem;
-  const season = currentSeason;
-  let url = '';
-
-  if (item.type === 'anime') {
-    const malId = item.mal_id || season?.mal_id;
-    url = `https://megaplay.buzz/stream/mal/${malId}/${currentEp}/${currentLang}`;
-  } else if (item.type === 'movie') {
-    const tmdbId = item.tmdb_id || item.id;
-    url = `https://vidsrc.me/embed/movie?tmdb=${tmdbId}`;
-  } else {
-    const tmdbId = item.tmdb_id || item.id;
-    const seasonNum = season?.season_number || 1;
-    url = `https://vidsrc.me/embed/tv?tmdb=${tmdbId}&season=${seasonNum}&episode=${currentEp}`;
-  }
-
-  window.open(url, '_blank');
 }
 
 function updateEpNav() {
