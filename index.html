@@ -378,13 +378,12 @@ const ANILIST   = 'https://graphql.anilist.co';
 // ═══════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════
-let currentItem    = null; // {type:'anime'|'tv'|'movie', data:{...}}
+let currentItem    = null;
 let currentSeason  = null;
 let allSeasons     = [];
 let currentEp      = 1;
 let totalEps       = 1;
 let currentLang    = 'sub';
-let pageStack      = ['home-page'];
 
 // Pagination state
 let animePageState  = {sub:'trending', page:1, hasMore:false};
@@ -419,7 +418,7 @@ async function al(query, variables={}) {
 }
 
 // ═══════════════════════════════════════════
-// NAV
+// NAV — uses browser History API
 // ═══════════════════════════════════════════
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -427,32 +426,74 @@ function showPage(id) {
   document.querySelector('.bottom-nav').style.display = id === 'player-page' ? 'none' : 'flex';
   window.scrollTo(0, 0);
 }
-function goHome() { pageStack = ['home-page']; showPage('home-page'); setNav('home'); }
-function goBack() {
-  if (pageStack.length > 1) {
-    const leaving = pageStack.pop();
-    if (leaving === 'player-page') document.getElementById('player-iframe').src = '';
-  }
-  const prev = pageStack[pageStack.length-1] || 'home-page';
-  showPage(prev);
+
+function goHome() {
+  document.getElementById('search-input') && (document.getElementById('search-input').value = '');
+  history.pushState({page:'home-page'}, '', '#home');
+  showPage('home-page');
+  setNav('home');
 }
-function navigateTo(id) {
-  if (pageStack[pageStack.length-1] !== id) pageStack.push(id);
+
+function goBack() {
+  history.back();
+}
+
+function navigateTo(id, stateData={}) {
+  const hash = id.replace('-page','');
+  history.pushState({page: id, ...stateData}, '', `#${hash}`);
   showPage(id);
 }
+
+// Handle browser back/forward (gestures, back button)
+window.addEventListener('popstate', async (e) => {
+  const state = e.state;
+  if (!state || !state.page) {
+    showPage('home-page');
+    setNav('home');
+    return;
+  }
+
+  const page = state.page;
+  showPage(page);
+
+  // Restore nav highlight
+  if (page === 'home-page')    setNav('home');
+  if (page === 'anime-page')   setNav('anime');
+  if (page === 'tv-page')      setNav('tv');
+  if (page === 'movies-page')  setNav('movies');
+  if (page === 'search-page')  setNav('search');
+
+  // If going back to detail page, restore the item
+  if (page === 'detail-page' && state.item) {
+    await openDetail(state.item, true); // true = restore only, don't push new history
+  }
+
+  // Stop player when going back
+  if (page !== 'player-page') {
+    document.getElementById('player-iframe').src = '';
+  }
+});
+
 function setNav(tab) {
-  document.querySelectorAll('.nav-item').forEach(n => { n.classList.remove('active'); n.querySelector('.nav-dot').style.display='none'; });
-  const el = document.getElementById('nav-'+tab);
-  if (el) { el.classList.add('active'); el.querySelector('.nav-dot').style.display='block'; }
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.remove('active');
+    n.querySelector('.nav-dot').style.display = 'none';
+  });
+  const el = document.getElementById('nav-' + tab);
+  if (el) {
+    el.classList.add('active');
+    el.querySelector('.nav-dot').style.display = 'block';
+  }
 }
+
 function navTo(tab) {
   setNav(tab);
-  const pageId = tab+'-page';
+  const pageId = tab + '-page';
   navigateTo(pageId);
   if (tab === 'anime'  && !document.getElementById('anime-grid').children.length)  loadAnimeSub('trending', document.querySelector('#anime-tabs .ctab'));
-  if (tab === 'tv'     && !document.getElementById('tv-grid').children.length)     loadTVSub('popular','', document.querySelector('#tv-tabs .ctab'));
+  if (tab === 'tv'     && !document.getElementById('tv-grid').children.length)     loadTVSub('popular', '', document.querySelector('#tv-tabs .ctab'));
   if (tab === 'movies' && !document.getElementById('movies-grid').children.length) loadMovieSub('popular', document.querySelector('#movie-tabs .ctab'));
-  if (tab === 'search') setTimeout(()=>document.getElementById('search-input')?.focus(), 100);
+  if (tab === 'search') setTimeout(() => document.getElementById('search-input')?.focus(), 100);
 }
 
 // ═══════════════════════════════════════════
@@ -480,9 +521,8 @@ function skRow(n) {
 function buildSmCard(item) {
   const c = document.createElement('a');
   c.className = 'card-sm';
-  c.href = `#${item.type}-${item.al_id||item.id||item.tmdb_id}`;
-  c.style.textDecoration = 'none';
-  c.style.color = 'inherit';
+  c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
+  c.style.cssText = 'text-decoration:none;color:inherit;';
   const img = item.img || '';
   const badge = item.score ? `<div class="card-sm-badge">⭐${item.score}</div>` : '';
   const typeBadge = `<div class="card-sm-type ${item.type}">${item.type==='anime'?'ANIME':item.type==='movie'?'MOVIE':'TV'}</div>`;
@@ -502,10 +542,8 @@ function buildSmCard(item) {
 function buildGridCard(item) {
   const c = document.createElement('a');
   c.className = 'grid-card';
-  c.href = `#${item.type}-${item.al_id||item.id||item.tmdb_id}`;
-  c.style.textDecoration = 'none';
-  c.style.color = 'inherit';
-  c.style.display = 'block';
+  c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
+  c.style.cssText = 'text-decoration:none;color:inherit;display:block;';
   const typeColor = item.type==='anime'?'anime':item.type==='movie'?'movie':'tv';
   const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'FILM':'TV';
   c.innerHTML = `
@@ -791,12 +829,17 @@ async function loadMoreSearch() {
 // ═══════════════════════════════════════════
 // DETAIL
 // ═══════════════════════════════════════════
-async function openDetail(item) {
+async function openDetail(item, restore=false) {
   currentItem   = item;
   allSeasons    = [];
   currentSeason = null;
   currentLang   = 'sub';
-  navigateTo('detail-page');
+
+  if (!restore) {
+    const hash = `detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
+    history.pushState({page:'detail-page', item}, '', `#${hash}`);
+  }
+  showPage('detail-page');
 
   // Skeleton
   document.getElementById('detail-backdrop-wrap').innerHTML = `<div class="sk" style="width:100%;height:100%;border-radius:0;"></div><div class="detail-backdrop-overlay"></div><div class="back-circle" onclick="goBack()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>`;
@@ -1065,6 +1108,8 @@ document.getElementById('next-ep').onclick = () => { if (currentEp < totalEps) o
 // ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
+// Set initial history state so back gesture works from first page
+history.replaceState({page:'home-page'}, '', '#home');
 loadHome();
 </script>
 </body>
