@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>JomerPB Personal Streaming 🎌</title>
+  <title>JomerPB Personal Streaming v3 🎌</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>
     :root{--bg:#080c14;--surface:#0f1620;--card:#141e2e;--accent:#e63946;--accent2:#457b9d;--text:#e8eaf0;--muted:#6b7a99;--border:#1e2d45;--skeleton:#1a2535;}
@@ -452,9 +452,22 @@ async function doSearch() {
   document.getElementById('results-title').textContent = `Results for "${q}"`;
   document.getElementById('results-grid').innerHTML = skeletonCards(8);
 
-  // Plain clean search — works for all anime old and new
-  const data = await fetchJSON(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24`);
-  renderGrid('results-grid', data?.data);
+  try {
+    const res = await fetch(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24`);
+    const data = await res.json();
+    if (data?.data?.length) {
+      renderGrid('results-grid', data.data);
+    } else {
+      // Jikan may rate-limit — retry once after 1 second
+      await new Promise(r => setTimeout(r, 1000));
+      const res2 = await fetch(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24`);
+      const data2 = await res2.json();
+      renderGrid('results-grid', data2?.data);
+    }
+  } catch(e) {
+    document.getElementById('results-grid').innerHTML =
+      `<div class="empty-state"><h3>Connection error</h3><p>Check your internet and try again.</p></div>`;
+  }
 }
 
 document.getElementById('search-btn').onclick = doSearch;
