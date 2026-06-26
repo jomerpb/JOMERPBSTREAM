@@ -1052,7 +1052,7 @@ async function fetchTV(sub, region, page) {
   let knownStatus = ''; // we know status based on which list we're fetching
 
   if (region) {
-    data = await tmdb('/discover/tv', {with_origin_country: region, sort_by:'popularity.desc', page});
+    data = await tmdb('/discover/tv', {with_origin_country: region, sort_by:'popularity.desc', 'vote_count.gte':'0', page});
     knownStatus = ''; // mixed — can't know
   } else if (sub === 'popular') {
     data = await tmdb('/discover/tv', {sort_by:'popularity.desc', 'with_status':'0', page}); // 0 = Returning Series
@@ -1721,8 +1721,15 @@ async function applyTVFilter() {
   const url = new URL(`${TMDB_BASE}/discover/tv`);
   url.searchParams.set('api_key', TMDB_KEY);
   url.searchParams.set('language', 'en-US');
-  url.searchParams.set('sort_by', 'vote_average.desc');
-  url.searchParams.set('vote_count.gte', '100');
+  // Use popularity sort when filtering by country to get more results
+  // Only use vote_average sort when no country filter (to avoid too few results)
+  if (country) {
+    url.searchParams.set('sort_by', 'popularity.desc');
+    url.searchParams.set('vote_count.gte', '0');
+  } else {
+    url.searchParams.set('sort_by', 'vote_average.desc');
+    url.searchParams.set('vote_count.gte', '50');
+  }
   if (country) url.searchParams.set('with_origin_country', country);
   if (genre)   url.searchParams.set('with_genres', genre);
   if (rating)  url.searchParams.set('vote_average.gte', rating);
