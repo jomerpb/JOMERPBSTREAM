@@ -9,7 +9,6 @@
     :root{--bg:#080c14;--surface:#0f1620;--card:#141e2e;--accent:#e63946;--accent2:#457b9d;--text:#e8eaf0;--muted:#6b7a99;--border:#1e2d45;}
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
-
     nav{display:flex;align-items:center;padding:14px 18px;background:rgba(8,12,20,0.97);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);gap:10px;flex-wrap:wrap;}
     .logo{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:3px;color:var(--accent);text-shadow:0 0 20px rgba(230,57,70,0.4);cursor:pointer;flex-shrink:0;}
     .logo span{color:var(--text);}
@@ -18,12 +17,9 @@
     #search-input:focus{border-color:var(--accent);}
     #search-input::placeholder{color:var(--muted);}
     #search-btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;}
-
     .page{display:none;padding:18px;}
     .page.active{display:block;}
-
     .section-title{font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:2px;color:var(--muted);margin-bottom:14px;border-left:3px solid var(--accent);padding-left:10px;}
-
     .anime-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:38px;}
     .anime-card{background:var(--card);border-radius:10px;overflow:hidden;cursor:pointer;border:1px solid var(--border);transition:transform 0.2s,border-color 0.2s,box-shadow 0.2s;}
     .anime-card:hover{transform:translateY(-4px);border-color:var(--accent);box-shadow:0 8px 24px rgba(230,57,70,0.18);}
@@ -32,10 +28,8 @@
     .anime-card-title{font-size:12px;font-weight:600;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
     .anime-card-sub{font-size:11px;color:var(--muted);margin-top:3px;}
     .anime-card-badge{display:inline-block;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-top:5px;}
-
     .results-header{display:flex;align-items:center;gap:12px;margin-bottom:18px;}
     .back-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:13px;}
-
     .detail-hero{display:flex;gap:18px;margin-bottom:24px;}
     .detail-poster{width:150px;min-width:150px;border-radius:10px;overflow:hidden;border:1px solid var(--border);}
     .detail-poster img{width:100%;display:block;background:var(--surface);}
@@ -45,48 +39,37 @@
     .meta-tag{background:var(--surface);border:1px solid var(--border);color:var(--muted);font-size:11px;padding:3px 9px;border-radius:20px;}
     .meta-tag.hi{background:rgba(230,57,70,0.15);border-color:var(--accent);color:var(--accent);}
     .detail-synopsis{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:14px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
-
     .detail-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
     .watch-now-btn{background:var(--accent);color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;}
     .lang-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
     .lang-btn{background:none;border:none;color:var(--muted);padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;}
     .lang-btn.active{background:var(--accent2);color:#fff;}
-
     .ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:7px;margin-top:12px;max-height:250px;overflow-y:auto;padding-right:4px;}
     .ep-grid::-webkit-scrollbar{width:4px;}
     .ep-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
     .ep-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 4px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;text-align:center;}
     .ep-btn:hover,.ep-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
-
     .player-header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
     .player-title{font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .player-title span{color:var(--accent);}
     .player-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;border:1px solid var(--border);}
     .player-wrap iframe{width:100%;height:100%;border:none;}
-
-    .player-controls{display:flex;gap:8px;margin:12px 0 0;flex-wrap:wrap;align-items:center;}
-    .lang-switch{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
-    .lang-switch-btn{background:none;border:none;color:var(--muted);padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:1px;}
+    .server-row{display:flex;gap:7px;margin:12px 0 0;flex-wrap:wrap;align-items:center;}
+    .srv-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;}
+    .srv-btn.active{border-color:var(--accent);color:var(--accent);}
+    .lang-switch{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-left:auto;}
+    .lang-switch-btn{background:none;border:none;color:var(--muted);padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:1px;}
     .lang-switch-btn.active{background:var(--accent2);color:#fff;}
-    .player-label{font-size:11px;color:var(--muted);margin-left:auto;}
-
     .ep-nav{display:flex;gap:8px;margin:12px 0 0;justify-content:space-between;align-items:center;}
     .ep-nav-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 15px;border-radius:8px;cursor:pointer;font-size:13px;}
     .ep-nav-btn:disabled{opacity:0.3;cursor:not-allowed;}
     .ep-indicator{font-size:13px;color:var(--muted);}
-
-    .info-box{background:rgba(69,123,157,0.08);border:1px solid var(--accent2);border-radius:8px;padding:10px 13px;font-size:12px;color:var(--muted);margin:11px 0 0;line-height:1.6;}
-    .info-box strong{color:var(--text);}
-
+    .tip-box{background:rgba(69,123,157,0.08);border:1px solid var(--accent2);border-radius:8px;padding:10px 13px;font-size:12px;color:var(--muted);margin:11px 0 0;line-height:1.6;}
+    .tip-box strong{color:var(--text);}
     .empty-state{text-align:center;padding:50px 20px;color:var(--muted);}
     .empty-state h3{font-size:18px;margin-bottom:6px;color:var(--text);}
     .empty-state p{font-size:13px;}
-
-    @media(max-width:480px){
-      .detail-hero{flex-direction:column;}
-      .detail-poster{width:120px;}
-      .detail-title{font-size:24px;}
-    }
+    @media(max-width:480px){.detail-hero{flex-direction:column;}.detail-poster{width:120px;}.detail-title{font-size:24px;}}
   </style>
 </head>
 <body>
@@ -107,7 +90,7 @@
   <div class="anime-grid" id="toprated-grid"></div>
 </div>
 
-<!-- SEARCH RESULTS -->
+<!-- SEARCH -->
 <div id="search-results-page" class="page">
   <div class="results-header">
     <button class="back-btn" onclick="goHome()">← Home</button>
@@ -144,21 +127,20 @@
     <div class="player-title" id="player-title">Loading...</div>
   </div>
   <div class="player-wrap">
-    <iframe id="player-iframe"
-      allowfullscreen
-      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-      frameborder="0" scrolling="no">
-    </iframe>
+    <iframe id="player-iframe" allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture" frameborder="0" scrolling="no"></iframe>
   </div>
-  <div class="player-controls">
+  <div class="server-row">
+    <button class="srv-btn active" onclick="setServer(0)" id="srv0">🎯 MegaPlay</button>
+    <button class="srv-btn" onclick="setServer(1)" id="srv1">Server 2</button>
+    <button class="srv-btn" onclick="setServer(2)" id="srv2">Server 3</button>
+    <button class="srv-btn" onclick="setServer(3)" id="srv3">Server 4</button>
     <div class="lang-switch">
-      <button class="lang-switch-btn active" id="player-sub-btn" onclick="switchLang('sub')">SUB</button>
-      <button class="lang-switch-btn" id="player-dub-btn" onclick="switchLang('dub')">DUB</button>
+      <button class="lang-switch-btn active" id="psub" onclick="switchLang('sub')">SUB</button>
+      <button class="lang-switch-btn" id="pdub" onclick="switchLang('dub')">DUB</button>
     </div>
-    <div class="player-label" id="player-label">Powered by MegaPlay</div>
   </div>
-  <div class="info-box">
-    💡 <strong>Tips:</strong> If video is black, wait 3–5 seconds for it to load. Toggle SUB/DUB above. MegaPlay streams from the HiAnime library — ad-free, high quality.
+  <div class="tip-box">
+    💡 <strong>MegaPlay</strong> is the default — best quality, HiAnime library. If it doesn't load, try Server 2–4. Toggle SUB/DUB anytime.
   </div>
   <div class="ep-nav">
     <button class="ep-nav-btn" id="prev-ep">← Prev</button>
@@ -168,87 +150,88 @@
 </div>
 
 <script>
-// ── ANIME LIBRARY — MAL IDs used directly with MegaPlay ──
 const LIBRARY = [
-  // TRENDING
-  {mal_id:52991, title:"Sousou no Frieren",                        score:9.07, episodes:28,  status:"Finished Airing",  type:"TV",    year:2023, img:"https://cdn.myanimelist.net/images/anime/1015/138006.jpg",  synopsis:"After the heroes defeated the Demon King, Frieren the Elf reflects on what it means to truly know someone across centuries of life."},
-  {mal_id:21,    title:"One Piece",                                  score:8.71, episodes:null, status:"Currently Airing", type:"TV",    year:1999, img:"https://cdn.myanimelist.net/images/anime/6/73245.jpg",    synopsis:"Monkey D. Luffy sets sail to find the legendary One Piece treasure and become King of the Pirates."},
-  {mal_id:40748, title:"Jujutsu Kaisen",                            score:8.66, episodes:24,  status:"Finished Airing",  type:"TV",    year:2020, img:"https://cdn.myanimelist.net/images/anime/1171/109222.jpg", synopsis:"Yuuji Itadori swallows a cursed finger to save his friends, becoming host to a powerful Curse."},
-  {mal_id:38000, title:"Demon Slayer: Kimetsu no Yaiba",           score:8.54, episodes:26,  status:"Finished Airing",  type:"TV",    year:2019, img:"https://cdn.myanimelist.net/images/anime/1286/99889.jpg", synopsis:"Tanjiro Kamado joins the Demon Slayer Corps after his family is slaughtered and his sister turned into a demon."},
-  {mal_id:47778, title:"Chainsaw Man",                               score:8.55, episodes:12,  status:"Finished Airing",  type:"TV",    year:2022, img:"https://cdn.myanimelist.net/images/anime/1806/126216.jpg", synopsis:"Denji, a young devil hunter in poverty, merges with his chainsaw devil dog to survive."},
-  {mal_id:16498, title:"Attack on Titan",                            score:8.53, episodes:25,  status:"Finished Airing",  type:"TV",    year:2013, img:"https://cdn.myanimelist.net/images/anime/10/47347.jpg",   synopsis:"Humanity lives inside walls to survive giant humanoid Titans. Eren Yeager vows to destroy them all."},
-  {mal_id:39535, title:"Vinland Saga",                               score:8.73, episodes:24,  status:"Finished Airing",  type:"TV",    year:2019, img:"https://cdn.myanimelist.net/images/anime/1171/99922.jpg",  synopsis:"Young Thorfinn seeks revenge against the Viking warrior who killed his father."},
-  {mal_id:37779, title:"That Time I Got Reincarnated as a Slime",  score:8.01, episodes:24,  status:"Finished Airing",  type:"TV",    year:2018, img:"https://cdn.myanimelist.net/images/anime/1694/93337.jpg",  synopsis:"A corporate worker reincarnates as a slime monster in a fantasy world and builds a nation of monsters."},
-  {mal_id:269,   title:"Bleach",                                     score:7.86, episodes:366, status:"Finished Airing",  type:"TV",    year:2004, img:"https://cdn.myanimelist.net/images/anime/3/40451.jpg",    synopsis:"Ichigo Kurosaki becomes a Soul Reaper and defends the living world from evil spirits."},
-  {mal_id:11757, title:"Sword Art Online",                           score:7.20, episodes:25,  status:"Finished Airing",  type:"TV",    year:2012, img:"https://cdn.myanimelist.net/images/anime/11/39717.jpg",   synopsis:"In 2022, thousands of players become trapped in a virtual reality MMORPG where death in-game means death in real life."},
-  {mal_id:1735,  title:"Naruto Shippuden",                           score:8.26, episodes:500, status:"Finished Airing",  type:"TV",    year:2007, img:"https://cdn.myanimelist.net/images/anime/4/50361.jpg",    synopsis:"Naruto returns after years of training to face the Akatsuki and uncover his destiny as a ninja."},
-  {mal_id:20,    title:"Naruto",                                      score:7.98, episodes:220, status:"Finished Airing",  type:"TV",    year:2002, img:"https://cdn.myanimelist.net/images/anime/13/17405.jpg",   synopsis:"Naruto Uzumaki, a young ninja with a demon fox sealed inside him, dreams of becoming the greatest ninja."},
-  // TOP RATED
-  {mal_id:5114,  title:"Fullmetal Alchemist: Brotherhood",          score:9.10, episodes:64,  status:"Finished Airing",  type:"TV",    year:2009, img:"https://cdn.myanimelist.net/images/anime/1223/96541.jpg",  synopsis:"Brothers Edward and Alphonse Elric seek the Philosopher's Stone after a failed alchemy experiment costs them dearly."},
-  {mal_id:9253,  title:"Steins;Gate",                                score:9.07, episodes:24,  status:"Finished Airing",  type:"TV",    year:2011, img:"https://cdn.myanimelist.net/images/anime/5/73199.jpg",    synopsis:"Self-proclaimed mad scientist Okabe accidentally discovers time travel and faces catastrophic consequences."},
-  {mal_id:1535,  title:"Death Note",                                  score:8.63, episodes:37,  status:"Finished Airing",  type:"TV",    year:2006, img:"https://cdn.myanimelist.net/images/anime/9/9453.jpg",    synopsis:"Light Yagami finds a notebook that kills anyone whose name is written in it, and becomes judge of the world."},
-  {mal_id:22319, title:"Tokyo Ghoul",                                 score:7.79, episodes:12,  status:"Finished Airing",  type:"TV",    year:2014, img:"https://cdn.myanimelist.net/images/anime/5/64449.jpg",   synopsis:"College student Ken Kaneki is transformed into a half-ghoul and must navigate two dangerous worlds."},
-  {mal_id:30276, title:"One Punch Man",                              score:8.68, episodes:12,  status:"Finished Airing",  type:"TV",    year:2015, img:"https://cdn.myanimelist.net/images/anime/12/76049.jpg",   synopsis:"Saitama trained so hard he can defeat anyone with a single punch — but now he's completely bored."},
-  {mal_id:11061, title:"Hunter x Hunter (2011)",                    score:9.04, episodes:148, status:"Finished Airing",  type:"TV",    year:2011, img:"https://cdn.myanimelist.net/images/anime/11/33657.jpg",   synopsis:"Gon Freecss discovers his father is a legendary Hunter and sets out to become one himself."},
-  {mal_id:33486, title:"Boku no Hero Academia",                      score:7.92, episodes:13,  status:"Finished Airing",  type:"TV",    year:2016, img:"https://cdn.myanimelist.net/images/anime/10/78745.jpg",   synopsis:"In a world of superpowers, a powerless boy named Izuku Midoriya dreams of becoming the greatest hero."},
-  {mal_id:44511, title:"Spy x Family",                               score:8.65, episodes:25,  status:"Finished Airing",  type:"TV",    year:2022, img:"https://cdn.myanimelist.net/images/anime/1441/122795.jpg", synopsis:"A spy, an assassin, and a telepath form a fake family — none knowing each other's true identity."},
-  {mal_id:23755, title:"Nanatsu no Taizai",                          score:7.71, episodes:24,  status:"Finished Airing",  type:"TV",    year:2014, img:"https://cdn.myanimelist.net/images/anime/8/65409.jpg",   synopsis:"Princess Elizabeth seeks the legendary Seven Deadly Sins to help reclaim her kingdom from the Holy Knights."},
-  {mal_id:32281, title:"Kimi no Na wa. (Your Name)",                score:9.00, episodes:1,   status:"Finished Airing",  type:"Movie", year:2016, img:"https://cdn.myanimelist.net/images/anime/5/87048.jpg",    synopsis:"Two teenagers inexplicably swap bodies and begin searching for each other across time and distance."},
-  {mal_id:199,   title:"Sen to Chihiro (Spirited Away)",            score:8.87, episodes:1,   status:"Finished Airing",  type:"Movie", year:2001, img:"https://cdn.myanimelist.net/images/anime/6/79597.jpg",    synopsis:"Chihiro stumbles into the spirit world and must work in a spirit bathhouse to save her transformed parents."},
-  {mal_id:74,    title:"Kara no Kyoukai 1",                          score:8.17, episodes:1,   status:"Finished Airing",  type:"Movie", year:2007, img:"https://cdn.myanimelist.net/images/anime/9/76365.jpg",    synopsis:"Shiki Ryougi, a girl with a supernatural ability to perceive death, investigates mysterious floating suicides."},
-  {mal_id:50739, title:"Oshi no Ko",                                  score:8.69, episodes:11,  status:"Finished Airing",  type:"TV",    year:2023, img:"https://cdn.myanimelist.net/images/anime/1812/134736.jpg", synopsis:"A doctor is reincarnated as the child of his favorite idol and uncovers the dark side of the entertainment world."},
-  {mal_id:54112, title:"Dandadan",                                    score:8.44, episodes:12,  status:"Finished Airing",  type:"TV",    year:2024, img:"https://cdn.myanimelist.net/images/anime/1340/144463.jpg", synopsis:"A girl who believes in the occult and a boy who believes in aliens face supernatural threats together."},
+  {mal_id:52991, tmdb:"209867", imdb:"tt22248376", title:"Sousou no Frieren",                      score:9.07, episodes:28,  status:"Finished Airing",  type:"TV",    year:2023, img:"https://cdn.myanimelist.net/images/anime/1015/138006.jpg",  synopsis:"After the heroes defeated the Demon King, Frieren the Elf reflects on what it means to truly know someone across centuries of life."},
+  {mal_id:21,    tmdb:"37854",  imdb:"tt0388629",  title:"One Piece",                               score:8.71, episodes:null,status:"Currently Airing", type:"TV",    year:1999, img:"https://cdn.myanimelist.net/images/anime/6/73245.jpg",    synopsis:"Monkey D. Luffy sets sail to find the One Piece and become King of the Pirates."},
+  {mal_id:40748, tmdb:"95479",  imdb:"tt12343534", title:"Jujutsu Kaisen",                          score:8.66, episodes:24,  status:"Finished Airing",  type:"TV",    year:2020, img:"https://cdn.myanimelist.net/images/anime/1171/109222.jpg", synopsis:"Yuuji Itadori swallows a cursed finger to save his friends, becoming host to a powerful Curse."},
+  {mal_id:38000, tmdb:"85937",  imdb:"tt9335498",  title:"Demon Slayer",                            score:8.54, episodes:26,  status:"Finished Airing",  type:"TV",    year:2019, img:"https://cdn.myanimelist.net/images/anime/1286/99889.jpg", synopsis:"Tanjiro Kamado joins the Demon Slayer Corps after his family is slaughtered and his sister turned into a demon."},
+  {mal_id:47778, tmdb:"114410", imdb:"tt13907694", title:"Chainsaw Man",                            score:8.55, episodes:12,  status:"Finished Airing",  type:"TV",    year:2022, img:"https://cdn.myanimelist.net/images/anime/1806/126216.jpg",synopsis:"Denji merges with his chainsaw devil dog to survive as a Devil Hunter."},
+  {mal_id:16498, tmdb:"1429",   imdb:"tt2560140",  title:"Attack on Titan",                         score:8.53, episodes:25,  status:"Finished Airing",  type:"TV",    year:2013, img:"https://cdn.myanimelist.net/images/anime/10/47347.jpg",   synopsis:"Humanity lives inside walls to survive giant humanoid Titans. Eren Yeager vows to destroy them all."},
+  {mal_id:39535, tmdb:"71613",  imdb:"tt7688960",  title:"Vinland Saga",                            score:8.73, episodes:24,  status:"Finished Airing",  type:"TV",    year:2019, img:"https://cdn.myanimelist.net/images/anime/1171/99922.jpg",  synopsis:"Young Thorfinn seeks revenge against the Viking warrior who killed his father."},
+  {mal_id:37779, tmdb:"87638",  imdb:"tt8331782",  title:"That Time I Got Reincarnated as a Slime",score:8.01, episodes:24,  status:"Finished Airing",  type:"TV",    year:2018, img:"https://cdn.myanimelist.net/images/anime/1694/93337.jpg",  synopsis:"A corporate worker reincarnates as a slime in a fantasy world and builds a nation of monsters."},
+  {mal_id:269,   tmdb:"30984",  imdb:"tt0434665",  title:"Bleach",                                  score:7.86, episodes:366, status:"Finished Airing",  type:"TV",    year:2004, img:"https://cdn.myanimelist.net/images/anime/3/40451.jpg",    synopsis:"Ichigo Kurosaki becomes a Soul Reaper and defends the living world from evil spirits."},
+  {mal_id:11757, tmdb:"45782",  imdb:"tt2390475",  title:"Sword Art Online",                        score:7.20, episodes:25,  status:"Finished Airing",  type:"TV",    year:2012, img:"https://cdn.myanimelist.net/images/anime/11/39717.jpg",   synopsis:"Players become trapped in a VR game where death in-game means death in real life."},
+  {mal_id:1735,  tmdb:"46298",  imdb:"tt1355578",  title:"Naruto Shippuden",                        score:8.26, episodes:500, status:"Finished Airing",  type:"TV",    year:2007, img:"https://cdn.myanimelist.net/images/anime/4/50361.jpg",    synopsis:"Naruto returns after years of training to face the Akatsuki and his destiny."},
+  {mal_id:20,    tmdb:"46260",  imdb:"tt0409591",  title:"Naruto",                                  score:7.98, episodes:220, status:"Finished Airing",  type:"TV",    year:2002, img:"https://cdn.myanimelist.net/images/anime/13/17405.jpg",   synopsis:"Naruto Uzumaki, a young ninja with a demon fox inside him, dreams of becoming the greatest ninja."},
+  {mal_id:5114,  tmdb:"31911",  imdb:"tt1355642",  title:"Fullmetal Alchemist: Brotherhood",       score:9.10, episodes:64,  status:"Finished Airing",  type:"TV",    year:2009, img:"https://cdn.myanimelist.net/images/anime/1223/96541.jpg",  synopsis:"Brothers Edward and Alphonse Elric seek the Philosopher's Stone after losing everything."},
+  {mal_id:9253,  tmdb:"40075",  imdb:"tt1910272",  title:"Steins;Gate",                             score:9.07, episodes:24,  status:"Finished Airing",  type:"TV",    year:2011, img:"https://cdn.myanimelist.net/images/anime/5/73199.jpg",    synopsis:"Mad scientist Okabe accidentally discovers time travel and faces catastrophic consequences."},
+  {mal_id:1535,  tmdb:"13916",  imdb:"tt0877057",  title:"Death Note",                              score:8.63, episodes:37,  status:"Finished Airing",  type:"TV",    year:2006, img:"https://cdn.myanimelist.net/images/anime/9/9453.jpg",    synopsis:"Light Yagami finds a notebook that kills anyone whose name is written in it."},
+  {mal_id:22319, tmdb:"61374",  imdb:"tt3398540",  title:"Tokyo Ghoul",                             score:7.79, episodes:12,  status:"Finished Airing",  type:"TV",    year:2014, img:"https://cdn.myanimelist.net/images/anime/5/64449.jpg",   synopsis:"Student Ken Kaneki becomes a half-ghoul and navigates two dangerous worlds."},
+  {mal_id:30276, tmdb:"63926",  imdb:"tt4508902",  title:"One Punch Man",                           score:8.68, episodes:12,  status:"Finished Airing",  type:"TV",    year:2015, img:"https://cdn.myanimelist.net/images/anime/12/76049.jpg",   synopsis:"Saitama can defeat anyone with a single punch — but now he's completely bored."},
+  {mal_id:11061, tmdb:"46195",  imdb:"tt2098220",  title:"Hunter x Hunter (2011)",                 score:9.04, episodes:148, status:"Finished Airing",  type:"TV",    year:2011, img:"https://cdn.myanimelist.net/images/anime/11/33657.jpg",   synopsis:"Gon Freecss sets out to become a legendary Hunter like his missing father."},
+  {mal_id:33486, tmdb:"65930",  imdb:"tt5311514",  title:"Boku no Hero Academia",                   score:7.92, episodes:13,  status:"Finished Airing",  type:"TV",    year:2016, img:"https://cdn.myanimelist.net/images/anime/10/78745.jpg",   synopsis:"In a world of superpowers, a powerless boy dreams of becoming the greatest hero."},
+  {mal_id:44511, tmdb:"120089", imdb:"tt13052034", title:"Spy x Family",                            score:8.65, episodes:25,  status:"Finished Airing",  type:"TV",    year:2022, img:"https://cdn.myanimelist.net/images/anime/1441/122795.jpg",synopsis:"A spy, an assassin, and a telepath form a fake family — none knowing each other's secrets."},
+  {mal_id:50739, tmdb:"210543", imdb:"tt21733534", title:"Oshi no Ko",                              score:8.69, episodes:11,  status:"Finished Airing",  type:"TV",    year:2023, img:"https://cdn.myanimelist.net/images/anime/1812/134736.jpg",synopsis:"A doctor reincarnates as his idol's child and uncovers the dark side of entertainment."},
+  {mal_id:54112, tmdb:"240411", imdb:"tt27686250", title:"Dandadan",                                score:8.44, episodes:12,  status:"Finished Airing",  type:"TV",    year:2024, img:"https://cdn.myanimelist.net/images/anime/1340/144463.jpg",synopsis:"A believer in the occult and a boy who believes in aliens face supernatural threats together."},
+  {mal_id:32281, tmdb:"372058", imdb:"tt5311514",  title:"Kimi no Na wa. (Your Name)",             score:9.00, episodes:1,   status:"Finished Airing",  type:"Movie", year:2016, img:"https://cdn.myanimelist.net/images/anime/5/87048.jpg",    synopsis:"Two teenagers inexplicably swap bodies and search for each other across time."},
+  {mal_id:199,   tmdb:"129",    imdb:"tt0245429",  title:"Spirited Away",                           score:8.87, episodes:1,   status:"Finished Airing",  type:"Movie", year:2001, img:"https://cdn.myanimelist.net/images/anime/6/79597.jpg",    synopsis:"Chihiro stumbles into the spirit world and must work in a bathhouse to save her parents."},
+  {mal_id:23755, tmdb:"61663",  imdb:"tt3455790",  title:"Nanatsu no Taizai",                       score:7.71, episodes:24,  status:"Finished Airing",  type:"TV",    year:2014, img:"https://cdn.myanimelist.net/images/anime/8/65409.jpg",   synopsis:"Princess Elizabeth seeks the Seven Deadly Sins to help reclaim her kingdom."},
+  {mal_id:23273, tmdb:"61889",  imdb:"tt3398540",  title:"Shigatsu wa Kimi no Uso",                score:8.67, episodes:22,  status:"Finished Airing",  type:"TV",    year:2014, img:"https://cdn.myanimelist.net/images/anime/3/67177.jpg",   synopsis:"A piano prodigy who lost his ability to hear the piano keys meets a violinist who changes his world."},
 ];
 
-// ── STATE ──
-let currentAnime=null, currentEp=1, totalEps=1, currentLang='sub';
+let currentAnime=null, currentEp=1, totalEps=1, currentLang='sub', currentServer=0;
 
-// MegaPlay MAL endpoint — no TMDB needed, no API call needed
-function buildStreamUrl(mal_id, ep, lang) {
-  return `https://megaplay.buzz/stream/mal/${mal_id}/${ep}/${lang}`;
-}
+// ── SERVERS ──
+// Server 0 = MegaPlay (primary, works now that we have a real domain)
+// Servers 1-3 = fallbacks
+const SERVERS = [
+  {
+    name:'🎯 MegaPlay',
+    url:(a,ep,lang)=>`https://megaplay.buzz/stream/mal/${a.mal_id}/${ep}/${lang}`
+  },
+  {
+    name:'Server 2',
+    url:(a,ep,lang)=>a.imdb?`https://vidsrc.me/embed/tv?imdb=${a.imdb}&season=1&episode=${ep}`:`https://vidsrc.me/embed/tv?tmdb=${a.tmdb}&season=1&episode=${ep}`
+  },
+  {
+    name:'Server 3',
+    url:(a,ep,lang)=>`https://vidsrc.icu/embed/tv/${a.tmdb}/1/${ep}`
+  },
+  {
+    name:'Server 4',
+    url:(a,ep,lang)=>`https://vidlink.pro/tv/${a.tmdb}/1/${ep}?sub_type=${lang}`
+  }
+];
 
 function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0);}
 function goHome(){document.getElementById('search-input').value='';showPage('home-page');}
-
-function setLang(lang){
-  currentLang=lang;
-  document.getElementById('detail-sub-btn').classList.toggle('active',lang==='sub');
-  document.getElementById('detail-dub-btn').classList.toggle('active',lang==='dub');
-}
-
-function switchLang(lang){
-  currentLang=lang;
-  document.getElementById('player-sub-btn').classList.toggle('active',lang==='sub');
-  document.getElementById('player-dub-btn').classList.toggle('active',lang==='dub');
-  document.getElementById('player-iframe').src=buildStreamUrl(currentAnime.mal_id,currentEp,lang);
-}
+function setLang(lang){currentLang=lang;document.getElementById('detail-sub-btn').classList.toggle('active',lang==='sub');document.getElementById('detail-dub-btn').classList.toggle('active',lang==='dub');}
+function switchLang(lang){currentLang=lang;document.getElementById('psub').classList.toggle('active',lang==='sub');document.getElementById('pdub').classList.toggle('active',lang==='dub');loadIframe();}
+function setServer(idx){currentServer=idx;[0,1,2,3].forEach(i=>document.getElementById('srv'+i).classList.toggle('active',i===idx));loadIframe();}
+function loadIframe(){document.getElementById('player-iframe').src=SERVERS[currentServer].url(currentAnime,currentEp,currentLang);}
 
 function buildCard(a){
-  const card=document.createElement('div');
-  card.className='anime-card';
-  card.innerHTML=`<img src="${a.img}" alt="${a.title}" loading="lazy"/>
+  const c=document.createElement('div');c.className='anime-card';
+  c.innerHTML=`<img src="${a.img}" alt="${a.title}" loading="lazy"/>
     <div class="anime-card-info">
       <div class="anime-card-title">${a.title}</div>
       <div class="anime-card-sub">${a.episodes?a.episodes+' eps':'Ongoing'}</div>
       ${a.score?`<div class="anime-card-badge">⭐ ${a.score}</div>`:''}
     </div>`;
-  card.onclick=()=>openDetail(a);
-  return card;
+  c.onclick=()=>openDetail(a);return c;
 }
-
 function renderGrid(id,list){
   const g=document.getElementById(id);g.innerHTML='';
   if(!list?.length){g.innerHTML=`<div class="empty-state"><h3>Nothing found</h3></div>`;return;}
   list.forEach(a=>g.appendChild(buildCard(a)));
 }
 
-const TRENDING_IDS=[52991,21,40748,38000,47778,16498,39535,37779,269,11757,1735,20,50739,54112];
-const TOPRATED_IDS=[5114,9253,11061,1535,30276,32281,199,44511,33486,22319,23755,37779,52991,50739];
+const TRENDING=[52991,21,40748,38000,47778,16498,39535,37779,269,11757,1735,20,50739,54112];
+const TOPRATED=[5114,9253,11061,1535,30276,32281,199,44511,33486,22319,37779,52991,23273,50739];
 
 function loadHome(){
-  renderGrid('trending-grid',TRENDING_IDS.map(id=>LIBRARY.find(a=>a.mal_id===id)).filter(Boolean));
-  renderGrid('toprated-grid',TOPRATED_IDS.map(id=>LIBRARY.find(a=>a.mal_id===id)).filter(Boolean));
+  renderGrid('trending-grid',TRENDING.map(id=>LIBRARY.find(a=>a.mal_id===id)).filter(Boolean));
+  renderGrid('toprated-grid',TOPRATED.map(id=>LIBRARY.find(a=>a.mal_id===id)).filter(Boolean));
 }
 
 function doSearch(){
@@ -257,39 +240,28 @@ function doSearch(){
   showPage('search-results-page');
   document.getElementById('results-title').textContent=`Results for "${q}"`;
   const matches=LIBRARY.filter(a=>a.title.toLowerCase().includes(q));
-  const grid=document.getElementById('results-grid');grid.innerHTML='';
-  if(!matches.length){
-    grid.innerHTML=`<div class="empty-state"><h3>Not in library</h3><p>Try: One Piece, Naruto, Bleach, Slime, AOT, FMA, Death Note, Jujutsu Kaisen...</p></div>`;
-    return;
-  }
-  matches.forEach(a=>grid.appendChild(buildCard(a)));
+  const g=document.getElementById('results-grid');g.innerHTML='';
+  if(!matches.length){g.innerHTML=`<div class="empty-state"><h3>Not in library</h3><p>Try: One Piece · Naruto · Bleach · Slime · AOT · FMA · Death Note · Jujutsu Kaisen</p></div>`;return;}
+  matches.forEach(a=>g.appendChild(buildCard(a)));
 }
-
 document.getElementById('search-btn').onclick=doSearch;
 document.getElementById('search-input').onkeydown=e=>{if(e.key==='Enter')doSearch();};
 
 function openDetail(a){
-  currentAnime=a;
-  showPage('detail-page');
+  currentAnime=a;showPage('detail-page');
   document.getElementById('detail-img').src=a.img;
   document.getElementById('detail-title').textContent=a.title;
   document.getElementById('detail-synopsis').textContent=a.synopsis||'No synopsis.';
-
   const tags=[
-    {label:a.type||'TV',hi:false},
-    {label:a.status||'',hi:a.status==='Currently Airing'},
-    {label:a.year?String(a.year):'',hi:false},
-    {label:a.score?`⭐ ${a.score}`:'',hi:true},
+    {label:a.type||'TV',hi:false},{label:a.status||'',hi:a.status==='Currently Airing'},
+    {label:a.year?String(a.year):'',hi:false},{label:a.score?`⭐ ${a.score}`:'',hi:true},
     {label:a.episodes?`${a.episodes} Episodes`:'Ongoing',hi:false},
   ].filter(t=>t.label);
   document.getElementById('detail-meta').innerHTML=tags.map(t=>`<span class="meta-tag ${t.hi?'hi':''}">${t.label}</span>`).join('');
-
-  // reset lang
   setLang('sub');
-
   totalEps=a.episodes||100;
   const eg=document.getElementById('ep-grid');eg.innerHTML='';
-  const max=Math.min(totalEps===100?100:totalEps,500);
+  const max=Math.min(totalEps,500);
   for(let i=1;i<=max;i++){
     const b=document.createElement('button');b.className='ep-btn';b.textContent=`EP ${i}`;
     b.onclick=()=>openPlayer(i);eg.appendChild(b);
@@ -299,18 +271,13 @@ function openDetail(a){
 }
 
 function openPlayer(ep){
-  currentEp=ep;
+  currentEp=ep;currentServer=0;
   showPage('player-page');
-  const a=currentAnime;
-  const url=buildStreamUrl(a.mal_id,ep,currentLang);
-
-  document.getElementById('player-title').innerHTML=`${a.title} <span>— EP ${ep}</span>`;
-  document.getElementById('player-iframe').src=url;
-
-  // sync lang buttons
-  document.getElementById('player-sub-btn').classList.toggle('active',currentLang==='sub');
-  document.getElementById('player-dub-btn').classList.toggle('active',currentLang==='dub');
-
+  document.getElementById('player-title').innerHTML=`${currentAnime.title} <span>— EP ${ep}</span>`;
+  [0,1,2,3].forEach(i=>document.getElementById('srv'+i).classList.toggle('active',i===0));
+  document.getElementById('psub').classList.toggle('active',currentLang==='sub');
+  document.getElementById('pdub').classList.toggle('active',currentLang==='dub');
+  loadIframe();
   updateEpNav();
   document.querySelectorAll('.ep-btn').forEach((b,i)=>b.classList.toggle('active',i+1===ep));
 }
@@ -320,7 +287,6 @@ function updateEpNav(){
   document.getElementById('prev-ep').disabled=currentEp<=1;
   document.getElementById('next-ep').disabled=currentEp>=totalEps;
 }
-
 document.getElementById('prev-ep').onclick=()=>{if(currentEp>1)openPlayer(currentEp-1);};
 document.getElementById('next-ep').onclick=()=>{if(currentEp<totalEps)openPlayer(currentEp+1);};
 document.getElementById('back-detail').onclick=()=>{document.getElementById('player-iframe').src='';showPage('detail-page');};
