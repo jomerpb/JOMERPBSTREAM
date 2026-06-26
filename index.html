@@ -771,11 +771,22 @@ function buildGridCard(item) {
   const typeColor = item.type==='anime'?'anime':item.type==='movie'?'movie':'tv';
   const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'FILM':'TV';
 
-  // Meta row: flag + year + genre
+  // Meta row: flag + year + genre + status
   const metaParts = [];
   if (item.countryFlag) metaParts.push(`<span>${item.countryFlag}</span>`);
   if (item.year)        metaParts.push(`<span>${item.year}</span>`);
   if (item.genre)       metaParts.push(`<span>· ${item.genre}</span>`);
+  // Status
+  const statusMap = {
+    'Returning Series':'🟢 Ongoing', 'In Production':'🟢 Ongoing',
+    'Planned':'🔵 Upcoming',  'Pilot':'🔵 Upcoming',
+    'Ended':'✅ Completed',   'Canceled':'⛔ Canceled',
+    'RELEASING':'🟢 Ongoing', 'FINISHED':'✅ Completed',
+    'NOT_YET_RELEASED':'🔵 Upcoming', 'CANCELLED':'⛔ Canceled',
+    'Currently Airing':'🟢 Ongoing', 'Finished Airing':'✅ Completed',
+  };
+  const statusLabel = statusMap[item.status] || '';
+  if (statusLabel) metaParts.push(`<span>· ${statusLabel}</span>`);
   const meta = metaParts.length ? `<div class="grid-card-meta">${metaParts.join('')}</div>` : '';
 
   c.innerHTML = `
@@ -827,6 +838,7 @@ function fromTMDB(m, type) {
     episodes: m.number_of_episodes || null,
     tmdb_id:  m.id,
     genre, country, countryFlag,
+    status: m.status || '',
   };
 }
 
@@ -846,6 +858,7 @@ function fromAL(m) {
     synopsis:(m.description||'').replace(/<[^>]*>/g,''),
     episodes,
     genre,
+    status: m.status || '',
     country: '🇯🇵', countryFlag: '🇯🇵',
   };
 }
