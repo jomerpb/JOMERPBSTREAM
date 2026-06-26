@@ -134,8 +134,8 @@
     .player-top-info{flex:1;min-width:0;}
     .player-top-info h3{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .player-top-info p{font-size:10px;color:var(--muted);margin-top:1px;}
-    .player-frame{width:100%;aspect-ratio:16/9;background:#000;position:relative;}
-    .player-frame iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none;display:block;}
+    .player-frame{width:100%;aspect-ratio:16/9;background:#000;}
+    .player-frame iframe{width:100%;height:100%;border:none;display:block;}
     .player-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);}
     .server-label{font-size:10px;color:var(--muted);}
     .server-label b{color:var(--accent2);}
@@ -273,111 +273,13 @@
     <button onclick="doSearch(document.getElementById('search-input').value)" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;">Go</button>
   </div>
   <div class="search-inner">
-
-    <!-- Type tabs -->
-    <div class="content-tabs" id="search-type-tabs" style="padding:0;margin-bottom:14px;">
+    <div class="content-tabs" id="search-type-tabs" style="padding:0;margin-bottom:12px;">
       <div class="ctab active" onclick="setSearchType('all',this)">All</div>
       <div class="ctab" onclick="setSearchType('anime',this)">🎌 Anime</div>
       <div class="ctab" onclick="setSearchType('tv',this)">📺 TV</div>
       <div class="ctab" onclick="setSearchType('movie',this)">🎬 Movies</div>
     </div>
-
-    <!-- Filter toggle button -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div id="search-label" style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:2px;color:var(--muted);"></div>
-      <button onclick="toggleFilters()" id="filter-toggle-btn" style="display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-        Filters
-        <span id="filter-count" style="display:none;background:var(--accent);color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;display:none;align-items:center;justify-content:center;"></span>
-      </button>
-    </div>
-
-    <!-- Filter Panel -->
-    <div id="filter-panel" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
-
-      <!-- Genre -->
-      <div class="filter-section">
-        <div class="filter-label">Genre</div>
-        <div class="chips-row" id="filter-genre">
-          <div class="chip active" data-val="" onclick="pickChip(this,'genre')">All</div>
-          <div class="chip" data-val="28|Action" onclick="pickChip(this,'genre')">Action</div>
-          <div class="chip" data-val="12|Adventure" onclick="pickChip(this,'genre')">Adventure</div>
-          <div class="chip" data-val="35|Comedy" onclick="pickChip(this,'genre')">Comedy</div>
-          <div class="chip" data-val="18|Drama" onclick="pickChip(this,'genre')">Drama</div>
-          <div class="chip" data-val="14|Fantasy" onclick="pickChip(this,'genre')">Fantasy</div>
-          <div class="chip" data-val="27|Horror" onclick="pickChip(this,'genre')">Horror</div>
-          <div class="chip" data-val="9648|Mystery" onclick="pickChip(this,'genre')">Mystery</div>
-          <div class="chip" data-val="10749|Romance" onclick="pickChip(this,'genre')">Romance</div>
-          <div class="chip" data-val="878|Sci-Fi" onclick="pickChip(this,'genre')">Sci-Fi</div>
-          <div class="chip" data-val="53|Thriller" onclick="pickChip(this,'genre')">Thriller</div>
-          <div class="chip" data-val="16|Animation" onclick="pickChip(this,'genre')">Animation</div>
-          <div class="chip" data-val="10765|Supernatural" onclick="pickChip(this,'genre')">Supernatural</div>
-        </div>
-      </div>
-
-      <!-- Country (TV only) -->
-      <div class="filter-section" id="filter-country-wrap">
-        <div class="filter-label">Country</div>
-        <div class="chips-row" id="filter-country">
-          <div class="chip active" data-val="" onclick="pickChip(this,'country')">All</div>
-          <div class="chip" data-val="KR" onclick="pickChip(this,'country')">🇰🇷 Korea</div>
-          <div class="chip" data-val="JP" onclick="pickChip(this,'country')">🇯🇵 Japan</div>
-          <div class="chip" data-val="CN" onclick="pickChip(this,'country')">🇨🇳 China</div>
-          <div class="chip" data-val="TH" onclick="pickChip(this,'country')">🇹🇭 Thailand</div>
-          <div class="chip" data-val="PH" onclick="pickChip(this,'country')">🇵🇭 Philippines</div>
-          <div class="chip" data-val="US" onclick="pickChip(this,'country')">🇺🇸 USA</div>
-          <div class="chip" data-val="GB" onclick="pickChip(this,'country')">🇬🇧 UK</div>
-          <div class="chip" data-val="IN" onclick="pickChip(this,'country')">🇮🇳 India</div>
-        </div>
-      </div>
-
-      <!-- Year / Decade -->
-      <div class="filter-section">
-        <div class="filter-label">Year / Era</div>
-        <div class="chips-row" id="filter-year">
-          <div class="chip active" data-val="" onclick="pickChip(this,'year')">All</div>
-          <div class="chip" data-val="2026" onclick="pickChip(this,'year')">2026</div>
-          <div class="chip" data-val="2025" onclick="pickChip(this,'year')">2025</div>
-          <div class="chip" data-val="2024" onclick="pickChip(this,'year')">2024</div>
-          <div class="chip" data-val="2023" onclick="pickChip(this,'year')">2023</div>
-          <div class="chip" data-val="2020s" onclick="pickChip(this,'year')">2020s</div>
-          <div class="chip" data-val="2010s" onclick="pickChip(this,'year')">2010s</div>
-          <div class="chip" data-val="2000s" onclick="pickChip(this,'year')">2000s</div>
-          <div class="chip" data-val="1990s" onclick="pickChip(this,'year')">1990s</div>
-          <div class="chip" data-val="1980s" onclick="pickChip(this,'year')">1980s</div>
-        </div>
-      </div>
-
-      <!-- Min Rating -->
-      <div class="filter-section">
-        <div class="filter-label">Min Rating</div>
-        <div class="chips-row" id="filter-rating">
-          <div class="chip active" data-val="" onclick="pickChip(this,'rating')">Any</div>
-          <div class="chip" data-val="9" onclick="pickChip(this,'rating')">9+ ⭐⭐⭐⭐⭐</div>
-          <div class="chip" data-val="8" onclick="pickChip(this,'rating')">8+ ⭐⭐⭐⭐</div>
-          <div class="chip" data-val="7" onclick="pickChip(this,'rating')">7+ ⭐⭐⭐</div>
-          <div class="chip" data-val="6" onclick="pickChip(this,'rating')">6+ ⭐⭐</div>
-        </div>
-      </div>
-
-      <!-- Sort -->
-      <div class="filter-section">
-        <div class="filter-label">Sort By</div>
-        <div class="chips-row" id="filter-sort">
-          <div class="chip active" data-val="popularity.desc" onclick="pickChip(this,'sort')">Most Popular</div>
-          <div class="chip" data-val="vote_average.desc" onclick="pickChip(this,'sort')">Top Rated</div>
-          <div class="chip" data-val="primary_release_date.desc" onclick="pickChip(this,'sort')">Newest First</div>
-          <div class="chip" data-val="primary_release_date.asc" onclick="pickChip(this,'sort')">Oldest First</div>
-        </div>
-      </div>
-
-      <!-- Apply / Clear -->
-      <div style="display:flex;gap:8px;margin-top:4px;">
-        <button onclick="applyFilters()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:11px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply Filters</button>
-        <button onclick="clearFilters()" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:11px 16px;border-radius:10px;font-size:12px;cursor:pointer;">Clear</button>
-      </div>
-    </div>
-
+    <div id="search-label" style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:2px;color:var(--muted);margin-bottom:10px;display:none;"></div>
     <div class="results-grid" id="search-grid"></div>
     <div id="search-more" style="display:none;"><button class="load-more-btn" onclick="loadMoreSearch()">Load More</button></div>
   </div>
@@ -424,12 +326,18 @@
       <p id="player-subtitle"></p>
     </div>
   </div>
-  <div class="player-frame"><iframe id="player-iframe" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" allow="autoplay;fullscreen *;encrypted-media;picture-in-picture" frameborder="0" scrolling="no" style="width:100%;height:100%;border:none;display:block;"></iframe></div>
+  <div class="player-frame"><iframe id="player-iframe" allowfullscreen allow="autoplay;fullscreen;encrypted-media;picture-in-picture" frameborder="0" scrolling="no"></iframe></div>
   <div class="player-bar">
     <div class="server-label">Server: <b id="server-name">MegaPlay</b></div>
-    <div class="lang-row" id="player-lang-row" style="display:none;">
-      <button class="lbtn active" id="psub" onclick="switchLang('sub')">SUB</button>
-      <button class="lbtn" id="pdub" onclick="switchLang('dub')">DUB</button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button id="open-browser-btn" onclick="openInBrowser()" style="display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:6px 11px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Open in Browser
+      </button>
+      <div class="lang-row" id="player-lang-row" style="display:none;">
+        <button class="lbtn active" id="psub" onclick="switchLang('sub')">SUB</button>
+        <button class="lbtn" id="pdub" onclick="switchLang('dub')">DUB</button>
+      </div>
     </div>
   </div>
   <div class="ep-nav-row">
@@ -873,12 +781,7 @@ async function fetchSearch(q, type, page) {
 
 async function loadMoreSearch() {
   searchState.page++;
-  let items;
-  if (searchState.mode === 'filter') {
-    items = await fetchFiltered(searchState.page);
-  } else {
-    items = await fetchSearch(searchState.q, searchState.type, searchState.page);
-  }
+  const items = await fetchSearch(searchState.q, searchState.type, searchState.page);
   renderGrid('search-grid', items, true);
   searchState.hasMore = items.length >= 20;
   document.getElementById('search-more').style.display = searchState.hasMore ? 'block' : 'none';
@@ -1148,6 +1051,26 @@ function playStream() {
   document.getElementById('player-iframe').src = url;
 }
 
+function openInBrowser() {
+  const item = currentItem;
+  const season = currentSeason;
+  let url = '';
+
+  if (item.type === 'anime') {
+    const malId = item.mal_id || season?.mal_id;
+    url = `https://megaplay.buzz/stream/mal/${malId}/${currentEp}/${currentLang}`;
+  } else if (item.type === 'movie') {
+    const tmdbId = item.tmdb_id || item.id;
+    url = `https://vidsrc.me/embed/movie?tmdb=${tmdbId}`;
+  } else {
+    const tmdbId = item.tmdb_id || item.id;
+    const seasonNum = season?.season_number || 1;
+    url = `https://vidsrc.me/embed/tv?tmdb=${tmdbId}&season=${seasonNum}&episode=${currentEp}`;
+  }
+
+  window.open(url, '_blank');
+}
+
 function updateEpNav() {
   const isMovie = currentItem?.type === 'movie';
   document.getElementById('ep-indicator').textContent = isMovie ? '' : `Episode ${currentEp} / ${totalEps||'?'}`;
@@ -1157,161 +1080,6 @@ function updateEpNav() {
 
 document.getElementById('prev-ep').onclick = () => { if (currentEp > 1) openPlayer(currentEp-1); };
 document.getElementById('next-ep').onclick = () => { if (currentEp < totalEps) openPlayer(currentEp+1); };
-
-// ═══════════════════════════════════════════
-// SEARCH FILTERS
-// ═══════════════════════════════════════════
-const filterState = { genre:'', country:'', year:'', rating:'', sort:'popularity.desc' };
-
-function toggleFilters() {
-  const panel = document.getElementById('filter-panel');
-  const isOpen = panel.style.display !== 'none';
-  panel.style.display = isOpen ? 'none' : 'block';
-  document.getElementById('filter-toggle-btn').style.borderColor = isOpen ? 'var(--border)' : 'var(--accent)';
-  document.getElementById('filter-toggle-btn').style.color = isOpen ? 'var(--muted)' : 'var(--accent)';
-  // Show/hide country filter based on type
-  const countryWrap = document.getElementById('filter-country-wrap');
-  countryWrap.style.display = (searchType === 'anime') ? 'none' : 'block';
-}
-
-function pickChip(el, group) {
-  el.closest('.chips-row').querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  filterState[group] = el.dataset.val;
-  updateFilterCount();
-}
-
-function updateFilterCount() {
-  const active = Object.values(filterState).filter(v => v && v !== 'popularity.desc').length;
-  const badge = document.getElementById('filter-count');
-  if (active > 0) {
-    badge.textContent = active;
-    badge.style.display = 'inline-flex';
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-function clearFilters() {
-  filterState.genre   = '';
-  filterState.country = '';
-  filterState.year    = '';
-  filterState.rating  = '';
-  filterState.sort    = 'popularity.desc';
-  ['filter-genre','filter-country','filter-year','filter-rating','filter-sort'].forEach(id => {
-    document.getElementById(id)?.querySelectorAll('.chip').forEach((c,i) => c.classList.toggle('active', i===0));
-  });
-  updateFilterCount();
-}
-
-async function applyFilters() {
-  // Close panel
-  document.getElementById('filter-panel').style.display = 'none';
-  document.getElementById('search-label').textContent = 'BROWSE RESULTS';
-  document.getElementById('search-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
-  document.getElementById('search-more').style.display = 'none';
-  searchState = {q:'', type: searchType, page:1, hasMore:false};
-
-  const items = await fetchFiltered(1);
-  renderGrid('search-grid', items);
-  searchState.hasMore = items.length >= 20;
-  document.getElementById('search-more').style.display = searchState.hasMore ? 'block' : 'none';
-  searchState.mode = 'filter';
-}
-
-async function fetchFiltered(page) {
-  const { genre, country, year, rating, sort } = filterState;
-  const type = searchType;
-
-  // Year range
-  let yearStart = '', yearEnd = '';
-  if (year) {
-    if (year.includes('s')) {
-      const decade = parseInt(year);
-      yearStart = `${decade}-01-01`;
-      yearEnd   = `${decade+9}-12-31`;
-    } else {
-      yearStart = `${year}-01-01`;
-      yearEnd   = `${year}-12-31`;
-    }
-  }
-
-  // Genre ID (stored as "28|Action" → "28")
-  const genreId = genre ? genre.split('|')[0] : '';
-
-  let results = [];
-
-  if (type === 'all' || type === 'tv') {
-    const tvSort = sort === 'primary_release_date.desc' ? 'first_air_date.desc'
-                 : sort === 'primary_release_date.asc'  ? 'first_air_date.asc'
-                 : sort;
-    const tvParams = { sort_by: tvSort, page };
-    if (genreId)    tvParams['with_genres']          = genreId;
-    if (country)    tvParams['with_origin_country']  = country;
-    if (rating)     tvParams['vote_average.gte']     = rating;
-    if (yearStart)  tvParams['first_air_date.gte']   = yearStart;
-    if (yearEnd)    tvParams['first_air_date.lte']   = yearEnd;
-
-    const url = new URL(`${TMDB_BASE}/discover/tv`);
-    url.searchParams.set('api_key', TMDB_KEY);
-    url.searchParams.set('language','en-US');
-    Object.entries(tvParams).forEach(([k,v]) => url.searchParams.set(k, v));
-    try {
-      const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
-      const d = await r.json();
-      results = results.concat((d?.results||[]).map(m=>fromTMDB(m,'tv')));
-    } catch {}
-  }
-
-  if (type === 'all' || type === 'movie') {
-    const mvParams = { sort_by: sort, page };
-    if (genreId)    mvParams['with_genres']                 = genreId;
-    if (country)    mvParams['with_origin_country']         = country;
-    if (rating)     mvParams['vote_average.gte']            = rating;
-    if (yearStart)  mvParams['primary_release_date.gte']    = yearStart;
-    if (yearEnd)    mvParams['primary_release_date.lte']    = yearEnd;
-
-    const url = new URL(`${TMDB_BASE}/discover/movie`);
-    url.searchParams.set('api_key', TMDB_KEY);
-    url.searchParams.set('language','en-US');
-    Object.entries(mvParams).forEach(([k,v]) => url.searchParams.set(k, v));
-    try {
-      const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
-      const d = await r.json();
-      results = results.concat((d?.results||[]).map(m=>fromTMDB(m,'movie')));
-    } catch {}
-  }
-
-  if (type === 'all' || type === 'anime') {
-    const genreName = genre ? genre.split('|')[1] : null;
-    const decade     = year?.includes('s') ? parseInt(year) : null;
-    const exactYear  = year && !year.includes('s') ? parseInt(year) : null;
-    const alSort     = sort.includes('vote_average')           ? 'SCORE_DESC'
-                     : sort.includes('release_date.asc')       ? 'START_DATE'
-                     : sort.includes('release_date.desc')      ? 'START_DATE_DESC'
-                     : 'POPULARITY_DESC';
-    const minScore   = rating ? parseInt(rating)*10 : undefined;
-    const yGte       = decade ? decade*10000 : exactYear ? exactYear*10000       : undefined;
-    const yLte       = decade ? (decade+9)*10000+1231 : exactYear ? exactYear*10000+1231 : undefined;
-
-    const Q = `query($page:Int,$genre:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int){
-      Page(page:$page,perPage:20){
-        media(type:ANIME,isAdult:false,genre:$genre,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore){
-          id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format
-        }
-      }
-    }`;
-    const d = await al(Q, {
-      page,
-      sort: [alSort],
-      genre: genreName || undefined,
-      yGte, yLte, minScore
-    });
-    results = results.concat((d?.data?.Page?.media||[]).map(fromAL));
-  }
-
-  return results;
-}
 
 // ═══════════════════════════════════════════
 // INIT
