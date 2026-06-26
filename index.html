@@ -236,9 +236,10 @@
     <div class="filter-group">
       <div class="filter-label">Sort By</div>
       <div class="filter-chips" id="chips-sort">
-        <div class="chip active" data-val="score" onclick="toggleChip(this,'sort')">Top Rated</div>
-        <div class="chip" data-val="popularity" onclick="toggleChip(this,'sort')">Most Popular</div>
-        <div class="chip" data-val="start_date" onclick="toggleChip(this,'sort')">Newest First</div>
+        <div class="chip active" data-val="bypopularity" onclick="toggleChip(this,'sort')">Most Popular</div>
+        <div class="chip" data-val="score" onclick="toggleChip(this,'sort')">Top Rated</div>
+        <div class="chip" data-val="airing" onclick="toggleChip(this,'sort')">Currently Airing</div>
+        <div class="chip" data-val="upcoming" onclick="toggleChip(this,'sort')">Upcoming</div>
         <div class="chip" data-val="favorites" onclick="toggleChip(this,'sort')">Most Favorited</div>
       </div>
     </div>
@@ -451,8 +452,8 @@ async function doSearch() {
   document.getElementById('results-title').textContent = `Results for "${q}"`;
   document.getElementById('results-grid').innerHTML = skeletonCards(8);
 
-  // No sfw filter — allows old anime like Flame of Recca, Yu Yu Hakusho
-  const data = await fetchJSON(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24`);
+  // No sfw filter, no unapproved — plain search works for all anime including old ones
+  const data = await fetchJSON(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24&order_by=score&sort=desc`);
   renderGrid('results-grid', data?.data);
 }
 
@@ -460,32 +461,28 @@ document.getElementById('search-btn').onclick = doSearch;
 document.getElementById('search-input').onkeydown = e => { if (e.key === 'Enter') doSearch(); };
 
 // ── BROWSE / FILTER ──
-const activeFilters = { type:'', status:'', genre:'', decade:'', sort:'score' };
+const activeFilters = { type:'', status:'', genre:'', decade:'', sort:'bypopularity' };
 let browsePage = 1;
 let browseHasMore = false;
 
 function toggleChip(el, group) {
-  // In each group, only one chip active at a time
   el.closest('.filter-chips').querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   activeFilters[group] = el.dataset.val;
 }
 
 function clearFilters() {
-  activeFilters.type = '';
+  activeFilters.type   = '';
   activeFilters.status = '';
-  activeFilters.genre = '';
+  activeFilters.genre  = '';
   activeFilters.decade = '';
-  activeFilters.sort = 'score';
-
-  // Reset all chips to first (All/Top Rated)
+  activeFilters.sort   = 'bypopularity';
   ['chips-type','chips-status','chips-genre','chips-decade'].forEach(id => {
-    const chips = document.getElementById(id)?.querySelectorAll('.chip');
-    chips?.forEach((c,i) => c.classList.toggle('active', i===0));
+    document.getElementById(id)?.querySelectorAll('.chip')
+      .forEach((c,i) => c.classList.toggle('active', i===0));
   });
-  const sortChips = document.getElementById('chips-sort')?.querySelectorAll('.chip');
-  sortChips?.forEach((c,i) => c.classList.toggle('active', i===0));
-
+  document.getElementById('chips-sort')?.querySelectorAll('.chip')
+    .forEach((c,i) => c.classList.toggle('active', i===0));
   document.getElementById('browse-grid').innerHTML = '';
   document.getElementById('load-more-wrap').style.display = 'none';
 }
@@ -497,33 +494,60 @@ async function applyFilters(page=1) {
     document.getElementById('load-more-wrap').style.display = 'none';
   }
 
-  let url = `${JIKAN}/anime?limit=24&order_by=${activeFilters.sort || 'score'}&sort=desc&page=${page}`;
+  let data = null;
 
-  if (activeFilters.type)   url += `&type=${activeFilters.type}`;
-  if (activeFilters.status) url += `&status=${activeFilters.status}`;
-  if (activeFilters.genre)  url += `&genres=${activeFilters.genre}`;
-
-  // Decade filter → start_date range
+  // If decade filter is set, use /anime search endpoint with date range
   if (activeFilters.decade) {
-    const start = activeFilters.decade;
-    const end   = activeFilters.decade === '1970' ? '1979' : String(parseInt(start) + 9);
-    const endYear = activeFilters.decade === '1970' ? '1969-12-31' : `${end}-12-31`;
-    const startYear = activeFilters.decade === '1970' ? '1900-01-01' : `${start}-01-01`;
-    url += `&start_date=${startYear}&end_date=${endYear}`;
+    const decade = parseInt(activeFilters.decade);
+    // For 1970s & older, go from 1900 to 1979
+    const startYear = decade === 1970 ? 1900 : decade;
+    const endYear   = decade === 1970 ? 1979 : decade + 9;
+
+    let url = `${JIKAN}/anime?limit=24&page=${page}&order_by=score&sort=desc`;
+    url += `&start_date=${startYear}-01-01&end_date=${endYear}-12-31`;
+    if (activeFilters.type)   url += `&type=${activeFilters.type}`;
+    if (activeFilters.status) url += `&status=${activeFilters.status}`;
+    if (activeFilters.genre)  url += `&genres=${activeFilters.genre}`;
+
+    data = await fetchJSON(url);
+
+  } else if (activeFilters.genre || activeFilters.type || activeFilters.status) {
+    // Genre/type/status filter — use /anime endpoint with a filter param
+    let url = `${JIKAN}/anime?limit=24&page=${page}&order_by=score&sort=desc`;
+    if (activeFilters.type)   url += `&type=${activeFilters.type}`;
+    if (activeFilters.status) url += `&status=${activeFilters.status}`;
+    if (activeFilters.genre)  url += `&genres=${activeFilters.genre}`;
+
+    data = await fetchJSON(url);
+
+  } else {
+    // No filters — use /top/anime with sort filter
+    const filterMap = {
+      'bypopularity': 'bypopularity',
+      'score':        '',          // default top/anime is by score
+      'upcoming':     'upcoming',
+      'favorites':    'favorite',
+      'airing':       'airing',
+    };
+    const sortVal = activeFilters.sort || '';
+    let url = `${JIKAN}/top/anime?limit=24&page=${page}`;
+    if (sortVal && filterMap[sortVal]) url += `&filter=${filterMap[sortVal]}`;
+
+    data = await fetchJSON(url);
   }
 
-  const data = await fetchJSON(url);
   const list = data?.data || [];
 
   if (page === 1) {
     renderGrid('browse-grid', list);
   } else {
-    // Append to existing grid
-    const grid = document.getElementById('browse-grid');
-    list.forEach(a => grid.appendChild(buildCard(a)));
+    if (!list.length) {
+      document.getElementById('load-more-wrap').style.display = 'none';
+      return;
+    }
+    list.forEach(a => document.getElementById('browse-grid').appendChild(buildCard(a)));
   }
 
-  // Show load more if there are more pages
   browseHasMore = data?.pagination?.has_next_page || false;
   document.getElementById('load-more-wrap').style.display = browseHasMore ? 'block' : 'none';
 }
