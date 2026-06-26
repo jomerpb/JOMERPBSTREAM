@@ -98,6 +98,9 @@
     .cw-title{font-size:11px;font-weight:600;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}
     .cw-sub{font-size:10px;color:var(--muted);margin-top:2px;}
 
+    .loader-more{display:flex;justify-content:center;padding:16px;}<br>
+    .spinner-sm{width:22px;height:22px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;}
+
     /* SEARCH DROPDOWN */
     .search-dropdown{position:absolute;top:calc(var(--top-h) - 2px);left:0;right:0;background:rgba(13,17,23,0.98);border-bottom:1px solid var(--border);z-index:200;max-height:70vh;overflow-y:auto;backdrop-filter:blur(20px);display:none;}
     .search-dropdown.open{display:block;}
@@ -323,7 +326,7 @@
       </div>
     </div>
     <div class="results-grid" id="anime-grid"></div>
-    <div id="anime-more" style="display:none;"><button class="load-more-btn" onclick="loadMoreAnime()">Load More</button></div>
+    <div id="anime-more" style="display:none;"><div id="anime-sentinel" data-page="anime" style="height:1px;"></div><div class="loader-more"><div class="spinner-sm"></div></div></div>
   </div>
 </div>
 
@@ -417,7 +420,7 @@
       </div>
     </div>
     <div class="results-grid" id="tv-grid"></div>
-    <div id="tv-more" style="display:none;"><button class="load-more-btn" onclick="loadMoreTV()">Load More</button></div>
+    <div id="tv-more" style="display:none;"><div id="tv-sentinel" data-page="tv" style="height:1px;"></div><div class="loader-more"><div class="spinner-sm"></div></div></div>
   </div>
 </div>
 
@@ -494,7 +497,7 @@
       </div>
     </div>
     <div class="results-grid" id="movies-grid"></div>
-    <div id="movies-more" style="display:none;"><button class="load-more-btn" onclick="loadMoreMovies()">Load More</button></div>
+    <div id="movies-more" style="display:none;"><div id="movies-sentinel" data-page="movies" style="height:1px;"></div><div class="loader-more"><div class="spinner-sm"></div></div></div>
   </div>
 </div>
 
@@ -990,6 +993,7 @@ async function loadAnimeSub(sub, tabEl) {
   renderGrid('anime-grid', items);
   animePageState.hasMore = items.length >= 24;
   document.getElementById('anime-more').style.display = animePageState.hasMore ? 'block' : 'none';
+  if (animePageState.hasMore) attachInfiniteScroll();
 }
 
 async function fetchAnime(sub, page) {
@@ -1018,11 +1022,14 @@ async function fetchAnime(sub, page) {
 }
 
 async function loadMoreAnime() {
+  if (!animePageState.hasMore) return;
+  animePageState.hasMore = false; // prevent double-fire
   animePageState.page++;
   const items = await fetchAnime(animePageState.sub, animePageState.page);
   renderGrid('anime-grid', items, true);
   animePageState.hasMore = items.length >= 24;
   document.getElementById('anime-more').style.display = animePageState.hasMore ? 'block' : 'none';
+  if (animePageState.hasMore) attachInfiniteScroll();
 }
 
 // ═══════════════════════════════════════════
@@ -1037,6 +1044,7 @@ async function loadTVSub(sub, region, tabEl) {
   renderGrid('tv-grid', items);
   tvPageState.hasMore = items.length >= 20;
   document.getElementById('tv-more').style.display = tvPageState.hasMore ? 'block' : 'none';
+  if (tvPageState.hasMore) attachInfiniteScroll();
 }
 
 async function fetchTV(sub, region, page) {
@@ -1072,11 +1080,14 @@ async function fetchTV(sub, region, page) {
 }
 
 async function loadMoreTV() {
+  if (!tvPageState.hasMore) return;
+  tvPageState.hasMore = false;
   tvPageState.page++;
   const items = await fetchTV(tvPageState.sub, tvPageState.region, tvPageState.page);
   renderGrid('tv-grid', items, true);
   tvPageState.hasMore = items.length >= 20;
   document.getElementById('tv-more').style.display = tvPageState.hasMore ? 'block' : 'none';
+  if (tvPageState.hasMore) attachInfiniteScroll();
 }
 
 function setTVFilter(region) {
@@ -1100,15 +1111,19 @@ async function loadMovieSub(sub, tabEl) {
   renderGrid('movies-grid', items);
   moviePageState.hasMore = (data?.total_pages||1) > 1;
   document.getElementById('movies-more').style.display = moviePageState.hasMore ? 'block' : 'none';
+  if (moviePageState.hasMore) attachInfiniteScroll();
 }
 
 async function loadMoreMovies() {
+  if (!moviePageState.hasMore) return;
+  moviePageState.hasMore = false;
   moviePageState.page++;
   const data = await tmdb(`/movie/${moviePageState.sub}`, {page: moviePageState.page});
   const items = (data?.results||[]).map(m=>fromTMDB(m,'movie'));
   renderGrid('movies-grid', items, true);
   moviePageState.hasMore = moviePageState.page < (data?.total_pages||1);
   document.getElementById('movies-more').style.display = moviePageState.hasMore ? 'block' : 'none';
+  if (moviePageState.hasMore) attachInfiniteScroll();
 }
 
 // ═══════════════════════════════════════════
@@ -1756,6 +1771,26 @@ async function applyMovieFilter() {
     renderGrid('movies-grid', (d?.results||[]).map(m=>fromTMDB(m,'movie')));
   } catch { renderGrid('movies-grid', []); }
   moviePageState = {sub:'filter', page:1, hasMore:false};
+}
+
+// ═══════════════════════════════════════════
+// INFINITE SCROLL
+// ═══════════════════════════════════════════
+const infiniteObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const page = entry.target.dataset.page;
+    if (page === 'anime'  && animePageState.hasMore)  loadMoreAnime();
+    if (page === 'tv'     && tvPageState.hasMore)     loadMoreTV();
+    if (page === 'movies' && moviePageState.hasMore)  loadMoreMovies();
+  });
+}, { rootMargin: '200px' });
+
+function attachInfiniteScroll() {
+  ['anime','tv','movies'].forEach(page => {
+    const sentinel = document.getElementById(`${page}-sentinel`);
+    if (sentinel) infiniteObserver.observe(sentinel);
+  });
 }
 
 // ═══════════════════════════════════════════
