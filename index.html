@@ -6,7 +6,7 @@
   <title>JomerStream 🎌</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>
-    :root{--bg:#080c14;--surface:#0f1620;--card:#141e2e;--accent:#e63946;--accent2:#457b9d;--text:#e8eaf0;--muted:#6b7a99;--border:#1e2d45;}
+    :root{--bg:#080c14;--surface:#0f1620;--card:#141e2e;--accent:#e63946;--accent2:#457b9d;--text:#e8eaf0;--muted:#6b7a99;--border:#1e2d45;--skeleton:#1a2535;}
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
 
@@ -29,6 +29,15 @@
 
     /* GRID */
     .anime-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:32px;}
+
+    /* SKELETON CARDS */
+    .skeleton-card{background:var(--card);border-radius:10px;overflow:hidden;border:1px solid var(--border);}
+    .skeleton-img{width:100%;aspect-ratio:2/3;background:var(--skeleton);animation:shimmer 1.4s infinite;}
+    .skeleton-line{height:10px;border-radius:4px;background:var(--skeleton);animation:shimmer 1.4s infinite;margin:8px 9px 4px;}
+    .skeleton-line.short{width:60%;margin-top:4px;}
+    @keyframes shimmer{0%{opacity:0.5}50%{opacity:1}100%{opacity:0.5}}
+
+    /* REAL CARDS */
     .anime-card{background:var(--card);border-radius:10px;overflow:hidden;cursor:pointer;border:1px solid var(--border);transition:transform 0.2s,border-color 0.2s,box-shadow 0.2s;}
     .anime-card:hover{transform:translateY(-4px);border-color:var(--accent);box-shadow:0 8px 24px rgba(230,57,70,0.18);}
     .anime-card img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block;background:var(--surface);}
@@ -37,14 +46,27 @@
     .anime-card-sub{font-size:10px;color:var(--muted);margin-top:2px;}
     .anime-card-badge{display:inline-block;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-top:4px;}
 
-    /* BACK */
+    /* BACK / HEADER */
     .back-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:13px;flex-shrink:0;}
     .results-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
 
-    /* DETAIL */
+    /* DETAIL HERO */
     .detail-hero{display:flex;gap:16px;margin-bottom:20px;}
     .detail-poster{width:130px;min-width:130px;border-radius:10px;overflow:hidden;border:1px solid var(--border);}
     .detail-poster img{width:100%;display:block;background:var(--surface);}
+
+    /* SKELETON HERO */
+    .skeleton-poster{width:130px;min-width:130px;border-radius:10px;overflow:hidden;border:1px solid var(--border);}
+    .skeleton-poster-img{width:100%;aspect-ratio:2/3;background:var(--skeleton);animation:shimmer 1.4s infinite;}
+    .skeleton-info{flex:1;}
+    .skeleton-title{height:22px;border-radius:4px;background:var(--skeleton);animation:shimmer 1.4s infinite;margin-bottom:10px;width:70%;}
+    .skeleton-meta{display:flex;gap:6px;margin-bottom:12px;}
+    .skeleton-tag{height:18px;width:60px;border-radius:20px;background:var(--skeleton);animation:shimmer 1.4s infinite;}
+    .skeleton-text{height:10px;border-radius:4px;background:var(--skeleton);animation:shimmer 1.4s infinite;margin-bottom:6px;}
+    .skeleton-text.w90{width:90%;}
+    .skeleton-text.w80{width:80%;}
+    .skeleton-text.w70{width:70%;}
+
     .detail-info{flex:1;min-width:0;}
     .detail-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;line-height:1.15;margin-bottom:8px;}
     .detail-meta{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;}
@@ -57,20 +79,20 @@
     .lang-btn{background:none;border:none;color:var(--muted);padding:8px 13px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;}
     .lang-btn.active{background:var(--accent2);color:#fff;}
 
-    /* SEASONS TABS */
+    /* SEASONS */
     .seasons-wrap{margin-bottom:16px;}
-    .seasons-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+    .seasons-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;min-height:36px;}
     .season-tab{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;}
     .season-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
-    .season-tab:hover:not(.active){border-color:var(--accent2);color:var(--text);}
-    .season-loading{font-size:12px;color:var(--muted);padding:8px 0;}
+    .skeleton-season-tab{width:100px;height:34px;border-radius:8px;background:var(--skeleton);animation:shimmer 1.4s infinite;display:inline-block;}
 
     /* EPISODES */
     .ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:6px;max-height:240px;overflow-y:auto;padding-right:4px;}
     .ep-grid::-webkit-scrollbar{width:4px;}
     .ep-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
-    .ep-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 4px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;text-align:center;}
+    .ep-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 4px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;text-align:center;transition:background 0.15s;}
     .ep-btn:hover,.ep-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+    .skeleton-ep{height:34px;border-radius:6px;background:var(--skeleton);animation:shimmer 1.4s infinite;}
 
     /* PLAYER */
     .player-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
@@ -89,13 +111,6 @@
     .ep-nav-btn:disabled{opacity:0.3;cursor:not-allowed;}
     .ep-indicator{font-size:12px;color:var(--muted);text-align:center;}
 
-    /* LOADER */
-    .loader{display:flex;justify-content:center;align-items:center;padding:40px;color:var(--muted);font-size:13px;gap:10px;}
-    .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;}
-    @keyframes spin{to{transform:rotate(360deg);}}
-    .mini-loader{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);}
-    .mini-spinner{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;}
-
     /* EMPTY */
     .empty-state{text-align:center;padding:40px 20px;color:var(--muted);}
     .empty-state h3{font-size:17px;margin-bottom:6px;color:var(--text);}
@@ -103,7 +118,7 @@
 
     @media(max-width:400px){
       .detail-hero{flex-direction:column;}
-      .detail-poster{width:110px;}
+      .detail-poster,.skeleton-poster{width:110px;}
       .detail-title{font-size:19px;}
     }
   </style>
@@ -121,11 +136,11 @@
 <!-- HOME -->
 <div id="home-page" class="page active">
   <div class="section-title">🆕 NEW THIS SEASON</div>
-  <div class="anime-grid" id="new-grid"><div class="loader"><div class="spinner"></div> Loading...</div></div>
+  <div class="anime-grid" id="new-grid"></div>
   <div class="section-title">🔥 TRENDING NOW</div>
-  <div class="anime-grid" id="trending-grid"><div class="loader"><div class="spinner"></div> Loading...</div></div>
+  <div class="anime-grid" id="trending-grid"></div>
   <div class="section-title">⭐ TOP RATED ALL TIME</div>
-  <div class="anime-grid" id="toprated-grid"><div class="loader"><div class="spinner"></div> Loading...</div></div>
+  <div class="anime-grid" id="toprated-grid"></div>
 </div>
 
 <!-- SEARCH RESULTS -->
@@ -137,33 +152,15 @@
   <div class="anime-grid" id="results-grid"></div>
 </div>
 
-<!-- DETAIL — seasons + episodes all in one -->
+<!-- DETAIL -->
 <div id="detail-page" class="page">
   <div style="margin-bottom:12px;">
     <button class="back-btn" onclick="goBack()">← Back</button>
   </div>
-  <div class="detail-hero">
-    <div class="detail-poster"><img id="detail-img" src="" alt=""/></div>
-    <div class="detail-info">
-      <div class="detail-title" id="detail-title"></div>
-      <div class="detail-meta" id="detail-meta"></div>
-      <div class="detail-synopsis" id="detail-synopsis"></div>
-      <div class="detail-actions">
-        <button class="watch-now-btn" id="watch-ep1-btn">▶ Watch EP 1</button>
-        <div class="lang-toggle">
-          <button class="lang-btn active" id="detail-sub-btn" onclick="setLang('sub')">SUB</button>
-          <button class="lang-btn" id="detail-dub-btn" onclick="setLang('dub')">DUB</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SEASONS + EPISODES -->
+  <div id="detail-hero-wrap"></div>
   <div class="seasons-wrap">
     <div class="section-title">SEASONS & EPISODES</div>
-    <div class="seasons-tabs" id="seasons-tabs">
-      <div class="mini-loader"><div class="mini-spinner"></div> Loading seasons...</div>
-    </div>
+    <div class="seasons-tabs" id="seasons-tabs"></div>
     <div class="ep-grid" id="ep-grid"></div>
   </div>
 </div>
@@ -171,18 +168,14 @@
 <!-- PLAYER -->
 <div id="player-page" class="page">
   <div class="player-header">
-    <button class="back-btn" id="back-to-detail">← Back</button>
+    <button class="back-btn" onclick="goBack()">← Back</button>
     <div class="player-title" id="player-title">Loading...</div>
   </div>
   <div class="player-wrap">
-    <iframe id="player-iframe"
-      allowfullscreen
-      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-      frameborder="0" scrolling="no">
-    </iframe>
+    <iframe id="player-iframe" allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture" frameborder="0" scrolling="no"></iframe>
   </div>
   <div class="player-controls">
-    <div class="powered-by">Powered by <span>MegaPlay</span> · HiAnime Library</div>
+    <div class="powered-by">Powered by <span>MegaPlay</span></div>
     <div class="lang-switch">
       <button class="lang-switch-btn active" id="psub" onclick="switchLang('sub')">SUB</button>
       <button class="lang-switch-btn" id="pdub" onclick="switchLang('dub')">DUB</button>
@@ -197,20 +190,22 @@
 
 <script>
 // ── STATE ──
-let currentAnime   = null;  // base anime (first season or clicked card)
-let currentSeason  = null;  // currently selected season object {mal_id, title, episodes}
-let allSeasons     = [];    // [{mal_id, title, episodes, img}]
-let currentEp      = 1;
-let totalEps       = 1;
-let currentLang    = 'sub';
-let pageStack      = ['home-page'];
+let currentAnime  = null;
+let currentSeason = null;
+let allSeasons    = [];
+let currentEp     = 1;
+let totalEps      = 1;
+let currentLang   = 'sub';
+let pageStack     = ['home-page'];
+
+// ── CACHE — prevents re-fetching same anime ──
+const seasonCache = {};
 
 const JIKAN = 'https://api.jikan.moe/v4';
 
 // ── STREAM URL ──
-function streamUrl(malId, ep, lang) {
-  return `https://megaplay.buzz/stream/mal/${malId}/${ep}/${lang}`;
-}
+const streamUrl = (malId, ep, lang) =>
+  `https://megaplay.buzz/stream/mal/${malId}/${ep}/${lang}`;
 
 // ── PAGE NAV ──
 function showPage(id) {
@@ -224,21 +219,19 @@ function goHome() {
   showPage('home-page');
 }
 function goBack() {
-  pageStack.pop();
-  const prev = pageStack[pageStack.length - 1] || 'home-page';
-  if (prev === 'player-page') pageStack.pop(); // skip player when going back
+  if (pageStack.length > 1) pageStack.pop();
   showPage(pageStack[pageStack.length - 1] || 'home-page');
 }
 function navigateTo(id) {
-  pageStack.push(id);
+  if (pageStack[pageStack.length - 1] !== id) pageStack.push(id);
   showPage(id);
 }
 
 // ── LANG ──
 function setLang(lang) {
   currentLang = lang;
-  document.getElementById('detail-sub-btn').classList.toggle('active', lang === 'sub');
-  document.getElementById('detail-dub-btn').classList.toggle('active', lang === 'dub');
+  document.getElementById('detail-sub-btn')?.classList.toggle('active', lang === 'sub');
+  document.getElementById('detail-dub-btn')?.classList.toggle('active', lang === 'dub');
 }
 function switchLang(lang) {
   currentLang = lang;
@@ -247,28 +240,54 @@ function switchLang(lang) {
   document.getElementById('player-iframe').src = streamUrl(currentSeason.mal_id, currentEp, lang);
 }
 
-// ── API ──
+// ── API (with timeout) ──
 async function fetchJSON(url) {
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!r.ok) return null;
     return r.json();
   } catch { return null; }
 }
 
-// ── CARD ──
+// ── SKELETON HELPERS ──
+function skeletonCards(n) {
+  return Array(n).fill(0).map(() => `
+    <div class="skeleton-card">
+      <div class="skeleton-img"></div>
+      <div class="skeleton-line"></div>
+      <div class="skeleton-line short"></div>
+    </div>`).join('');
+}
+function skeletonHero() {
+  return `
+    <div class="detail-hero">
+      <div class="skeleton-poster"><div class="skeleton-poster-img"></div></div>
+      <div class="skeleton-info">
+        <div class="skeleton-title"></div>
+        <div class="skeleton-meta">
+          <div class="skeleton-tag"></div><div class="skeleton-tag"></div><div class="skeleton-tag"></div>
+        </div>
+        <div class="skeleton-text w90"></div>
+        <div class="skeleton-text w80"></div>
+        <div class="skeleton-text w70"></div>
+      </div>
+    </div>`;
+}
+function skeletonEpisodes(n=12) {
+  return Array(n).fill(0).map(() => `<div class="skeleton-ep"></div>`).join('');
+}
+
+// ── CARD BUILDER ──
 function buildCard(a) {
   const card = document.createElement('div');
   card.className = 'anime-card';
   const img = a.images?.jpg?.image_url || '';
-  const eps = a.episodes ? `${a.episodes} eps` : 'Ongoing';
-  const score = a.score ? `<div class="anime-card-badge">⭐ ${a.score}</div>` : '';
   card.innerHTML = `
     <img src="${img}" alt="${a.title}" loading="lazy"/>
     <div class="anime-card-info">
       <div class="anime-card-title">${a.title}</div>
-      <div class="anime-card-sub">${eps}</div>
-      ${score}
+      <div class="anime-card-sub">${a.episodes ? a.episodes + ' eps' : 'Ongoing'}</div>
+      ${a.score ? `<div class="anime-card-badge">⭐ ${a.score}</div>` : ''}
     </div>`;
   card.onclick = () => openDetail(a);
   return card;
@@ -284,26 +303,33 @@ function renderGrid(id, list) {
   list.forEach(a => g.appendChild(buildCard(a)));
 }
 
-// ── HOME ──
+// ── HOME — skeletons first, then real data ──
 async function loadHome() {
+  // Show skeletons immediately
+  document.getElementById('new-grid').innerHTML      = skeletonCards(6);
+  document.getElementById('trending-grid').innerHTML = skeletonCards(6);
+  document.getElementById('toprated-grid').innerHTML = skeletonCards(6);
+
+  // Fetch all 3 in parallel
   const [seasonal, trending, toprated] = await Promise.all([
     fetchJSON(`${JIKAN}/seasons/now?limit=12`),
     fetchJSON(`${JIKAN}/top/anime?filter=airing&limit=12`),
     fetchJSON(`${JIKAN}/top/anime?limit=12`)
   ]);
+
+  // Replace skeletons with real cards as each arrives
   renderGrid('new-grid',      seasonal?.data || []);
   renderGrid('trending-grid', trending?.data  || []);
   renderGrid('toprated-grid', toprated?.data  || []);
 }
 
-// ── SEARCH ──
+// ── SEARCH — skeleton while searching ──
 async function doSearch() {
   const q = document.getElementById('search-input').value.trim();
   if (!q) return;
   navigateTo('search-results-page');
   document.getElementById('results-title').textContent = `Results for "${q}"`;
-  const grid = document.getElementById('results-grid');
-  grid.innerHTML = '<div class="loader"><div class="spinner"></div> Searching...</div>';
+  document.getElementById('results-grid').innerHTML = skeletonCards(8);
   const data = await fetchJSON(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24&sfw=true`);
   renderGrid('results-grid', data?.data);
 }
@@ -311,169 +337,195 @@ async function doSearch() {
 document.getElementById('search-btn').onclick = doSearch;
 document.getElementById('search-input').onkeydown = e => { if (e.key === 'Enter') doSearch(); };
 
-// ── FETCH ALL SEASONS via relations ──
-// Walks the sequel/prequel chain to collect all seasons in order
+// ── FETCH ALL SEASONS (cached, parallel where possible) ──
 async function fetchAllSeasons(rootId) {
+  if (seasonCache[rootId]) return seasonCache[rootId];
+
   const visited = new Set();
   const seasons = [];
+
+  // Fetch a single anime's info + relations in parallel
+  async function fetchAnimeData(malId) {
+    const [info, relations] = await Promise.all([
+      fetchJSON(`${JIKAN}/anime/${malId}`),
+      fetchJSON(`${JIKAN}/anime/${malId}/relations`)
+    ]);
+    return { info: info?.data, relations: relations?.data };
+  }
 
   async function walk(malId) {
     if (visited.has(malId)) return;
     visited.add(malId);
 
-    const [info, relations] = await Promise.all([
-      fetchJSON(`${JIKAN}/anime/${malId}`),
-      fetchJSON(`${JIKAN}/anime/${malId}/relations`)
-    ]);
+    const { info, relations } = await fetchAnimeData(malId);
+    if (!info) return;
 
-    if (!info?.data) return;
-    const a = info.data;
-
-    // Only include TV series and OVAs — skip movies/music
-    if (['TV','OVA','ONA','Special'].includes(a.type)) {
+    if (['TV','OVA','ONA','Special'].includes(info.type)) {
       seasons.push({
-        mal_id:   a.mal_id,
-        title:    a.title,
-        title_en: a.title_english || a.title,
-        episodes: a.episodes || 0,
-        status:   a.status,
-        year:     a.year,
-        score:    a.score,
-        img:      a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || ''
+        mal_id:   info.mal_id,
+        title:    info.title,
+        title_en: info.title_english || info.title,
+        episodes: info.episodes || 0,
+        status:   info.status,
+        year:     info.year,
+        score:    info.score,
+        img:      info.images?.jpg?.large_image_url || info.images?.jpg?.image_url || '',
+        synopsis: info.synopsis || ''
       });
     }
 
-    // Follow sequels and prequels
-    if (relations?.data) {
-      for (const rel of relations.data) {
-        if (['Sequel','Prequel','Alternative version','Side story'].includes(rel.relation)) {
+    if (relations) {
+      // Collect all sequel/prequel IDs first
+      const nextIds = [];
+      for (const rel of relations) {
+        if (['Sequel','Prequel','Alternative version'].includes(rel.relation)) {
           for (const entry of rel.entry) {
             if (entry.type === 'anime' && !visited.has(entry.mal_id)) {
-              await delay(400); // respect Jikan rate limit
-              await walk(entry.mal_id);
+              nextIds.push(entry.mal_id);
             }
           }
         }
+      }
+      // Walk sequentially with small delay to respect rate limit
+      for (const id of nextIds) {
+        await new Promise(r => setTimeout(r, 300));
+        await walk(id);
       }
     }
   }
 
   await walk(rootId);
-
-  // Sort by year, then by mal_id as tiebreaker
   seasons.sort((a, b) => (a.year || 9999) - (b.year || 9999) || a.mal_id - b.mal_id);
+
+  // Cache result
+  seasonCache[rootId] = seasons;
   return seasons;
 }
 
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// ── OPEN DETAIL ──
+// ── OPEN DETAIL — instant skeleton, load in background ──
 async function openDetail(a) {
   currentAnime = a;
   allSeasons   = [];
+  currentLang  = 'sub';
   navigateTo('detail-page');
-  setLang('sub');
 
-  // Fill hero
-  const img = a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || '';
-  document.getElementById('detail-img').src = img;
-  document.getElementById('detail-title').textContent = a.title;
-  document.getElementById('detail-synopsis').textContent = a.synopsis || 'No synopsis available.';
-
-  const tags = [
-    { label: a.type || 'TV',      hi: false },
-    { label: a.status || '',       hi: a.status === 'Currently Airing' },
-    { label: a.year ? String(a.year) : '', hi: false },
-    { label: a.score ? `⭐ ${a.score}` : '', hi: true },
-  ].filter(t => t.label);
-  document.getElementById('detail-meta').innerHTML =
-    tags.map(t => `<span class="meta-tag ${t.hi ? 'hi' : ''}">${t.label}</span>`).join('');
-
-  // Show loading state for seasons
+  // Show skeleton hero immediately
+  document.getElementById('detail-hero-wrap').innerHTML = skeletonHero();
   document.getElementById('seasons-tabs').innerHTML =
-    '<div class="mini-loader"><div class="mini-spinner"></div> Loading seasons...</div>';
-  document.getElementById('ep-grid').innerHTML = '';
-  document.getElementById('watch-ep1-btn').onclick = () => {};
+    `<div class="skeleton-season-tab"></div><div class="skeleton-season-tab"></div>`;
+  document.getElementById('ep-grid').innerHTML = skeletonEpisodes(24);
 
-  // Fetch all seasons
-  allSeasons = await fetchAllSeasons(a.mal_id);
+  // Fetch full info + seasons in parallel
+  const [fullInfo, seasons] = await Promise.all([
+    fetchJSON(`${JIKAN}/anime/${a.mal_id}`),
+    fetchAllSeasons(a.mal_id)
+  ]);
 
-  // Fallback: if only 1 season found, just use the clicked anime
-  if (!allSeasons.length) {
-    allSeasons = [{
-      mal_id:   a.mal_id,
-      title:    a.title,
-      title_en: a.title_english || a.title,
-      episodes: a.episodes || 0,
-      status:   a.status,
-      year:     a.year,
-      score:    a.score,
-      img:      img
-    }];
-  }
+  const anime = fullInfo?.data || a;
+  allSeasons = seasons.length ? seasons : [{
+    mal_id:   anime.mal_id,
+    title:    anime.title,
+    title_en: anime.title_english || anime.title,
+    episodes: anime.episodes || 0,
+    status:   anime.status,
+    year:     anime.year,
+    score:    anime.score,
+    img:      anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url || '',
+    synopsis: anime.synopsis || ''
+  }];
 
+  // Render real hero
+  renderDetailHero(anime);
   renderSeasonTabs();
   selectSeason(allSeasons[0]);
 }
 
-// ── RENDER SEASON TABS ──
+function renderDetailHero(a) {
+  const img = a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || '';
+  const tags = [
+    { label: a.type || 'TV',    hi: false },
+    { label: a.status || '',    hi: a.status === 'Currently Airing' },
+    { label: a.year ? String(a.year) : '', hi: false },
+    { label: a.score ? `⭐ ${a.score}` : '', hi: true },
+  ].filter(t => t.label);
+
+  document.getElementById('detail-hero-wrap').innerHTML = `
+    <div class="detail-hero">
+      <div class="detail-poster"><img src="${img}" alt="${a.title}"/></div>
+      <div class="detail-info">
+        <div class="detail-title">${a.title}</div>
+        <div class="detail-meta">
+          ${tags.map(t => `<span class="meta-tag ${t.hi ? 'hi' : ''}">${t.label}</span>`).join('')}
+        </div>
+        <div class="detail-synopsis">${a.synopsis || 'No synopsis available.'}</div>
+        <div class="detail-actions">
+          <button class="watch-now-btn" id="watch-ep1-btn">▶ Watch EP 1</button>
+          <div class="lang-toggle">
+            <button class="lang-btn active" id="detail-sub-btn" onclick="setLang('sub')">SUB</button>
+            <button class="lang-btn" id="detail-dub-btn" onclick="setLang('dub')">DUB</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('watch-ep1-btn').onclick = () => openPlayer(1);
+}
+
 function renderSeasonTabs() {
   const tabs = document.getElementById('seasons-tabs');
   tabs.innerHTML = '';
-
   allSeasons.forEach((s, i) => {
     const btn = document.createElement('button');
     btn.className = 'season-tab';
-    // Label: "Season 1", "Season 2", etc. with year
-    const label = allSeasons.length === 1
+    btn.textContent = allSeasons.length === 1
       ? (s.title_en || s.title)
       : `Season ${i + 1}${s.year ? ` (${s.year})` : ''}`;
-    btn.textContent = label;
-    btn.title = s.title;
-    btn.onclick = () => selectSeason(s);
+    btn.title    = s.title;
     btn.dataset.malId = s.mal_id;
+    btn.onclick  = () => selectSeason(s);
     tabs.appendChild(btn);
   });
 }
 
-// ── SELECT SEASON ──
 function selectSeason(s) {
   currentSeason = s;
   totalEps = s.episodes || 100;
 
-  // Update active tab
-  document.querySelectorAll('.season-tab').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.dataset.malId) === s.mal_id);
-  });
+  document.querySelectorAll('.season-tab').forEach(b =>
+    b.classList.toggle('active', parseInt(b.dataset.malId) === s.mal_id));
 
-  // Update hero image + synopsis if switching seasons
-  if (s.img) document.getElementById('detail-img').src = s.img;
-  document.getElementById('detail-title').textContent = s.title;
+  // Update detail title/meta for selected season
+  const titleEl = document.querySelector('.detail-title');
+  if (titleEl) titleEl.textContent = s.title;
 
-  // Update meta
-  const tags = [
-    { label: s.type || 'TV',    hi: false },
-    { label: s.status || '',    hi: s.status === 'Currently Airing' },
-    { label: s.year ? String(s.year) : '', hi: false },
-    { label: s.score ? `⭐ ${s.score}` : '', hi: true },
-    { label: s.episodes ? `${s.episodes} Episodes` : 'Ongoing', hi: false },
-  ].filter(t => t.label);
-  document.getElementById('detail-meta').innerHTML =
-    tags.map(t => `<span class="meta-tag ${t.hi ? 'hi' : ''}">${t.label}</span>`).join('');
+  const metaEl = document.querySelector('.detail-meta');
+  if (metaEl) {
+    const tags = [
+      { label: 'TV',    hi: false },
+      { label: s.status || '', hi: s.status === 'Currently Airing' },
+      { label: s.year ? String(s.year) : '', hi: false },
+      { label: s.score ? `⭐ ${s.score}` : '', hi: true },
+      { label: s.episodes ? `${s.episodes} Episodes` : 'Ongoing', hi: false },
+    ].filter(t => t.label);
+    metaEl.innerHTML = tags.map(t =>
+      `<span class="meta-tag ${t.hi ? 'hi' : ''}">${t.label}</span>`).join('');
+  }
 
-  // Build episode buttons
+  // Rebuild episode buttons
   const eg = document.getElementById('ep-grid');
   eg.innerHTML = '';
   const max = Math.min(totalEps || 100, 500);
   for (let i = 1; i <= max; i++) {
     const b = document.createElement('button');
-    b.className = 'ep-btn';
+    b.className  = 'ep-btn';
     b.textContent = `EP ${i}`;
-    b.onclick = () => openPlayer(i);
+    b.onclick    = () => openPlayer(i);
     eg.appendChild(b);
   }
 
-  document.getElementById('watch-ep1-btn').onclick = () => openPlayer(1);
+  if (document.getElementById('watch-ep1-btn')) {
+    document.getElementById('watch-ep1-btn').onclick = () => openPlayer(1);
+  }
 }
 
 // ── PLAYER ──
@@ -481,13 +533,11 @@ function openPlayer(ep) {
   currentEp = ep;
   navigateTo('player-page');
 
-  const seasonLabel = allSeasons.length > 1
-    ? `S${allSeasons.indexOf(currentSeason) + 1} `
-    : '';
+  const sIdx = allSeasons.indexOf(currentSeason);
+  const sLabel = allSeasons.length > 1 ? `S${sIdx + 1} ` : '';
 
   document.getElementById('player-title').innerHTML =
-    `${currentAnime.title} <span>— ${seasonLabel}EP ${ep}</span>`;
-
+    `${currentAnime.title} <span>— ${sLabel}EP ${ep}</span>`;
   document.getElementById('psub').classList.toggle('active', currentLang === 'sub');
   document.getElementById('pdub').classList.toggle('active', currentLang === 'dub');
   document.getElementById('player-iframe').src = streamUrl(currentSeason.mal_id, ep, currentLang);
@@ -498,20 +548,16 @@ function openPlayer(ep) {
 }
 
 function updateEpNav() {
-  const seasonIdx = allSeasons.indexOf(currentSeason);
-  const seasonLabel = allSeasons.length > 1 ? `S${seasonIdx + 1} · ` : '';
-  document.getElementById('ep-indicator').textContent = `${seasonLabel}Episode ${currentEp} / ${totalEps || '?'}`;
+  const sIdx = allSeasons.indexOf(currentSeason);
+  const sLabel = allSeasons.length > 1 ? `S${sIdx + 1} · ` : '';
+  document.getElementById('ep-indicator').textContent =
+    `${sLabel}Episode ${currentEp} / ${totalEps || '?'}`;
   document.getElementById('prev-ep').disabled = currentEp <= 1;
   document.getElementById('next-ep').disabled = currentEp >= totalEps;
 }
 
 document.getElementById('prev-ep').onclick = () => { if (currentEp > 1) openPlayer(currentEp - 1); };
 document.getElementById('next-ep').onclick = () => { if (currentEp < totalEps) openPlayer(currentEp + 1); };
-document.getElementById('back-to-detail').onclick = () => {
-  document.getElementById('player-iframe').src = '';
-  pageStack.pop();
-  showPage('detail-page');
-};
 
 // ── INIT ──
 loadHome();
