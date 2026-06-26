@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>JomerStream 🎌</title>
+  <title>JomerPB Personal Streaming 🎌</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>
     :root{--bg:#080c14;--surface:#0f1620;--card:#141e2e;--accent:#e63946;--accent2:#457b9d;--text:#e8eaf0;--muted:#6b7a99;--border:#1e2d45;--skeleton:#1a2535;}
@@ -11,10 +11,12 @@
     body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
 
     /* NAV */
-    nav{display:flex;align-items:center;padding:12px 16px;background:rgba(8,12,20,0.97);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);gap:12px;}
-    .logo{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--accent);text-shadow:0 0 20px rgba(230,57,70,0.4);cursor:pointer;flex-shrink:0;white-space:nowrap;}
+    nav{display:flex;flex-direction:column;align-items:flex-start;padding:12px 16px 14px;background:rgba(8,12,20,0.97);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);gap:10px;}
+    .logo-wrap{display:flex;flex-direction:column;gap:1px;cursor:pointer;}
+    .logo{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:var(--accent);text-shadow:0 0 20px rgba(230,57,70,0.4);line-height:1;}
     .logo span{color:var(--text);}
-    .search-wrap{display:flex;align-items:center;gap:8px;flex:1;}
+    .logo-sub{font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:3px;color:var(--muted);line-height:1;}
+    .search-wrap{display:flex;align-items:center;gap:8px;width:100%;}
     #search-input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color 0.2s;}
     #search-input:focus{border-color:var(--accent);}
     #search-input::placeholder{color:var(--muted);}
@@ -126,7 +128,10 @@
 <body>
 
 <nav>
-  <div class="logo" onclick="goHome()">JOMER<span>STREAM</span></div>
+  <div class="logo-wrap" onclick="goHome()">
+    <div class="logo">JOMERPB <span>PERSONAL STREAMING</span></div>
+    <div class="logo-sub">🎌 Your Private Anime Library</div>
+  </div>
   <div class="search-wrap">
     <input type="text" id="search-input" placeholder="Search any anime..."/>
     <button id="search-btn">Search</button>
