@@ -773,17 +773,19 @@ function buildGridCard(item) {
   const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'FILM':'TV';
 
   const statusMap = {
-    'Returning Series':'🟢','In Production':'🟢','Ended':'✅','Canceled':'⛔',
-    'RELEASING':'🟢','FINISHED':'✅','NOT_YET_RELEASED':'🔵','CANCELLED':'⛔',
-    'Currently Airing':'🟢','Finished Airing':'✅','Planned':'🔵',
+    'Returning Series':'Ongoing','In Production':'Ongoing','Ended':'Completed',
+    'Canceled':'Canceled','Cancelled':'Canceled','Pilot':'Upcoming','Planned':'Upcoming',
+    'RELEASING':'Ongoing','FINISHED':'Completed','NOT_YET_RELEASED':'Upcoming','CANCELLED':'Canceled',
+    'Currently Airing':'Ongoing','Finished Airing':'Completed',
   };
-  const statusIcon = statusMap[item.status] || '';
+  const statusText = statusMap[item.status] || '';
+  const statusColor = statusText==='Ongoing'?'#22c55e':statusText==='Completed'?'#60a5fa':statusText==='Canceled'?'#ef4444':'#a78bfa';
 
   const metaParts = [];
   if (item.countryFlag) metaParts.push(`<span>${item.countryFlag}</span>`);
   if (item.year)        metaParts.push(`<span>${item.year}</span>`);
   if (item.genre)       metaParts.push(`<span>· ${item.genre}</span>`);
-  if (statusIcon)       metaParts.push(`<span>${statusIcon}</span>`);
+  if (statusText)       metaParts.push(`<span style="color:${statusColor};font-weight:700;">· ${statusText}</span>`);
   const meta = metaParts.length ? `<div class="grid-card-meta">${metaParts.join('')}</div>` : '';
 
   c.innerHTML = `
@@ -823,11 +825,11 @@ function fromTMDB(m, type) {
   const title = m.title || m.name || 'Unknown';
   const year  = (m.release_date || m.first_air_date || '').slice(0,4);
   const score = m.vote_average ? m.vote_average.toFixed(1) : null;
-  // Map first genre_id to name
   const genreMap = {28:'Action',12:'Adventure',16:'Animation',35:'Comedy',80:'Crime',18:'Drama',14:'Fantasy',27:'Horror',9648:'Mystery',10749:'Romance',878:'Sci-Fi',53:'Thriller',10765:'Sci-Fi',10759:'Action',10762:'Kids',10763:'News',10764:'Reality',10766:'Soap',10767:'Talk',10768:'War'};
   const genre = m.genre_ids?.[0] ? (genreMap[m.genre_ids[0]] || '') : (m.genres?.[0]?.name || '');
-  const country = (m.origin_country?.[0] || m.production_countries?.[0]?.iso_3166_1 || '');
-  const countryFlag = {KR:'🇰🇷',JP:'🇯🇵',CN:'🇨🇳',TH:'🇹🇭',PH:'🇵🇭',US:'🇺🇸',GB:'🇬🇧',IN:'🇮🇳',FR:'🇫🇷',DE:'🇩🇪',IT:'🇮🇹',ES:'🇪🇸'}[country] || '';
+  const countryCode = m.origin_country?.[0] || m.production_countries?.[0]?.iso_3166_1 || '';
+  const flagMap = {KR:'🇰🇷',JP:'🇯🇵',CN:'🇨🇳',TH:'🇹🇭',PH:'🇵🇭',US:'🇺🇸',GB:'🇬🇧',IN:'🇮🇳',FR:'🇫🇷',DE:'🇩🇪',IT:'🇮🇹',ES:'🇪🇸',AU:'🇦🇺',CA:'🇨🇦',MX:'🇲🇽',BR:'🇧🇷',TR:'🇹🇷',ID:'🇮🇩'};
+  const countryFlag = flagMap[countryCode] || '';
   return {
     type, id:m.id, title, year, score,
     img:      m.poster_path   ? TMDB_IMG + m.poster_path   : '',
@@ -836,7 +838,7 @@ function fromTMDB(m, type) {
     seasons:  m.number_of_seasons  || null,
     episodes: m.number_of_episodes || null,
     tmdb_id:  m.id,
-    genre, country, countryFlag,
+    genre, country: countryCode, countryFlag,
     status: m.status || '',
   };
 }
