@@ -405,13 +405,12 @@ const ANILIST   = 'https://graphql.anilist.co';
 // ═══════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════
-let currentItem    = null; // {type:'anime'|'tv'|'movie', data:{...}}
+let currentItem    = null;
 let currentSeason  = null;
 let allSeasons     = [];
 let currentEp      = 1;
 let totalEps       = 1;
 let currentLang    = 'sub';
-let pageStack      = ['home-page'];
 
 // Pagination state
 let animePageState  = {sub:'trending', page:1, hasMore:false};
@@ -446,7 +445,7 @@ async function al(query, variables={}) {
 }
 
 // ═══════════════════════════════════════════
-// NAV
+// NAV — Browser History API
 // ═══════════════════════════════════════════
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -454,33 +453,61 @@ function showPage(id) {
   document.querySelector('.bottom-nav').style.display = id === 'player-page' ? 'none' : 'flex';
   window.scrollTo(0, 0);
 }
-function goHome() { pageStack = ['home-page']; showPage('home-page'); setNav('home'); }
-function goBack() {
-  if (pageStack.length > 1) {
-    const leaving = pageStack.pop();
-    if (leaving === 'player-page') document.getElementById('player-iframe').src = '';
-  }
-  const prev = pageStack[pageStack.length-1] || 'home-page';
-  showPage(prev);
+
+function goHome() {
+  history.pushState({page:'home-page'}, '', '#home');
+  showPage('home-page'); setNav('home');
 }
-function navigateTo(id) {
-  if (pageStack[pageStack.length-1] !== id) pageStack.push(id);
+
+function goBack() { history.back(); }
+
+function navigateTo(id, extra={}) {
+  const hash = id.replace('-page','');
+  history.pushState({page:id, ...extra}, '', `#${hash}`);
   showPage(id);
 }
+
 function setNav(tab) {
-  document.querySelectorAll('.nav-item').forEach(n => { n.classList.remove('active'); n.querySelector('.nav-dot').style.display='none'; });
-  const el = document.getElementById('nav-'+tab);
-  if (el) { el.classList.add('active'); el.querySelector('.nav-dot').style.display='block'; }
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.remove('active');
+    n.querySelector('.nav-dot').style.display = 'none';
+  });
+  const el = document.getElementById('nav-' + tab);
+  if (el) { el.classList.add('active'); el.querySelector('.nav-dot').style.display = 'block'; }
 }
+
 function navTo(tab) {
   setNav(tab);
-  const pageId = tab+'-page';
-  navigateTo(pageId);
+  navigateTo(tab + '-page');
   if (tab === 'anime'  && !document.getElementById('anime-grid').children.length)  loadAnimeSub('trending', document.querySelector('#anime-tabs .ctab'));
   if (tab === 'tv'     && !document.getElementById('tv-grid').children.length)     loadTVSub('popular','', document.querySelector('#tv-tabs .ctab'));
   if (tab === 'movies' && !document.getElementById('movies-grid').children.length) loadMovieSub('popular', document.querySelector('#movie-tabs .ctab'));
-  if (tab === 'search') setTimeout(()=>document.getElementById('search-input')?.focus(), 100);
+  if (tab === 'search') setTimeout(() => document.getElementById('search-input')?.focus(), 100);
 }
+
+// Back/forward/gesture handler
+window.addEventListener('popstate', async (e) => {
+  const state = e.state;
+  if (!state?.page) { showPage('home-page'); setNav('home'); return; }
+  const page = state.page;
+  if (page !== 'player-page') document.getElementById('player-iframe').src = '';
+  showPage(page);
+  const navMap = {'home-page':'home','anime-page':'anime','tv-page':'tv','movies-page':'movies','search-page':'search'};
+  if (navMap[page]) setNav(navMap[page]);
+  if (page === 'detail-page' && state.item) await openDetail(state.item, true);
+  if (page === 'player-page' && state.item) {
+    currentItem=state.item; currentSeason=state.season; currentEp=state.ep; currentLang=state.lang||'sub';
+    const isAnime=state.item.type==='anime', isMovie=state.item.type==='movie';
+    document.getElementById('player-title').textContent=state.item.title;
+    document.getElementById('player-subtitle').textContent=isMovie?(state.item.year||''):`Episode ${state.ep}`;
+    document.getElementById('player-lang-row').style.display=isAnime?'flex':'none';
+    document.getElementById('psub').classList.toggle('active',currentLang==='sub');
+    document.getElementById('pdub').classList.toggle('active',currentLang==='dub');
+    document.getElementById('server-name').textContent=isAnime?'MegaPlay':'VidSrc';
+    document.querySelector('.bottom-nav').style.display='none';
+    playStream(); updateEpNav();
+  }
+});
 
 // ═══════════════════════════════════════════
 // LANG
@@ -498,34 +525,37 @@ function switchLang(lang) {
 }
 
 // ═══════════════════════════════════════════
-// CARD BUILDERS
+// CARD BUILDERS — anchor tags for long press
 // ═══════════════════════════════════════════
 function skRow(n) {
   return Array(n).fill(0).map(()=>`<div style="flex-shrink:0;"><div class="sk" style="width:105px;height:148px;border-radius:8px;"></div><div class="sk" style="width:90px;height:9px;border-radius:4px;margin-top:5px;"></div></div>`).join('');
 }
 
 function buildSmCard(item) {
-  const c = document.createElement('div');
+  const c = document.createElement('a');
   c.className = 'card-sm';
-  const img = item.img || '';
+  c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
+  c.style.cssText = 'text-decoration:none;color:inherit;';
   const badge = item.score ? `<div class="card-sm-badge">⭐${item.score}</div>` : '';
   const typeBadge = `<div class="card-sm-type ${item.type}">${item.type==='anime'?'ANIME':item.type==='movie'?'MOVIE':'TV'}</div>`;
   c.innerHTML = `
     <div class="card-sm-img">
-      <img src="${img}" alt="${item.title}" loading="lazy"/>
+      <img src="${item.img||''}" alt="${item.title}" loading="lazy"/>
       ${badge}${typeBadge}
     </div>
     <div class="card-sm-info">
       <div class="card-sm-title">${item.title}</div>
       <div class="card-sm-sub">${item.year||''}</div>
     </div>`;
-  c.onclick = () => openDetail(item);
+  c.onclick = (e) => { e.preventDefault(); openDetail(item); };
   return c;
 }
 
 function buildGridCard(item) {
-  const c = document.createElement('div');
+  const c = document.createElement('a');
   c.className = 'grid-card';
+  c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
+  c.style.cssText = 'text-decoration:none;color:inherit;display:block;';
   const typeColor = item.type==='anime'?'anime':item.type==='movie'?'movie':'tv';
   const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'FILM':'TV';
   c.innerHTML = `
@@ -535,7 +565,7 @@ function buildGridCard(item) {
       <div class="grid-card-type ${typeColor}">${typeLabel}</div>
     </div>
     <div class="grid-card-title">${item.title}</div>`;
-  c.onclick = () => openDetail(item);
+  c.onclick = (e) => { e.preventDefault(); openDetail(item); };
   return c;
 }
 
@@ -811,12 +841,15 @@ async function loadMoreSearch() {
 // ═══════════════════════════════════════════
 // DETAIL
 // ═══════════════════════════════════════════
-async function openDetail(item) {
+async function openDetail(item, restore=false) {
   currentItem   = item;
   allSeasons    = [];
   currentSeason = null;
   currentLang   = 'sub';
-  navigateTo('detail-page');
+  if (!restore) {
+    history.pushState({page:'detail-page', item}, '', `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`);
+  }
+  showPage('detail-page');
 
   // Skeleton
   document.getElementById('detail-backdrop-wrap').innerHTML = `<div class="sk" style="width:100%;height:100%;border-radius:0;"></div><div class="detail-backdrop-overlay"></div><div class="back-circle" onclick="goBack()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>`;
@@ -1018,12 +1051,12 @@ function renderSimpleDetail(item, type) {
 // ═══════════════════════════════════════════
 function openPlayer(ep) {
   currentEp = ep;
-  navigateTo('player-page');
-
   const item = currentItem;
   const season = currentSeason;
   const isAnime = item.type === 'anime';
   const isMovie = item.type === 'movie';
+  history.pushState({page:'player-page', item, season, ep, lang:currentLang}, '', `#player-${item.type}-${item.al_id||item.tmdb_id||item.id}-s${season?.season_number||1}-e${ep}`);
+  showPage('player-page');
 
   // Title display
   let subtitle = '';
@@ -1167,9 +1200,76 @@ document.addEventListener('click', (e) => {
 });
 
 // ═══════════════════════════════════════════
-// INIT
+// INIT — restore page from URL hash
 // ═══════════════════════════════════════════
-loadHome();
+async function initFromHash() {
+  const hash = window.location.hash.replace('#','');
+
+  // Helper to fetch item by type+id
+  async function fetchItem(type, id) {
+    if (type==='anime') {
+      const Q=`query($id:Int){Media(id:$id,type:ANIME){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format description}}`;
+      const r=await al(Q,{id:parseInt(id)});
+      if(r?.data?.Media){const m=r.data.Media;return{...fromAL(m),al_id:m.id,mal_id:m.idMal};}
+    } else if (type==='tv') {
+      const d=await tmdb(`/tv/${id}`); if(d)return fromTMDB(d,'tv');
+    } else if (type==='movie') {
+      const d=await tmdb(`/movie/${id}`); if(d)return fromTMDB(d,'movie');
+    }
+    return null;
+  }
+
+  // Detail page
+  const detailM = hash.match(/^detail-(anime|tv|movie)-(\d+)$/);
+  if (detailM) {
+    showPage('detail-page');
+    loadHome();
+    const item = await fetchItem(detailM[1], detailM[2]);
+    if (item) await openDetail(item, true);
+    else { showPage('home-page'); setNav('home'); }
+    return;
+  }
+
+  // Player page
+  const playerM = hash.match(/^player-(anime|tv|movie)-(\d+)-s(\d+)-e(\d+)$/);
+  if (playerM) {
+    showPage('player-page');
+    document.querySelector('.bottom-nav').style.display='none';
+    loadHome();
+    const item = await fetchItem(playerM[1], playerM[2]);
+    if (item) {
+      currentItem   = item;
+      currentEp     = parseInt(playerM[4]);
+      currentSeason = {type:playerM[1], season_number:parseInt(playerM[3]), mal_id:item.mal_id, tmdb_id:item.tmdb_id||item.id};
+      allSeasons    = [currentSeason];
+      totalEps      = item.episodes||1;
+      const isAnime = item.type==='anime', isMovie = item.type==='movie';
+      document.getElementById('player-title').textContent    = item.title;
+      document.getElementById('player-subtitle').textContent = isMovie?(item.year||''):`Episode ${currentEp}`;
+      document.getElementById('player-lang-row').style.display = isAnime?'flex':'none';
+      document.getElementById('server-name').textContent = isAnime?'MegaPlay':'VidSrc';
+      playStream(); updateEpNav();
+    } else { showPage('home-page'); setNav('home'); }
+    return;
+  }
+
+  // Tab pages
+  const tabMap = {anime:'anime-page',tv:'tv-page',movies:'movies-page',search:'search-page'};
+  if (tabMap[hash]) {
+    showPage(tabMap[hash]); setNav(hash); loadHome();
+    if(hash==='anime')  loadAnimeSub('trending',document.querySelector('#anime-tabs .ctab'));
+    if(hash==='tv')     loadTVSub('popular','',document.querySelector('#tv-tabs .ctab'));
+    if(hash==='movies') loadMovieSub('popular',document.querySelector('#movie-tabs .ctab'));
+    return;
+  }
+
+  // Default: home
+  history.replaceState({page:'home-page'},'','#home');
+  showPage('home-page'); setNav('home');
+  loadHome();
+}
+
+initFromHash();
 </script>
 </body>
 </html>
