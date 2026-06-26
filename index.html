@@ -22,7 +22,7 @@
     .topbar{position:sticky;top:0;z-index:90;height:var(--top-h);display:flex;align-items:center;gap:10px;padding:0 14px;background:rgba(7,9,15,0.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);}
     .topbar-logo{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent);flex-shrink:0;cursor:pointer;}
     .topbar-logo span{color:var(--text);}
-    .topbar-search{flex:1;display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 10px;gap:7px;height:34px;}
+    .topbar-search{flex:1;display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 10px;gap:7px;height:34px;position:relative;}
     .topbar-search svg{flex-shrink:0;opacity:0.4;}
     .topbar-search input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;}
     .topbar-search input::placeholder{color:var(--muted);}
@@ -81,6 +81,23 @@
     .content-tabs::-webkit-scrollbar{display:none;}
     .ctab{flex-shrink:0;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;}
     .ctab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+    /* SEARCH DROPDOWN */
+    .search-dropdown{position:absolute;top:calc(var(--top-h) - 2px);left:0;right:0;background:rgba(13,17,23,0.98);border-bottom:1px solid var(--border);z-index:200;max-height:70vh;overflow-y:auto;backdrop-filter:blur(20px);display:none;}
+    .search-dropdown.open{display:block;}
+    .dropdown-item{display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(30,41,59,0.5);transition:background 0.15s;}
+    .dropdown-item:hover{background:rgba(255,255,255,0.05);}
+    .dropdown-item:last-child{border-bottom:none;}
+    .dropdown-thumb{width:42px;height:58px;border-radius:6px;overflow:hidden;flex-shrink:0;border:1px solid var(--border);background:var(--card);}
+    .dropdown-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+    .dropdown-info{flex:1;min-width:0;}
+    .dropdown-title{font-size:13px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .dropdown-sub{font-size:11px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;}
+    .dropdown-type{font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;}
+    .dropdown-type.anime{background:rgba(139,92,246,0.2);color:var(--accent3);}
+    .dropdown-type.tv{background:rgba(59,130,246,0.2);color:var(--accent2);}
+    .dropdown-type.movie{background:rgba(230,57,70,0.2);color:var(--accent);}
+    .dropdown-view-all{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;background:var(--accent2);color:#fff;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.5px;}
 
     /* SEARCH PAGE */
     .search-inner{padding:12px 16px;}
@@ -164,9 +181,14 @@
 <div id="home-page" class="page active">
   <div class="topbar">
     <div class="topbar-logo" onclick="goHome()">JOMERPB <span>STREAM</span></div>
-    <div class="topbar-search" onclick="navTo('search')">
+    <div class="topbar-search" style="position:relative;">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="text" id="home-search-input" placeholder="Anime, movies, TV series..." onkeydown="if(event.key==='Enter'){navTo('search');setTimeout(()=>{doSearch(document.getElementById('home-search-input').value)},100)}"/>
+      <input type="text" id="home-search-input" placeholder="Anime, movies, TV series..."
+        oninput="handleLiveSearch(this.value,'home')"
+        onkeydown="if(event.key==='Enter'){closeDropdown();doSearch(this.value)}"
+        onfocus="if(this.value.trim().length>=2)openDropdown('home')"
+      />
+      <div id="home-dropdown" class="search-dropdown"></div>
     </div>
   </div>
   <div class="hero" id="hero-wrap"><div class="sk" style="width:100%;height:100%;border-radius:0;"></div></div>
@@ -266,9 +288,14 @@
     <div class="back-circle" style="position:relative;top:auto;left:auto;flex-shrink:0;" onclick="goBack()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
     </div>
-    <div class="topbar-search" style="flex:1;">
+    <div class="topbar-search" style="flex:1;position:relative;">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" opacity="0.4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="text" id="search-input" placeholder="Search everything..." autofocus onkeydown="if(event.key==='Enter')doSearch(this.value)"/>
+      <input type="text" id="search-input" placeholder="Search everything..." autofocus
+        oninput="handleLiveSearch(this.value,'search')"
+        onkeydown="if(event.key==='Enter'){closeDropdown();doSearch(this.value)}"
+        onfocus="if(this.value.trim().length>=2)openDropdown('search')"
+      />
+      <div id="search-dropdown" class="search-dropdown"></div>
     </div>
     <button onclick="doSearch(document.getElementById('search-input').value)" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;">Go</button>
   </div>
@@ -378,12 +405,13 @@ const ANILIST   = 'https://graphql.anilist.co';
 // ═══════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════
-let currentItem    = null;
+let currentItem    = null; // {type:'anime'|'tv'|'movie', data:{...}}
 let currentSeason  = null;
 let allSeasons     = [];
 let currentEp      = 1;
 let totalEps       = 1;
 let currentLang    = 'sub';
+let pageStack      = ['home-page'];
 
 // Pagination state
 let animePageState  = {sub:'trending', page:1, hasMore:false};
@@ -418,7 +446,7 @@ async function al(query, variables={}) {
 }
 
 // ═══════════════════════════════════════════
-// NAV — uses browser History API
+// NAV
 // ═══════════════════════════════════════════
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -426,95 +454,32 @@ function showPage(id) {
   document.querySelector('.bottom-nav').style.display = id === 'player-page' ? 'none' : 'flex';
   window.scrollTo(0, 0);
 }
-
-function goHome() {
-  document.getElementById('search-input') && (document.getElementById('search-input').value = '');
-  history.pushState({page:'home-page'}, '', '#home');
-  showPage('home-page');
-  setNav('home');
-}
-
+function goHome() { pageStack = ['home-page']; showPage('home-page'); setNav('home'); }
 function goBack() {
-  history.back();
+  if (pageStack.length > 1) {
+    const leaving = pageStack.pop();
+    if (leaving === 'player-page') document.getElementById('player-iframe').src = '';
+  }
+  const prev = pageStack[pageStack.length-1] || 'home-page';
+  showPage(prev);
 }
-
-function navigateTo(id, stateData={}) {
-  const hash = id.replace('-page','');
-  history.pushState({page: id, ...stateData}, '', `#${hash}`);
+function navigateTo(id) {
+  if (pageStack[pageStack.length-1] !== id) pageStack.push(id);
   showPage(id);
 }
-
-// Handle browser back/forward (gestures, back button)
-window.addEventListener('popstate', async (e) => {
-  const state = e.state;
-  if (!state || !state.page) {
-    showPage('home-page');
-    setNav('home');
-    return;
-  }
-
-  const page = state.page;
-
-  // Stop player when leaving player page
-  if (page !== 'player-page') {
-    document.getElementById('player-iframe').src = '';
-  }
-
-  showPage(page);
-
-  // Restore nav highlight
-  if (page === 'home-page')    setNav('home');
-  if (page === 'anime-page')   setNav('anime');
-  if (page === 'tv-page')      setNav('tv');
-  if (page === 'movies-page')  setNav('movies');
-  if (page === 'search-page')  setNav('search');
-
-  // Restore detail page
-  if (page === 'detail-page' && state.item) {
-    await openDetail(state.item, true);
-  }
-
-  // Restore player page
-  if (page === 'player-page' && state.item) {
-    currentItem   = state.item;
-    currentSeason = state.season;
-    currentEp     = state.ep;
-    currentLang   = state.lang || 'sub';
-    const isAnime = state.item.type === 'anime';
-    const isMovie = state.item.type === 'movie';
-    const sLabel  = allSeasons.length > 1 ? `S${allSeasons.indexOf(state.season)+1} · ` : '';
-    document.getElementById('player-title').textContent = state.item.title;
-    document.getElementById('player-subtitle').textContent = isMovie ? (state.item.year||'') : `${sLabel}Episode ${state.ep}`;
-    document.getElementById('player-lang-row').style.display = isAnime ? 'flex' : 'none';
-    document.getElementById('psub').classList.toggle('active', currentLang==='sub');
-    document.getElementById('pdub').classList.toggle('active', currentLang==='dub');
-    document.getElementById('server-name').textContent = isAnime ? 'MegaPlay' : 'VidSrc';
-    document.querySelector('.bottom-nav').style.display = 'none';
-    playStream();
-    updateEpNav();
-  }
-});
-
 function setNav(tab) {
-  document.querySelectorAll('.nav-item').forEach(n => {
-    n.classList.remove('active');
-    n.querySelector('.nav-dot').style.display = 'none';
-  });
-  const el = document.getElementById('nav-' + tab);
-  if (el) {
-    el.classList.add('active');
-    el.querySelector('.nav-dot').style.display = 'block';
-  }
+  document.querySelectorAll('.nav-item').forEach(n => { n.classList.remove('active'); n.querySelector('.nav-dot').style.display='none'; });
+  const el = document.getElementById('nav-'+tab);
+  if (el) { el.classList.add('active'); el.querySelector('.nav-dot').style.display='block'; }
 }
-
 function navTo(tab) {
   setNav(tab);
-  const pageId = tab + '-page';
+  const pageId = tab+'-page';
   navigateTo(pageId);
   if (tab === 'anime'  && !document.getElementById('anime-grid').children.length)  loadAnimeSub('trending', document.querySelector('#anime-tabs .ctab'));
-  if (tab === 'tv'     && !document.getElementById('tv-grid').children.length)     loadTVSub('popular', '', document.querySelector('#tv-tabs .ctab'));
+  if (tab === 'tv'     && !document.getElementById('tv-grid').children.length)     loadTVSub('popular','', document.querySelector('#tv-tabs .ctab'));
   if (tab === 'movies' && !document.getElementById('movies-grid').children.length) loadMovieSub('popular', document.querySelector('#movie-tabs .ctab'));
-  if (tab === 'search') setTimeout(() => document.getElementById('search-input')?.focus(), 100);
+  if (tab === 'search') setTimeout(()=>document.getElementById('search-input')?.focus(), 100);
 }
 
 // ═══════════════════════════════════════════
@@ -540,10 +505,8 @@ function skRow(n) {
 }
 
 function buildSmCard(item) {
-  const c = document.createElement('a');
+  const c = document.createElement('div');
   c.className = 'card-sm';
-  c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
-  c.style.cssText = 'text-decoration:none;color:inherit;';
   const img = item.img || '';
   const badge = item.score ? `<div class="card-sm-badge">⭐${item.score}</div>` : '';
   const typeBadge = `<div class="card-sm-type ${item.type}">${item.type==='anime'?'ANIME':item.type==='movie'?'MOVIE':'TV'}</div>`;
@@ -556,15 +519,13 @@ function buildSmCard(item) {
       <div class="card-sm-title">${item.title}</div>
       <div class="card-sm-sub">${item.year||''}</div>
     </div>`;
-  c.onclick = (e) => { e.preventDefault(); openDetail(item); };
+  c.onclick = () => openDetail(item);
   return c;
 }
 
 function buildGridCard(item) {
-  const c = document.createElement('a');
+  const c = document.createElement('div');
   c.className = 'grid-card';
-  c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
-  c.style.cssText = 'text-decoration:none;color:inherit;display:block;';
   const typeColor = item.type==='anime'?'anime':item.type==='movie'?'movie':'tv';
   const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'FILM':'TV';
   c.innerHTML = `
@@ -574,7 +535,7 @@ function buildGridCard(item) {
       <div class="grid-card-type ${typeColor}">${typeLabel}</div>
     </div>
     <div class="grid-card-title">${item.title}</div>`;
-  c.onclick = (e) => { e.preventDefault(); openDetail(item); };
+  c.onclick = () => openDetail(item);
   return c;
 }
 
@@ -850,17 +811,12 @@ async function loadMoreSearch() {
 // ═══════════════════════════════════════════
 // DETAIL
 // ═══════════════════════════════════════════
-async function openDetail(item, restore=false) {
+async function openDetail(item) {
   currentItem   = item;
   allSeasons    = [];
   currentSeason = null;
   currentLang   = 'sub';
-
-  if (!restore) {
-    const hash = `detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
-    history.pushState({page:'detail-page', item}, '', `#${hash}`);
-  }
-  showPage('detail-page');
+  navigateTo('detail-page');
 
   // Skeleton
   document.getElementById('detail-backdrop-wrap').innerHTML = `<div class="sk" style="width:100%;height:100%;border-radius:0;"></div><div class="detail-backdrop-overlay"></div><div class="back-circle" onclick="goBack()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>`;
@@ -1062,17 +1018,14 @@ function renderSimpleDetail(item, type) {
 // ═══════════════════════════════════════════
 function openPlayer(ep) {
   currentEp = ep;
+  navigateTo('player-page');
 
   const item = currentItem;
   const season = currentSeason;
   const isAnime = item.type === 'anime';
   const isMovie = item.type === 'movie';
 
-  // Push player state to history
-  const hash = `player-${item.type}-${item.al_id||item.tmdb_id||item.id}-s${season?.season_number||1}-e${ep}`;
-  history.pushState({page:'player-page', item, season, ep, lang: currentLang}, '', `#${hash}`);
-  showPage('player-page');
-
+  // Title display
   let subtitle = '';
   if (isMovie) subtitle = item.year || '';
   else {
@@ -1083,10 +1036,13 @@ function openPlayer(ep) {
   document.getElementById('player-title').textContent = item.title;
   document.getElementById('player-subtitle').textContent = subtitle;
 
+  // Show/hide lang toggle (anime only)
   const langRow = document.getElementById('player-lang-row');
   langRow.style.display = isAnime ? 'flex' : 'none';
   document.getElementById('psub').classList.toggle('active', currentLang==='sub');
   document.getElementById('pdub').classList.toggle('active', currentLang==='dub');
+
+  // Set server label
   document.getElementById('server-name').textContent = isAnime ? 'MegaPlay' : 'VidSrc';
 
   playStream();
@@ -1127,140 +1083,93 @@ document.getElementById('prev-ep').onclick = () => { if (currentEp > 1) openPlay
 document.getElementById('next-ep').onclick = () => { if (currentEp < totalEps) openPlayer(currentEp+1); };
 
 // ═══════════════════════════════════════════
-// INIT — read URL hash and restore page
+// LIVE SEARCH DROPDOWN
 // ═══════════════════════════════════════════
-async function initFromHash() {
-  const hash = window.location.hash.replace('#', '');
+let liveSearchTimer = null;
 
-  if (!hash || hash === 'home') {
-    history.replaceState({page:'home-page'}, '', '#home');
-    showPage('home-page');
-    setNav('home');
-    loadHome();
+function handleLiveSearch(q, source) {
+  clearTimeout(liveSearchTimer);
+  const dropdownId = source === 'home' ? 'home-dropdown' : 'search-dropdown';
+  const dropdown = document.getElementById(dropdownId);
+
+  if (!q || q.trim().length < 2) {
+    closeDropdown();
     return;
   }
 
-  if (hash === 'anime') {
-    history.replaceState({page:'anime-page'}, '', '#anime');
-    showPage('anime-page'); setNav('anime');
-    loadAnimeSub('trending', document.querySelector('#anime-tabs .ctab'));
-    loadHome(); return;
-  }
+  // Show loading state
+  dropdown.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px;">Searching...</div>`;
+  dropdown.classList.add('open');
 
-  if (hash === 'tv') {
-    history.replaceState({page:'tv-page'}, '', '#tv');
-    showPage('tv-page'); setNav('tv');
-    loadTVSub('popular','', document.querySelector('#tv-tabs .ctab'));
-    loadHome(); return;
-  }
-
-  if (hash === 'movies') {
-    history.replaceState({page:'movies-page'}, '', '#movies');
-    showPage('movies-page'); setNav('movies');
-    loadMovieSub('popular', document.querySelector('#movie-tabs .ctab'));
-    loadHome(); return;
-  }
-
-  if (hash === 'search') {
-    history.replaceState({page:'search-page'}, '', '#search');
-    showPage('search-page'); setNav('search');
-    loadHome(); return;
-  }
-
-  // Handle detail page: #detail-anime-12345 or #detail-tv-12345 or #detail-movie-12345
-  const detailMatch = hash.match(/^detail-(anime|tv|movie)-(\d+)$/);
-  if (detailMatch) {
-    const type  = detailMatch[1];
-    const id    = parseInt(detailMatch[2]);
-
-    // Load home in background
-    loadHome();
-
-    // Show skeleton detail page immediately
-    showPage('detail-page');
-
-    // Fetch item data from API then open detail
-    let item = null;
-    if (type === 'anime') {
-      const Q = `query($id:Int){Media(id:$id,type:ANIME){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format description}}`;
-      const r = await al(Q, {id});
-      if (r?.data?.Media) item = {...fromAL(r.data.Media), al_id: r.data.Media.id, mal_id: r.data.Media.idMal};
-    } else if (type === 'tv') {
-      const d = await tmdb(`/tv/${id}`);
-      if (d) item = fromTMDB(d, 'tv');
-    } else if (type === 'movie') {
-      const d = await tmdb(`/movie/${id}`);
-      if (d) item = fromTMDB(d, 'movie');
-    }
-
-    if (item) {
-      await openDetail(item, true);
-    } else {
-      // Fallback to home if fetch failed
-      showPage('home-page'); setNav('home');
-    }
-    return;
-  }
-
-  // Handle player page: #player-anime-12345-s1-e4
-  const playerMatch = hash.match(/^player-(anime|tv|movie)-(\d+)-s(\d+)-e(\d+)$/);
-  if (playerMatch) {
-    const type      = playerMatch[1];
-    const id        = parseInt(playerMatch[2]);
-    const seasonNum = parseInt(playerMatch[3]);
-    const ep        = parseInt(playerMatch[4]);
-
-    loadHome();
-    showPage('player-page');
-
-    // Fetch item then restore player
-    let item = null;
-    if (type === 'anime') {
-      const Q = `query($id:Int){Media(id:$id,type:ANIME){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format description}}`;
-      const r = await al(Q, {id});
-      if (r?.data?.Media) item = {...fromAL(r.data.Media), al_id: r.data.Media.id, mal_id: r.data.Media.idMal};
-    } else if (type === 'tv') {
-      const d = await tmdb(`/tv/${id}`);
-      if (d) item = fromTMDB(d, 'tv');
-    } else if (type === 'movie') {
-      const d = await tmdb(`/movie/${id}`);
-      if (d) item = fromTMDB(d, 'movie');
-    }
-
-    if (item) {
-      currentItem = item;
-      currentEp   = ep;
-      currentSeason = {
-        type, season_number: seasonNum,
-        mal_id: item.mal_id, tmdb_id: item.tmdb_id||item.id
-      };
-      allSeasons  = [currentSeason];
-      totalEps    = item.episodes || 1;
-
-      const isAnime = type === 'anime';
-      const isMovie = type === 'movie';
-      const sLabel  = seasonNum > 1 ? `S${seasonNum} · ` : '';
-
-      document.getElementById('player-title').textContent = item.title;
-      document.getElementById('player-subtitle').textContent = isMovie ? (item.year||'') : `${sLabel}Episode ${ep}`;
-      document.getElementById('player-lang-row').style.display = isAnime ? 'flex' : 'none';
-      document.getElementById('server-name').textContent = isAnime ? 'MegaPlay' : 'VidSrc';
-      document.querySelector('.bottom-nav').style.display = 'none';
-      playStream();
-      updateEpNav();
-    } else {
-      showPage('home-page'); setNav('home');
-    }
-    return;
-  }
-
-  // Unknown hash — go home
-  history.replaceState({page:'home-page'}, '', '#home');
-  showPage('home-page'); setNav('home');
-  loadHome();
+  // Debounce — wait 400ms after user stops typing
+  liveSearchTimer = setTimeout(() => fetchLiveResults(q.trim(), dropdownId), 400);
 }
 
-initFromHash();
+async function fetchLiveResults(q, dropdownId) {
+  // Fetch anime + TV + movies in parallel, limit to 3 each = 9 max results
+  const [animeData, tvData, movieData] = await Promise.all([
+    al(`query($s:String){Page(perPage:3){media(type:ANIME,search:$s,isAdult:false,sort:SEARCH_MATCH){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format}}}`, {s:q}),
+    tmdb('/search/tv',    {query:q, page:1}),
+    tmdb('/search/movie', {query:q, page:1}),
+  ]);
+
+  const animeList = (animeData?.data?.Page?.media||[]).map(m => ({...fromAL(m), al_id:m.id}));
+  const tvList    = (tvData?.results||[]).slice(0,3).map(m => fromTMDB(m,'tv'));
+  const movieList = (movieData?.results||[]).slice(0,3).map(m => fromTMDB(m,'movie'));
+  const combined  = [...animeList, ...tvList, ...movieList];
+
+  const dropdown = document.getElementById(dropdownId);
+  if (!combined.length) {
+    dropdown.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px;">No results for "${q}"</div>`;
+    return;
+  }
+
+  dropdown.innerHTML = '';
+  combined.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'dropdown-item';
+    const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'MOVIE':'TV';
+    el.innerHTML = `
+      <div class="dropdown-thumb"><img src="${item.img||''}" alt="${item.title}" loading="lazy"/></div>
+      <div class="dropdown-info">
+        <div class="dropdown-title">${item.title}</div>
+        <div class="dropdown-sub">
+          <span class="dropdown-type ${item.type}">${typeLabel}</span>
+          <span>${item.year||''}</span>
+          ${item.episodes ? `<span>· ${item.episodes} eps</span>` : ''}
+          ${item.score ? `<span>· ⭐${item.score}</span>` : ''}
+        </div>
+      </div>`;
+    el.onclick = () => { closeDropdown(); openDetail(item); };
+    dropdown.appendChild(el);
+  });
+
+  // View all results button
+  const viewAll = document.createElement('div');
+  viewAll.className = 'dropdown-view-all';
+  viewAll.innerHTML = `View all results for "${q}" →`;
+  viewAll.onclick = () => { closeDropdown(); doSearch(q); };
+  dropdown.appendChild(viewAll);
+}
+
+function openDropdown(source) {
+  const id = source === 'home' ? 'home-dropdown' : 'search-dropdown';
+  document.getElementById(id).classList.add('open');
+}
+
+function closeDropdown() {
+  document.querySelectorAll('.search-dropdown').forEach(d => d.classList.remove('open'));
+}
+
+// Close dropdown when tapping outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.topbar-search')) closeDropdown();
+});
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+loadHome();
 </script>
 </body>
 </html>
