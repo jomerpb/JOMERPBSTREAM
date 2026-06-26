@@ -1023,13 +1023,17 @@ async function fetchAnime(sub, page) {
 
 async function loadMoreAnime() {
   if (!animePageState.hasMore) return;
-  animePageState.hasMore = false; // prevent double-fire
+  animePageState.hasMore = false;
   animePageState.page++;
-  const items = await fetchAnime(animePageState.sub, animePageState.page);
-  renderGrid('anime-grid', items, true);
-  animePageState.hasMore = items.length >= 24;
-  document.getElementById('anime-more').style.display = animePageState.hasMore ? 'block' : 'none';
-  if (animePageState.hasMore) attachInfiniteScroll();
+  if (animePageState.sub === 'filter') {
+    await applyAnimeFilter(animePageState.page);
+  } else {
+    const items = await fetchAnime(animePageState.sub, animePageState.page);
+    renderGrid('anime-grid', items, true);
+    animePageState.hasMore = items.length >= 24;
+    document.getElementById('anime-more').style.display = animePageState.hasMore ? 'block' : 'none';
+    if (animePageState.hasMore) attachInfiniteScroll();
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -1083,11 +1087,15 @@ async function loadMoreTV() {
   if (!tvPageState.hasMore) return;
   tvPageState.hasMore = false;
   tvPageState.page++;
-  const items = await fetchTV(tvPageState.sub, tvPageState.region, tvPageState.page);
-  renderGrid('tv-grid', items, true);
-  tvPageState.hasMore = items.length >= 20;
-  document.getElementById('tv-more').style.display = tvPageState.hasMore ? 'block' : 'none';
-  if (tvPageState.hasMore) attachInfiniteScroll();
+  if (tvPageState.sub === 'filter') {
+    await applyTVFilter(tvPageState.page);
+  } else {
+    const items = await fetchTV(tvPageState.sub, tvPageState.region, tvPageState.page);
+    renderGrid('tv-grid', items, true);
+    tvPageState.hasMore = items.length >= 20;
+    document.getElementById('tv-more').style.display = tvPageState.hasMore ? 'block' : 'none';
+    if (tvPageState.hasMore) attachInfiniteScroll();
+  }
 }
 
 function setTVFilter(region) {
@@ -1118,12 +1126,16 @@ async function loadMoreMovies() {
   if (!moviePageState.hasMore) return;
   moviePageState.hasMore = false;
   moviePageState.page++;
-  const data = await tmdb(`/movie/${moviePageState.sub}`, {page: moviePageState.page});
-  const items = (data?.results||[]).map(m=>fromTMDB(m,'movie'));
-  renderGrid('movies-grid', items, true);
-  moviePageState.hasMore = moviePageState.page < (data?.total_pages||1);
-  document.getElementById('movies-more').style.display = moviePageState.hasMore ? 'block' : 'none';
-  if (moviePageState.hasMore) attachInfiniteScroll();
+  if (moviePageState.sub === 'filter') {
+    await applyMovieFilter(moviePageState.page);
+  } else {
+    const data = await tmdb(`/movie/${moviePageState.sub}`, {page: moviePageState.page});
+    const items = (data?.results||[]).map(m=>fromTMDB(m,'movie'));
+    renderGrid('movies-grid', items, true);
+    moviePageState.hasMore = moviePageState.page < (data?.total_pages||1);
+    document.getElementById('movies-more').style.display = moviePageState.hasMore ? 'block' : 'none';
+    if (moviePageState.hasMore) attachInfiniteScroll();
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -1680,104 +1692,139 @@ function resetPageFilter(page) {
 }
 
 // ── ANIME FILTER ──
-async function applyAnimeFilter() {
-  document.getElementById('anime-filter').style.display = 'none';
-  document.getElementById('anime-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
-  document.getElementById('anime-more').style.display = 'none';
+let animeFilterVars = null;
+let animeFilterQ = null;
 
-  const genre   = getChipVal('af-genre');
-  const yearVal = getChipVal('af-year');
-  const rating  = getChipVal('af-rating');
-  const status  = getChipVal('af-status');
-  const yr      = getYearRange(yearVal);
-  const minScore = rating ? parseInt(rating) : undefined;
-  const yGte = yr.gte ? parseInt(yr.gte.slice(0,4))*10000 : undefined;
-  const yLte = yr.lte ? parseInt(yr.lte.slice(0,4))*10000+1231 : undefined;
+async function applyAnimeFilter(page=1) {
+  if (page === 1) {
+    document.getElementById('anime-filter').style.display = 'none';
+    document.getElementById('anime-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
+    document.getElementById('anime-more').style.display = 'none';
 
-  const Q = `query($genre:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$status:MediaStatus){
-    Page(perPage:24){media(type:ANIME,isAdult:false,genre:$genre,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status:$status){
-      id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres
-    }}
-  }`;
-  const data = await al(Q, { genre:genre||undefined, sort:['SCORE_DESC'], yGte, yLte, minScore, status:status||undefined });
+    const genre   = getChipVal('af-genre');
+    const yearVal = getChipVal('af-year');
+    const rating  = getChipVal('af-rating');
+    const status  = getChipVal('af-status');
+    const yr      = getYearRange(yearVal);
+    const minScore = rating ? parseInt(rating) : undefined;
+    const yGte = yr.gte ? parseInt(yr.gte.slice(0,4))*10000 : undefined;
+    const yLte = yr.lte ? parseInt(yr.lte.slice(0,4))*10000+1231 : undefined;
+
+    animeFilterQ = `query($page:Int,$genre:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$status:MediaStatus){
+      Page(page:$page,perPage:24){
+        pageInfo{hasNextPage}
+        media(type:ANIME,isAdult:false,genre:$genre,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status:$status){
+          id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres
+        }
+      }
+    }`;
+    animeFilterVars = { genre:genre||undefined, sort:['SCORE_DESC'], yGte, yLte, minScore, status:status||undefined };
+  }
+
+  const data = await al(animeFilterQ, {...animeFilterVars, page});
   const list = (data?.data?.Page?.media||[]).map(fromAL);
-  renderGrid('anime-grid', list);
-  animePageState = {sub:'filter', page:1, hasMore:false};
+  const hasMore = data?.data?.Page?.pageInfo?.hasNextPage || false;
+
+  if (page === 1) renderGrid('anime-grid', list);
+  else list.forEach(a => document.getElementById('anime-grid').appendChild(buildGridCard(a)));
+
+  animePageState = {sub:'filter', page, hasMore};
+  document.getElementById('anime-more').style.display = hasMore ? 'block' : 'none';
+  if (hasMore) attachInfiniteScroll();
 }
 
 // ── TV FILTER ──
-async function applyTVFilter() {
-  document.getElementById('tv-filter').style.display = 'none';
-  document.getElementById('tv-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
-  document.getElementById('tv-more').style.display = 'none';
+// Store filter URL base for pagination
+let tvFilterUrl = null;
 
-  const country = getChipVal('tf-country');
-  const genre   = getChipVal('tf-genre');
-  const yearVal = getChipVal('tf-year');
-  const rating  = getChipVal('tf-rating');
-  const status  = getChipVal('tf-status');
-  const yr      = getYearRange(yearVal);
+async function applyTVFilter(page=1) {
+  if (page === 1) {
+    document.getElementById('tv-filter').style.display = 'none';
+    document.getElementById('tv-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
+    document.getElementById('tv-more').style.display = 'none';
 
-  const url = new URL(`${TMDB_BASE}/discover/tv`);
-  url.searchParams.set('api_key', TMDB_KEY);
-  url.searchParams.set('language', 'en-US');
-  // Use popularity sort when filtering by country to get more results
-  // Only use vote_average sort when no country filter (to avoid too few results)
-  if (country) {
-    url.searchParams.set('sort_by', 'popularity.desc');
-    url.searchParams.set('vote_count.gte', '0');
-  } else {
-    url.searchParams.set('sort_by', 'vote_average.desc');
-    url.searchParams.set('vote_count.gte', '50');
+    const country = getChipVal('tf-country');
+    const genre   = getChipVal('tf-genre');
+    const yearVal = getChipVal('tf-year');
+    const rating  = getChipVal('tf-rating');
+    const status  = getChipVal('tf-status');
+    const yr      = getYearRange(yearVal);
+
+    const url = new URL(`${TMDB_BASE}/discover/tv`);
+    url.searchParams.set('api_key', TMDB_KEY);
+    url.searchParams.set('language', 'en-US');
+    if (country) {
+      url.searchParams.set('sort_by', 'popularity.desc');
+      url.searchParams.set('vote_count.gte', '0');
+    } else {
+      url.searchParams.set('sort_by', 'vote_average.desc');
+      url.searchParams.set('vote_count.gte', '50');
+    }
+    if (country) url.searchParams.set('with_origin_country', country);
+    if (genre)   url.searchParams.set('with_genres', genre);
+    if (rating)  url.searchParams.set('vote_average.gte', rating);
+    if (yr.gte)  url.searchParams.set('first_air_date.gte', yr.gte);
+    if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
+    if (status)  url.searchParams.set('with_status', status);
+
+    // Save base URL without page for pagination
+    tvFilterUrl = url.toString();
   }
-  if (country) url.searchParams.set('with_origin_country', country);
-  if (genre)   url.searchParams.set('with_genres', genre);
-  if (rating)  url.searchParams.set('vote_average.gte', rating);
-  if (yr.gte)  url.searchParams.set('first_air_date.gte', yr.gte);
-  if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
-  if (status)  url.searchParams.set('with_status', status);
 
   try {
-    const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
+    const r = await fetch(`${tvFilterUrl}&page=${page}`, {signal: AbortSignal.timeout(10000)});
     const d = await r.json();
-    renderGrid('tv-grid', (d?.results||[]).map(m=>fromTMDB(m,'tv')));
+    const items = (d?.results||[]).map(m=>fromTMDB(m,'tv'));
+    if (page === 1) renderGrid('tv-grid', items);
+    else items.forEach(a=>document.getElementById('tv-grid').appendChild(buildGridCard(a)));
+    const hasMore = (d?.page||1) < (d?.total_pages||1);
+    tvPageState = {sub:'filter', region:'', page, hasMore};
+    document.getElementById('tv-more').style.display = hasMore ? 'block' : 'none';
+    if (hasMore) attachInfiniteScroll();
   } catch { renderGrid('tv-grid', []); }
-  tvPageState = {sub:'filter', region:'', page:1, hasMore:false};
 }
 
 // ── MOVIE FILTER ──
-async function applyMovieFilter() {
-  document.getElementById('movie-filter').style.display = 'none';
-  document.getElementById('movies-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
-  document.getElementById('movies-more').style.display = 'none';
+let movieFilterUrl = null;
 
-  const genre   = getChipVal('mf-genre');
-  const yearVal = getChipVal('mf-year');
-  const rating  = getChipVal('mf-rating');
-  const status  = getChipVal('mf-status');
-  const yr      = getYearRange(yearVal);
+async function applyMovieFilter(page=1) {
+  if (page === 1) {
+    document.getElementById('movie-filter').style.display = 'none';
+    document.getElementById('movies-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
+    document.getElementById('movies-more').style.display = 'none';
 
-  const url = new URL(`${TMDB_BASE}/discover/movie`);
-  url.searchParams.set('api_key', TMDB_KEY);
-  url.searchParams.set('language', 'en-US');
-  url.searchParams.set('sort_by', 'vote_average.desc');
-  url.searchParams.set('vote_count.gte', '100');
-  if (genre)  url.searchParams.set('with_genres', genre);
-  if (rating) url.searchParams.set('vote_average.gte', rating);
-  if (yr.gte) url.searchParams.set('primary_release_date.gte', yr.gte);
-  if (yr.lte) url.searchParams.set('primary_release_date.lte', yr.lte);
-  if (status === 'upcoming') {
-    url.searchParams.set('primary_release_date.gte', new Date().toISOString().slice(0,10));
-  } else if (status === 'released') {
-    url.searchParams.set('primary_release_date.lte', new Date().toISOString().slice(0,10));
+    const genre   = getChipVal('mf-genre');
+    const yearVal = getChipVal('mf-year');
+    const rating  = getChipVal('mf-rating');
+    const status  = getChipVal('mf-status');
+    const yr      = getYearRange(yearVal);
+
+    const url = new URL(`${TMDB_BASE}/discover/movie`);
+    url.searchParams.set('api_key', TMDB_KEY);
+    url.searchParams.set('language', 'en-US');
+    url.searchParams.set('sort_by', 'vote_average.desc');
+    url.searchParams.set('vote_count.gte', '100');
+    if (genre)  url.searchParams.set('with_genres', genre);
+    if (rating) url.searchParams.set('vote_average.gte', rating);
+    if (yr.gte) url.searchParams.set('primary_release_date.gte', yr.gte);
+    if (yr.lte) url.searchParams.set('primary_release_date.lte', yr.lte);
+    if (status === 'upcoming') url.searchParams.set('primary_release_date.gte', new Date().toISOString().slice(0,10));
+    else if (status === 'released') url.searchParams.set('primary_release_date.lte', new Date().toISOString().slice(0,10));
+
+    movieFilterUrl = url.toString();
   }
 
   try {
-    const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
+    const r = await fetch(`${movieFilterUrl}&page=${page}`, {signal: AbortSignal.timeout(10000)});
     const d = await r.json();
-    renderGrid('movies-grid', (d?.results||[]).map(m=>fromTMDB(m,'movie')));
+    const items = (d?.results||[]).map(m=>fromTMDB(m,'movie'));
+    if (page === 1) renderGrid('movies-grid', items);
+    else items.forEach(a => document.getElementById('movies-grid').appendChild(buildGridCard(a)));
+    const hasMore = (d?.page||1) < (d?.total_pages||1);
+    moviePageState = {sub:'filter', page, hasMore};
+    document.getElementById('movies-more').style.display = hasMore ? 'block' : 'none';
+    if (hasMore) attachInfiniteScroll();
   } catch { renderGrid('movies-grid', []); }
-  moviePageState = {sub:'filter', page:1, hasMore:false};
 }
 
 // ═══════════════════════════════════════════
