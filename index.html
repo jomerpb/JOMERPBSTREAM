@@ -1224,75 +1224,88 @@ async function fetchFiltered(page) {
   const type = searchType;
 
   // Year range
-  let yearGte = '', yearLte = '';
+  let yearStart = '', yearEnd = '';
   if (year) {
     if (year.includes('s')) {
       const decade = parseInt(year);
-      yearGte = `${decade}-01-01`;
-      yearLte = `${decade+9}-12-31`;
+      yearStart = `${decade}-01-01`;
+      yearEnd   = `${decade+9}-12-31`;
     } else {
-      yearGte = `${year}-01-01`;
-      yearLte = `${year}-12-31`;
+      yearStart = `${year}-01-01`;
+      yearEnd   = `${year}-12-31`;
     }
   }
 
-  // Genre — split value "28|Action" → just the ID part
+  // Genre ID (stored as "28|Action" → "28")
   const genreId = genre ? genre.split('|')[0] : '';
 
   let results = [];
 
   if (type === 'all' || type === 'tv') {
-    const params = {
-      sort_by: sort.includes('release') ? sort.replace('primary_release_date','first_air_date') : sort,
-      page,
-      with_genres: genreId || undefined,
-      with_origin_country: country || undefined,
-      'vote_average.gte': rating || undefined,
-      'first_air_date.gte': yearGte || undefined,
-      'first_air_date.lte': yearLte || undefined,
-    };
-    const d = await tmdb('/discover/tv', params);
-    results = results.concat((d?.results||[]).map(m=>fromTMDB(m,'tv')));
+    const tvSort = sort === 'primary_release_date.desc' ? 'first_air_date.desc'
+                 : sort === 'primary_release_date.asc'  ? 'first_air_date.asc'
+                 : sort;
+    const tvParams = { sort_by: tvSort, page };
+    if (genreId)    tvParams['with_genres']          = genreId;
+    if (country)    tvParams['with_origin_country']  = country;
+    if (rating)     tvParams['vote_average.gte']     = rating;
+    if (yearStart)  tvParams['first_air_date.gte']   = yearStart;
+    if (yearEnd)    tvParams['first_air_date.lte']   = yearEnd;
+
+    const url = new URL(`${TMDB_BASE}/discover/tv`);
+    url.searchParams.set('api_key', TMDB_KEY);
+    url.searchParams.set('language','en-US');
+    Object.entries(tvParams).forEach(([k,v]) => url.searchParams.set(k, v));
+    try {
+      const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
+      const d = await r.json();
+      results = results.concat((d?.results||[]).map(m=>fromTMDB(m,'tv')));
+    } catch {}
   }
 
   if (type === 'all' || type === 'movie') {
-    const params = {
-      sort_by: sort,
-      page,
-      with_genres: genreId || undefined,
-      with_origin_country: country || undefined,
-      'vote_average.gte': rating || undefined,
-      'primary_release_date.gte': yearGte || undefined,
-      'primary_release_date.lte': yearLte || undefined,
-    };
-    const d = await tmdb('/discover/movie', params);
-    results = results.concat((d?.results||[]).map(m=>fromTMDB(m,'movie')));
+    const mvParams = { sort_by: sort, page };
+    if (genreId)    mvParams['with_genres']                 = genreId;
+    if (country)    mvParams['with_origin_country']         = country;
+    if (rating)     mvParams['vote_average.gte']            = rating;
+    if (yearStart)  mvParams['primary_release_date.gte']    = yearStart;
+    if (yearEnd)    mvParams['primary_release_date.lte']    = yearEnd;
+
+    const url = new URL(`${TMDB_BASE}/discover/movie`);
+    url.searchParams.set('api_key', TMDB_KEY);
+    url.searchParams.set('language','en-US');
+    Object.entries(mvParams).forEach(([k,v]) => url.searchParams.set(k, v));
+    try {
+      const r = await fetch(url.toString(), {signal: AbortSignal.timeout(10000)});
+      const d = await r.json();
+      results = results.concat((d?.results||[]).map(m=>fromTMDB(m,'movie')));
+    } catch {}
   }
 
   if (type === 'all' || type === 'anime') {
     const genreName = genre ? genre.split('|')[1] : null;
-    const decade = year?.includes('s') ? parseInt(year) : null;
-    const specificYear = year && !year.includes('s') ? parseInt(year) : null;
+    const decade     = year?.includes('s') ? parseInt(year) : null;
+    const exactYear  = year && !year.includes('s') ? parseInt(year) : null;
+    const alSort     = sort.includes('vote_average')           ? 'SCORE_DESC'
+                     : sort.includes('release_date.asc')       ? 'START_DATE'
+                     : sort.includes('release_date.desc')      ? 'START_DATE_DESC'
+                     : 'POPULARITY_DESC';
+    const minScore   = rating ? parseInt(rating)*10 : undefined;
+    const yGte       = decade ? decade*10000 : exactYear ? exactYear*10000       : undefined;
+    const yLte       = decade ? (decade+9)*10000+1231 : exactYear ? exactYear*10000+1231 : undefined;
 
-    const Q = `query($page:Int,$genre:String,$sort:[MediaSort],$yearGte:FuzzyDateInt,$yearLte:FuzzyDateInt,$minScore:Int){
+    const Q = `query($page:Int,$genre:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int){
       Page(page:$page,perPage:20){
-        media(type:ANIME,isAdult:false,genre:$genre,sort:$sort,startDate_greater:$yearGte,startDate_lesser:$yearLte,averageScore_greater:$minScore){
+        media(type:ANIME,isAdult:false,genre:$genre,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore){
           id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format
         }
       }
     }`;
-    const alSort = sort.includes('vote_average') ? 'SCORE_DESC' : sort.includes('release_date.asc') ? 'START_DATE' : sort.includes('release_date.desc') ? 'START_DATE_DESC' : 'POPULARITY_DESC';
-    const minScore = rating ? parseInt(rating)*10 : undefined;
-    const yGte = decade ? decade*10000 : specificYear ? specificYear*10000 : undefined;
-    const yLte = decade ? (decade+9)*10000+1231 : specificYear ? specificYear*10000+1231 : undefined;
-
     const d = await al(Q, {
       page,
       sort: [alSort],
       genre: genreName || undefined,
-      yearGte: yGte,
-      yearLte: yLte,
-      minScore
+      yGte, yLte, minScore
     });
     results = results.concat((d?.data?.Page?.media||[]).map(fromAL));
   }
