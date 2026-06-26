@@ -829,6 +829,8 @@ function fromTMDB(m, type) {
 
 function fromAL(m) {
   const genre = m.genres?.[0] || '';
+  // For ongoing anime, use nextAiringEpisode - 1 as current episode count
+  const episodes = m.episodes || (m.nextAiringEpisode?.episode ? m.nextAiringEpisode.episode - 1 : null);
   return {
     type: 'anime',
     al_id:   m.id,
@@ -839,7 +841,7 @@ function fromAL(m) {
     img:     m.coverImage?.large  || m.coverImage?.medium || '',
     banner:  m.bannerImage || m.coverImage?.extraLarge    || '',
     synopsis:(m.description||'').replace(/<[^>]*>/g,''),
-    episodes: m.episodes,
+    episodes,
     genre,
     country: '🇯🇵', countryFlag: '🇯🇵',
   };
@@ -1096,7 +1098,7 @@ async function openDetail(item, restore=false) {
 
 // ── ANIME DETAIL ──
 async function openAnimeDetail(item) {
-  const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:ANIME){id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description episodes averageScore status seasonYear format relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format type}}}}}`;
+  const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:ANIME){id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description episodes averageScore status seasonYear format nextAiringEpisode{episode} genres relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format type nextAiringEpisode{episode}}}}}}`;
   const vars = item.al_id ? {alId:item.al_id} : {malId:item.mal_id};
   const r = await al(Q, vars);
   const m = r?.data?.Media;
@@ -1230,10 +1232,23 @@ function renderSeasonTabs() {
 
 function selectSeason(s) {
   currentSeason = s;
-  totalEps = s.episodes || 100;
+  // For ongoing anime with no episode count, fetch actual count from AniList
+  if (!s.episodes && s.al_id) {
+    totalEps = 9999; // allow next button while loading
+    document.getElementById('eps-label').style.display = 'block';
+    buildEpGrid(9999, null);
+    // Fetch real episode count in background
+    al(`query($id:Int){Media(id:$id){episodes nextAiringEpisode{episode}}}`, {id: s.al_id}).then(r => {
+      const m = r?.data?.Media;
+      const count = m?.episodes || (m?.nextAiringEpisode?.episode ? m.nextAiringEpisode.episode - 1 : null);
+      if (count) { totalEps = count; buildEpGrid(count, null); }
+    });
+  } else {
+    totalEps = s.episodes || 100;
+    document.getElementById('eps-label').style.display = 'block';
+    buildEpGrid(totalEps, null);
+  }
   document.querySelectorAll('.spill').forEach((b,i) => b.classList.toggle('active', parseInt(b.dataset.idx)===allSeasons.indexOf(s)));
-  document.getElementById('eps-label').style.display = 'block';
-  buildEpGrid(totalEps, null);
   document.getElementById('detail-play-btn').onclick = () => openPlayer(1);
 }
 
@@ -1252,7 +1267,9 @@ async function selectTVSeason(s) {
 function buildEpGrid(count, seasonNum) {
   const eg = document.getElementById('eps-grid');
   eg.innerHTML = '';
-  const max = Math.min(count || 100, 500);
+  const actual = count || 100;
+  // For very long series like One Piece (1000+ eps), show all up to 2000
+  const max = Math.min(actual === 9999 ? 100 : actual, 2000);
   for (let i = 1; i <= max; i++) {
     const b = document.createElement('button');
     b.className = 'ep-btn';
