@@ -849,9 +849,9 @@ function fromTMDB(m, type) {
   const score = m.vote_average ? m.vote_average.toFixed(1) : null;
   const genreMap = {28:'Action',12:'Adventure',16:'Animation',35:'Comedy',80:'Crime',18:'Drama',14:'Fantasy',27:'Horror',9648:'Mystery',10749:'Romance',878:'Sci-Fi',53:'Thriller',10765:'Sci-Fi',10759:'Action',10762:'Kids',10764:'Reality',10766:'Soap',10767:'Talk'};
   const genre = m.genre_ids?.[0] ? (genreMap[m.genre_ids[0]] || '') : (m.genres?.[0]?.name || '');
-  const countryCode = m.origin_country?.[0] || m.production_countries?.[0]?.iso_3166_1 || '';
-  const flagMap = {KR:'🇰🇷',JP:'🇯🇵',CN:'🇨🇳',TH:'🇹🇭',PH:'🇵🇭',US:'🇺🇸',GB:'🇬🇧',IN:'🇮🇳',FR:'🇫🇷',DE:'🇩🇪',IT:'🇮🇹',ES:'🇪🇸',AU:'🇦🇺',CA:'🇨🇦',MX:'🇲🇽',BR:'🇧🇷',TR:'🇹🇷',ID:'🇮🇩'};
-  const countryFlag = flagMap[countryCode] || '';
+  const countryCode = m.origin_country?.[0] || m.production_countries?.[0]?.iso_3166_1 || (m.original_language === 'ko' ? 'KR' : m.original_language === 'ja' ? 'JP' : m.original_language === 'zh' ? 'CN' : m.original_language === 'th' ? 'TH' : m.original_language === 'hi' ? 'IN' : m.original_language === 'fr' ? 'FR' : m.original_language === 'de' ? 'DE' : m.original_language === 'es' ? 'ES' : m.original_language === 'pt' ? 'BR' : m.original_language === 'tr' ? 'TR' : m.original_language === 'id' ? 'ID' : m.original_language === 'en' ? 'US' : '');
+  const countryNames = {KR:'Korea',JP:'Japan',CN:'China',TH:'Thailand',PH:'Philippines',US:'USA',GB:'UK',IN:'India',FR:'France',DE:'Germany',IT:'Italy',ES:'Spain',AU:'Australia',CA:'Canada',MX:'Mexico',BR:'Brazil',TR:'Turkey',ID:'Indonesia',TW:'Taiwan',SG:'Singapore',HK:'Hong Kong'};
+  const countryFlag = countryNames[countryCode] || countryCode || '';
 
   // Derive status — TMDB list results don't include status field
   // If m.status exists (detail endpoint), use it directly
@@ -866,19 +866,29 @@ function fromTMDB(m, type) {
     else if (s==='Released') status='Completed';
     else status = s;
   } else {
-    // Derive from date for list results
     const now = new Date();
     const releaseDate = m.release_date || m.first_air_date || '';
-    const lastAir = m.last_air_date || '';
-    if (!releaseDate) {
-      status = 'Upcoming';
-    } else if (new Date(releaseDate) > now) {
+    if (!releaseDate || new Date(releaseDate) > now) {
       status = 'Upcoming';
     } else if (type === 'movie') {
       status = 'Completed';
     } else {
-      // TV: check in_production flag if available
-      status = m.in_production === false ? 'Completed' : (m.in_production === true ? 'Ongoing' : '');
+      // TV: next_episode_to_air means still airing
+      // in_production flag when available
+      // last_air_date within last 12 months = likely ongoing
+      if (m.next_episode_to_air) {
+        status = 'Ongoing';
+      } else if (m.in_production === true) {
+        status = 'Ongoing';
+      } else if (m.in_production === false) {
+        status = 'Completed';
+      } else if (m.last_air_date) {
+        const lastAir = new Date(m.last_air_date);
+        const monthsAgo = (now - lastAir) / (1000 * 60 * 60 * 24 * 30);
+        status = monthsAgo < 12 ? 'Ongoing' : 'Completed';
+      } else {
+        status = '';
+      }
     }
   }
 
@@ -912,7 +922,7 @@ function fromAL(m) {
     banner:   m.bannerImage || m.coverImage?.extraLarge    || '',
     synopsis: (m.description||'').replace(/<[^>]*>/g,''),
     episodes, genre, status,
-    country: 'JP', countryFlag: '🇯🇵',
+    country: 'JP', countryFlag: 'Japan',
   };
 }
 
@@ -932,13 +942,13 @@ async function loadHome() {
 
   const [animeData, tvData, kdramaData, movieData] = await Promise.all([
     al(`query{Page(perPage:15){media(type:ANIME,sort:TRENDING_DESC,isAdult:false){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format genres}}}`, {}),
-    tmdb('/tv/popular'),
+    tmdb('/discover/tv', {sort_by:'popularity.desc', 'with_status':'0'}),
     tmdb('/discover/tv', {with_origin_country:'KR', sort_by:'popularity.desc'}),
     tmdb('/movie/popular'),
   ]);
 
   const animeList = (animeData?.data?.Page?.media||[]).map(fromAL);
-  const tvList    = (tvData?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
+  const tvList    = (tvData?.results||[]).slice(0,15).map(m=>{const i=fromTMDB(m,'tv');if(!i.status)i.status='Ongoing';return i;});
   const kdramaList= (kdramaData?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
   const movieList = (movieData?.results||[]).slice(0,15).map(m=>fromTMDB(m,'movie'));
 
@@ -1031,12 +1041,34 @@ async function loadTVSub(sub, region, tabEl) {
 
 async function fetchTV(sub, region, page) {
   let data;
+  let knownStatus = ''; // we know status based on which list we're fetching
+
   if (region) {
     data = await tmdb('/discover/tv', {with_origin_country: region, sort_by:'popularity.desc', page});
+    knownStatus = ''; // mixed — can't know
+  } else if (sub === 'popular') {
+    data = await tmdb('/discover/tv', {sort_by:'popularity.desc', 'with_status':'0', page}); // 0 = Returning Series
+    knownStatus = 'Ongoing';
+  } else if (sub === 'top_rated') {
+    data = await tmdb('/tv/top_rated', {page});
+    knownStatus = ''; // mixed
+  } else if (sub === 'airing_today') {
+    data = await tmdb('/tv/airing_today', {page});
+    knownStatus = 'Ongoing';
+  } else if (sub === 'on_the_air') {
+    data = await tmdb('/tv/on_the_air', {page});
+    knownStatus = 'Ongoing';
   } else {
     data = await tmdb(`/tv/${sub}`, {page});
+    knownStatus = '';
   }
-  return (data?.results||[]).map(m=>fromTMDB(m,'tv'));
+
+  return (data?.results||[]).map(m => {
+    const item = fromTMDB(m, 'tv');
+    // If we know the status from context, use it
+    if (knownStatus && !item.status) item.status = knownStatus;
+    return item;
+  });
 }
 
 async function loadMoreTV() {
