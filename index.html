@@ -452,8 +452,8 @@ async function doSearch() {
   document.getElementById('results-title').textContent = `Results for "${q}"`;
   document.getElementById('results-grid').innerHTML = skeletonCards(8);
 
-  // No sfw filter, no unapproved — plain search works for all anime including old ones
-  const data = await fetchJSON(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24&order_by=score&sort=desc`);
+  // Plain clean search — works for all anime old and new
+  const data = await fetchJSON(`${JIKAN}/anime?q=${encodeURIComponent(q)}&limit=24`);
   renderGrid('results-grid', data?.data);
 }
 
