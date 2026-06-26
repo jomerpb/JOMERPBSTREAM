@@ -339,6 +339,31 @@
     </div>
     <div class="sec-label" id="eps-label" style="display:none;">EPISODES</div>
     <div class="eps-grid" id="eps-grid"></div>
+
+    <!-- RECOMMENDATIONS -->
+    <div id="rec-section" style="display:none;margin-top:24px;">
+      <!-- Row 1: Similar -->
+      <div id="rec-row-1" style="display:none;margin-bottom:20px;">
+        <div class="row-header" style="padding:0;margin-bottom:10px;">
+          <div class="row-title" id="rec-title-1"></div>
+        </div>
+        <div class="row-scroll" style="padding:0;" id="rec-grid-1"></div>
+      </div>
+      <!-- Row 2: Same Genre -->
+      <div id="rec-row-2" style="display:none;margin-bottom:20px;">
+        <div class="row-header" style="padding:0;margin-bottom:10px;">
+          <div class="row-title" id="rec-title-2"></div>
+        </div>
+        <div class="row-scroll" style="padding:0;" id="rec-grid-2"></div>
+      </div>
+      <!-- Row 3: Also Popular -->
+      <div id="rec-row-3" style="display:none;margin-bottom:20px;">
+        <div class="row-header" style="padding:0;margin-bottom:10px;">
+          <div class="row-title" id="rec-title-3"></div>
+        </div>
+        <div class="row-scroll" style="padding:0;" id="rec-grid-3"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -902,6 +927,7 @@ async function openAnimeDetail(item) {
   document.getElementById('detail-lang').style.display = 'flex';
   renderSeasonTabs();
   selectSeason(allSeasons[0]);
+  loadRecommendations(full);
 }
 
 // ── TV DETAIL ──
@@ -930,11 +956,11 @@ async function openTVDetail(item) {
     renderSeasonTabs();
     selectTVSeason(tvSeasons[0]);
   } else {
-    // single season
     allSeasons = [{...full, season_number:1}];
     document.getElementById('eps-label').style.display = 'block';
     buildEpGrid(data.number_of_episodes||20, null);
   }
+  loadRecommendations(full);
 }
 
 // ── MOVIE DETAIL ──
@@ -954,6 +980,7 @@ async function openMovieDetail(item) {
   allSeasons = [{...full, season_number:0}];
   currentSeason = allSeasons[0];
   totalEps = 1;
+  loadRecommendations(full);
 }
 
 function renderDetailBackdrop(img, title) {
@@ -1044,6 +1071,88 @@ function renderSimpleDetail(item, type) {
   currentSeason = allSeasons[0];
   totalEps = item.episodes || (type==='movie'?1:20);
   if (type !== 'movie') buildEpGrid(totalEps, 1);
+}
+
+// ═══════════════════════════════════════════
+// RECOMMENDATIONS
+// ═══════════════════════════════════════════
+async function loadRecommendations(item) {
+  // Hide all rows first
+  document.getElementById('rec-section').style.display = 'none';
+  ['rec-row-1','rec-row-2','rec-row-3'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['rec-grid-1','rec-grid-2','rec-grid-3'].forEach(id => document.getElementById(id).innerHTML = '');
+
+  const type = item.type;
+
+  if (type === 'anime') {
+    // Row 1: AniList recommendations
+    const Q1 = `query($id:Int){Media(id:$id){recommendations(perPage:10,sort:RATING_DESC){nodes{mediaRecommendation{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format}}}}}`;
+    const r1 = await al(Q1, {id: item.al_id});
+    const recList = (r1?.data?.Media?.recommendations?.nodes||[])
+      .map(n=>n.mediaRecommendation).filter(Boolean)
+      .map(m=>({...fromAL(m), al_id:m.id}));
+
+    // Row 2: Same genre anime
+    const genre = item.genres?.[0] || null;
+    const Q2 = `query($genre:String){Page(perPage:10){media(type:ANIME,isAdult:false,genre:$genre,sort:POPULARITY_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format}}}`;
+    const r2 = await al(Q2, {genre});
+    const genreList = (r2?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(m=>({...fromAL(m),al_id:m.id}));
+
+    // Row 3: Trending anime
+    const Q3 = `{Page(perPage:10){media(type:ANIME,isAdult:false,sort:TRENDING_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format}}}`;
+    const r3 = await al(Q3);
+    const trendList = (r3?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(m=>({...fromAL(m),al_id:m.id}));
+
+    renderRecRow(1, '✨ Recommended For You', recList);
+    renderRecRow(2, '🎌 More Anime Like This', genreList);
+    renderRecRow(3, '🔥 Trending Anime', trendList);
+
+  } else if (type === 'tv') {
+    const id = item.tmdb_id || item.id;
+    // Row 1: TMDB similar
+    const d1 = await tmdb(`/tv/${id}/similar`);
+    const simList = (d1?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
+
+    // Row 2: TMDB recommendations
+    const d2 = await tmdb(`/tv/${id}/recommendations`);
+    const recList = (d2?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
+
+    // Row 3: Popular TV
+    const d3 = await tmdb('/tv/popular');
+    const popList = (d3?.results||[]).filter(m=>m.id!==id).slice(0,15).map(m=>fromTMDB(m,'tv'));
+
+    renderRecRow(1, '📺 Similar Series', simList);
+    renderRecRow(2, '👍 Recommended For You', recList);
+    renderRecRow(3, '🔥 Popular Right Now', popList);
+
+  } else if (type === 'movie') {
+    const id = item.tmdb_id || item.id;
+    // Row 1: Similar movies
+    const d1 = await tmdb(`/movie/${id}/similar`);
+    const simList = (d1?.results||[]).slice(0,15).map(m=>fromTMDB(m,'movie'));
+
+    // Row 2: Recommendations
+    const d2 = await tmdb(`/movie/${id}/recommendations`);
+    const recList = (d2?.results||[]).slice(0,15).map(m=>fromTMDB(m,'movie'));
+
+    // Row 3: Popular movies
+    const d3 = await tmdb('/movie/popular');
+    const popList = (d3?.results||[]).filter(m=>m.id!==id).slice(0,15).map(m=>fromTMDB(m,'movie'));
+
+    renderRecRow(1, '🎬 Similar Movies', simList);
+    renderRecRow(2, '👍 Recommended For You', recList);
+    renderRecRow(3, '🔥 Popular Movies', popList);
+  }
+}
+
+function renderRecRow(num, title, items) {
+  if (!items?.length) return;
+  document.getElementById('rec-section').style.display = 'block';
+  document.getElementById(`rec-title-${num}`).textContent = title;
+  const grid = document.getElementById(`rec-grid-${num}`);
+  grid.innerHTML = '';
+  items.forEach(item => grid.appendChild(buildSmCard(item)));
+  document.getElementById(`rec-row-${num}`).style.display = 'block';
 }
 
 // ═══════════════════════════════════════════
