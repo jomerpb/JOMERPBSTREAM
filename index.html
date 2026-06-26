@@ -1321,8 +1321,8 @@ async function loadRecommendations(item) {
     const r3 = await al(Q3);
     const trendList = (r3?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(m=>({...fromAL(m),al_id:m.id}));
 
-    renderRecRow(1, '✨ Recommended For You', recList);
-    renderRecRow(2, '🎌 More Anime Like This', genreList);
+    renderRecRow(1, '✨ Similar Anime', recList);
+    renderRecRow(2, '🎌 More Like This', genreList);
     renderRecRow(3, '🔥 Trending Anime', trendList);
 
   } else if (type === 'tv') {
