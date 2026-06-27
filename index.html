@@ -2049,7 +2049,6 @@ async function initFromHash() {
       document.getElementById('player-title').textContent    = item.title;
       document.getElementById('player-subtitle').textContent = isMovie?(item.year||''):`Episode ${currentEp}`;
       document.getElementById('player-lang-row').style.display = isAnime?'flex':'none';
-      document.getElementById('server-name').textContent = isAnime?'MegaPlay':'VidLink';
       playStream(); updateEpNav();
     } else { showPage('home-page'); setNav('home'); }
     return;
