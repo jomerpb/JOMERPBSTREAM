@@ -2033,12 +2033,20 @@ async function initFromHash() {
 
 initFromHash();
 </script>
-
-<!-- ═══════════════════════════════════════ -->
 <!-- ORACLE PAGE -->
-<!-- ═══════════════════════════════════════ -->
-<div id="oracle-page" class="page">
+<div id="oracle-page" class="page" style="background:#0a0a0f;">
+  <iframe 
+    id="oracle-iframe"
+    srcdoc="<!DOCTYPE html>
+<html lang=&quot;en&quot;>
+<head>
+<meta charset=&quot;UTF-8&quot;/>
+<meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1.0,viewport-fit=cover&quot;/>
+<meta name=&quot;theme-color&quot; content=&quot;#0a0a0f&quot;/>
+<title>JOMERPB Lotto Oracle</title>
+<link href=&quot;https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap&quot; rel=&quot;stylesheet&quot;/>
 <style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   /* JOMERPB Brand Tokens */
   --bg:#0a0a0f;
@@ -2064,12 +2072,8 @@ initFromHash();
   --radius:14px;
   --nav-h:64px;
 }
-@keyframes spin{to{transform:rotate(360deg)}
-
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-
-#oracle-page html{scroll-behavior:smooth}
-#oracle-page body{
+html{scroll-behavior:smooth}
+body{
   background:var(--bg);
   color:var(--text);
   font-family:var(--inter);
@@ -2081,7 +2085,7 @@ initFromHash();
 /* ══════════════════════════════════
    HERO
 ══════════════════════════════════ */
-#oracle-page .hero{
+.hero{
   background:linear-gradient(170deg,#0d0d18 0%,#110e2a 45%,#0a0a10 100%);
   border-bottom:1px solid var(--border);
   padding:36px 16px 28px;
@@ -2089,26 +2093,26 @@ initFromHash();
   position:relative;
   overflow:hidden;
 }
-#oracle-page .hero::before{
+.hero::before{
   content:'';position:absolute;
   top:-100px;left:50%;transform:translateX(-50%);
   width:500px;height:300px;
   background:radial-gradient(ellipse,rgba(124,92,252,.18) 0%,transparent 70%);
   pointer-events:none;
 }
-#oracle-page .hero::after{
+.hero::after{
   content:'';position:absolute;
   bottom:-40px;left:50%;transform:translateX(-50%);
   width:300px;height:100px;
   background:radial-gradient(ellipse,rgba(245,200,66,.06) 0%,transparent 70%);
   pointer-events:none;
 }
-#oracle-page .hero-brand{
+.hero-brand{
   font-size:10px;font-weight:700;
   letter-spacing:.28em;color:var(--accent2);
   text-transform:uppercase;margin-bottom:8px;
 }
-#oracle-page .hero h1{
+.hero h1{
   font-family:var(--bebas);
   font-size:clamp(48px,12vw,80px);
   letter-spacing:.04em;line-height:.9;
@@ -2117,15 +2121,15 @@ initFromHash();
   background-clip:text;
   margin-bottom:8px;
 }
-#oracle-page .hero-sub{
+.hero-sub{
   font-size:11px;color:var(--muted2);
   line-height:1.8;margin-bottom:14px;
 }
-#oracle-page .hero-layers{
+.hero-layers{
   display:flex;gap:5px;
   justify-content:center;flex-wrap:wrap;
 }
-#oracle-page .hlayer{
+.hlayer{
   background:rgba(124,92,252,.08);
   border:1px solid rgba(124,92,252,.2);
   border-radius:20px;padding:3px 10px;
@@ -2133,7 +2137,7 @@ initFromHash();
   letter-spacing:.1em;color:var(--accent2);
   text-transform:uppercase;
 }
-#oracle-page .hlayer.new{
+.hlayer.new{
   background:rgba(245,200,66,.07);
   border-color:rgba(245,200,66,.22);
   color:var(--gold);
@@ -2142,19 +2146,19 @@ initFromHash();
 /* ══════════════════════════════════
    LAYOUT
 ══════════════════════════════════ */
-#oracle-page .page{max-width:600px;margin:0 auto;padding:0 14px}
+.page{max-width:600px;margin:0 auto;padding:0 14px}
 
 /* ══════════════════════════════════
    SECTION LABELS
 ══════════════════════════════════ */
-#oracle-page .slabel{
+.slabel{
   font-family:var(--bebas);
   font-size:11px;letter-spacing:.22em;
   color:var(--muted);
   margin:20px 0 8px 2px;
   display:flex;align-items:center;gap:8px;
 }
-#oracle-page .slabel::after{
+.slabel::after{
   content:'';flex:1;height:1px;
   background:var(--border);
 }
@@ -2162,42 +2166,42 @@ initFromHash();
 /* ══════════════════════════════════
    GAME SELECTOR
 ══════════════════════════════════ */
-#oracle-page .game-wrap{padding:20px 14px 0}
-#oracle-page .game-eyebrow{
+.game-wrap{padding:20px 14px 0}
+.game-eyebrow{
   font-size:10px;font-weight:700;
   letter-spacing:.18em;text-transform:uppercase;
   color:var(--muted);margin-bottom:10px;
 }
-#oracle-page .game-grid{
+.game-grid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
   gap:8px;margin-bottom:16px;
 }
-#oracle-page .gbtn{
+.gbtn{
   padding:12px 6px;
   border:1px solid var(--border);
   background:var(--surface);
   border-radius:12px;cursor:pointer;
   transition:all .2s;text-align:center;
 }
-#oracle-page .gbtn .gn{
+.gbtn .gn{
   font-family:var(--bebas);
   font-size:18px;letter-spacing:.06em;
   color:var(--muted2);display:block;
   transition:color .2s;
 }
-#oracle-page .gbtn .gs{
+.gbtn .gs{
   font-size:9px;color:var(--muted);
   display:block;margin-top:2px;
   letter-spacing:.05em;
 }
-#oracle-page .gbtn.active{
+.gbtn.active{
   border-color:var(--accent);
   background:rgba(124,92,252,.08);
 }
-#oracle-page .gbtn.active .gn{color:var(--gold)}
-#oracle-page .gbtn.active .gs{color:var(--accent2)}
-#oracle-page .gbtn:hover:not(.active){
+.gbtn.active .gn{color:var(--gold)}
+.gbtn.active .gs{color:var(--accent2)}
+.gbtn:hover:not(.active){
   border-color:var(--border2);
   background:var(--card);
 }
@@ -2205,7 +2209,7 @@ initFromHash();
 /* ══════════════════════════════════
    RUN BUTTON
 ══════════════════════════════════ */
-#oracle-page .run-btn{
+.run-btn{
   width:100%;padding:16px;
   background:linear-gradient(135deg,var(--accent) 0%,#5533cc 100%);
   border:none;border-radius:12px;
@@ -2216,17 +2220,17 @@ initFromHash();
   box-shadow:0 4px 24px rgba(124,92,252,.25);
   margin-bottom:8px;
 }
-#oracle-page .run-btn:hover{opacity:.88}
-#oracle-page .run-btn:active{transform:scale(.98)}
+.run-btn:hover{opacity:.88}
+.run-btn:active{transform:scale(.98)}
 
 /* ══════════════════════════════════
    LOADER
 ══════════════════════════════════ */
-#oracle-page .loader{
+.loader{
   display:none;text-align:center;
   padding:44px 0;
 }
-#oracle-page .lring{
+.lring{
   width:46px;height:46px;
   border:3px solid var(--border);
   border-top-color:var(--accent);
@@ -2234,9 +2238,9 @@ initFromHash();
   animation:spin .7s linear infinite;
   margin:0 auto 14px;
 }
-}
-#oracle-page .ltitle{font-size:13px;color:var(--muted2);margin-bottom:8px}
-#oracle-page .lsteps{
+@keyframes spin{to{transform:rotate(360deg)}}
+.ltitle{font-size:13px;color:var(--muted2);margin-bottom:8px}
+.lsteps{
   font-size:10px;color:var(--muted);
   line-height:2.3;
 }
@@ -2244,37 +2248,37 @@ initFromHash();
 /* ══════════════════════════════════
    RESULTS
 ══════════════════════════════════ */
-#oracle-page #results{display:none}
+#results{display:none}
 
 /* ══════════════════════════════════
    ENERGY FLOW CARD
 ══════════════════════════════════ */
-#oracle-page .eflow{
+.eflow{
   background:var(--card);
   border:1px solid var(--border2);
   border-radius:var(--radius);
   padding:16px;margin-bottom:8px;
 }
-#oracle-page .eflow-title{
+.eflow-title{
   font-family:var(--bebas);
   font-size:13px;letter-spacing:.14em;
   color:var(--muted2);margin-bottom:14px;
 }
-#oracle-page .erow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-#oracle-page .elabel{font-size:10px;color:var(--muted2);width:82px;flex-shrink:0}
-#oracle-page .ebar-wrap{flex:1;background:var(--surface);border-radius:4px;height:7px;overflow:hidden}
-#oracle-page .ebar{height:100%;border-radius:4px;transition:width 1.1s cubic-bezier(.16,1,.3,1)}
-#oracle-page .ef{background:linear-gradient(90deg,#fc5c3c,var(--gold))}
-#oracle-page .ew{background:linear-gradient(90deg,var(--teal),var(--accent))}
-#oracle-page .ewod{background:linear-gradient(90deg,#4cfc9a,#22aa55)}
-#oracle-page .emet{background:linear-gradient(90deg,#c8d4f0,#ffffff)}
-#oracle-page .eear{background:linear-gradient(90deg,var(--gold),#aa8800)}
-#oracle-page .epct{font-family:var(--bebas);font-size:15px;width:36px;text-align:right;flex-shrink:0}
+.erow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.elabel{font-size:10px;color:var(--muted2);width:82px;flex-shrink:0}
+.ebar-wrap{flex:1;background:var(--surface);border-radius:4px;height:7px;overflow:hidden}
+.ebar{height:100%;border-radius:4px;transition:width 1.1s cubic-bezier(.16,1,.3,1)}
+.ef{background:linear-gradient(90deg,#fc5c3c,var(--gold))}
+.ew{background:linear-gradient(90deg,var(--teal),var(--accent))}
+.ewod{background:linear-gradient(90deg,#4cfc9a,#22aa55)}
+.emet{background:linear-gradient(90deg,#c8d4f0,#ffffff)}
+.eear{background:linear-gradient(90deg,var(--gold),#aa8800)}
+.epct{font-family:var(--bebas);font-size:15px;width:36px;text-align:right;flex-shrink:0}
 
 /* ══════════════════════════════════
    BALLS
 ══════════════════════════════════ */
-#oracle-page .balls-card{
+.balls-card{
   background:var(--card);
   border:1px solid var(--border2);
   border-radius:var(--radius);
@@ -2282,17 +2286,17 @@ initFromHash();
   margin-bottom:8px;
   text-align:center;
 }
-#oracle-page .balls-eyebrow{
+.balls-eyebrow{
   font-size:9px;font-weight:700;
   letter-spacing:.2em;text-transform:uppercase;
   color:var(--muted);margin-bottom:14px;
 }
-#oracle-page .balls-row{
+.balls-row{
   display:flex;gap:8px;
   justify-content:center;flex-wrap:wrap;
   margin-bottom:10px;
 }
-#oracle-page .ball{
+.ball{
   width:52px;height:52px;
   border-radius:50%;
   display:flex;align-items:center;justify-content:center;
@@ -2301,14 +2305,14 @@ initFromHash();
   box-shadow:0 4px 16px rgba(0,0,0,.5);
   transition:transform .2s;
 }
-#oracle-page .ball:hover{transform:scale(1.08)}
-#oracle-page .b1{background:radial-gradient(circle at 35% 30%,#ffe88a,var(--gold) 55%,#a07800);color:#1a1000;border:2px solid rgba(255,220,80,.5)}
-#oracle-page .b2{background:radial-gradient(circle at 35% 30%,#d8e0f4,var(--silver) 55%,#5a6878);color:#1a1e2a;border:2px solid rgba(168,178,200,.5)}
-#oracle-page .b3{background:radial-gradient(circle at 35% 30%,#e0b080,#b87333 55%,#6a3f10);color:#fff;border:2px solid rgba(184,115,51,.4)}
-#oracle-page .b4{background:radial-gradient(circle at 35% 30%,#aa88ff,var(--accent) 55%,#3a1aaa);color:#fff;border:2px solid rgba(124,92,252,.5)}
-#oracle-page .b5{background:radial-gradient(circle at 35% 30%,#66dd99,#22aa55 55%,#115528);color:#fff;border:2px solid rgba(76,200,120,.4)}
-#oracle-page .b6{background:radial-gradient(circle at 35% 30%,#ff88aa,var(--red) 55%,#aa1133);color:#fff;border:2px solid rgba(252,92,124,.4)}
-#oracle-page .btag{
+.ball:hover{transform:scale(1.08)}
+.b1{background:radial-gradient(circle at 35% 30%,#ffe88a,var(--gold) 55%,#a07800);color:#1a1000;border:2px solid rgba(255,220,80,.5)}
+.b2{background:radial-gradient(circle at 35% 30%,#d8e0f4,var(--silver) 55%,#5a6878);color:#1a1e2a;border:2px solid rgba(168,178,200,.5)}
+.b3{background:radial-gradient(circle at 35% 30%,#e0b080,#b87333 55%,#6a3f10);color:#fff;border:2px solid rgba(184,115,51,.4)}
+.b4{background:radial-gradient(circle at 35% 30%,#aa88ff,var(--accent) 55%,#3a1aaa);color:#fff;border:2px solid rgba(124,92,252,.5)}
+.b5{background:radial-gradient(circle at 35% 30%,#66dd99,#22aa55 55%,#115528);color:#fff;border:2px solid rgba(76,200,120,.4)}
+.b6{background:radial-gradient(circle at 35% 30%,#ff88aa,var(--red) 55%,#aa1133);color:#fff;border:2px solid rgba(252,92,124,.4)}
+.btag{
   position:absolute;bottom:-4px;right:-4px;
   background:rgba(0,0,0,.85);
   border:1px solid var(--border2);
@@ -2317,25 +2321,25 @@ initFromHash();
   font-family:var(--inter);font-weight:700;
   white-space:nowrap;
 }
-#oracle-page .balls-note{
+.balls-note{
   font-size:10px;color:var(--muted);
   line-height:1.7;
 }
 
 /* alt combo */
-#oracle-page .alt-card{
+.alt-card{
   background:var(--surface);
   border:1px solid var(--border);
   border-radius:12px;padding:12px;
   text-align:center;margin-bottom:8px;
 }
-#oracle-page .alt-label{
+.alt-label{
   font-size:9px;font-weight:700;
   letter-spacing:.15em;text-transform:uppercase;
   color:var(--muted);margin-bottom:10px;
 }
-#oracle-page .alt-row{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
-#oracle-page .aball{
+.alt-row{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
+.aball{
   width:42px;height:42px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
   font-family:var(--bebas);font-size:17px;
@@ -2344,86 +2348,86 @@ initFromHash();
   color:var(--accent2);
   transition:transform .2s;
 }
-#oracle-page .aball:hover{transform:scale(1.08)}
+.aball:hover{transform:scale(1.08)}
 
 /* ══════════════════════════════════
    DIGIT CONVERGENCE
 ══════════════════════════════════ */
-#oracle-page .dgrid{
+.dgrid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
   gap:7px;margin-bottom:7px;
 }
-#oracle-page .dcard{
+.dcard{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:11px;padding:11px 6px;
   text-align:center;transition:border-color .2s;
 }
-#oracle-page .dcard.s8{border-color:var(--gold);background:linear-gradient(160deg,rgba(245,200,66,.1),var(--card))}
-#oracle-page .dcard.s7{border-color:var(--gold)}
-#oracle-page .dcard.s6{border-color:var(--accent)}
-#oracle-page .dcard.s5{border-color:#6644cc}
-#oracle-page .dcard.s4{border-color:#3a3a5a}
-#oracle-page .dnum{font-family:var(--bebas);font-size:28px;line-height:1}
-#oracle-page .dcard.s8 .dnum,#oracle-page .dcard.s7 .dnum{color:var(--gold)}
-#oracle-page .dcard.s6 .dnum{color:var(--accent2)}
-#oracle-page .dcard.s5 .dnum,#oracle-page .dcard.s4 .dnum{color:var(--muted2)}
-#oracle-page .dscore{font-size:9px;color:var(--muted);margin-top:3px}
-#oracle-page .ddots{display:flex;gap:2px;justify-content:center;margin-top:5px;flex-wrap:wrap}
-#oracle-page .dot{
+.dcard.s8{border-color:var(--gold);background:linear-gradient(160deg,rgba(245,200,66,.1),var(--card))}
+.dcard.s7{border-color:var(--gold)}
+.dcard.s6{border-color:var(--accent)}
+.dcard.s5{border-color:#6644cc}
+.dcard.s4{border-color:#3a3a5a}
+.dnum{font-family:var(--bebas);font-size:28px;line-height:1}
+.dcard.s8 .dnum,.dcard.s7 .dnum{color:var(--gold)}
+.dcard.s6 .dnum{color:var(--accent2)}
+.dcard.s5 .dnum,.dcard.s4 .dnum{color:var(--muted2)}
+.dscore{font-size:9px;color:var(--muted);margin-top:3px}
+.ddots{display:flex;gap:2px;justify-content:center;margin-top:5px;flex-wrap:wrap}
+.dot{
   width:15px;height:15px;border-radius:3px;
   display:flex;align-items:center;justify-content:center;
   font-size:7px;font-weight:700;
   border:1px solid transparent;
 }
-#oracle-page .dot.on{background:rgba(124,92,252,.2);border-color:var(--accent);color:var(--accent2)}
-#oracle-page .dot.gold{background:rgba(245,200,66,.15);border-color:rgba(245,200,66,.4);color:var(--gold)}
-#oracle-page .dot.teal{background:rgba(76,200,252,.1);border-color:rgba(76,200,252,.3);color:var(--teal)}
-#oracle-page .dot.off{background:var(--surface);color:var(--muted)}
+.dot.on{background:rgba(124,92,252,.2);border-color:var(--accent);color:var(--accent2)}
+.dot.gold{background:rgba(245,200,66,.15);border-color:rgba(245,200,66,.4);color:var(--gold)}
+.dot.teal{background:rgba(76,200,252,.1);border-color:rgba(76,200,252,.3);color:var(--teal)}
+.dot.off{background:var(--surface);color:var(--muted)}
 
 /* ══════════════════════════════════
    NUMBER MAP
 ══════════════════════════════════ */
-#oracle-page .maprow{
+.maprow{
   display:flex;align-items:center;
   gap:8px;padding:8px 0;
   border-bottom:1px solid var(--border);
 }
-#oracle-page .maprow:last-child{border-bottom:none}
-#oracle-page .mapdig{
+.maprow:last-child{border-bottom:none}
+.mapdig{
   font-family:var(--bebas);font-size:12px;
   color:var(--muted);width:54px;flex-shrink:0;
 }
-#oracle-page .mapnums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
-#oracle-page .mn{
+.mapnums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+.mn{
   font-family:var(--bebas);font-size:15px;
   padding:2px 7px;border-radius:5px;
   border:1px solid var(--border);
 }
-#oracle-page .mn.hot{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
-#oracle-page .mn.warm{background:rgba(124,92,252,.1);border-color:rgba(124,92,252,.3);color:var(--accent2)}
-#oracle-page .mn.cold{background:var(--surface);color:var(--muted2)}
+.mn.hot{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
+.mn.warm{background:rgba(124,92,252,.1);border-color:rgba(124,92,252,.3);color:var(--accent2)}
+.mn.cold{background:var(--surface);color:var(--muted2)}
 
 /* ══════════════════════════════════
    LAYER CARDS
 ══════════════════════════════════ */
-#oracle-page .lcard{
+.lcard{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:var(--radius);
   padding:14px;margin-bottom:8px;
   overflow:hidden;
 }
-#oracle-page .lhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-#oracle-page .licon{
+.lhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.licon{
   width:36px;height:36px;border-radius:9px;
   background:var(--surface);border:1px solid var(--border2);
   display:flex;align-items:center;justify-content:center;
   font-size:16px;flex-shrink:0;
 }
-#oracle-page .lname{font-family:var(--bebas);font-size:15px;letter-spacing:.08em}
-#oracle-page .lnew{
+.lname{font-family:var(--bebas);font-size:15px;letter-spacing:.08em}
+.lnew{
   font-size:8px;font-weight:700;letter-spacing:.1em;
   text-transform:uppercase;
   background:rgba(245,200,66,.1);
@@ -2431,62 +2435,62 @@ initFromHash();
   color:var(--gold);border-radius:4px;
   padding:2px 6px;margin-left:6px;
 }
-#oracle-page .lpills{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
-#oracle-page .pill{
+.lpills{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.pill{
   background:rgba(124,92,252,.1);
   border:1px solid rgba(124,92,252,.28);
   border-radius:5px;padding:2px 8px;
   font-family:var(--bebas);font-size:15px;
   color:var(--accent2);
 }
-#oracle-page .pill.g{background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.25);color:var(--gold)}
-#oracle-page .pill.t{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.25);color:var(--teal)}
-#oracle-page .lsteps{
+.pill.g{background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.25);color:var(--gold)}
+.pill.t{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.25);color:var(--teal)}
+.lsteps{
   font-size:11px;color:var(--muted2);
   line-height:1.9;
   border-top:1px solid var(--border);
   padding-top:10px;
 }
-#oracle-page .lsteps b{color:var(--text)}
-#oracle-page .lsteps .ok{color:var(--green)}
-#oracle-page .lsteps .warn{color:var(--orange)}
+.lsteps b{color:var(--text)}
+.lsteps .ok{color:var(--green)}
+.lsteps .warn{color:var(--orange)}
 
 /* horary sub-grid */
-#oracle-page .hgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-#oracle-page .hbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
-#oracle-page .hbox-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
-#oracle-page .hbox-val{font-family:var(--bebas);font-size:15px;color:var(--text);margin-bottom:3px}
-#oracle-page .hbox-sub{font-size:10px;color:var(--muted2);line-height:1.55}
-#oracle-page .arow{font-size:11px;color:var(--muted2);padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5}
-#oracle-page .arow:last-child{border-bottom:none}
-#oracle-page .arow b{color:var(--text)}
+.hgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.hbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
+.hbox-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
+.hbox-val{font-family:var(--bebas);font-size:15px;color:var(--text);margin-bottom:3px}
+.hbox-sub{font-size:10px;color:var(--muted2);line-height:1.55}
+.arow{font-size:11px;color:var(--muted2);padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5}
+.arow:last-child{border-bottom:none}
+.arow b{color:var(--text)}
 
 /* bazi pillars */
-#oracle-page .bpillars{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
-#oracle-page .bp{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 6px;text-align:center}
-#oracle-page .bp-role{font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-#oracle-page .bp-stem{font-family:var(--bebas);font-size:13px;color:var(--text);line-height:1.3}
-#oracle-page .bp-branch{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.4}
-#oracle-page .bp-nums{display:flex;gap:3px;justify-content:center;margin-top:5px;flex-wrap:wrap}
-#oracle-page .bpn{font-family:var(--bebas);font-size:14px;color:var(--accent2)}
-#oracle-page .bint{font-size:11px;color:var(--muted2);padding:4px 0;border-bottom:1px solid var(--border);margin-top:8px;line-height:1.5}
-#oracle-page .bint:last-child{border-bottom:none}
-#oracle-page .bint b{color:var(--teal)}
+.bpillars{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.bp{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 6px;text-align:center}
+.bp-role{font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.bp-stem{font-family:var(--bebas);font-size:13px;color:var(--text);line-height:1.3}
+.bp-branch{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.4}
+.bp-nums{display:flex;gap:3px;justify-content:center;margin-top:5px;flex-wrap:wrap}
+.bpn{font-family:var(--bebas);font-size:14px;color:var(--accent2)}
+.bint{font-size:11px;color:var(--muted2);padding:4px 0;border-bottom:1px solid var(--border);margin-top:8px;line-height:1.5}
+.bint:last-child{border-bottom:none}
+.bint b{color:var(--teal)}
 
 /* i ching */
-#oracle-page .irow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
-#oracle-page .ibox{flex:1;min-width:70px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
-#oracle-page .isym{font-size:22px;margin-bottom:3px}
-#oracle-page .iname{font-family:var(--bebas);font-size:12px;letter-spacing:.05em;color:var(--teal)}
-#oracle-page .imsg{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.5}
-#oracle-page .ichange{font-size:11px;color:var(--muted2);margin-top:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;line-height:1.6}
-#oracle-page .ichange b{color:var(--teal)}
+.irow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.ibox{flex:1;min-width:70px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
+.isym{font-size:22px;margin-bottom:3px}
+.iname{font-family:var(--bebas);font-size:12px;letter-spacing:.05em;color:var(--teal)}
+.imsg{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.5}
+.ichange{font-size:11px;color:var(--muted2);margin-top:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;line-height:1.6}
+.ichange b{color:var(--teal)}
 
 /* stats */
-#oracle-page .st-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-#oracle-page .stbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
-#oracle-page .stitle{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
-#oracle-page .hnum{
+.st-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.stbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
+.stitle{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.hnum{
   display:inline-flex;align-items:center;justify-content:center;
   width:29px;height:29px;border-radius:6px;
   font-family:var(--bebas);font-size:14px;
@@ -2495,19 +2499,19 @@ initFromHash();
   border:1px solid rgba(245,200,66,.22);
   color:var(--gold);
 }
-#oracle-page .sfrow{display:flex;align-items:center;gap:6px;margin-bottom:5px}
-#oracle-page .sflabel{font-family:var(--bebas);font-size:13px;width:22px;text-align:center;flex-shrink:0}
-#oracle-page .sfwrap{flex:1;background:var(--bg);border-radius:3px;height:5px;overflow:hidden}
-#oracle-page .sffill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--gold));transition:width 1s cubic-bezier(.16,1,.3,1)}
-#oracle-page .sfval{font-size:9px;color:var(--muted);width:22px;text-align:right;flex-shrink:0}
+.sfrow{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.sflabel{font-family:var(--bebas);font-size:13px;width:22px;text-align:center;flex-shrink:0}
+.sfwrap{flex:1;background:var(--bg);border-radius:3px;height:5px;overflow:hidden}
+.sffill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--gold));transition:width 1s cubic-bezier(.16,1,.3,1)}
+.sfval{font-size:9px;color:var(--muted);width:22px;text-align:right;flex-shrink:0}
 
 /* legend */
-#oracle-page .legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-#oracle-page .leg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
-#oracle-page .ldot{width:10px;height:10px;border-radius:2px}
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.leg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
+.ldot{width:10px;height:10px;border-radius:2px}
 
 /* disclaimer */
-#oracle-page .disc{
+.disc{
   background:var(--surface);
   border:1px solid var(--border);
   border-left:3px solid var(--red);
@@ -2519,7 +2523,7 @@ initFromHash();
 /* ══════════════════════════════════
    BOTTOM NAV (JOMERPB style)
 ══════════════════════════════════ */
-#oracle-page .bnav{
+.bnav{
   position:fixed;bottom:0;left:0;right:0;
   height:var(--nav-h);
   background:rgba(10,10,15,.92);
@@ -2531,128 +2535,114 @@ initFromHash();
   padding:0 8px;
   z-index:100;
 }
-#oracle-page .bnavitem{
+.bnavitem{
   display:flex;flex-direction:column;
   align-items:center;gap:3px;
   padding:6px 12px;border-radius:10px;
   cursor:pointer;transition:all .2s;
   text-decoration:none;flex:1;
 }
-#oracle-page .bnavitem.active{background:rgba(124,92,252,.12)}
-#oracle-page .bnavitem .bni{font-size:20px}
-#oracle-page .bnavitem .bnl{
+.bnavitem.active{background:rgba(124,92,252,.12)}
+.bnavitem .bni{font-size:20px}
+.bnavitem .bnl{
   font-size:9px;font-weight:700;
   letter-spacing:.08em;text-transform:uppercase;
   color:var(--muted);transition:color .2s;
 }
-#oracle-page .bnavitem.active .bnl{color:var(--accent2)}
+.bnavitem.active .bnl{color:var(--accent2)}
 
 /* ══════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════ */
 @media(max-width:380px){
-#oracle-page .ball{width:46px;height:46px;font-size:17px}
-#oracle-page .game-grid{grid-template-columns:repeat(3,1fr)}
-#oracle-page .bpillars{grid-template-columns:repeat(2,1fr)}
+  .ball{width:46px;height:46px;font-size:17px}
+  .game-grid{grid-template-columns:repeat(3,1fr)}
+  .bpillars{grid-template-columns:repeat(2,1fr)}
 }
-
-#oracle-page .o-section { display: block; }
-#oracle-page #results { display: none; }
-#oracle-page #results.active-oracle { display: block; }
-
-#oracle-page .hero {
-  position:relative;width:auto;aspect-ratio:unset;max-height:none;overflow:hidden;
-  background:linear-gradient(170deg,#0d0d18 0%,#110e2a 45%,#0a0a10 100%) !important;
-  border-bottom:1px solid #262635;
-  padding:36px 16px 28px;
-  text-align:center;
-}
-#oracle-page .hero img { display:none; }
-#oracle-page .hero-overlay { display:none; }
-
 </style>
+</head>
+<body>
+
 <!-- HERO -->
-<div class="hero">
-  <div class="hero-brand">JOMERPB · PH Lotto Oracle</div>
+<div class=&quot;hero&quot;>
+  <div class=&quot;hero-brand&quot;>JOMERPB · PH Lotto Oracle</div>
   <h1>LOTTO<br>ORACLE</h1>
-  <p class="hero-sub">
+  <p class=&quot;hero-sub&quot;>
     Current cosmic energy flow · No personal data needed<br>
-    All readings based on what the universe is doing <b style="color:var(--gold)">right now</b>
+    All readings based on what the universe is doing <b style=&quot;color:var(--gold)&quot;>right now</b>
   </p>
-  <div class="hero-layers">
-    <span class="hlayer">Pythagorean</span>
-    <span class="hlayer">Chaldean</span>
-    <span class="hlayer">Astrology</span>
-    <span class="hlayer new">★ Horary</span>
-    <span class="hlayer new">★ Part of Fortune</span>
-    <span class="hlayer new">★ Dignities</span>
-    <span class="hlayer">BaZi</span>
-    <span class="hlayer new">★ Clashes</span>
-    <span class="hlayer">Feng Shui</span>
-    <span class="hlayer new">★ Lo Shu</span>
-    <span class="hlayer new">★ I Ching</span>
-    <span class="hlayer">PCSO Data</span>
+  <div class=&quot;hero-layers&quot;>
+    <span class=&quot;hlayer&quot;>Pythagorean</span>
+    <span class=&quot;hlayer&quot;>Chaldean</span>
+    <span class=&quot;hlayer&quot;>Astrology</span>
+    <span class=&quot;hlayer new&quot;>★ Horary</span>
+    <span class=&quot;hlayer new&quot;>★ Part of Fortune</span>
+    <span class=&quot;hlayer new&quot;>★ Dignities</span>
+    <span class=&quot;hlayer&quot;>BaZi</span>
+    <span class=&quot;hlayer new&quot;>★ Clashes</span>
+    <span class=&quot;hlayer&quot;>Feng Shui</span>
+    <span class=&quot;hlayer new&quot;>★ Lo Shu</span>
+    <span class=&quot;hlayer new&quot;>★ I Ching</span>
+    <span class=&quot;hlayer&quot;>PCSO Data</span>
   </div>
 </div>
 
 <!-- GAME SELECTOR -->
-<div class="game-wrap o-section">
-  <div class="game-eyebrow">▸ Select Game</div>
-  <div class="game-grid" id="gameGrid">
-    <button class="gbtn active" onclick="setGame('ez2',this)">
-      <span class="gn">EZ2</span><span class="gs">2PM · 5PM · 9PM</span>
+<div class=&quot;game-wrap page&quot;>
+  <div class=&quot;game-eyebrow&quot;>▸ Select Game</div>
+  <div class=&quot;game-grid&quot; id=&quot;gameGrid&quot;>
+    <button class=&quot;gbtn active&quot; onclick=&quot;setGame('ez2',this)&quot;>
+      <span class=&quot;gn&quot;>EZ2</span><span class=&quot;gs&quot;>2PM · 5PM · 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('642',this)">
-      <span class="gn">6/42</span><span class="gs">Tue·Thu·Sat 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('642',this)&quot;>
+      <span class=&quot;gn&quot;>6/42</span><span class=&quot;gs&quot;>Tue·Thu·Sat 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('645',this)">
-      <span class="gn">6/45</span><span class="gs">Mon·Wed·Fri 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('645',this)&quot;>
+      <span class=&quot;gn&quot;>6/45</span><span class=&quot;gs&quot;>Mon·Wed·Fri 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('649',this)">
-      <span class="gn">6/49</span><span class="gs">Tue·Thu·Sun 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('649',this)&quot;>
+      <span class=&quot;gn&quot;>6/49</span><span class=&quot;gs&quot;>Tue·Thu·Sun 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('655',this)">
-      <span class="gn">6/55</span><span class="gs">Mon·Wed·Sat 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('655',this)&quot;>
+      <span class=&quot;gn&quot;>6/55</span><span class=&quot;gs&quot;>Mon·Wed·Sat 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('658',this)">
-      <span class="gn">6/58</span><span class="gs">Tue·Fri·Sun 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('658',this)&quot;>
+      <span class=&quot;gn&quot;>6/58</span><span class=&quot;gs&quot;>Tue·Fri·Sun 9PM</span>
     </button>
   </div>
 
   <!-- EZ2 draw time (only shows for EZ2) -->
-  <div id="ez2wrap" style="margin-bottom:14px">
-    <div class="game-eyebrow">▸ EZ2 Draw Time</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-      <button class="gbtn" onclick="setDraw('2PM',this)" id="d2pm">
-        <span class="gn">2PM</span>
+  <div id=&quot;ez2wrap&quot; style=&quot;margin-bottom:14px&quot;>
+    <div class=&quot;game-eyebrow&quot;>▸ EZ2 Draw Time</div>
+    <div style=&quot;display:grid;grid-template-columns:repeat(3,1fr);gap:8px&quot;>
+      <button class=&quot;gbtn&quot; onclick=&quot;setDraw('2PM',this)&quot; id=&quot;d2pm&quot;>
+        <span class=&quot;gn&quot;>2PM</span>
       </button>
-      <button class="gbtn" onclick="setDraw('5PM',this)" id="d5pm">
-        <span class="gn">5PM</span>
+      <button class=&quot;gbtn&quot; onclick=&quot;setDraw('5PM',this)&quot; id=&quot;d5pm&quot;>
+        <span class=&quot;gn&quot;>5PM</span>
       </button>
-      <button class="gbtn active" onclick="setDraw('9PM',this)" id="d9pm">
-        <span class="gn">9PM</span>
+      <button class=&quot;gbtn active&quot; onclick=&quot;setDraw('9PM',this)&quot; id=&quot;d9pm&quot;>
+        <span class=&quot;gn&quot;>9PM</span>
       </button>
     </div>
   </div>
 
-  <button class="run-btn" onclick="generate()">⚡ RUN EXPERT ORACLE</button>
+  <button class=&quot;run-btn&quot; onclick=&quot;generate()&quot;>⚡ RUN EXPERT ORACLE</button>
 </div>
 
 <!-- LOADER -->
-<div class="loader o-section" id="loader">
-  <div class="lring"></div>
-  <div class="ltitle">Running 12-layer expert analysis…</div>
-  <div class="lsteps" id="lsteps"></div>
+<div class=&quot;loader page&quot; id=&quot;loader&quot;>
+  <div class=&quot;lring&quot;></div>
+  <div class=&quot;ltitle&quot;>Running 12-layer expert analysis…</div>
+  <div class=&quot;lsteps&quot; id=&quot;lsteps&quot;></div>
 </div>
 
 <!-- RESULTS -->
-<div id="results" class="o-section"></div>
+<div id=&quot;results&quot; class=&quot;page&quot;></div>
 
-<!-- BOTTOM NAV -->
-</div>
+
+
 <script>
-/* ═══ ORACLE JS ═══ */
-
 // ══════════════════════════
 // PCSO REAL HISTORICAL DATA
 // ══════════════════════════
@@ -2713,11 +2703,11 @@ function layerNumerology(drawHour){
   const pyNums=[...new Set([ud,h,combined,saturn,monthYear,dayReduction])];
 
   // Chaldean system
-  // "PCSO": P=8,C=3,S=3,O=7 = 21 → 3
+  // &quot;PCSO&quot;: P=8,C=3,S=3,O=7 = 21 → 3
   const pcso=reduce(8+3+3+7); // 3
-  // "LOTTO": L=3,O=7,T=4,T=4,O=7 = 25 → 7
+  // &quot;LOTTO&quot;: L=3,O=7,T=4,T=4,O=7 = 25 → 7
   const lotto=reduce(3+7+4+4+7); // 7
-  // "PHILIPPINES": P=8,H=5,I=1,L=3,I=1,P=8,P=8,I=1,N=5,E=5,S=3 = 48→12→3
+  // &quot;PHILIPPINES&quot;: P=8,H=5,I=1,L=3,I=1,P=8,P=8,I=1,N=5,E=5,S=3 = 48→12→3
   const phils=reduce(8+5+1+3+1+8+8+1+5+5+3); // 3
   const chNums=[...new Set([pcso,lotto,phils])];
 
@@ -2732,9 +2722,9 @@ function layerNumerology(drawHour){
       `<b>Draw hour ${drawHour}:</b> → <b>${h}</b> · Combined ${ud}+${h}=${ud+h} → <b>${combined}</b>`,
       `<b>Saturday=Saturn:</b> → <b>${saturn}</b>`,
       `<b>Month(6)+Year(2026→1):</b> → <b>${monthYear}</b>`,
-      `<b>Chaldean — "PCSO":</b> P(8)+C(3)+S(3)+O(7)=21 → <b>${pcso}</b>`,
-      `<b>Chaldean — "LOTTO":</b> L(3)+O(7)+T(4)+T(4)+O(7)=25 → <b>${lotto}</b>`,
-      `<b>Chaldean — "PHILIPPINES":</b> =48→12 → <b>${phils}</b>`,
+      `<b>Chaldean — &quot;PCSO&quot;:</b> P(8)+C(3)+S(3)+O(7)=21 → <b>${pcso}</b>`,
+      `<b>Chaldean — &quot;LOTTO&quot;:</b> L(3)+O(7)+T(4)+T(4)+O(7)=25 → <b>${lotto}</b>`,
+      `<b>Chaldean — &quot;PHILIPPINES&quot;:</b> =48→12 → <b>${phils}</b>`,
     ]
   };
 }
@@ -2746,25 +2736,25 @@ function layerNumerology(drawHour){
 function layerAstrology(drawHour){
   // REAL Jun 27 2026 planetary positions (verified)
   const planets=[
-    {name:'Jupiter ♃',pos:"29°16' Cancer",sign:'Cancer',deg:29.26,
+    {name:'Jupiter ♃',pos:&quot;29°16' Cancer&quot;,sign:'Cancer',deg:29.26,
      dignity:'Exalted', // Jupiter is EXALTED in Cancer = maximum strength
      nums:[2,3,7],note:'EXALTED at anaretic 29° = peak power before sign change → luck amplified'},
-    {name:'Moon ☽',pos:"0°45' Sagittarius",sign:'Sagittarius',deg:0.75,
+    {name:'Moon ☽',pos:&quot;0°45' Sagittarius&quot;,sign:'Sagittarius',deg:0.75,
      dignity:'Neutral',phase:'Waxing Gibbous',
      nums:[1,3,9],note:'Waxing=favorable for gain · Sag=3,9 · 0°=new cycle beginning'},
-    {name:'Venus ♀',pos:"15°27' Leo",sign:'Leo',deg:15.45,
+    {name:'Venus ♀',pos:&quot;15°27' Leo&quot;,sign:'Leo',deg:15.45,
      dignity:'Peregrine', // no special dignity in Leo
      nums:[1,4,6],note:'Peregrine but strong by position · Leo=power · Fortune=6'},
-    {name:'Mars ♂',pos:"28°35' Taurus",sign:'Taurus',deg:28.58,
+    {name:'Mars ♂',pos:&quot;28°35' Taurus&quot;,sign:'Taurus',deg:28.58,
      dignity:'Detriment', // Mars in Taurus = detriment (weak)
      nums:[9],note:'In DETRIMENT = weak aggressive energy · cautious number'},
-    {name:'Mercury ☿',pos:"25°56' Cancer",sign:'Cancer',deg:25.93,
+    {name:'Mercury ☿',pos:&quot;25°56' Cancer&quot;,sign:'Cancer',deg:25.93,
      dignity:'Peregrine',rx:'Pre-Rx shadow',
      nums:[2,7],note:'Almost stationary pre-Rx · concentrated mental energy'},
-    {name:'Saturn ♄',pos:"13°59' Aries",sign:'Aries',deg:13.98,
+    {name:'Saturn ♄',pos:&quot;13°59' Aries&quot;,sign:'Aries',deg:13.98,
      dignity:'Detriment', // Saturn in Aries = detriment
      nums:[4,8],note:'In DETRIMENT · structure challenged · 13°=4'},
-    {name:'Sun ☉',pos:"6°12' Cancer",sign:'Cancer',deg:6.12,
+    {name:'Sun ☉',pos:&quot;6°12' Cancer&quot;,sign:'Cancer',deg:6.12,
      dignity:'Neutral',
      nums:[6,1],note:'6°=6 · Cancer=2 · vitality energy'},
   ];
@@ -2785,7 +2775,7 @@ function layerAstrology(drawHour){
   // 5th house from Capricorn = Taurus
   const h5sign='Taurus';
   const h5ruler='Venus'; // Taurus ruler = Venus
-  const h5rulerPos="15°27' Leo";
+  const h5rulerPos=&quot;15°27' Leo&quot;;
   const h5dignity='Peregrine (but in strong Leo)';
   // Venus applies to aspect? Venus at 15°Leo, applying sextile to Jupiter at 29°Cancer
   // Sextile = 60° apart → Leo 15° to Cancer 29° = difference ~46° ≈ separating
@@ -2988,7 +2978,7 @@ function layerIChing(drawHour){
     meaning:'Collective energy gathers · Water collects under Earth · Great assembly of fortune',
     gambling:'Highly auspicious — energy is converging and concentrating · Favorable for joining collective games like lottery · Fortune assembles when people gather around common goal',
     nums:[5,8,2], // Earth+Water = 5,8 + gathering=2
-    changingLine:`Hour of ${drawHour} activates Line 4: "Great good fortune — no blame" · Receiving blessings from above`,
+    changingLine:`Hour of ${drawHour} activates Line 4: &quot;Great good fortune — no blame&quot; · Receiving blessings from above`,
     nuclear:{num:53,name:'Jian (Gradual Progress)'},
   };
 
@@ -3017,7 +3007,7 @@ function layerStats(gameKey,drawHour){
 
   const freq={};
   for(let i=1;i<=game.max;i++) freq[i]=0;
-  draws.forEach(draw=>draw.forEach(n=>{ if(n>=1&&n<=game.max) freq[n]++; }));
+  draws.forEach(draw=>draw.forEach(n=>{ if(n>=1&amp;&amp;n<=game.max) freq[n]++; }));
 
   const lastSeen={};
   for(let i=0;i<draws.length;i++)
@@ -3102,7 +3092,7 @@ function convergence(layers,gameKey){
   for(const ds of sorted){
     if(picks.length>=needed) break;
     const bns=bestNums(ds.digit);
-    if(bns.length&&!picks.includes(bns[0])) picks.push(bns[0]);
+    if(bns.length&amp;&amp;!picks.includes(bns[0])) picks.push(bns[0]);
   }
   if(picks.length<needed){
     for(const ds of sorted){
@@ -3117,7 +3107,7 @@ function convergence(layers,gameKey){
   for(const ds of sorted){
     if(altPicks.length>=needed) break;
     const bns=bestNums(ds.digit);
-    const alt=bns.find(n=>!picks.includes(n)&&!altPicks.includes(n));
+    const alt=bns.find(n=>!picks.includes(n)&amp;&amp;!altPicks.includes(n));
     if(alt) altPicks.push(alt);
   }
   altPicks.sort((a,b)=>a-b);
@@ -3192,7 +3182,7 @@ const BTIERS=['b1','b2','b3','b4','b5','b6'];
 function dotHTML(idxs,labels){
   const icons=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
   const cls=['on','on','on','on','on','teal','teal','gold'];
-  return labels.map((l,i)=>`<span class="dot ${idxs.includes(i)?cls[i]:'off'}" title="${l}">${icons[i]}</span>`).join('');
+  return labels.map((l,i)=>`<span class=&quot;dot ${idxs.includes(i)?cls[i]:'off'}&quot; title=&quot;${l}&quot;>${icons[i]}</span>`).join('');
 }
 function dCls(c){ return c>=8?'s8':c>=7?'s7':c>=6?'s6':c>=5?'s5':'s4'; }
 
@@ -3205,195 +3195,195 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
   const elCls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
   const elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
   const energyHTML=elOrder.map(e=>`
-    <div class="erow">
-      <span class="elabel">${elEmoji[e]} ${e}</span>
-      <div class="ebar-wrap"><div class="ebar ${elCls[e]}" style="width:0%" data-w="${energy[e].pct}%"></div></div>
-      <span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span>
+    <div class=&quot;erow&quot;>
+      <span class=&quot;elabel&quot;>${elEmoji[e]} ${e}</span>
+      <div class=&quot;ebar-wrap&quot;><div class=&quot;ebar ${elCls[e]}&quot; style=&quot;width:0%&quot; data-w=&quot;${energy[e].pct}%&quot;></div></div>
+      <span class=&quot;epct&quot; style=&quot;color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}&quot;>${energy[e].pct}%</span>
     </div>`).join('');
 
   // Balls
   const ballsHTML=conv.picks.map((n,i)=>{
     const d=digitOf(n);
     const ds=conv.digitScores[d];
-    return `<div class="ball ${BTIERS[Math.min(i,5)]}">
-      ${pad(n)}<span class="btag">d${d}·${ds.count}/8</span>
+    return `<div class=&quot;ball ${BTIERS[Math.min(i,5)]}&quot;>
+      ${pad(n)}<span class=&quot;btag&quot;>d${d}·${ds.count}/8</span>
     </div>`;
   }).join('');
-  const altHTML=conv.altPicks.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
+  const altHTML=conv.altPicks.map(n=>`<div class=&quot;aball&quot;>${pad(n)}</div>`).join('');
 
   // Digit cards
   const digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
-    <div class="dcard ${dCls(s.count)}">
-      <div class="dnum">${s.digit}</div>
-      <div class="dscore">${s.count}/8 layers</div>
-      <div class="ddots">${dotHTML(s.layers,conv.LABELS)}</div>
+    <div class=&quot;dcard ${dCls(s.count)}&quot;>
+      <div class=&quot;dnum&quot;>${s.digit}</div>
+      <div class=&quot;dscore&quot;>${s.count}/8 layers</div>
+      <div class=&quot;ddots&quot;>${dotHTML(s.layers,conv.LABELS)}</div>
     </div>`).join('');
 
   // Map
   const hotNums=layers.stats.hotNums;
   const mapHTML=conv.sorted.slice(0,5).map(s=>{
     const nums=conv.digitToNums[s.digit]||[];
-    return `<div class="maprow">
-      <span class="mapdig">Digit <b>${s.digit}</b> <span style="color:var(--muted)">(${s.count}/8)</span></span>
-      <div class="mapnums">${nums.map(n=>{
+    return `<div class=&quot;maprow&quot;>
+      <span class=&quot;mapdig&quot;>Digit <b>${s.digit}</b> <span style=&quot;color:var(--muted)&quot;>(${s.count}/8)</span></span>
+      <div class=&quot;mapnums&quot;>${nums.map(n=>{
         const cls=hotNums.includes(n)?'hot':(layers.stats.freq[n]||0)>=2?'warm':'cold';
-        return `<span class="mn ${cls}">${pad(n)}</span>`;
+        return `<span class=&quot;mn ${cls}&quot;>${pad(n)}</span>`;
       }).join('')}</div>
     </div>`;
   }).join('');
 
   // Horary sub-panel
   const horaryHTML=`
-    <div class="hgrid">
-      <div class="hbox">
-        <div class="hbox-title">Ascendant</div>
-        <div class="hbox-val">${layers.astro.horaryASC}</div>
-        <div class="hbox-sub">Ruler: ${layers.astro.horaryASCRuler}<br>Chart is radical ✓<br>Moon not void ✓<br>Not Via Combusta ✓</div>
+    <div class=&quot;hgrid&quot;>
+      <div class=&quot;hbox&quot;>
+        <div class=&quot;hbox-title&quot;>Ascendant</div>
+        <div class=&quot;hbox-val&quot;>${layers.astro.horaryASC}</div>
+        <div class=&quot;hbox-sub&quot;>Ruler: ${layers.astro.horaryASCRuler}<br>Chart is radical ✓<br>Moon not void ✓<br>Not Via Combusta ✓</div>
       </div>
-      <div class="hbox">
-        <div class="hbox-title">5th House (Gambling)</div>
-        <div class="hbox-val">${layers.astro.h5sign}</div>
-        <div class="hbox-sub">Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}</div>
+      <div class=&quot;hbox&quot;>
+        <div class=&quot;hbox-title&quot;>5th House (Gambling)</div>
+        <div class=&quot;hbox-val&quot;>${layers.astro.h5sign}</div>
+        <div class=&quot;hbox-sub&quot;>Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}</div>
       </div>
-      <div class="hbox">
-        <div class="hbox-title">Part of Fortune ⊕</div>
-        <div class="hbox-val">~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
-        <div class="hbox-sub">Night chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
+      <div class=&quot;hbox&quot;>
+        <div class=&quot;hbox-title&quot;>Part of Fortune ⊕</div>
+        <div class=&quot;hbox-val&quot;>~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
+        <div class=&quot;hbox-sub&quot;>Night chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
       </div>
-      <div class="hbox">
-        <div class="hbox-title">Jupiter Status</div>
-        <div class="hbox-val" style="color:var(--green)">EXALTED ★</div>
-        <div class="hbox-sub">29°16' Cancer<br>Anaretic degree<br>Peak luck energy</div>
+      <div class=&quot;hbox&quot;>
+        <div class=&quot;hbox-title&quot;>Jupiter Status</div>
+        <div class=&quot;hbox-val&quot; style=&quot;color:var(--green)&quot;>EXALTED ★</div>
+        <div class=&quot;hbox-sub&quot;>29°16' Cancer<br>Anaretic degree<br>Peak luck energy</div>
       </div>
     </div>
-    <div style="margin-top:8px">
-      ${layers.astro.aspects.map(a=>`<div class="arow">
-        <span style="color:${a.nature==='favorable'?'var(--green)':a.nature==='caution'?'var(--orange)':'var(--red)'}">${a.nature==='favorable'?'✓':a.nature==='caution'?'⚠':'⚡'}</span>
+    <div style=&quot;margin-top:8px&quot;>
+      ${layers.astro.aspects.map(a=>`<div class=&quot;arow&quot;>
+        <span style=&quot;color:${a.nature==='favorable'?'var(--green)':a.nature==='caution'?'var(--orange)':'var(--red)'}&quot;>${a.nature==='favorable'?'✓':a.nature==='caution'?'⚠':'⚡'}</span>
         <b> ${a.asp}</b> — ${a.note}
       </div>`).join('')}
     </div>`;
 
   // BaZi panel
   const baziHTML=`
-    <div class="bpillars">
+    <div class=&quot;bpillars&quot;>
       ${[layers.bazi.year,layers.bazi.month,layers.bazi.day,layers.bazi.hour].map((p,i)=>`
-        <div class="bp">
-          <div class="bp-role">${['Year','Month','Day','Hour'][i]}</div>
-          <div class="bp-stem">${p.stem}</div>
-          <div class="bp-branch">${p.branch}</div>
-          <div class="bp-nums">${p.nums.map(n=>`<span class="bpn">${n}</span>`).join('')}</div>
+        <div class=&quot;bp&quot;>
+          <div class=&quot;bp-role&quot;>${['Year','Month','Day','Hour'][i]}</div>
+          <div class=&quot;bp-stem&quot;>${p.stem}</div>
+          <div class=&quot;bp-branch&quot;>${p.branch}</div>
+          <div class=&quot;bp-nums&quot;>${p.nums.map(n=>`<span class=&quot;bpn&quot;>${n}</span>`).join('')}</div>
         </div>`).join('')}
     </div>
-    ${layers.bazi.interactions.map(x=>`<div class="bint"><b>${x.type}:</b> ${x.desc}</div>`).join('')}`;
+    ${layers.bazi.interactions.map(x=>`<div class=&quot;bint&quot;><b>${x.type}:</b> ${x.desc}</div>`).join('')}`;
 
   // I Ching panel
   const ichingHTML=`
-    <div class="irow">
-      <div class="ibox">
-        <div class="isym">${layers.iching.hex.upper.sym}</div>
-        <div class="iname">${layers.iching.hex.upper.name}</div>
-        <div class="imsg">Upper</div>
+    <div class=&quot;irow&quot;>
+      <div class=&quot;ibox&quot;>
+        <div class=&quot;isym&quot;>${layers.iching.hex.upper.sym}</div>
+        <div class=&quot;iname&quot;>${layers.iching.hex.upper.name}</div>
+        <div class=&quot;imsg&quot;>Upper</div>
       </div>
-      <div class="ibox" style="flex:2">
-        <div class="isym">卦${layers.iching.hex.num}</div>
-        <div class="iname">${layers.iching.hex.name} · ${layers.iching.hex.english}</div>
-        <div class="imsg">${layers.iching.hex.gambling}</div>
+      <div class=&quot;ibox&quot; style=&quot;flex:2&quot;>
+        <div class=&quot;isym&quot;>卦${layers.iching.hex.num}</div>
+        <div class=&quot;iname&quot;>${layers.iching.hex.name} · ${layers.iching.hex.english}</div>
+        <div class=&quot;imsg&quot;>${layers.iching.hex.gambling}</div>
       </div>
-      <div class="ibox">
-        <div class="isym">${layers.iching.hex.lower.sym}</div>
-        <div class="iname">${layers.iching.hex.lower.name}</div>
-        <div class="imsg">Lower</div>
+      <div class=&quot;ibox&quot;>
+        <div class=&quot;isym&quot;>${layers.iching.hex.lower.sym}</div>
+        <div class=&quot;iname&quot;>${layers.iching.hex.lower.name}</div>
+        <div class=&quot;imsg&quot;>Lower</div>
       </div>
     </div>
-    <div class="ichange"><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}</div>`;
+    <div class=&quot;ichange&quot;><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}</div>`;
 
   // Stats panel
   const maxF=Math.max(...Object.values(layers.stats.freq))||1;
   const freqBarsHTML=Object.entries(layers.stats.freq)
     .sort((a,b)=>b[1]-a[1]).slice(0,8)
-    .map(([n,c])=>`<div class="sfrow">
-      <span class="sflabel">${pad(parseInt(n))}</span>
-      <div class="sfwrap"><div class="sffill" style="width:0%" data-w="${(c/maxF*100).toFixed(0)}%"></div></div>
-      <span class="sfval">${c}x</span>
+    .map(([n,c])=>`<div class=&quot;sfrow&quot;>
+      <span class=&quot;sflabel&quot;>${pad(parseInt(n))}</span>
+      <div class=&quot;sfwrap&quot;><div class=&quot;sffill&quot; style=&quot;width:0%&quot; data-w=&quot;${(c/maxF*100).toFixed(0)}%&quot;></div></div>
+      <span class=&quot;sfval&quot;>${c}x</span>
     </div>`).join('');
 
   function lcard(icon,name,nums,steps,extra='',isNew=false){
-    return `<div class="lcard">
-      <div class="lhead">
-        <div class="licon">${icon}</div>
+    return `<div class=&quot;lcard&quot;>
+      <div class=&quot;lhead&quot;>
+        <div class=&quot;licon&quot;>${icon}</div>
         <div>
-          <div class="lname">${name}${isNew?'<span class="lnew">★ Expert</span>':''}</div>
-          <div class="lpills">${nums.map(n=>`<span class="pill">${n}</span>`).join('')}</div>
+          <div class=&quot;lname&quot;>${name}${isNew?'<span class=&quot;lnew&quot;>★ Expert</span>':''}</div>
+          <div class=&quot;lpills&quot;>${nums.map(n=>`<span class=&quot;pill&quot;>${n}</span>`).join('')}</div>
         </div>
       </div>
-      <div class="lsteps">${steps.map(s=>`• ${s}`).join('<br>')}</div>
+      <div class=&quot;lsteps&quot;>${steps.map(s=>`• ${s}`).join('<br>')}</div>
       ${extra}
     </div>`;
   }
 
   document.getElementById('results').innerHTML=`
-    <div class="slabel">Current Energy Flow · Jun 27 2026 · ${drawHour}</div>
-    <div class="eflow">
-      <div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>
+    <div class=&quot;slabel&quot;>Current Energy Flow · Jun 27 2026 · ${drawHour}</div>
+    <div class=&quot;eflow&quot;>
+      <div class=&quot;eflow-title&quot;>⚡ Elemental Energy Balance — All 12 Layers</div>
       ${energyHTML}
     </div>
 
-    <div class="slabel">${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
-    <div class="balls-card">
-      <div class="balls-eyebrow">Primary Pick — 12-Layer Expert Oracle</div>
-      <div class="balls-row">${ballsHTML}</div>
-      <div class="balls-note">
+    <div class=&quot;slabel&quot;>${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
+    <div class=&quot;balls-card&quot;>
+      <div class=&quot;balls-eyebrow&quot;>Primary Pick — 12-Layer Expert Oracle</div>
+      <div class=&quot;balls-row&quot;>${ballsHTML}</div>
+      <div class=&quot;balls-note&quot;>
         Ball tag = digit (d) + convergence score out of 8 sources<br>
         Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · St=Stats
       </div>
     </div>
-    <div class="alt-card">
-      <div class="alt-label">Alternate Combination</div>
-      <div class="alt-row">${altHTML}</div>
+    <div class=&quot;alt-card&quot;>
+      <div class=&quot;alt-label&quot;>Alternate Combination</div>
+      <div class=&quot;alt-row&quot;>${altHTML}</div>
     </div>
 
-    <div class="slabel">Step 1 — Digit Convergence · 8 Sources</div>
-    <div class="legend">
-      <span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span>
-      <span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF</span>
-      <span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span>
-      <span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span>
+    <div class=&quot;slabel&quot;>Step 1 — Digit Convergence · 8 Sources</div>
+    <div class=&quot;legend&quot;>
+      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--accent)&quot;></span>Metaphysical</span>
+      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--teal)&quot;></span>I Ching · PoF</span>
+      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--gold)&quot;></span>Chaldean · Stats</span>
+      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--surface);border:1px solid var(--border)&quot;></span>Not in layer</span>
     </div>
-    <div class="dgrid">${digitCardsHTML}</div>
+    <div class=&quot;dgrid&quot;>${digitCardsHTML}</div>
 
-    <div class="slabel">Step 2 — Digit → Number Map · 1–${game.max}</div>
-    <div class="lcard">
-      <div class="lsteps" style="border:none;padding:0;margin-bottom:10px">
-        🔥 Gold = Game hot number &nbsp; 💜 Purple = Appeared 2+ times recently &nbsp; Gray = Cold
+    <div class=&quot;slabel&quot;>Step 2 — Digit → Number Map · 1–${game.max}</div>
+    <div class=&quot;lcard&quot;>
+      <div class=&quot;lsteps&quot; style=&quot;border:none;padding:0;margin-bottom:10px&quot;>
+        🔥 Gold = Game hot number &amp;nbsp; 💜 Purple = Appeared 2+ times recently &amp;nbsp; Gray = Cold
       </div>${mapHTML}
     </div>
 
-    <div class="slabel">Full 12-Layer Breakdown</div>
+    <div class=&quot;slabel&quot;>Full 12-Layer Breakdown</div>
     ${lcard('🔢','Numerology — Pythagorean + Chaldean',layers.num.nums,layers.num.steps)}
     ${lcard('🪐','Astrology — Dignities + Aspects + Horary',layers.astro.nums.slice(0,7),layers.astro.steps,horaryHTML,true)}
     ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
     ${lcard('🏮','Feng Shui — Flying Star + Lo Shu + Fixed Stars',layers.fs.nums,layers.fs.steps,'',false)}
     ${lcard('☯','I Ching — Hexagram 45 + Nuclear + Changing Line',layers.iching.nums,layers.iching.steps,ichingHTML,true)}
-    <div class="lcard">
-      <div class="lhead">
-        <div class="licon">📊</div>
+    <div class=&quot;lcard&quot;>
+      <div class=&quot;lhead&quot;>
+        <div class=&quot;licon&quot;>📊</div>
         <div>
-          <div class="lname">PCSO ${game.short} — Historical Data</div>
-          <div class="lpills">${layers.stats.topDigits.slice(0,5).map(d=>`<span class="pill g">${d}</span>`).join('')}</div>
+          <div class=&quot;lname&quot;>PCSO ${game.short} — Historical Data</div>
+          <div class=&quot;lpills&quot;>${layers.stats.topDigits.slice(0,5).map(d=>`<span class=&quot;pill g&quot;>${d}</span>`).join('')}</div>
         </div>
       </div>
-      <div class="lsteps">
+      <div class=&quot;lsteps&quot;>
         • <b>Hot numbers (${game.short}${isEZ2?' '+drawHour:''}):</b> ${hotNums.map(n=>pad(n)).join(', ')}<br>
         • <b>Top stat digits:</b> ${layers.stats.topDigits.slice(0,5).join(', ')} (freq×4 + hot×6 + overdue×5)<br>
         • <b>Recent draws analyzed:</b> ${layers.stats.draws.length} draws · Game pool: 1–${game.max}
       </div>
-      <div class="st-grid">
-        <div class="stbox"><div class="stitle">🔥 Hot Numbers</div>${hotNums.map(n=>`<span class="hnum">${pad(n)}</span>`).join('')}</div>
-        <div class="stbox"><div class="stitle">📈 Recent Frequency</div>${freqBarsHTML}</div>
+      <div class=&quot;st-grid&quot;>
+        <div class=&quot;stbox&quot;><div class=&quot;stitle&quot;>🔥 Hot Numbers</div>${hotNums.map(n=>`<span class=&quot;hnum&quot;>${pad(n)}</span>`).join('')}</div>
+        <div class=&quot;stbox&quot;><div class=&quot;stitle&quot;>📈 Recent Frequency</div>${freqBarsHTML}</div>
       </div>
     </div>
 
-    <div class="disc">
+    <div class=&quot;disc&quot;>
       ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified Jun 27 2026 ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (Ren Shen day · ${drawHour==='2PM'?'Geng Wei hour':drawHour==='5PM'?'Ren You hour':'Jia Hai hour'}) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching Hexagram 45 Cui with nuclear and changing line, and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
     </div>
   `;
@@ -3407,12 +3397,19 @@ function animateBars(){
   });
 }
 
-function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
+
 
 // Init
 document.getElementById('ez2wrap').style.display='block';
-
 </script>
+</body>
+</html>
+"
+    style="width:100%;height:calc(100vh - 60px);border:none;display:block;background:#0a0a0f;"
+    scrolling="yes"
+    title="JOMERPB Lotto Oracle"
+  ></iframe>
+</div>
 
 </body>
 </html>
