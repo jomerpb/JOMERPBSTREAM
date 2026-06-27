@@ -186,6 +186,11 @@
     .ep-nav-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:9px 18px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;}
     .ep-nav-btn:disabled{opacity:0.3;cursor:not-allowed;}
     .ep-nav-ind{font-size:11px;color:var(--muted);text-align:center;}
+    .resume-row{display:none;align-items:center;gap:8px;padding:8px 14px;background:rgba(59,130,246,0.08);border-top:1px solid rgba(59,130,246,0.2);}
+    .resume-text{font-size:11px;color:var(--muted);flex:1;}
+    .resume-text b{color:var(--accent2);}
+    .resume-btn{background:var(--accent2);border:none;color:#fff;padding:6px 14px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;}
+    .resume-skip{background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:6px 8px;}
 
     /* SKELETON */
     @keyframes shimmer{0%{opacity:0.4}50%{opacity:0.8}100%{opacity:0.4}}
@@ -604,6 +609,11 @@
       <button class="lbtn active" id="psub" onclick="switchLang('sub')">SUB</button>
       <button class="lbtn" id="pdub" onclick="switchLang('dub')">DUB</button>
     </div>
+  </div>
+  <div class="resume-row" id="resume-row">
+    <span class="resume-text">Resume from <b id="resume-time-lbl">0:00</b>?</span>
+    <button class="resume-btn" onclick="resumeFromTracked()">▶ Resume</button>
+    <button class="resume-skip" onclick="hideResume()">Skip</button>
   </div>
   <div class="ep-nav-row">
     <button class="ep-nav-btn" id="prev-ep">← Prev</button>
@@ -1592,17 +1602,83 @@ function updateServerButtons() {
   `;
 }
 
+// ── WATCH TIMER ──
+let watchTimer = null;
+let watchedSeconds = 0;
+
+function startWatchTimer() {
+  stopWatchTimer();
+  watchedSeconds = 0;
+  watchTimer = setInterval(function() { watchedSeconds++; }, 1000);
+}
+
+function stopWatchTimer() {
+  if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
+}
+
+function formatWatchTime(secs) {
+  var h = Math.floor(secs / 3600);
+  var m = Math.floor((secs % 3600) / 60);
+  var s = secs % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  return m + ':' + String(s).padStart(2,'0');
+}
+
+function showResume() {
+  var row = document.getElementById('resume-row');
+  var lbl = document.getElementById('resume-time-lbl');
+  if (!row || watchedSeconds < 10) return; // only show if watched >10s
+  lbl.textContent = formatWatchTime(watchedSeconds);
+  row.style.display = 'flex';
+}
+
+function hideResume() {
+  var row = document.getElementById('resume-row');
+  if (row) row.style.display = 'none';
+}
+
+function resumeFromTracked() {
+  hideResume();
+  var t = watchedSeconds;
+  var item = currentItem;
+  var season = currentSeason;
+  var tmdbId = item ? (item.tmdb_id || item.id) : null;
+  var seasonNum = season ? (season.season_number || 1) : 1;
+  if (!tmdbId) return;
+  var url = '';
+  if (currentServer === 'vidlink') {
+    if (item.type === 'movie')
+      url = `https://vidlink.pro/movie/${tmdbId}?autoplay=true&primaryColor=e63946&startAt=${t}`;
+    else
+      url = `https://vidlink.pro/tv/${tmdbId}/${seasonNum}/${currentEp}?autoplay=true&primaryColor=e63946&startAt=${t}`;
+  } else if (currentServer === 'vidsrcmov') {
+    // vidsrc.mov supports ?t= for timestamp
+    if (item.type === 'movie')
+      url = `https://vidsrc.mov/embed/movie/${tmdbId}?t=${t}`;
+    else
+      url = `https://vidsrc.mov/embed/tv/${tmdbId}/${seasonNum}/${currentEp}?t=${t}`;
+  }
+  if (url) document.getElementById('player-iframe').src = url;
+  startWatchTimer(); // restart timer from 0 on new server
+}
+
 function switchServer(srv) {
   if (srv === currentServer) return;
+  stopWatchTimer();
+  showResume(); // show resume prompt with tracked time
   currentServer = srv;
   updateServerButtons();
   document.getElementById('player-iframe').src = buildUrl(currentServer);
+  startWatchTimer(); // start fresh timer on new server
 }
 
 function playStream() {
   currentServer = 'vidlink'; // reset to default on new content
+  hideResume();
+  stopWatchTimer();
   document.getElementById('player-iframe').src = buildUrl(currentServer);
   updateServerButtons();
+  startWatchTimer();
 }
 
 function updateEpNav() {
