@@ -1568,10 +1568,10 @@ function buildUrl(server) {
     return `https://vidlink.pro/tv/${tmdbId}/${seasonNum}/${currentEp}?autoplay=true&primaryColor=e63946`;
   }
 
-  if (server === 'vidgod') {
+  if (server === 'vidsrcmov') {
     if (item.type === 'movie')
-      return `https://vidgod.net/movie/${tmdbId}`;
-    return `https://vidgod.net/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+      return `https://vidsrc.mov/embed/movie/${tmdbId}`;
+    return `https://vidsrc.mov/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
   }
 
   return '';
@@ -1588,7 +1588,7 @@ function updateServerButtons() {
   btns.innerHTML = `
     <span style="font-size:10px;color:var(--muted);margin-right:2px;">Server:</span>
     <button class="srv-btn ${currentServer==='vidlink'?'active':''}" onclick="switchServer('vidlink')">VidLink</button>
-    <button class="srv-btn ${currentServer==='vidgod'?'active':''}" onclick="switchServer('vidgod')">VidGod</button>
+    <button class="srv-btn ${currentServer==='vidsrcmov'?'active':''}" onclick="switchServer('vidsrcmov')">VidSrc</button>
   `;
 }
 
