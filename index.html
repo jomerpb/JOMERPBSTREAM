@@ -758,6 +758,7 @@ window.addEventListener('popstate', async (e) => {
   if (page === 'detail-page' && state.item) await openDetail(state.item, true);
   if (page === 'player-page' && state.item) {
     currentItem=state.item; currentSeason=state.season; currentEp=state.ep; currentLang=state.lang||'sub';
+    currentServer=state.srv||localStorage.getItem('preferredServer')||'vidlink';
     const isAnime=state.item.type==='anime', isMovie=state.item.type==='movie';
     document.getElementById('player-title').textContent=state.item.title;
     document.getElementById('player-subtitle').textContent=isMovie?(state.item.year||''):`Episode ${state.ep}`;
@@ -1527,7 +1528,7 @@ function openPlayer(ep) {
   const season = currentSeason;
   const isAnime = item.type === 'anime';
   const isMovie = item.type === 'movie';
-  history.pushState({page:'player-page', item, season, ep, lang:currentLang}, '', `#player-${item.type}-${item.al_id||item.tmdb_id||item.id}-s${season?.season_number||1}-e${ep}`);
+  history.pushState({page:'player-page', item, season, ep, lang:currentLang, srv:currentServer}, '', `#player-${item.type}-${item.al_id||item.tmdb_id||item.id}-s${season?.season_number||1}-e${ep}`);
   showPage('player-page');
 
   // Title display
@@ -1665,15 +1666,22 @@ function resumeFromTracked() {
 function switchServer(srv) {
   if (srv === currentServer) return;
   stopWatchTimer();
-  showResume(); // show resume prompt with tracked time
+  showResume();
   currentServer = srv;
+  localStorage.setItem('preferredServer', srv);
+  // Update current history state to include new server
+  try {
+    var st = history.state || {};
+    st.srv = srv;
+    history.replaceState(st, '');
+  } catch(e) {}
   updateServerButtons();
   document.getElementById('player-iframe').src = buildUrl(currentServer);
-  startWatchTimer(); // start fresh timer on new server
+  startWatchTimer();
 }
 
 function playStream() {
-  currentServer = 'vidlink'; // reset to default on new content
+  currentServer = localStorage.getItem('preferredServer') || 'vidlink';
   hideResume();
   stopWatchTimer();
   document.getElementById('player-iframe').src = buildUrl(currentServer);
