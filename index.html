@@ -175,13 +175,10 @@
     .player-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);}
     .server-label{font-size:10px;color:var(--muted);}
     .server-label b{color:var(--accent2);}
-    .server-btns{display:flex;gap:6px;align-items:center;}
-    .srv-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:5px 12px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.5px;transition:all 0.15s;white-space:nowrap;}
+    .server-btns{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+    .srv-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:5px 14px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.5px;transition:all 0.15s;white-space:nowrap;}
     .srv-btn.active{background:var(--accent2);border-color:var(--accent2);color:#fff;}
     .srv-btn:hover:not(.active){border-color:var(--accent2);color:var(--accent2);}
-    .ts-row{display:flex;align-items:center;gap:8px;padding:0 14px 10px;font-size:11px;color:var(--muted);}
-    .ts-row input{width:70px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:7px;font-size:11px;font-family:'Inter',sans-serif;outline:none;text-align:center;}
-    .ts-btn{background:var(--accent2);border:none;color:#fff;padding:5px 12px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.5px;}
     .lang-row{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
     .lbtn{background:none;border:none;color:var(--muted);padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px;}
     .lbtn.active{background:var(--accent2);color:#fff;}
@@ -602,20 +599,11 @@
   </div>
   <div class="player-frame"><iframe id="player-iframe" allowfullscreen mozallowfullscreen webkitallowfullscreen allow="autoplay; fullscreen; picture-in-picture" frameborder="0" scrolling="no" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"></iframe></div>
   <div class="player-bar">
-    <div class="server-btns" id="server-btns">
-      <!-- Server buttons injected by JS based on content type -->
-    </div>
+    <div class="server-btns" id="server-btns"></div>
     <div class="lang-row" id="player-lang-row" style="display:none;">
       <button class="lbtn active" id="psub" onclick="switchLang('sub')">SUB</button>
       <button class="lbtn" id="pdub" onclick="switchLang('dub')">DUB</button>
     </div>
-  </div>
-  <div class="ts-row" id="ts-row" style="display:none;">
-    <span>Resume from:</span>
-    <input type="number" id="ts-min" placeholder="min" min="0" max="999"/>
-    <span>min</span>
-    <button class="ts-btn" onclick="resumeFromTime()">▶ Go</button>
-    <span id="ts-hint" style="font-size:10px;opacity:0.5;"></span>
   </div>
   <div class="ep-nav-row">
     <button class="ep-nav-btn" id="prev-ep">← Prev</button>
@@ -766,7 +754,7 @@ window.addEventListener('popstate', async (e) => {
     document.getElementById('player-lang-row').style.display=isAnime?'flex':'none';
     document.getElementById('psub').classList.toggle('active',currentLang==='sub');
     document.getElementById('pdub').classList.toggle('active',currentLang==='dub');
-    // server buttons handled by updateServerButtons()
+    updateServerButtons();
     document.querySelector('.bottom-nav').style.display='none';
     playStream(); updateEpNav();
   }
@@ -1550,7 +1538,7 @@ function openPlayer(ep) {
   document.getElementById('pdub').classList.toggle('active', currentLang==='dub');
 
   // Set server label
-  // server buttons handled by updateServerButtons()
+  updateServerButtons();
 
   playStream();
   updateEpNav();
@@ -1560,17 +1548,14 @@ function openPlayer(ep) {
 }
 
 // ─── SERVER STATE ───
-let currentServer = 'vidlink'; // default for movies/tv
-let currentTimeSec = 0; // manual timestamp tracker
+let currentServer = 'vidlink';
 
-function buildUrl(server, timeSec) {
+function buildUrl(server) {
   const item = currentItem;
   const season = currentSeason;
-  const t = timeSec || 0;
 
   if (item.type === 'anime') {
     const malId = item.mal_id || season?.mal_id;
-    // Anime only uses MegaPlay
     return `https://megaplay.buzz/stream/mal/${malId}/${currentEp}/${currentLang}`;
   }
 
@@ -1578,19 +1563,15 @@ function buildUrl(server, timeSec) {
   const seasonNum = season?.season_number || 1;
 
   if (server === 'vidlink') {
-    if (item.type === 'movie') {
-      return `https://vidlink.pro/movie/${tmdbId}?autoplay=true&primaryColor=e63946${t>0?'&t='+t:''}`;
-    } else {
-      return `https://vidlink.pro/tv/${tmdbId}/${seasonNum}/${currentEp}?autoplay=true&primaryColor=e63946${t>0?'&t='+t:''}`;
-    }
+    if (item.type === 'movie')
+      return `https://vidlink.pro/movie/${tmdbId}?autoplay=true&primaryColor=e63946`;
+    return `https://vidlink.pro/tv/${tmdbId}/${seasonNum}/${currentEp}?autoplay=true&primaryColor=e63946`;
   }
 
-  if (server === 'smoothpre') {
-    if (item.type === 'movie') {
-      return `https://smoothpre.com/embed/movie/${tmdbId}${t>0?'?t='+t:''}`;
-    } else {
-      return `https://smoothpre.com/embed/tv/${tmdbId}/${seasonNum}/${currentEp}${t>0?'?t='+t:''}`;
-    }
+  if (server === 'vidgod') {
+    if (item.type === 'movie')
+      return `https://vidgod.net/movie/${tmdbId}`;
+    return `https://vidgod.net/tv/${tmdbId}/${seasonNum}/${currentEp}`;
   }
 
   return '';
@@ -1600,47 +1581,27 @@ function updateServerButtons() {
   const item = currentItem;
   const isAnime = item?.type === 'anime';
   const btns = document.getElementById('server-btns');
-  const tsRow = document.getElementById('ts-row');
-
   if (isAnime) {
     btns.innerHTML = '<span style="font-size:10px;color:var(--muted)">Server: <b style="color:var(--accent2)">MegaPlay</b></span>';
-    tsRow.style.display = 'none';
     return;
   }
-
   btns.innerHTML = `
-    <span style="font-size:10px;color:var(--muted);margin-right:4px;">Server:</span>
+    <span style="font-size:10px;color:var(--muted);margin-right:2px;">Server:</span>
     <button class="srv-btn ${currentServer==='vidlink'?'active':''}" onclick="switchServer('vidlink')">VidLink</button>
-    <button class="srv-btn ${currentServer==='smoothpre'?'active':''}" onclick="switchServer('smoothpre')">SmoothPre</button>
+    <button class="srv-btn ${currentServer==='vidgod'?'active':''}" onclick="switchServer('vidgod')">VidGod</button>
   `;
-  tsRow.style.display = 'flex';
-  document.getElementById('ts-hint').textContent = 'Switch server will resume from this time';
 }
 
 function switchServer(srv) {
   if (srv === currentServer) return;
-  // Read current time input if user set it
-  const minInput = document.getElementById('ts-min');
-  const mins = parseFloat(minInput.value) || 0;
-  currentTimeSec = Math.floor(mins * 60);
   currentServer = srv;
   updateServerButtons();
-  document.getElementById('player-iframe').src = buildUrl(currentServer, currentTimeSec);
-}
-
-function resumeFromTime() {
-  const minInput = document.getElementById('ts-min');
-  const mins = parseFloat(minInput.value) || 0;
-  currentTimeSec = Math.floor(mins * 60);
-  document.getElementById('player-iframe').src = buildUrl(currentServer, currentTimeSec);
+  document.getElementById('player-iframe').src = buildUrl(currentServer);
 }
 
 function playStream() {
   currentServer = 'vidlink'; // reset to default on new content
-  currentTimeSec = 0;
-  const minInput = document.getElementById('ts-min');
-  if (minInput) minInput.value = '';
-  document.getElementById('player-iframe').src = buildUrl(currentServer, 0);
+  document.getElementById('player-iframe').src = buildUrl(currentServer);
   updateServerButtons();
 }
 
@@ -2088,7 +2049,7 @@ async function initFromHash() {
       document.getElementById('player-title').textContent    = item.title;
       document.getElementById('player-subtitle').textContent = isMovie?(item.year||''):`Episode ${currentEp}`;
       document.getElementById('player-lang-row').style.display = isAnime?'flex':'none';
-      updateServerButtons();
+      document.getElementById('server-name').textContent = isAnime?'MegaPlay':'VidLink';
       playStream(); updateEpNav();
     } else { showPage('home-page'); setNav('home'); }
     return;
@@ -2114,9 +2075,7 @@ initFromHash();
 </script>
 <!-- ORACLE PAGE -->
 <div id="oracle-page" class="page" style="background:#0a0a0f;">
-  <iframe
-    id="oracle-iframe"
-    srcdoc="<!DOCTYPE html>
+  <iframe id="oracle-iframe" srcdoc="<!DOCTYPE html>
 <html lang=&quot;en&quot;>
 <head>
 <meta charset=&quot;UTF-8&quot;/>
@@ -3493,10 +3452,7 @@ document.getElementById('ez2wrap').style.display='block';
 </html>
 "
     style="width:100%;height:calc(100vh - 60px);border:none;display:block;background:#0a0a0f;"
-    scrolling="yes"
-    title="JOMERPB Lotto Oracle"
-  ></iframe>
+    scrolling="yes" title="JOMERPB Lotto Oracle"></iframe>
 </div>
-
 </body>
 </html>
