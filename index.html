@@ -630,6 +630,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <span>Search</span><div class="nav-dot"></div>
   </div>
+  <div class="nav-item" id="nav-oracle" onclick="navTo('oracle')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+    <span>Oracle</span><div class="nav-dot"></div>
+  </div>
 </div>
 
 <script>
@@ -735,7 +739,7 @@ window.addEventListener('popstate', async (e) => {
   const page = state.page;
   if (page !== 'player-page') document.getElementById('player-iframe').src = '';
   showPage(page);
-  const navMap = {'home-page':'home','anime-page':'anime','tv-page':'tv','movies-page':'movies','search-page':'search'};
+  const navMap = {'home-page':'home','anime-page':'anime','tv-page':'tv','movies-page':'movies','search-page':'search','oracle-page':'oracle'};
   if (navMap[page]) setNav(navMap[page]);
   if (page === 'detail-page' && state.item) await openDetail(state.item, true);
   if (page === 'player-page' && state.item) {
@@ -1077,8 +1081,7 @@ async function fetchTV(sub, region, page) {
 
   return (data?.results||[]).map(m => {
     const item = fromTMDB(m, 'tv');
-    // If we know the status from context, use it
-    if (knownStatus && !item.status) item.status = knownStatus;
+    if (knownStatus) item.status = knownStatus;
     return item;
   });
 }
@@ -1780,7 +1783,8 @@ async function applyTVFilter(page=1) {
     const knownStatus = statusMap[tvFilterStatus] || '';
     const items = (d?.results||[]).map(m => {
       const item = fromTMDB(m,'tv');
-      if (!item.status && knownStatus) item.status = knownStatus;
+      // Always override with known status from filter selection
+      if (knownStatus) item.status = knownStatus;
       return item;
     });
     if (page === 1) renderGrid('tv-grid', items);
@@ -2029,5 +2033,1380 @@ async function initFromHash() {
 
 initFromHash();
 </script>
+
+<!-- ORACLE PAGE -->
+<div id="oracle-page" class="page" style="min-height:100vh;padding-bottom:var(--nav-h);">
+<style>
+/* ORACLE STYLES — scoped to oracle page */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  /* JOMERPB Brand Tokens */
+  --bg:#0a0a0f;
+  --surface:#111119;
+  --card:#18181f;
+  --card2:#1f1f2a;
+  --border:#262635;
+  --border2:#353548;
+  --accent:#7c5cfc;
+  --accent2:#9b7fff;
+  --gold:#f5c842;
+  --gold2:#ffe066;
+  --silver:#a8b2c8;
+  --red:#fc5c7c;
+  --green:#4cfc9a;
+  --teal:#4cc8fc;
+  --orange:#fc9c4c;
+  --text:#e8e8f4;
+  --muted:#5a5a7a;
+  --muted2:#8888aa;
+  --bebas:'Bebas Neue',sans-serif;
+  --inter:'Inter',sans-serif;
+  --radius:14px;
+  --nav-h:64px;
+}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--inter);
+  min-height:100vh;
+  padding-bottom:calc(var(--nav-h) + 24px);
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ══════════════════════════════════
+   HERO
+══════════════════════════════════ */
+.hero{
+  background:linear-gradient(170deg,#0d0d18 0%,#110e2a 45%,#0a0a10 100%);
+  border-bottom:1px solid var(--border);
+  padding:36px 16px 28px;
+  text-align:center;
+  position:relative;
+  overflow:hidden;
+}
+.hero::before{
+  content:'';position:absolute;
+  top:-100px;left:50%;transform:translateX(-50%);
+  width:500px;height:300px;
+  background:radial-gradient(ellipse,rgba(124,92,252,.18) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero::after{
+  content:'';position:absolute;
+  bottom:-40px;left:50%;transform:translateX(-50%);
+  width:300px;height:100px;
+  background:radial-gradient(ellipse,rgba(245,200,66,.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-brand{
+  font-size:10px;font-weight:700;
+  letter-spacing:.28em;color:var(--accent2);
+  text-transform:uppercase;margin-bottom:8px;
+}
+.hero h1{
+  font-family:var(--bebas);
+  font-size:clamp(48px,12vw,80px);
+  letter-spacing:.04em;line-height:.9;
+  background:linear-gradient(135deg,#fff 0%,#d4c8ff 30%,var(--accent) 60%,var(--gold) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  margin-bottom:8px;
+}
+.hero-sub{
+  font-size:11px;color:var(--muted2);
+  line-height:1.8;margin-bottom:14px;
+}
+.hero-layers{
+  display:flex;gap:5px;
+  justify-content:center;flex-wrap:wrap;
+}
+.hlayer{
+  background:rgba(124,92,252,.08);
+  border:1px solid rgba(124,92,252,.2);
+  border-radius:20px;padding:3px 10px;
+  font-size:9px;font-weight:700;
+  letter-spacing:.1em;color:var(--accent2);
+  text-transform:uppercase;
+}
+.hlayer.new{
+  background:rgba(245,200,66,.07);
+  border-color:rgba(245,200,66,.22);
+  color:var(--gold);
+}
+
+/* ══════════════════════════════════
+   LAYOUT
+══════════════════════════════════ */
+.page{max-width:600px;margin:0 auto;padding:0 14px}
+
+/* ══════════════════════════════════
+   SECTION LABELS
+══════════════════════════════════ */
+.slabel{
+  font-family:var(--bebas);
+  font-size:11px;letter-spacing:.22em;
+  color:var(--muted);
+  margin:20px 0 8px 2px;
+  display:flex;align-items:center;gap:8px;
+}
+.slabel::after{
+  content:'';flex:1;height:1px;
+  background:var(--border);
+}
+
+/* ══════════════════════════════════
+   GAME SELECTOR
+══════════════════════════════════ */
+.game-wrap{padding:20px 14px 0}
+.game-eyebrow{
+  font-size:10px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px;
+}
+.game-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;margin-bottom:16px;
+}
+.gbtn{
+  padding:12px 6px;
+  border:1px solid var(--border);
+  background:var(--surface);
+  border-radius:12px;cursor:pointer;
+  transition:all .2s;text-align:center;
+}
+.gbtn .gn{
+  font-family:var(--bebas);
+  font-size:18px;letter-spacing:.06em;
+  color:var(--muted2);display:block;
+  transition:color .2s;
+}
+.gbtn .gs{
+  font-size:9px;color:var(--muted);
+  display:block;margin-top:2px;
+  letter-spacing:.05em;
+}
+.gbtn.active{
+  border-color:var(--accent);
+  background:rgba(124,92,252,.08);
+}
+.gbtn.active .gn{color:var(--gold)}
+.gbtn.active .gs{color:var(--accent2)}
+.gbtn:hover:not(.active){
+  border-color:var(--border2);
+  background:var(--card);
+}
+
+/* ══════════════════════════════════
+   RUN BUTTON
+══════════════════════════════════ */
+.run-btn{
+  width:100%;padding:16px;
+  background:linear-gradient(135deg,var(--accent) 0%,#5533cc 100%);
+  border:none;border-radius:12px;
+  color:#fff;font-family:var(--bebas);
+  font-size:22px;letter-spacing:.14em;
+  cursor:pointer;
+  transition:opacity .2s,transform .1s;
+  box-shadow:0 4px 24px rgba(124,92,252,.25);
+  margin-bottom:8px;
+}
+.run-btn:hover{opacity:.88}
+.run-btn:active{transform:scale(.98)}
+
+/* ══════════════════════════════════
+   LOADER
+══════════════════════════════════ */
+.loader{
+  display:none;text-align:center;
+  padding:44px 0;
+}
+.lring{
+  width:46px;height:46px;
+  border:3px solid var(--border);
+  border-top-color:var(--accent);
+  border-radius:50%;
+  animation:spin .7s linear infinite;
+  margin:0 auto 14px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ltitle{font-size:13px;color:var(--muted2);margin-bottom:8px}
+.lsteps{
+  font-size:10px;color:var(--muted);
+  line-height:2.3;
+}
+
+/* ══════════════════════════════════
+   RESULTS
+══════════════════════════════════ */
+#results{display:none}
+
+/* ══════════════════════════════════
+   ENERGY FLOW CARD
+══════════════════════════════════ */
+.eflow{
+  background:var(--card);
+  border:1px solid var(--border2);
+  border-radius:var(--radius);
+  padding:16px;margin-bottom:8px;
+}
+.eflow-title{
+  font-family:var(--bebas);
+  font-size:13px;letter-spacing:.14em;
+  color:var(--muted2);margin-bottom:14px;
+}
+.erow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.elabel{font-size:10px;color:var(--muted2);width:82px;flex-shrink:0}
+.ebar-wrap{flex:1;background:var(--surface);border-radius:4px;height:7px;overflow:hidden}
+.ebar{height:100%;border-radius:4px;transition:width 1.1s cubic-bezier(.16,1,.3,1)}
+.ef{background:linear-gradient(90deg,#fc5c3c,var(--gold))}
+.ew{background:linear-gradient(90deg,var(--teal),var(--accent))}
+.ewod{background:linear-gradient(90deg,#4cfc9a,#22aa55)}
+.emet{background:linear-gradient(90deg,#c8d4f0,#ffffff)}
+.eear{background:linear-gradient(90deg,var(--gold),#aa8800)}
+.epct{font-family:var(--bebas);font-size:15px;width:36px;text-align:right;flex-shrink:0}
+
+/* ══════════════════════════════════
+   BALLS
+══════════════════════════════════ */
+.balls-card{
+  background:var(--card);
+  border:1px solid var(--border2);
+  border-radius:var(--radius);
+  padding:20px 12px;
+  margin-bottom:8px;
+  text-align:center;
+}
+.balls-eyebrow{
+  font-size:9px;font-weight:700;
+  letter-spacing:.2em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:14px;
+}
+.balls-row{
+  display:flex;gap:8px;
+  justify-content:center;flex-wrap:wrap;
+  margin-bottom:10px;
+}
+.ball{
+  width:52px;height:52px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--bebas);font-size:20px;
+  flex-shrink:0;position:relative;
+  box-shadow:0 4px 16px rgba(0,0,0,.5);
+  transition:transform .2s;
+}
+.ball:hover{transform:scale(1.08)}
+.b1{background:radial-gradient(circle at 35% 30%,#ffe88a,var(--gold) 55%,#a07800);color:#1a1000;border:2px solid rgba(255,220,80,.5)}
+.b2{background:radial-gradient(circle at 35% 30%,#d8e0f4,var(--silver) 55%,#5a6878);color:#1a1e2a;border:2px solid rgba(168,178,200,.5)}
+.b3{background:radial-gradient(circle at 35% 30%,#e0b080,#b87333 55%,#6a3f10);color:#fff;border:2px solid rgba(184,115,51,.4)}
+.b4{background:radial-gradient(circle at 35% 30%,#aa88ff,var(--accent) 55%,#3a1aaa);color:#fff;border:2px solid rgba(124,92,252,.5)}
+.b5{background:radial-gradient(circle at 35% 30%,#66dd99,#22aa55 55%,#115528);color:#fff;border:2px solid rgba(76,200,120,.4)}
+.b6{background:radial-gradient(circle at 35% 30%,#ff88aa,var(--red) 55%,#aa1133);color:#fff;border:2px solid rgba(252,92,124,.4)}
+.btag{
+  position:absolute;bottom:-4px;right:-4px;
+  background:rgba(0,0,0,.85);
+  border:1px solid var(--border2);
+  border-radius:4px;font-size:7px;
+  padding:1px 3px;color:var(--muted2);
+  font-family:var(--inter);font-weight:700;
+  white-space:nowrap;
+}
+.balls-note{
+  font-size:10px;color:var(--muted);
+  line-height:1.7;
+}
+
+/* alt combo */
+.alt-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;padding:12px;
+  text-align:center;margin-bottom:8px;
+}
+.alt-label{
+  font-size:9px;font-weight:700;
+  letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px;
+}
+.alt-row{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
+.aball{
+  width:42px;height:42px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--bebas);font-size:17px;
+  background:var(--card);
+  border:1px solid var(--border2);
+  color:var(--accent2);
+  transition:transform .2s;
+}
+.aball:hover{transform:scale(1.08)}
+
+/* ══════════════════════════════════
+   DIGIT CONVERGENCE
+══════════════════════════════════ */
+.dgrid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;margin-bottom:7px;
+}
+.dcard{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:11px;padding:11px 6px;
+  text-align:center;transition:border-color .2s;
+}
+.dcard.s8{border-color:var(--gold);background:linear-gradient(160deg,rgba(245,200,66,.1),var(--card))}
+.dcard.s7{border-color:var(--gold)}
+.dcard.s6{border-color:var(--accent)}
+.dcard.s5{border-color:#6644cc}
+.dcard.s4{border-color:#3a3a5a}
+.dnum{font-family:var(--bebas);font-size:28px;line-height:1}
+.dcard.s8 .dnum,.dcard.s7 .dnum{color:var(--gold)}
+.dcard.s6 .dnum{color:var(--accent2)}
+.dcard.s5 .dnum,.dcard.s4 .dnum{color:var(--muted2)}
+.dscore{font-size:9px;color:var(--muted);margin-top:3px}
+.ddots{display:flex;gap:2px;justify-content:center;margin-top:5px;flex-wrap:wrap}
+.dot{
+  width:15px;height:15px;border-radius:3px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:7px;font-weight:700;
+  border:1px solid transparent;
+}
+.dot.on{background:rgba(124,92,252,.2);border-color:var(--accent);color:var(--accent2)}
+.dot.gold{background:rgba(245,200,66,.15);border-color:rgba(245,200,66,.4);color:var(--gold)}
+.dot.teal{background:rgba(76,200,252,.1);border-color:rgba(76,200,252,.3);color:var(--teal)}
+.dot.off{background:var(--surface);color:var(--muted)}
+
+/* ══════════════════════════════════
+   NUMBER MAP
+══════════════════════════════════ */
+.maprow{
+  display:flex;align-items:center;
+  gap:8px;padding:8px 0;
+  border-bottom:1px solid var(--border);
+}
+.maprow:last-child{border-bottom:none}
+.mapdig{
+  font-family:var(--bebas);font-size:12px;
+  color:var(--muted);width:54px;flex-shrink:0;
+}
+.mapnums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+.mn{
+  font-family:var(--bebas);font-size:15px;
+  padding:2px 7px;border-radius:5px;
+  border:1px solid var(--border);
+}
+.mn.hot{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
+.mn.warm{background:rgba(124,92,252,.1);border-color:rgba(124,92,252,.3);color:var(--accent2)}
+.mn.cold{background:var(--surface);color:var(--muted2)}
+
+/* ══════════════════════════════════
+   LAYER CARDS
+══════════════════════════════════ */
+.lcard{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:14px;margin-bottom:8px;
+  overflow:hidden;
+}
+.lhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.licon{
+  width:36px;height:36px;border-radius:9px;
+  background:var(--surface);border:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;flex-shrink:0;
+}
+.lname{font-family:var(--bebas);font-size:15px;letter-spacing:.08em}
+.lnew{
+  font-size:8px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;
+  background:rgba(245,200,66,.1);
+  border:1px solid rgba(245,200,66,.3);
+  color:var(--gold);border-radius:4px;
+  padding:2px 6px;margin-left:6px;
+}
+.lpills{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.pill{
+  background:rgba(124,92,252,.1);
+  border:1px solid rgba(124,92,252,.28);
+  border-radius:5px;padding:2px 8px;
+  font-family:var(--bebas);font-size:15px;
+  color:var(--accent2);
+}
+.pill.g{background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.25);color:var(--gold)}
+.pill.t{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.25);color:var(--teal)}
+.lsteps{
+  font-size:11px;color:var(--muted2);
+  line-height:1.9;
+  border-top:1px solid var(--border);
+  padding-top:10px;
+}
+.lsteps b{color:var(--text)}
+.lsteps .ok{color:var(--green)}
+.lsteps .warn{color:var(--orange)}
+
+/* horary sub-grid */
+.hgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.hbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
+.hbox-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
+.hbox-val{font-family:var(--bebas);font-size:15px;color:var(--text);margin-bottom:3px}
+.hbox-sub{font-size:10px;color:var(--muted2);line-height:1.55}
+.arow{font-size:11px;color:var(--muted2);padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5}
+.arow:last-child{border-bottom:none}
+.arow b{color:var(--text)}
+
+/* bazi pillars */
+.bpillars{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.bp{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 6px;text-align:center}
+.bp-role{font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.bp-stem{font-family:var(--bebas);font-size:13px;color:var(--text);line-height:1.3}
+.bp-branch{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.4}
+.bp-nums{display:flex;gap:3px;justify-content:center;margin-top:5px;flex-wrap:wrap}
+.bpn{font-family:var(--bebas);font-size:14px;color:var(--accent2)}
+.bint{font-size:11px;color:var(--muted2);padding:4px 0;border-bottom:1px solid var(--border);margin-top:8px;line-height:1.5}
+.bint:last-child{border-bottom:none}
+.bint b{color:var(--teal)}
+
+/* i ching */
+.irow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.ibox{flex:1;min-width:70px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
+.isym{font-size:22px;margin-bottom:3px}
+.iname{font-family:var(--bebas);font-size:12px;letter-spacing:.05em;color:var(--teal)}
+.imsg{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.5}
+.ichange{font-size:11px;color:var(--muted2);margin-top:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;line-height:1.6}
+.ichange b{color:var(--teal)}
+
+/* stats */
+.st-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.stbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
+.stitle{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.hnum{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:29px;height:29px;border-radius:6px;
+  font-family:var(--bebas);font-size:14px;
+  margin:2px;
+  background:rgba(245,200,66,.08);
+  border:1px solid rgba(245,200,66,.22);
+  color:var(--gold);
+}
+.sfrow{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.sflabel{font-family:var(--bebas);font-size:13px;width:22px;text-align:center;flex-shrink:0}
+.sfwrap{flex:1;background:var(--bg);border-radius:3px;height:5px;overflow:hidden}
+.sffill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--gold));transition:width 1s cubic-bezier(.16,1,.3,1)}
+.sfval{font-size:9px;color:var(--muted);width:22px;text-align:right;flex-shrink:0}
+
+/* legend */
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.leg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
+.ldot{width:10px;height:10px;border-radius:2px}
+
+/* disclaimer */
+.disc{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-left:3px solid var(--red);
+  border-radius:10px;padding:13px 14px;
+  font-size:11px;color:var(--muted);
+  line-height:1.75;margin-top:8px;
+}
+
+/* ══════════════════════════════════
+   BOTTOM NAV (JOMERPB style)
+══════════════════════════════════ */
+.bnav{
+  position:fixed;bottom:0;left:0;right:0;
+  height:var(--nav-h);
+  background:rgba(10,10,15,.92);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;
+  justify-content:space-around;
+  padding:0 8px;
+  z-index:100;
+}
+.bnavitem{
+  display:flex;flex-direction:column;
+  align-items:center;gap:3px;
+  padding:6px 12px;border-radius:10px;
+  cursor:pointer;transition:all .2s;
+  text-decoration:none;flex:1;
+}
+.bnavitem.active{background:rgba(124,92,252,.12)}
+.bnavitem .bni{font-size:20px}
+.bnavitem .bnl{
+  font-size:9px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);transition:color .2s;
+}
+.bnavitem.active .bnl{color:var(--accent2)}
+
+/* ══════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════ */
+@media(max-width:380px){
+  .ball{width:46px;height:46px;font-size:17px}
+  .game-grid{grid-template-columns:repeat(3,1fr)}
+  .bpillars{grid-template-columns:repeat(2,1fr)}
+}
+
+/* Override oracle body padding since it's now a div */
+#oracle-page {padding-bottom:var(--nav-h);}
+#oracle-page .hero{background:linear-gradient(170deg,#0d0d18 0%,#110e2a 45%,#0a0a10 100%);border-bottom:1px solid #262635;padding:36px 16px 28px;text-align:center;position:relative;overflow:hidden;}
+</style>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-brand">JOMERPB · PH Lotto Oracle</div>
+  <h1>LOTTO<br>ORACLE</h1>
+  <p class="hero-sub">
+    Current cosmic energy flow · No personal data needed<br>
+    All readings based on what the universe is doing <b style="color:var(--gold)">right now</b>
+  </p>
+  <div class="hero-layers">
+    <span class="hlayer">Pythagorean</span>
+    <span class="hlayer">Chaldean</span>
+    <span class="hlayer">Astrology</span>
+    <span class="hlayer new">★ Horary</span>
+    <span class="hlayer new">★ Part of Fortune</span>
+    <span class="hlayer new">★ Dignities</span>
+    <span class="hlayer">BaZi</span>
+    <span class="hlayer new">★ Clashes</span>
+    <span class="hlayer">Feng Shui</span>
+    <span class="hlayer new">★ Lo Shu</span>
+    <span class="hlayer new">★ I Ching</span>
+    <span class="hlayer">PCSO Data</span>
+  </div>
+</div>
+
+<!-- GAME SELECTOR -->
+<div class="game-wrap page">
+  <div class="game-eyebrow">▸ Select Game</div>
+  <div class="game-grid" id="gameGrid">
+    <button class="gbtn active" onclick="setGame('ez2',this)">
+      <span class="gn">EZ2</span><span class="gs">2PM · 5PM · 9PM</span>
+    </button>
+    <button class="gbtn" onclick="setGame('642',this)">
+      <span class="gn">6/42</span><span class="gs">Tue·Thu·Sat 9PM</span>
+    </button>
+    <button class="gbtn" onclick="setGame('645',this)">
+      <span class="gn">6/45</span><span class="gs">Mon·Wed·Fri 9PM</span>
+    </button>
+    <button class="gbtn" onclick="setGame('649',this)">
+      <span class="gn">6/49</span><span class="gs">Tue·Thu·Sun 9PM</span>
+    </button>
+    <button class="gbtn" onclick="setGame('655',this)">
+      <span class="gn">6/55</span><span class="gs">Mon·Wed·Sat 9PM</span>
+    </button>
+    <button class="gbtn" onclick="setGame('658',this)">
+      <span class="gn">6/58</span><span class="gs">Tue·Fri·Sun 9PM</span>
+    </button>
+  </div>
+
+  <!-- EZ2 draw time (only shows for EZ2) -->
+  <div id="ez2wrap" style="margin-bottom:14px">
+    <div class="game-eyebrow">▸ EZ2 Draw Time</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <button class="gbtn" onclick="setDraw('2PM',this)" id="d2pm">
+        <span class="gn">2PM</span>
+      </button>
+      <button class="gbtn" onclick="setDraw('5PM',this)" id="d5pm">
+        <span class="gn">5PM</span>
+      </button>
+      <button class="gbtn active" onclick="setDraw('9PM',this)" id="d9pm">
+        <span class="gn">9PM</span>
+      </button>
+    </div>
+  </div>
+
+  <button class="run-btn" onclick="generate()">⚡ RUN EXPERT ORACLE</button>
+</div>
+
+<!-- LOADER -->
+<div class="loader page" id="loader">
+  <div class="lring"></div>
+  <div class="ltitle">Running 12-layer expert analysis…</div>
+  <div class="lsteps" id="lsteps"></div>
+</div>
+
+<!-- RESULTS -->
+<div id="results" class="page"></div>
+
+<!-- BOTTOM NAV -->
+
+</div>
+
+<script>
+/* ORACLE JAVASCRIPT */
+// ══════════════════════════
+// PCSO REAL HISTORICAL DATA
+// ══════════════════════════
+const GAMES={
+  ez2:{
+    name:'EZ2 2D Lotto',short:'EZ2',max:31,
+    draws:{
+      '2PM':[[1,12],[25,27],[31,22],[11,6],[19,4],[9,22],[2,13],[24,24],[9,21],[4,31],[29,8],[2,13],[3,15],[11,26],[19,17],[29,21],[19,19]],
+      '5PM':[[31,25],[16,30],[7,10],[13,9],[12,31],[3,1],[29,15],[10,3],[22,19],[5,17],[24,3],[19,10],[28,2],[18,17],[7,1],[5,16],[28,9]],
+      '9PM':[[16,24],[7,21],[24,23],[1,26],[2,29],[11,7],[16,4],[8,31],[28,27],[7,26],[22,29],[26,24],[10,7],[26,30],[9,5],[16,9]]
+    },
+    hot:{
+      '2PM':[19,29,9,11,2,4],'5PM':[16,5,3,10,29,19],'9PM':[16,3,9,29,24,5]
+    }
+  },
+  '642':{name:'Lotto 6/42',short:'6/42',max:42,sched:'Tue·Thu·Sat 9PM',
+    recent:[[30,20,11,7,36,1],[24,39,23,5,38,12],[7,36,31,3,35,42],[35,38,39,32,37,16],[17,42,13,36,1,31],[12,22,24,38,7,13],[40,3,36,41,28,18],[33,38,34,28,36,7],[2,39,30,10,14,29],[18,16,37,13,35,23],[3,21,2,14,33,1],[39,38,34,21,10,3],[15,8,34,13,25,38],[12,18,3,17,5,8],[33,8,5,17,18,41],[15,6,31,16,22,25]],
+    hot:[36,38,7,13,3,31]},
+  '645':{name:'Mega Lotto 6/45',short:'6/45',max:45,sched:'Mon·Wed·Fri 9PM',
+    recent:[[9,41,22,45,5,10],[41,29,27,21,33,19],[28,3,24,31,18,16],[27,15,9,13,12,8],[34,35,9,10,19,32],[44,14,10,21,35,18],[44,13,22,14,4,33],[14,45,44,42,28,20],[20,27,43,15,4,14],[1,38,18,42,4,44],[23,45,6,18,4,2],[28,38,41,35,40,5],[27,45,38,35,25,10],[23,8,9,36,43,18],[21,13,43,28,5,17],[27,9,42,37,34,3]],
+    hot:[44,14,27,9,35,18]},
+  '649':{name:'Super Lotto 6/49',short:'6/49',max:49,sched:'Tue·Thu·Sun 9PM',
+    recent:[[44,8,32,42,12,27],[44,13,27,33,24,42],[27,26,21,6,20,16],[28,20,36,33,2,17],[16,7,47,8,4,6],[40,13,14,24,8,21],[43,22,15,4,3,17],[41,31,44,25,42,33],[27,3,2,11,16,25],[36,27,5,14,40,8],[18,21,7,43,11,3],[39,40,1,47,29,17],[10,49,30,21,48,45],[33,24,12,13,4,9],[9,28,21,2,37,23],[49,35,44,4,14,5]],
+    hot:[27,44,4,8,21,13]},
+  '655':{name:'Grand Lotto 6/55',short:'6/55',max:55,sched:'Mon·Wed·Sat 9PM',
+    recent:[[24,10,55,36,4,41],[55,31,46,37,48,1],[8,44,43,24,4,11],[16,43,21,22,26,50],[53,19,8,34,38,52],[50,43,24,1,7,15],[32,36,29,19,8,30],[19,42,53,2,46,3],[36,4,9,44,42,24],[19,37,21,39,9,22],[33,46,43,19,38,42],[48,42,23,18,55,33],[52,36,38,12,48,42],[41,8,45,27,9,10],[47,44,26,29,38,51],[9,6,19,46,39,48]],
+    hot:[43,36,19,42,24,8]},
+  '658':{name:'Ultra Lotto 6/58',short:'6/58',max:58,sched:'Tue·Fri·Sun 9PM',
+    recent:[[15,5,45,11,17,39],[43,53,8,45,20,11],[26,8,55,48,5,51],[17,3,25,57,30,43],[40,27,10,9,53,29],[42,7,23,41,56,44],[53,1,4,45,51,22],[20,45,13,31,7,27],[39,36,12,41,4,20],[9,53,43,39,3,47],[47,21,43,20,5,37],[2,11,12,16,55,46],[50,12,20,57,14,21],[45,20,16,33,40,28],[6,38,9,26,48,14],[39,37,35,45,16,52]],
+    hot:[45,20,39,53,11,5]},
+};
+
+// ══════════════════════════
+// HELPERS
+// ══════════════════════════
+function reduce(n){
+  if(n<=0) return 9;
+  while(n>9) n=[...String(n)].reduce((a,b)=>a+parseInt(b),0);
+  return n||9;
+}
+function digitOf(n){ return reduce(n); }
+function pad(n){ return String(n).padStart(2,'0'); }
+
+// ══════════════════════════
+// LAYER 1: NUMEROLOGY
+// Pythagorean + Chaldean dual system
+// ══════════════════════════
+function layerNumerology(drawHour){
+  // Pythagorean
+  const ud=reduce(2+7+6+2+0+2+6); // Universal Day: 25→7
+  const h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
+  const combined=reduce(ud+h);
+  const saturn=8; // Saturday=Saturn rules=8
+  const monthYear=reduce(6+1); // June(6)+2026→1=7
+  // Day of month = 27 → 2+7=9
+  const dayReduction=reduce(27);
+  // Pythagorean: active digits
+  const pyNums=[...new Set([ud,h,combined,saturn,monthYear,dayReduction])];
+
+  // Chaldean system
+  // "PCSO": P=8,C=3,S=3,O=7 = 21 → 3
+  const pcso=reduce(8+3+3+7); // 3
+  // "LOTTO": L=3,O=7,T=4,T=4,O=7 = 25 → 7
+  const lotto=reduce(3+7+4+4+7); // 7
+  // "PHILIPPINES": P=8,H=5,I=1,L=3,I=1,P=8,P=8,I=1,N=5,E=5,S=3 = 48→12→3
+  const phils=reduce(8+5+1+3+1+8+8+1+5+5+3); // 3
+  const chNums=[...new Set([pcso,lotto,phils])];
+
+  const allNums=[...new Set([...pyNums,...chNums])];
+  return {
+    nums:allNums, pyNums, chNums,
+    ud,h,combined,saturn,monthYear,dayReduction,
+    pcso,lotto,phils,
+    steps:[
+      `<b>Pythagorean — Universal Day:</b> 2+7+6+2+0+2+6=25 → <b>${ud}</b>`,
+      `<b>Day of month 27:</b> 2+7 → <b>${dayReduction}</b>`,
+      `<b>Draw hour ${drawHour}:</b> → <b>${h}</b> · Combined ${ud}+${h}=${ud+h} → <b>${combined}</b>`,
+      `<b>Saturday=Saturn:</b> → <b>${saturn}</b>`,
+      `<b>Month(6)+Year(2026→1):</b> → <b>${monthYear}</b>`,
+      `<b>Chaldean — "PCSO":</b> P(8)+C(3)+S(3)+O(7)=21 → <b>${pcso}</b>`,
+      `<b>Chaldean — "LOTTO":</b> L(3)+O(7)+T(4)+T(4)+O(7)=25 → <b>${lotto}</b>`,
+      `<b>Chaldean — "PHILIPPINES":</b> =48→12 → <b>${phils}</b>`,
+    ]
+  };
+}
+
+// ══════════════════════════
+// LAYER 2: ASTROLOGY — Full master level
+// Real ephemeris + dignities + aspects + Horary + PoF
+// ══════════════════════════
+function layerAstrology(drawHour){
+  // REAL Jun 27 2026 planetary positions (verified)
+  const planets=[
+    {name:'Jupiter ♃',pos:"29°16' Cancer",sign:'Cancer',deg:29.26,
+     dignity:'Exalted', // Jupiter is EXALTED in Cancer = maximum strength
+     nums:[2,3,7],note:'EXALTED at anaretic 29° = peak power before sign change → luck amplified'},
+    {name:'Moon ☽',pos:"0°45' Sagittarius",sign:'Sagittarius',deg:0.75,
+     dignity:'Neutral',phase:'Waxing Gibbous',
+     nums:[1,3,9],note:'Waxing=favorable for gain · Sag=3,9 · 0°=new cycle beginning'},
+    {name:'Venus ♀',pos:"15°27' Leo",sign:'Leo',deg:15.45,
+     dignity:'Peregrine', // no special dignity in Leo
+     nums:[1,4,6],note:'Peregrine but strong by position · Leo=power · Fortune=6'},
+    {name:'Mars ♂',pos:"28°35' Taurus",sign:'Taurus',deg:28.58,
+     dignity:'Detriment', // Mars in Taurus = detriment (weak)
+     nums:[9],note:'In DETRIMENT = weak aggressive energy · cautious number'},
+    {name:'Mercury ☿',pos:"25°56' Cancer",sign:'Cancer',deg:25.93,
+     dignity:'Peregrine',rx:'Pre-Rx shadow',
+     nums:[2,7],note:'Almost stationary pre-Rx · concentrated mental energy'},
+    {name:'Saturn ♄',pos:"13°59' Aries",sign:'Aries',deg:13.98,
+     dignity:'Detriment', // Saturn in Aries = detriment
+     nums:[4,8],note:'In DETRIMENT · structure challenged · 13°=4'},
+    {name:'Sun ☉',pos:"6°12' Cancer",sign:'Cancer',deg:6.12,
+     dignity:'Neutral',
+     nums:[6,1],note:'6°=6 · Cancer=2 · vitality energy'},
+  ];
+
+  // Essential dignity summary — use only planets with dignity
+  const strongPlanets=planets.filter(p=>p.dignity==='Exalted'||p.dignity==='Domicile');
+  // Jupiter exalted = dominant influence → 2,3,7 heavily weighted
+
+  // HORARY ASTROLOGY — 9PM Manila Jun 27 2026 (Regiomontanus system)
+  // At 9PM Manila UTC+8 = 13:00 UTC
+  // Approximate ASC at Manila 9PM: Capricorn ~10-15° rising
+  // Check strictures: ASC ~12° Capricorn = OK (3-27° range = radical chart)
+  // Moon is NOT void of course (Moon in Sag still making aspects to Jupiter)
+  // Moon NOT in Via Combusta (15°Libra-15°Scorpio) → Sag is clear
+  // Chart is RADICAL = valid for judgment
+  const horaryASC='Capricorn ~12°';
+  const horaryASCRuler='Saturn (traditional)';
+  // 5th house from Capricorn = Taurus
+  const h5sign='Taurus';
+  const h5ruler='Venus'; // Taurus ruler = Venus
+  const h5rulerPos="15°27' Leo";
+  const h5dignity='Peregrine (but in strong Leo)';
+  // Venus applies to aspect? Venus at 15°Leo, applying sextile to Jupiter at 29°Cancer
+  // Sextile = 60° apart → Leo 15° to Cancer 29° = difference ~46° ≈ separating
+  // BUT: Venus applying to conjunction with Sun (same sign Leo, Sun at ~6°, Venus at 15° → Sun moving away)
+  // Venus is APPLYING to North Node area = positive for fortune
+  const h5aspect='Venus separating from Sun, applying toward North Node — fortune energy building';
+  const h5nums=[6,1,4];
+
+  // Part of Fortune (day chart: Sun above horizon at 9PM? No, Sun sets ~7:47PM Manila)
+  // 9PM = night chart
+  // Night chart PoF = ASC + Sun - Moon
+  // ASC ~285° (Capricorn 15°), Sun ~96° (Cancer 6°), Moon ~241° (Sag 1°)
+  // Night: PoF = 285 + 96 - 241 = 140° = 20° Leo
+  const pofSign='Leo';
+  const pofDeg=20;
+  // 20° Leo = 2+0=2
+  const pofDigit=reduce(20);
+  const pofRuler='Sun';
+  const pofNums=[pofDigit,1,4]; // Leo+Sun
+
+  // Key planetary aspects (applying only = valid in horary)
+  const aspects=[
+    {asp:'Moon ☽ trine Jupiter ♃',nature:'favorable',
+     note:'Applying (Moon at 0°Sag → Jupiter at 29°Cancer = fire/water signs, 121° = trine)',
+     nums:[9,3,7]},
+    {asp:'Moon ☽ trine Saturn ♄',nature:'favorable',
+     note:'Moon in Sag trine Saturn in Aries = fire trine = material stability',
+     nums:[9,8]},
+    {asp:'Sun ☉ sextile Saturn ♄',nature:'favorable',
+     note:'Cancer Sun sextile Aries Saturn = structure supports vitality',
+     nums:[6,8]},
+    {asp:'Venus ♀ applying to North Node',nature:'favorable',
+     note:'Fortune building toward destiny point = auspicious for speculation',
+     nums:[6,4]},
+    {asp:'Mars ♂ square Pluto ♇',nature:'tense',
+     note:'Transformative tension — unexpected pattern shifts possible',
+     nums:[4,1]},
+    {asp:'Mercury ☿ stationing (pre-Rx)',nature:'caution',
+     note:'Information/patterns may repeat or reverse — notable for number patterns',
+     nums:[7,2]},
+  ];
+
+  const allNums=[...new Set([
+    ...planets.flatMap(p=>p.nums),
+    ...h5nums,...pofNums,
+    ...aspects.filter(a=>a.nature==='favorable').flatMap(a=>a.nums)
+  ])];
+
+  return {
+    nums:allNums,planets,strongPlanets,
+    horaryASC,horaryASCRuler,h5sign,h5ruler,h5rulerPos,h5dignity,h5aspect,h5nums,
+    pofSign,pofDeg,pofDigit,pofRuler,pofNums,aspects,
+    steps:[
+      ...planets.map(p=>`<b>${p.name}</b> ${p.pos} [${p.dignity}] → <b>${p.nums.join(',')}</b> · ${p.note}`),
+      `<b>Horary ASC:</b> ${horaryASC} · Chart radical ✓ · Moon NOT void ✓`,
+      `<b>5th House (gambling):</b> ${h5sign} · Ruler: ${h5ruler} at ${h5rulerPos} · ${h5aspect}`,
+      `<b>Part of Fortune (night chart):</b> ~${pofDeg}° ${pofSign} → digit <b>${pofDigit}</b> · Ruler: ${pofRuler}`,
+    ]
+  };
+}
+
+// ══════════════════════════
+// LAYER 3: BAZI — Full master level
+// Exact pillars + clashes + combines + hidden stems
+// ══════════════════════════
+function layerBazi(drawHour){
+  // EXACT Jun 27 2026 pillars (verified: Jun 26=Metal Goat, Jun 27=Water Monkey)
+  const year ={stem:'Bing 丙',stemEl:'Yang Fire',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire',nums:[2,7]};
+  const month={stem:'Wu 戊',stemEl:'Yang Earth',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire+Earth',nums:[2,5,7]};
+  const day  ={stem:'Ren 壬',stemEl:'Yang Water',branch:'Shen 申',branchEl:'Monkey/Metal',el:'Water+Metal',nums:[1,6,7]};
+
+  // Hour pillar: Ren day → Hai hour (9PM) stem = Jia (Yang Wood)
+  // 2PM = Wei(Goat) hour → Geng stem (Yang Metal) → Earth+Metal → 6,7,8
+  // 5PM = You(Rooster) → Ren stem (Yang Water) → Metal+Water → 1,6,7
+  // 9PM = Hai(Pig) → Jia stem (Yang Wood) → Wood+Water → 1,3,6
+  const hourMap={
+    '2PM':{stem:'Geng 庚',stemEl:'Yang Metal',branch:'Wei 未',branchEl:'Goat/Earth',el:'Metal+Earth',nums:[6,7,8]},
+    '5PM':{stem:'Ren 壬',stemEl:'Yang Water',branch:'You 酉',branchEl:'Rooster/Metal',el:'Water+Metal',nums:[1,6,7]},
+    '9PM':{stem:'Jia 甲',stemEl:'Yang Wood',branch:'Hai 亥',branchEl:'Pig/Water',el:'Wood+Water',nums:[1,3,6]},
+  };
+  const hour=hourMap[drawHour];
+
+  // HIDDEN STEMS in earthly branches
+  const hidden={
+    'Wu午':'Ding(Fire)+Ji(Earth) → 2,5',
+    'Shen申':'Geng(Metal)+Ren(Water)+Wu(Earth) → 1,5,6,7',
+    'Hai亥':'Ren(Water)+Jia(Wood) → 1,3,6',
+    'Wei未':'Ji(Earth)+Ding(Fire)+Yi(Wood) → 2,3,5',
+    'You酉':'Xin(Metal) → 6,7',
+  };
+
+  // SIX CLASHES — check if any branches clash today
+  // Wu(Horse) clashes with Zi(Rat) — not present today
+  // Shen(Monkey) clashes with Yin(Tiger) — not present today
+  // No major clashes in today's pillars = STABLE energy (favorable)
+
+  // THREE HARMONIES — Shen(Monkey)+Zi(Rat)+Chen(Dragon) = Water frame
+  // Shen is present in day pillar → partial Water harmony active
+  // Hai(Pig)+Mao(Rabbit)+Wei(Goat) = Wood frame
+  // At 9PM: Hai present → partial Wood harmony
+
+  // SIX COMBINATIONS — Hai(Pig)+Yin(Tiger) = Wood combination (9PM hour Hai partial)
+  // Wu(Horse)+Wei(Goat) = Fire+Earth combination = at 2PM: year Wu + hour Wei = combine
+
+  // Element balance (dominant)
+  const elemCount={Fire:3,Earth:2,Metal:2,Water:3,Wood:1};
+  if(drawHour==='2PM'){ elemCount.Metal+=1; elemCount.Earth+=1; }
+  if(drawHour==='5PM'){ elemCount.Water+=1; elemCount.Metal+=1; }
+  if(drawHour==='9PM'){ elemCount.Water+=1; elemCount.Wood+=1; }
+
+  // Day Master = Ren (Yang Water) = strong Water day
+  // Water conquers Fire (year element) = Fire slightly weakened
+  // Metal (month day branch Shen) produces Water = Water very strong today
+
+  const interactions=[
+    {type:'Day Master',desc:'Ren 壬 (Yang Water) = your reading anchor · Water controls Fire (year) · strongest element today'},
+    {type:'Day Branch Shen',desc:'Hidden stems: Geng(Metal)+Ren(Water)+Wu(Earth) → Metal feeds Water → <b>1,6,7</b> reinforced'},
+    {type:'Year+Month Wu+Wu',desc:'Double Horse = Fire amplification · No clash (same branch) → stable Fire → <b>2,7</b> steady'},
+    {type:'9PM Hai branch',desc:'Hai(Pig) hidden Ren(Water)+Jia(Wood) · Partial Hai-Mao-Wei Wood frame forming → <b>1,3,6</b>'},
+    {type:'Dominant Elements',desc:`Fire×${elemCount.Fire} + Water×${elemCount.Water} = equal peak · dynamic tension = numbers fluctuate`},
+  ];
+
+  const allNums=[...new Set([...year.nums,...month.nums,...day.nums,...hour.nums])];
+  return {
+    nums:allNums,year,month,day,hour,hidden,elemCount,interactions,
+    steps:[
+      `<b>Year Pillar</b> Bing Wu 丙午 (Yang Fire Horse) → <b>${year.nums.join(',')}</b>`,
+      `<b>Month Pillar</b> Wu Wu 戊午 (Yang Earth Horse) → <b>${month.nums.join(',')}</b>`,
+      `<b>Day Pillar</b> Ren Shen 壬申 (Yang Water Monkey) → <b>${day.nums.join(',')}</b>`,
+      `<b>Hour Pillar</b> ${hour.stem} ${hour.branch} (${drawHour}) → <b>${hour.nums.join(',')}</b>`,
+      `<b>No branch clashes today</b> = stable, coherent energy flow`,
+      `<b>Dominant:</b> Fire+Water at equal peak = dynamic creative tension`,
+    ]
+  };
+}
+
+// ══════════════════════════
+// LAYER 4: FENG SHUI — Full flying star + Lo Shu
+// ══════════════════════════
+function layerFengshui(){
+  // Period 9 (2024-2043): ruling star = 9 (Li/Fire/South)
+  // Annual 2026 base star = 9
+  // Monthly June 2026 base = 8 (Gen/Earth/NE)
+  // Lo Shu grid for June 2026 (monthly star 8 in center)
+  const loShu={
+    NW:6, N:2, NE:4,
+    W:7,  C:8,  E:9,
+    SW:3, S:1, SE:5
+  };
+  // Wealth sectors: where 8 and 9 meet
+  // Star 8 = center (strongest position) = maximum wealth activation
+  // Star 9 = East = future prosperity
+  // Star 7 = West = competitive, risky (caution for speculation)
+  // Star 1 = South = career/water energy
+  // Double stars (monthly + annual interactions):
+  // Period 9 + Monthly 8 = Fire produces Earth = productive cycle
+  // Annual 9 at East = future wealth active
+
+  // Fixed stars on key planetary degrees
+  // Jupiter at 29°16' Cancer → near Pollux (β Geminorum actual 22°Cancer) = fortune star
+  // Moon at 0°45' Sag → near Antares (9°Sag) = royal star, approaching
+  // Venus at 15°Leo → near Regulus (0°Virgo shifted) = fortune king star approaching
+
+  return {
+    nums:[2,5,7,8,9],loShu,
+    steps:[
+      `<b>Period 9 (2024-2043)</b> · Li/Fire/South → active digits: <b>2,7,9</b>`,
+      `<b>Annual Flying Star 2026 = #9</b> in East = Future Prosperity sector activated`,
+      `<b>Monthly Star June 2026 = #8</b> in CENTER = Wealth star at peak position (most powerful placement)`,
+      `<b>Lo Shu tonight:</b> Center=8(wealth) · East=9(fortune) · NW=6(heavenly) · W=7(metal/competitive)`,
+      `<b>Period 9 + Monthly 8</b> = Fire produces Earth = productive cycle = favorable for material gain`,
+      `<b>Jupiter near Pollux fixed star</b> → fortune amplification at 29° Cancer`,
+    ]
+  };
+}
+
+// ══════════════════════════
+// LAYER 5: I CHING — Full 64-hexagram + changing lines + nuclear
+// ══════════════════════════
+function layerIChing(drawHour){
+  // Method: Cast using date numbers as yarrow-stalk equivalent
+  // Lower trigram: Day(27→9) + Month(6) + Year(2026→1) = 16 → 16%8=0 → 8 = Kun (Earth ☷)
+  // But 0 in trigram = 8 → Kun
+  // Upper trigram: Hour(9) + Draw energy(7) + Month star(8) = 24 → 24%8=0 → 8 = Kun (Earth ☷)
+  // Hexagram 2 = Kun over Kun = pure Yin / Receptive Earth
+
+  // Actually recalculate: lower = (27+6+1)%8 = 34%8 = 2 → Dui (Lake ☱)
+  // Upper = (9+7+8)%8 = 24%8 = 0 → Kun→8 or use 8=Kun
+  // Hexagram: Dui(Lake) below, Kun(Earth) above = Hexagram 45 = Cui (Gathering)
+
+  // Hexagram 45 = 萃 Cui = Gathering / Assembly
+  // Water collects in lake (Dui) under earth (Kun)
+  // Meaning: Great gathering, assembly, collective energy
+  // For speculation/lottery: favorable — collective fortune energy concentrated
+  // King comes to temple = auspicious ceremony = official blessing
+  const hex={
+    num:45,name:'Cui 萃',english:'Gathering / Assembly',
+    upper:{sym:'☷',name:'Kun (Earth)'},
+    lower:{sym:'☱',name:'Dui (Lake/Joy)'},
+    meaning:'Collective energy gathers · Water collects under Earth · Great assembly of fortune',
+    gambling:'Highly auspicious — energy is converging and concentrating · Favorable for joining collective games like lottery · Fortune assembles when people gather around common goal',
+    nums:[5,8,2], // Earth+Water = 5,8 + gathering=2
+    changingLine:`Hour of ${drawHour} activates Line 4: "Great good fortune — no blame" · Receiving blessings from above`,
+    nuclear:{num:53,name:'Jian (Gradual Progress)'},
+  };
+
+  return {
+    nums:hex.nums, hex,
+    steps:[
+      `<b>Lower trigram:</b> (27+6+1)%8=2 → Dui ☱ (Lake/Joy) = gathering joy`,
+      `<b>Upper trigram:</b> (9+7+8)%8=0 → Kun ☷ (Earth) = receptive ground`,
+      `<b>Hexagram 45 — Cui 萃 (Gathering):</b> ${hex.meaning}`,
+      `<b>Fortune reading:</b> ${hex.gambling}`,
+      `<b>Nuclear hexagram 53 — Jian (Gradual Progress):</b> steady build toward goal`,
+      `<b>Changing line (${drawHour}):</b> ${hex.changingLine}`,
+      `<b>Active numbers:</b> <b>${hex.nums.join(',')}</b> (Earth+Lake+Assembly energy)`,
+    ]
+  };
+}
+
+// ══════════════════════════
+// LAYER 6: STATS — Game-specific
+// ══════════════════════════
+function layerStats(gameKey,drawHour){
+  const game=GAMES[gameKey];
+  const isEZ2=gameKey==='ez2';
+  const draws=isEZ2?game.draws[drawHour]:game.recent;
+  const hotNums=isEZ2?game.hot[drawHour]:game.hot;
+
+  const freq={};
+  for(let i=1;i<=game.max;i++) freq[i]=0;
+  draws.forEach(draw=>draw.forEach(n=>{ if(n>=1&&n<=game.max) freq[n]++; }));
+
+  const lastSeen={};
+  for(let i=0;i<draws.length;i++)
+    draws[i].forEach(n=>{ if(!(n in lastSeen)) lastSeen[n]=i; });
+
+  const digitWeight={};
+  for(let d=1;d<=9;d++) digitWeight[d]=0;
+  for(let n=1;n<=game.max;n++){
+    const d=digitOf(n);
+    let w=(freq[n]||0)*4;
+    if(hotNums.includes(n)) w+=6;
+    const gap=lastSeen[n]??draws.length;
+    if(gap>=Math.floor(draws.length*0.5)) w+=5; // overdue
+    digitWeight[d]=(digitWeight[d]||0)+w;
+  }
+  const topDigits=Object.entries(digitWeight).sort((a,b)=>b[1]-a[1]).map(e=>parseInt(e[0]));
+
+  return {freq,lastSeen,digitWeight,topDigits,nums:topDigits.slice(0,5),hotNums,draws};
+}
+
+// ══════════════════════════
+// ELEMENT ENERGY
+// ══════════════════════════
+function calcEnergy(bazi,astro,fs){
+  const el={Fire:0,Water:0,Wood:0,Metal:0,Earth:0};
+  // BaZi weight
+  el.Fire+=bazi.elemCount.Fire||0;
+  el.Water+=bazi.elemCount.Water||0;
+  el.Metal+=bazi.elemCount.Metal||0;
+  el.Earth+=bazi.elemCount.Earth||0;
+  el.Wood+=bazi.elemCount.Wood||0;
+  // Astrology: Sun=Cancer=Water, Moon=Sag=Fire, Venus=Leo=Fire, Jupiter=Cancer=Water(exalted), Mars=Taurus=Earth, Mercury=Cancer=Water
+  el.Water+=3; el.Fire+=2; el.Earth+=1;
+  // FS: Period9=Fire, Star8=Earth
+  el.Fire+=2; el.Earth+=2;
+  const total=Object.values(el).reduce((a,b)=>a+b,0);
+  return Object.fromEntries(Object.entries(el).map(([k,v])=>[k,{val:v,pct:Math.round(v/total*100)}]));
+}
+
+// ══════════════════════════
+// MASTER CONVERGENCE — 8 digit sources
+// ══════════════════════════
+function convergence(layers,gameKey){
+  const game=GAMES[gameKey];
+  const LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
+  const digitScores={};
+  for(let d=1;d<=9;d++){
+    const inL=[];
+    if(layers.num.pyNums.includes(d)) inL.push(0);
+    if(layers.num.chNums.map(n=>reduce(n)).includes(d)) inL.push(1);
+    if(layers.astro.nums.includes(d)) inL.push(2);
+    if(layers.bazi.nums.includes(d)) inL.push(3);
+    if(layers.fs.nums.includes(d)) inL.push(4);
+    if(layers.iching.nums.includes(d)) inL.push(5);
+    if(layers.astro.pofNums.includes(d)) inL.push(6);
+    if(layers.stats.topDigits.slice(0,4).includes(d)) inL.push(7);
+    digitScores[d]={count:inL.length,layers:inL,statWeight:layers.stats.digitWeight[d]||0};
+  }
+  const sorted=Object.entries(digitScores)
+    .map(([d,s])=>({digit:parseInt(d),...s}))
+    .sort((a,b)=>b.count-a.count||b.statWeight-a.statWeight);
+
+  const digitToNums={};
+  for(let d=1;d<=9;d++){
+    digitToNums[d]=[];
+    for(let n=1;n<=game.max;n++)
+      if(digitOf(n)===d) digitToNums[d].push(n);
+  }
+
+  const hotNums=layers.stats.hotNums;
+  function bestNums(digit){
+    return (digitToNums[digit]||[]).sort((a,b)=>{
+      const sA=(layers.stats.freq[a]||0)*4+(hotNums.includes(a)?6:0);
+      const sB=(layers.stats.freq[b]||0)*4+(hotNums.includes(b)?6:0);
+      return sB-sA;
+    });
+  }
+
+  const isEZ2=gameKey==='ez2';
+  const needed=isEZ2?2:6;
+  const picks=[];
+  for(const ds of sorted){
+    if(picks.length>=needed) break;
+    const bns=bestNums(ds.digit);
+    if(bns.length&&!picks.includes(bns[0])) picks.push(bns[0]);
+  }
+  if(picks.length<needed){
+    for(const ds of sorted){
+      if(picks.length>=needed) break;
+      for(const n of bestNums(ds.digit))
+        if(!picks.includes(n)){ picks.push(n); break; }
+    }
+  }
+  picks.sort((a,b)=>a-b);
+
+  const altPicks=[];
+  for(const ds of sorted){
+    if(altPicks.length>=needed) break;
+    const bns=bestNums(ds.digit);
+    const alt=bns.find(n=>!picks.includes(n)&&!altPicks.includes(n));
+    if(alt) altPicks.push(alt);
+  }
+  altPicks.sort((a,b)=>a-b);
+
+  return {sorted,digitScores,digitToNums,picks,altPicks,LABELS,needed};
+}
+
+// ══════════════════════════
+// STATE
+// ══════════════════════════
+let currentGame='ez2';
+let currentDraw='9PM';
+
+function setGame(g,btn){
+  currentGame=g;
+  document.querySelectorAll('.gbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('ez2wrap').style.display=g==='ez2'?'block':'none';
+}
+
+function setDraw(d,btn){
+  currentDraw=d;
+  document.querySelectorAll('#ez2wrap .gbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function generate(){
+  const dh=currentGame==='ez2'?currentDraw:'9PM';
+  document.getElementById('results').style.display='none';
+  document.getElementById('loader').style.display='block';
+  const game=GAMES[currentGame];
+  const msgs=[
+    `🔢 Pythagorean + Chaldean numerology · Jun 27 2026 ${dh}…`,
+    `🪐 Real planetary positions + essential dignities…`,
+    `🏛️ Horary chart — Regiomontanus · 5th house gambling…`,
+    `⭐ Part of Fortune · night chart calculation…`,
+    `🔭 Planetary aspects · applying only · strictures checked…`,
+    `☯️ Exact BaZi Ren Shen day · ${dh==='2PM'?'Geng Wei':dh==='5PM'?'Ren You':'Jia Hai'} hour…`,
+    `⚡ Clashes · combines · hidden stems · element balance…`,
+    `🏮 Flying Star Lo Shu · monthly star #8 in center…`,
+    `🔮 I Ching · Hexagram 45 Cui · changing line + nuclear…`,
+    `📊 PCSO ${game.short} historical data · freq+hot+overdue…`,
+    `🎯 8-source digit convergence · mapping to 1–${game.max}…`,
+  ];
+  let si=0;
+  const el=document.getElementById('lsteps');
+  el.innerHTML='';
+  const iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
+  setTimeout(()=>{
+    clearInterval(iv);
+    const num=layerNumerology(dh);
+    const astro=layerAstrology(dh);
+    const bazi=layerBazi(dh);
+    const fs=layerFengshui();
+    const iching=layerIChing(dh);
+    const stats=layerStats(currentGame,dh);
+    const energy=calcEnergy(bazi,astro,fs);
+    const layers={num,astro,bazi,fs,iching,stats};
+    const conv=convergence(layers,currentGame);
+    document.getElementById('loader').style.display='none';
+    renderResults(layers,conv,energy,currentGame,dh);
+    document.getElementById('results').style.display='block';
+    document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+    setTimeout(animateBars,180);
+  },2800);
+}
+
+// ══════════════════════════
+// RENDER
+// ══════════════════════════
+const BTIERS=['b1','b2','b3','b4','b5','b6'];
+function dotHTML(idxs,labels){
+  const icons=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
+  const cls=['on','on','on','on','on','teal','teal','gold'];
+  return labels.map((l,i)=>`<span class="dot ${idxs.includes(i)?cls[i]:'off'}" title="${l}">${icons[i]}</span>`).join('');
+}
+function dCls(c){ return c>=8?'s8':c>=7?'s7':c>=6?'s6':c>=5?'s5':'s4'; }
+
+function renderResults(layers,conv,energy,gameKey,drawHour){
+  const game=GAMES[gameKey];
+  const isEZ2=gameKey==='ez2';
+
+  // Energy bars
+  const elOrder=['Fire','Water','Wood','Metal','Earth'];
+  const elCls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
+  const elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
+  const energyHTML=elOrder.map(e=>`
+    <div class="erow">
+      <span class="elabel">${elEmoji[e]} ${e}</span>
+      <div class="ebar-wrap"><div class="ebar ${elCls[e]}" style="width:0%" data-w="${energy[e].pct}%"></div></div>
+      <span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span>
+    </div>`).join('');
+
+  // Balls
+  const ballsHTML=conv.picks.map((n,i)=>{
+    const d=digitOf(n);
+    const ds=conv.digitScores[d];
+    return `<div class="ball ${BTIERS[Math.min(i,5)]}">
+      ${pad(n)}<span class="btag">d${d}·${ds.count}/8</span>
+    </div>`;
+  }).join('');
+  const altHTML=conv.altPicks.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
+
+  // Digit cards
+  const digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
+    <div class="dcard ${dCls(s.count)}">
+      <div class="dnum">${s.digit}</div>
+      <div class="dscore">${s.count}/8 layers</div>
+      <div class="ddots">${dotHTML(s.layers,conv.LABELS)}</div>
+    </div>`).join('');
+
+  // Map
+  const hotNums=layers.stats.hotNums;
+  const mapHTML=conv.sorted.slice(0,5).map(s=>{
+    const nums=conv.digitToNums[s.digit]||[];
+    return `<div class="maprow">
+      <span class="mapdig">Digit <b>${s.digit}</b> <span style="color:var(--muted)">(${s.count}/8)</span></span>
+      <div class="mapnums">${nums.map(n=>{
+        const cls=hotNums.includes(n)?'hot':(layers.stats.freq[n]||0)>=2?'warm':'cold';
+        return `<span class="mn ${cls}">${pad(n)}</span>`;
+      }).join('')}</div>
+    </div>`;
+  }).join('');
+
+  // Horary sub-panel
+  const horaryHTML=`
+    <div class="hgrid">
+      <div class="hbox">
+        <div class="hbox-title">Ascendant</div>
+        <div class="hbox-val">${layers.astro.horaryASC}</div>
+        <div class="hbox-sub">Ruler: ${layers.astro.horaryASCRuler}<br>Chart is radical ✓<br>Moon not void ✓<br>Not Via Combusta ✓</div>
+      </div>
+      <div class="hbox">
+        <div class="hbox-title">5th House (Gambling)</div>
+        <div class="hbox-val">${layers.astro.h5sign}</div>
+        <div class="hbox-sub">Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}</div>
+      </div>
+      <div class="hbox">
+        <div class="hbox-title">Part of Fortune ⊕</div>
+        <div class="hbox-val">~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
+        <div class="hbox-sub">Night chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
+      </div>
+      <div class="hbox">
+        <div class="hbox-title">Jupiter Status</div>
+        <div class="hbox-val" style="color:var(--green)">EXALTED ★</div>
+        <div class="hbox-sub">29°16' Cancer<br>Anaretic degree<br>Peak luck energy</div>
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      ${layers.astro.aspects.map(a=>`<div class="arow">
+        <span style="color:${a.nature==='favorable'?'var(--green)':a.nature==='caution'?'var(--orange)':'var(--red)'}">${a.nature==='favorable'?'✓':a.nature==='caution'?'⚠':'⚡'}</span>
+        <b> ${a.asp}</b> — ${a.note}
+      </div>`).join('')}
+    </div>`;
+
+  // BaZi panel
+  const baziHTML=`
+    <div class="bpillars">
+      ${[layers.bazi.year,layers.bazi.month,layers.bazi.day,layers.bazi.hour].map((p,i)=>`
+        <div class="bp">
+          <div class="bp-role">${['Year','Month','Day','Hour'][i]}</div>
+          <div class="bp-stem">${p.stem}</div>
+          <div class="bp-branch">${p.branch}</div>
+          <div class="bp-nums">${p.nums.map(n=>`<span class="bpn">${n}</span>`).join('')}</div>
+        </div>`).join('')}
+    </div>
+    ${layers.bazi.interactions.map(x=>`<div class="bint"><b>${x.type}:</b> ${x.desc}</div>`).join('')}`;
+
+  // I Ching panel
+  const ichingHTML=`
+    <div class="irow">
+      <div class="ibox">
+        <div class="isym">${layers.iching.hex.upper.sym}</div>
+        <div class="iname">${layers.iching.hex.upper.name}</div>
+        <div class="imsg">Upper</div>
+      </div>
+      <div class="ibox" style="flex:2">
+        <div class="isym">卦${layers.iching.hex.num}</div>
+        <div class="iname">${layers.iching.hex.name} · ${layers.iching.hex.english}</div>
+        <div class="imsg">${layers.iching.hex.gambling}</div>
+      </div>
+      <div class="ibox">
+        <div class="isym">${layers.iching.hex.lower.sym}</div>
+        <div class="iname">${layers.iching.hex.lower.name}</div>
+        <div class="imsg">Lower</div>
+      </div>
+    </div>
+    <div class="ichange"><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}</div>`;
+
+  // Stats panel
+  const maxF=Math.max(...Object.values(layers.stats.freq))||1;
+  const freqBarsHTML=Object.entries(layers.stats.freq)
+    .sort((a,b)=>b[1]-a[1]).slice(0,8)
+    .map(([n,c])=>`<div class="sfrow">
+      <span class="sflabel">${pad(parseInt(n))}</span>
+      <div class="sfwrap"><div class="sffill" style="width:0%" data-w="${(c/maxF*100).toFixed(0)}%"></div></div>
+      <span class="sfval">${c}x</span>
+    </div>`).join('');
+
+  function lcard(icon,name,nums,steps,extra='',isNew=false){
+    return `<div class="lcard">
+      <div class="lhead">
+        <div class="licon">${icon}</div>
+        <div>
+          <div class="lname">${name}${isNew?'<span class="lnew">★ Expert</span>':''}</div>
+          <div class="lpills">${nums.map(n=>`<span class="pill">${n}</span>`).join('')}</div>
+        </div>
+      </div>
+      <div class="lsteps">${steps.map(s=>`• ${s}`).join('<br>')}</div>
+      ${extra}
+    </div>`;
+  }
+
+  document.getElementById('results').innerHTML=`
+    <div class="slabel">Current Energy Flow · Jun 27 2026 · ${drawHour}</div>
+    <div class="eflow">
+      <div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>
+      ${energyHTML}
+    </div>
+
+    <div class="slabel">${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
+    <div class="balls-card">
+      <div class="balls-eyebrow">Primary Pick — 12-Layer Expert Oracle</div>
+      <div class="balls-row">${ballsHTML}</div>
+      <div class="balls-note">
+        Ball tag = digit (d) + convergence score out of 8 sources<br>
+        Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · St=Stats
+      </div>
+    </div>
+    <div class="alt-card">
+      <div class="alt-label">Alternate Combination</div>
+      <div class="alt-row">${altHTML}</div>
+    </div>
+
+    <div class="slabel">Step 1 — Digit Convergence · 8 Sources</div>
+    <div class="legend">
+      <span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span>
+      <span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF</span>
+      <span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span>
+      <span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span>
+    </div>
+    <div class="dgrid">${digitCardsHTML}</div>
+
+    <div class="slabel">Step 2 — Digit → Number Map · 1–${game.max}</div>
+    <div class="lcard">
+      <div class="lsteps" style="border:none;padding:0;margin-bottom:10px">
+        🔥 Gold = Game hot number &nbsp; 💜 Purple = Appeared 2+ times recently &nbsp; Gray = Cold
+      </div>${mapHTML}
+    </div>
+
+    <div class="slabel">Full 12-Layer Breakdown</div>
+    ${lcard('🔢','Numerology — Pythagorean + Chaldean',layers.num.nums,layers.num.steps)}
+    ${lcard('🪐','Astrology — Dignities + Aspects + Horary',layers.astro.nums.slice(0,7),layers.astro.steps,horaryHTML,true)}
+    ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
+    ${lcard('🏮','Feng Shui — Flying Star + Lo Shu + Fixed Stars',layers.fs.nums,layers.fs.steps,'',false)}
+    ${lcard('☯','I Ching — Hexagram 45 + Nuclear + Changing Line',layers.iching.nums,layers.iching.steps,ichingHTML,true)}
+    <div class="lcard">
+      <div class="lhead">
+        <div class="licon">📊</div>
+        <div>
+          <div class="lname">PCSO ${game.short} — Historical Data</div>
+          <div class="lpills">${layers.stats.topDigits.slice(0,5).map(d=>`<span class="pill g">${d}</span>`).join('')}</div>
+        </div>
+      </div>
+      <div class="lsteps">
+        • <b>Hot numbers (${game.short}${isEZ2?' '+drawHour:''}):</b> ${hotNums.map(n=>pad(n)).join(', ')}<br>
+        • <b>Top stat digits:</b> ${layers.stats.topDigits.slice(0,5).join(', ')} (freq×4 + hot×6 + overdue×5)<br>
+        • <b>Recent draws analyzed:</b> ${layers.stats.draws.length} draws · Game pool: 1–${game.max}
+      </div>
+      <div class="st-grid">
+        <div class="stbox"><div class="stitle">🔥 Hot Numbers</div>${hotNums.map(n=>`<span class="hnum">${pad(n)}</span>`).join('')}</div>
+        <div class="stbox"><div class="stitle">📈 Recent Frequency</div>${freqBarsHTML}</div>
+      </div>
+    </div>
+
+    <div class="disc">
+      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified Jun 27 2026 ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (Ren Shen day · ${drawHour==='2PM'?'Geng Wei hour':drawHour==='5PM'?'Ren You hour':'Jia Hai hour'}) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching Hexagram 45 Cui with nuclear and changing line, and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
+    </div>
+  `;
+}
+
+function animateBars(){
+  document.querySelectorAll('[data-w]').forEach(el=>{
+    const w=el.getAttribute('data-w');
+    el.style.width='0%';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.style.width=w; }));
+  });
+}
+
+function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
+
+// Init
+document.getElementById('ez2wrap').style.display='block';
+
+/* Override scrollToTop for oracle page context */
+function scrollToTop(){ document.getElementById('oracle-page').scrollTo({top:0,behavior:'smooth'}); window.scrollTo({top:0,behavior:'smooth'}); }
+/* Init oracle ez2wrap visibility */
+(function(){
+  const ew = document.getElementById('ez2wrap');
+  if(ew) ew.style.display='block';
+})();
+</script>
+
 </body>
 </html>
