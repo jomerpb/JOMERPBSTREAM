@@ -118,7 +118,7 @@ def main():
     print("=" * 50)
 
     # Fetch main results page
-    url = 'https://www.lottopcso.com/lotto-result-today-pcso-daily-draw-summary/'
+    url = 'https://www.lottopcso.com/'
     print(f"Fetching: {url}")
     html = fetch(url)
 
@@ -185,4 +185,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
