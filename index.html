@@ -242,11 +242,6 @@
     <div class="row-header"><div class="row-title">📺 Popular TV Series</div><div class="row-see-all" onclick="navTo('tv')">See all</div></div>
     <div class="row-scroll" id="row-tv"></div>
   </div>
-  <!-- K-Drama Row -->
-  <div class="row-section">
-    <div class="row-header"><div class="row-title">🇰🇷 K-Drama</div><div class="row-see-all" onclick="setTVFilter('KR')">See all</div></div>
-    <div class="row-scroll" id="row-kdrama"></div>
-  </div>
   <!-- Movies Row -->
   <div class="row-section">
     <div class="row-header"><div class="row-title">🎬 Popular Movies</div><div class="row-see-all" onclick="navTo('movies')">See all</div></div>
@@ -626,24 +621,8 @@
 <!-- BOTTOM NAV -->
 <div class="bottom-nav">
   <div class="nav-item active" id="nav-home" onclick="navTo('home')">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-    <span>Home</span><div class="nav-dot"></div>
-  </div>
-  <div class="nav-item" id="nav-anime" onclick="navTo('anime')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-    <span>Anime</span><div class="nav-dot"></div>
-  </div>
-  <div class="nav-item" id="nav-tv" onclick="navTo('tv')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
-    <span>TV</span><div class="nav-dot"></div>
-  </div>
-  <div class="nav-item" id="nav-movies" onclick="navTo('movies')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5"/></svg>
-    <span>Movies</span><div class="nav-dot"></div>
-  </div>
-  <div class="nav-item" id="nav-search" onclick="navTo('search')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <span>Search</span><div class="nav-dot"></div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M5 7V5a7 7 0 0 1 14 0v2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
+    <span>Stream</span><div class="nav-dot"></div>
   </div>
   <div class="nav-item" id="nav-oracle" onclick="navTo('oracle')">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
@@ -961,7 +940,7 @@ function fromAL(m) {
 async function loadHome() {
   renderContinueWatching();
   // skeletons
-  ['row-anime','row-tv','row-kdrama','row-movies'].forEach(id => {
+  ['row-anime','row-tv','row-movies'].forEach(id => {
     document.getElementById(id).innerHTML = skRow(8);
   });
 
@@ -969,21 +948,18 @@ async function loadHome() {
   const season = mo<=3?'WINTER':mo<=6?'SPRING':mo<=9?'SUMMER':'FALL';
   const year = now.getFullYear();
 
-  const [animeData, tvData, kdramaData, movieData] = await Promise.all([
+  const [animeData, tvData, movieData] = await Promise.all([
     al(`query{Page(perPage:15){media(type:ANIME,sort:TRENDING_DESC,isAdult:false){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format genres}}}`, {}),
     tmdb('/discover/tv', {sort_by:'popularity.desc', 'with_status':'0'}),
-    tmdb('/discover/tv', {with_origin_country:'KR', sort_by:'popularity.desc'}),
     tmdb('/movie/popular'),
   ]);
 
   const animeList = (animeData?.data?.Page?.media||[]).map(fromAL);
   const tvList    = (tvData?.results||[]).slice(0,15).map(m=>{const i=fromTMDB(m,'tv');if(!i.status)i.status='Ongoing';return i;});
-  const kdramaList= (kdramaData?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
   const movieList = (movieData?.results||[]).slice(0,15).map(m=>fromTMDB(m,'movie'));
 
   renderRow('row-anime',  animeList);
   renderRow('row-tv',     tvList);
-  renderRow('row-kdrama', kdramaList);
   renderRow('row-movies', movieList);
 
   // Hero — use a trending anime or TV with backdrop
@@ -3700,9 +3676,9 @@ document.getElementById('ez2wrap').style.display='block';
 var PCSO_DATA = {
   date: TODAY_PH_FULL,
   ez2: [
-    {draw:'2PM', nums:[24,4],  done:true},
-    {draw:'5PM', nums:[],      done:false},
-    {draw:'9PM', nums:[],      done:false}
+    {draw:'2PM', nums:[24,4],  cutoff:14},
+    {draw:'5PM', nums:[],      cutoff:17},
+    {draw:'9PM', nums:[],      cutoff:21}
   ],
   balls: [
     {game:'6/58', date:'Jun 26', nums:[53,54,44,57,51,7],   done:true, jackpot:'₱128M', winners:0},
@@ -3720,8 +3696,18 @@ function pcsoRender(){
   var lbl=document.getElementById('pcso-date-lbl');
   if(lbl) lbl.textContent=d.date;
   var h='';
+  var phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
+  var phHour=phNow.getHours()+phNow.getMinutes()/60;
   d.ez2.forEach(function(e){
-    var n=e.done?e.nums.map(function(x){return '<span class="pnum ez">'+p2(x)+'</span>';}).join(''):'<span class="pcso-pending">Pending…</span>';
+    var drawDone=e.nums.length>0||(phHour>=(e.cutoff+0.1));
+    var n;
+    if(e.nums.length>0){
+      n=e.nums.map(function(x){return '<span class="pnum ez">'+p2(x)+'</span>';}).join('');
+    } else if(drawDone){
+      n='<span class="pcso-pending" style="color:var(--muted2)">Result not yet recorded</span>';
+    } else {
+      n='<span class="pcso-pending">Pending…</span>';
+    }
     h+='<div class="pcso-row"><span class="pcso-game">EZ2</span><span class="pcso-draw">'+e.draw+'</span><div class="pcso-nums">'+n+'</div></div>';
   });
   d.balls.forEach(function(g){
