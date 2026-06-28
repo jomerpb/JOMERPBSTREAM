@@ -2775,6 +2775,7 @@ body{
 
 
 
+
 var _phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
 var _phMo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var TODAY_PH=_phMo[_phNow.getMonth()]+' '+_phNow.getDate()+' '+_phNow.getFullYear();
@@ -3539,14 +3540,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     </div>`;
   }
 
-  document.getElementById('results').innerHTML=`
-    <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
-    <div class="eflow">
-      <div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>
-      ${energyHTML}
-    </div>
-
-    <div class="slabel">${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
+  document.getElementById('results').innerHTML=`<div class="slabel">${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
     <div class="balls-card">
       <div class="balls-eyebrow">Primary Pick — 12-Layer Expert Oracle</div>
       <div class="balls-row">${ballsHTML}</div>
@@ -3558,6 +3552,12 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     <div class="alt-card">
       <div class="alt-label">Alternate Combination</div>
       <div class="alt-row">${altHTML}</div>
+    </div>
+
+    <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
+    <div class="eflow">
+      <div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>
+      ${energyHTML}
     </div>
 
     <div class="slabel">Step 1 — Digit Convergence · 8 Sources</div>
@@ -3619,6 +3619,7 @@ function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
 
 // Init
 document.getElementById('ez2wrap').style.display='block';
+
 
 
 
