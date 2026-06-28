@@ -2818,6 +2818,8 @@ body{
 
 
 
+
+
 var _phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
 var _phMo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var TODAY_PH=_phMo[_phNow.getMonth()]+' '+_phNow.getDate()+' '+_phNow.getFullYear();
@@ -2978,6 +2980,7 @@ function layerAstrology(drawHour){
   // Simplified aspects (Sun-Moon angle)
   var sunMoonAngle=norm(moon-sun);
   var aspectName=sunMoonAngle<30?"Conjunction":sunMoonAngle<90?"Sextile/Semi-square":sunMoonAngle<120?"Square":"Trine/Opposition";
+  var aspNature=sunMoonAngle<30||sunMoonAngle>330?'favorable':sunMoonAngle<60||sunMoonAngle>300?'favorable':sunMoonAngle<120||sunMoonAngle>240?'caution':'caution';
   return {
     nums,pofNums,
     horaryASC:signs2[signOf(ascApprox)]+" "+degInSign(ascApprox).toFixed(0)+"°",
@@ -2986,7 +2989,7 @@ function layerAstrology(drawHour){
     h5aspect:aspectName,
     pofSign:signs2[pofSignIdx],pofDeg:degInSign(pof).toFixed(1)+"°",
     pofRuler:pofRuler,pofDigit:pofDigit,
-    aspects:[{planets:"Sun-Moon",angle:sunMoonAngle.toFixed(0)+"°",aspect:aspectName}],
+    aspects:[{asp:aspectName+' '+sunMoonAngle.toFixed(0)+'°',nature:aspNature,note:'Sun-Moon · '+signs2[signOf(sun)]+' to '+signs2[signOf(moon)]}],
     planets:[
       {name:'Jupiter ♃',sign:signs[jSign],deg:degInSign(jupiter).toFixed(1),nums:signNums[jSign]},
       {name:'Moon ☽',sign:signs[mSign],deg:degInSign(moon).toFixed(1),nums:signNums[mSign]},
@@ -3720,6 +3723,8 @@ function pcsoRender(){
   else{setTimeout(tryPcso,200);}
 })();
 setInterval(pcsoRender,600000);
+
+
 
 </script>
 </div>
