@@ -1,0 +1,33 @@
+name: PCSO History Scraper
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scrape-history:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run history scraper
+        run: python3 .github/scripts/scrape_history.py
+
+      - name: Commit history
+        run: |
+          git config user.name "PCSO Bot"
+          git config user.email "pcso-bot@jomerpb.github.io"
+          git add pcso-history.json
+          git diff --staged --quiet || git commit -m "chore: add PCSO 90-day history $(date -u +'%Y-%m-%d')"
+          git push
