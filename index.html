@@ -750,7 +750,11 @@ function navTo(tab) {
 // Back/forward/gesture handler
 window.addEventListener('popstate', async (e) => {
   const state = e.state;
-  if (!state?.page) { showPage('home-page'); setNav('home'); return; }
+  if (!state?.page) {
+    var h=window.location.hash.replace('#','');
+    if(h==='oracle'){showPage('oracle-page');setNav('oracle');return;}
+    showPage('home-page'); setNav('home'); return;
+  }
   const page = state.page;
   if (page !== 'player-page') document.getElementById('player-iframe').src = '';
   showPage(page);
@@ -2142,7 +2146,7 @@ async function initFromHash() {
   // Tab pages
   const tabMap = {anime:'anime-page',tv:'tv-page',movies:'movies-page',search:'search-page',oracle:'oracle-page'};
   if (tabMap[hash]) {
-    showPage(tabMap[hash]); setNav(hash); loadHome();
+    showPage(tabMap[hash]); setNav(hash); if(hash!=='oracle') loadHome();
     if(hash==='anime')  loadAnimeSub('trending',document.querySelector('#anime-tabs .ctab'));
     if(hash==='tv')     loadTVSub('popular','',document.querySelector('#tv-tabs .ctab'));
     if(hash==='movies') loadMovieSub('popular',document.querySelector('#movie-tabs .ctab'));
