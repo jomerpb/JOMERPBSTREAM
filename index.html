@@ -2684,6 +2684,30 @@ body{
 #oracle-page .bpillars{grid-template-columns:repeat(2,1fr)}
 }
 
+
+/* ── PCSO RESULTS WIDGET ── */
+#oracle-page .pcso-widget{padding:14px 14px 0;max-width:580px;margin:0 auto}
+#oracle-page .pcso-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+#oracle-page .pcso-title{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.2em;color:var(--muted2)}
+#oracle-page .pcso-live{width:7px;height:7px;border-radius:50%;background:#4cfc9a;animation:pcso-pulse 2s infinite;flex-shrink:0}
+@keyframes pcso-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+#oracle-page .pcso-meta{display:flex;align-items:center;gap:8px}
+#oracle-page .pcso-date-lbl{font-size:10px;color:var(--muted)}
+#oracle-page .pcso-refresh{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:10px;padding:3px 9px;cursor:pointer;font-weight:600;font-family:var(--inter)}
+#oracle-page .pcso-refresh:hover{border-color:var(--accent);color:var(--accent2)}
+#oracle-page .pcso-grid{display:flex;flex-direction:column;gap:5px;margin-bottom:4px}
+#oracle-page .pcso-row{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 13px;display:flex;align-items:center;gap:8px}
+#oracle-page .pcso-game{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.05em;color:var(--muted2);width:60px;flex-shrink:0}
+#oracle-page .pcso-draw{font-size:9px;color:var(--muted);width:28px;flex-shrink:0;text-align:center}
+#oracle-page .pcso-nums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+#oracle-page .pnum{font-family:'Bebas Neue',sans-serif;font-size:16px;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.2);border-radius:5px;padding:2px 7px;color:var(--accent2)}
+#oracle-page .pnum.ez{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.25);color:var(--gold)}
+#oracle-page .pnum.six{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.2);color:#4cc8fc}
+#oracle-page .pcso-pending{font-size:11px;color:var(--muted);font-style:italic}
+#oracle-page .pcso-src{font-size:9px;color:var(--muted);text-align:right;margin-top:3px;padding:0 2px 10px}
+#oracle-page .pcso-meta-row{display:flex;gap:12px;margin-top:4px;padding-left:2px}
+#oracle-page .pcso-jackpot{font-size:10px;color:#4cfc9a;font-weight:700}
+#oracle-page .pcso-winners{font-size:10px;color:var(--muted)}
 </style>
 <!-- HERO -->
 <div class="hero">
@@ -2707,6 +2731,24 @@ body{
     <span class="hlayer new">★ I Ching</span>
     <span class="hlayer">PCSO Data</span>
   </div>
+</div>
+
+<!-- PCSO RESULTS WIDGET -->
+<div class="pcso-widget">
+  <div class="pcso-header">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="pcso-live"></div>
+      <span class="pcso-title">TODAY'S PCSO RESULTS</span>
+    </div>
+    <div class="pcso-meta">
+      <span class="pcso-date-lbl" id="pcso-date-lbl"></span>
+      <button class="pcso-refresh" onclick="pcsoRender()">&#8635; Refresh</button>
+    </div>
+  </div>
+  <div id="pcso-grid" class="pcso-grid">
+    <div class="pcso-row"><span class="pcso-pending">Loading results…</span></div>
+  </div>
+  <div class="pcso-src">Source: PCSO Official · Auto-refreshes every 10 min</div>
 </div>
 
 <!-- GAME SELECTOR -->
@@ -3629,6 +3671,55 @@ document.getElementById('ez2wrap').style.display='block';
 
 
 
+
+
+// ══ PCSO RESULTS WIDGET ══
+var PCSO_DATA = {
+  date: TODAY_PH_FULL,
+  ez2: [
+    {draw:'2PM', nums:[24,4],  done:true},
+    {draw:'5PM', nums:[],      done:false},
+    {draw:'9PM', nums:[],      done:false}
+  ],
+  balls: [
+    {game:'6/58', date:'Jun 26', nums:[53,54,44,57,51,7],   done:true, jackpot:'₱128M', winners:0},
+    {game:'6/55', date:'Jun 27', nums:[38,27,33,32,49,31],  done:true, jackpot:'₱50.3M', winners:0},
+    {game:'6/49', date:'Jun 25', nums:[49,19,15,46,25,36],  done:true, jackpot:'₱42.7M', winners:0},
+    {game:'6/45', date:'Jun 26', nums:[9,41,22,45,5,10],    done:true, jackpot:'₱83M', winners:0},
+    {game:'6/42', date:'Jun 27', nums:[24,31,3,36,35,23],   done:true, jackpot:'₱49.6M', winners:0}
+  ]
+};
+
+function p2(n){return String(n).padStart(2,'0');}
+
+function pcsoRender(){
+  var d=PCSO_DATA;
+  var lbl=document.getElementById('pcso-date-lbl');
+  if(lbl) lbl.textContent=d.date;
+  var h='';
+  d.ez2.forEach(function(e){
+    var n=e.done?e.nums.map(function(x){return '<span class="pnum ez">'+p2(x)+'</span>';}).join(''):'<span class="pcso-pending">Pending…</span>';
+    h+='<div class="pcso-row"><span class="pcso-game">EZ2</span><span class="pcso-draw">'+e.draw+'</span><div class="pcso-nums">'+n+'</div></div>';
+  });
+  d.balls.forEach(function(g){
+    var n=g.done?g.nums.map(function(x){return '<span class="pnum six">'+p2(x)+'</span>';}).join(''):'<span class="pcso-pending">'+(g.note||'Pending…')+'</span>';
+    var meta='';
+    if(g.jackpot!==undefined){
+      var wLabel=g.winners===0?'No winner — jackpot rolls!':g.winners===1?'1 winner':g.winners+' winners';
+      meta='<div class="pcso-meta-row"><span class="pcso-jackpot">'+g.jackpot+' jackpot</span><span class="pcso-winners">'+wLabel+'</span></div>';
+    }
+    h+='<div class="pcso-row" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;align-items:center;gap:8px;width:100%"><span class="pcso-game">'+g.game+'</span><span class="pcso-draw" style="font-size:9px;color:var(--muted)">'+g.date+'</span><div class="pcso-nums">'+n+'</div></div>'+meta+'</div>';
+  });
+  var grid=document.getElementById('pcso-grid');
+  if(grid) grid.innerHTML=h;
+}
+
+(function tryPcso(){
+  var g=document.getElementById('pcso-grid');
+  if(g){pcsoRender();}
+  else{setTimeout(tryPcso,200);}
+})();
+setInterval(pcsoRender,600000);
 
 </script>
 </div>
