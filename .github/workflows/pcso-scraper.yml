@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4 PCSOLotto-Webscraper
+        run: pip install requests beautifulsoup4 pytz PCSOLotto-Webscraper
 
       - name: Run PCSO scraper
         run: python3 .github/scripts/scrape_pcso.py
