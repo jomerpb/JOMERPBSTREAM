@@ -2,9 +2,9 @@ name: PCSO Results Scraper
 
 on:
   schedule:
-    - cron: '15 6 * * *'
-    - cron: '15 9 * * *'
-    - cron: '20 13 * * *'
+    - cron: '15 6 * * *'   # 2:15 PM PH
+    - cron: '15 9 * * *'   # 5:15 PM PH
+    - cron: '45 13 * * *'  # 9:45 PM PH
   workflow_dispatch:
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
+        run: pip install requests beautifulsoup4 PCSOLotto-Webscraper
 
       - name: Run PCSO scraper
         run: python3 .github/scripts/scrape_pcso.py
