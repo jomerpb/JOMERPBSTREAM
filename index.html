@@ -719,6 +719,7 @@ function showPage(id) {
 function goHome() {
   history.pushState({page:'home-page'}, '', '#home');
   showPage('home-page'); setNav('home');
+  loadHome();
 }
 
 function goBack() { history.back(); }
@@ -745,6 +746,7 @@ function navTo(tab) {
   if (tab === 'tv'     && !document.getElementById('tv-grid').children.length)     loadTVSub('popular','', document.querySelector('#tv-tabs .ctab'));
   if (tab === 'movies' && !document.getElementById('movies-grid').children.length) loadMovieSub('popular', document.querySelector('#movie-tabs .ctab'));
   if (tab === 'search') setTimeout(() => document.getElementById('search-input')?.focus(), 100);
+  if (tab === 'home') loadHome();
 }
 
 // Back/forward/gesture handler
@@ -2164,7 +2166,32 @@ async function initFromHash() {
 <!-- ORACLE PAGE -->
 <div id="oracle-page" class="page">
 <style>
-#oracle-page{background:#0a0a0f;color:#e8e8f4;font-family:'Inter',sans-serif;padding-bottom:70px;min-height:0!important;}
+#oracle-page{
+  --bg:#0a0a0f;
+  --surface:#111119;
+  --card:#18181f;
+  --card2:#1f1f2a;
+  --border:#262635;
+  --border2:#353548;
+  --accent:#7c5cfc;
+  --accent2:#9b7fff;
+  --gold:#f5c842;
+  --gold2:#ffe066;
+  --silver:#a8b2c8;
+  --red:#fc5c7c;
+  --green:#4cfc9a;
+  --teal:#4cc8fc;
+  --orange:#fc9c4c;
+  --text:#e8e8f4;
+  --muted:#5a5a7a;
+  --muted2:#8888aa;
+  --radius:12px;
+  background:#0a0a0f;
+  color:#e8e8f4;
+  font-family:'Inter',sans-serif;
+  padding-bottom:70px;
+  min-height:0!important;
+}
 #oracle-page *{box-sizing:border-box;}
 #oracle-page .game-wrap.page{display:block!important;min-height:0!important;}
 #oracle-page .page{min-height:0!important;}
@@ -2174,8 +2201,29 @@ async function initFromHash() {
 #oracle-page .hero{aspect-ratio:auto!important;max-height:none!important;height:auto!important;}
 #oracle-page .hero img{display:none!important;}
 
-/* global reset removed - handled by stream CSS */
-/* :root vars removed - handled by stream CSS */
+#oracle-page *,#oracle-page *::before,#oracle-page *::after{box-sizing:border-box;}
+
+#oracle-page{
+  --bg:#0a0a0f;
+  --surface:#111119;
+  --card:#18181f;
+  --card2:#1f1f2a;
+  --border:#262635;
+  --border2:#353548;
+  --accent:#7c5cfc;
+  --accent2:#9b7fff;
+  --gold:#f5c842;
+  --gold2:#ffe066;
+  --silver:#a8b2c8;
+  --red:#fc5c7c;
+  --green:#4cfc9a;
+  --teal:#4cc8fc;
+  --orange:#fc9c4c;
+  --text:#e8e8f4;
+  --muted:#5a5a7a;
+  --muted2:#8888aa;
+  --nav-h:60px;
+}
 /* body/html styles removed - handled by #oracle-page */
 
 /* ══════════════════════════════════
@@ -2209,7 +2257,7 @@ async function initFromHash() {
   text-transform:uppercase;margin-bottom:8px;
 }
 #oracle-page .hero h1{
-  font-family:var(--bebas);
+  font-family:'Bebas Neue',sans-serif;
   font-size:clamp(48px,12vw,80px);
   letter-spacing:.04em;line-height:.9;
   background:linear-gradient(135deg,#fff 0%,#d4c8ff 30%,var(--accent) 60%,var(--gold) 100%);
@@ -2248,7 +2296,7 @@ async function initFromHash() {
    SECTION LABELS
 ══════════════════════════════════ */
 #oracle-page .slabel{
-  font-family:var(--bebas);
+  font-family:'Bebas Neue',sans-serif;
   font-size:11px;letter-spacing:.22em;
   color:var(--muted);
   margin:20px 0 8px 2px;
@@ -2281,7 +2329,7 @@ async function initFromHash() {
   transition:all .2s;text-align:center;
 }
 #oracle-page .gbtn .gn{
-  font-family:var(--bebas);
+  font-family:'Bebas Neue',sans-serif;
   font-size:18px;letter-spacing:.06em;
   color:var(--muted2);display:block;
   transition:color .2s;
@@ -2309,7 +2357,7 @@ async function initFromHash() {
   width:100%;padding:16px;
   background:linear-gradient(135deg,var(--accent) 0%,#5533cc 100%);
   border:none;border-radius:12px;
-  color:#fff;font-family:var(--bebas);
+  color:#fff;font-family:'Bebas Neue',sans-serif;
   font-size:22px;letter-spacing:.14em;
   cursor:pointer;
   transition:opacity .2s,transform .1s;
@@ -2356,7 +2404,7 @@ async function initFromHash() {
   padding:16px;margin-bottom:8px;
 }
 #oracle-page .eflow-title{
-  font-family:var(--bebas);
+  font-family:'Bebas Neue',sans-serif;
   font-size:13px;letter-spacing:.14em;
   color:var(--muted2);margin-bottom:14px;
 }
@@ -2369,7 +2417,7 @@ async function initFromHash() {
 #oracle-page .ewod{background:linear-gradient(90deg,#4cfc9a,#22aa55)}
 #oracle-page .emet{background:linear-gradient(90deg,#c8d4f0,#ffffff)}
 #oracle-page .eear{background:linear-gradient(90deg,var(--gold),#aa8800)}
-#oracle-page .epct{font-family:var(--bebas);font-size:15px;width:36px;text-align:right;flex-shrink:0}
+#oracle-page .epct{font-family:'Bebas Neue',sans-serif;font-size:15px;width:36px;text-align:right;flex-shrink:0}
 
 /* ══════════════════════════════════
    BALLS
@@ -2396,7 +2444,7 @@ async function initFromHash() {
   width:52px;height:52px;
   border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-family:var(--bebas);font-size:20px;
+  font-family:'Bebas Neue',sans-serif;font-size:20px;
   flex-shrink:0;position:relative;
   box-shadow:0 4px 16px rgba(0,0,0,.5);
   transition:transform .2s;
@@ -2414,7 +2462,7 @@ async function initFromHash() {
   border:1px solid var(--border2);
   border-radius:4px;font-size:7px;
   padding:1px 3px;color:var(--muted2);
-  font-family:var(--inter);font-weight:700;
+  font-family:'Inter',sans-serif;font-weight:700;
   white-space:nowrap;
 }
 #oracle-page .balls-note{
@@ -2438,7 +2486,7 @@ async function initFromHash() {
 #oracle-page .aball{
   width:42px;height:42px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-family:var(--bebas);font-size:17px;
+  font-family:'Bebas Neue',sans-serif;font-size:17px;
   background:var(--card);
   border:1px solid var(--border2);
   color:var(--accent2);
@@ -2465,7 +2513,7 @@ async function initFromHash() {
 #oracle-page .dcard.s6{border-color:var(--accent)}
 #oracle-page .dcard.s5{border-color:#6644cc}
 #oracle-page .dcard.s4{border-color:#3a3a5a}
-#oracle-page .dnum{font-family:var(--bebas);font-size:28px;line-height:1}
+#oracle-page .dnum{font-family:'Bebas Neue',sans-serif;font-size:28px;line-height:1}
 #oracle-page .dcard.s8 .dnum,#oracle-page .dcard.s7 .dnum{color:var(--gold)}
 #oracle-page .dcard.s6 .dnum{color:var(--accent2)}
 #oracle-page .dcard.s5 .dnum,#oracle-page .dcard.s4 .dnum{color:var(--muted2)}
@@ -2492,12 +2540,12 @@ async function initFromHash() {
 }
 #oracle-page .maprow:last-child{border-bottom:none}
 #oracle-page .mapdig{
-  font-family:var(--bebas);font-size:12px;
+  font-family:'Bebas Neue',sans-serif;font-size:12px;
   color:var(--muted);width:54px;flex-shrink:0;
 }
 #oracle-page .mapnums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
 #oracle-page .mn{
-  font-family:var(--bebas);font-size:15px;
+  font-family:'Bebas Neue',sans-serif;font-size:15px;
   padding:2px 7px;border-radius:5px;
   border:1px solid var(--border);
 }
@@ -2522,7 +2570,7 @@ async function initFromHash() {
   display:flex;align-items:center;justify-content:center;
   font-size:16px;flex-shrink:0;
 }
-#oracle-page .lname{font-family:var(--bebas);font-size:15px;letter-spacing:.08em}
+#oracle-page .lname{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em}
 #oracle-page .lnew{
   font-size:8px;font-weight:700;letter-spacing:.1em;
   text-transform:uppercase;
@@ -2536,7 +2584,7 @@ async function initFromHash() {
   background:rgba(124,92,252,.1);
   border:1px solid rgba(124,92,252,.28);
   border-radius:5px;padding:2px 8px;
-  font-family:var(--bebas);font-size:15px;
+  font-family:'Bebas Neue',sans-serif;font-size:15px;
   color:var(--accent2);
 }
 #oracle-page .pill.g{background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.25);color:var(--gold)}
@@ -2555,7 +2603,7 @@ async function initFromHash() {
 #oracle-page .hgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 #oracle-page .hbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
 #oracle-page .hbox-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
-#oracle-page .hbox-val{font-family:var(--bebas);font-size:15px;color:var(--text);margin-bottom:3px}
+#oracle-page .hbox-val{font-family:'Bebas Neue',sans-serif;font-size:15px;color:var(--text);margin-bottom:3px}
 #oracle-page .hbox-sub{font-size:10px;color:var(--muted2);line-height:1.55}
 #oracle-page .arow{font-size:11px;color:var(--muted2);padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5}
 #oracle-page .arow:last-child{border-bottom:none}
@@ -2565,10 +2613,10 @@ async function initFromHash() {
 #oracle-page .bpillars{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
 #oracle-page .bp{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 6px;text-align:center}
 #oracle-page .bp-role{font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-#oracle-page .bp-stem{font-family:var(--bebas);font-size:13px;color:var(--text);line-height:1.3}
+#oracle-page .bp-stem{font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--text);line-height:1.3}
 #oracle-page .bp-branch{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.4}
 #oracle-page .bp-nums{display:flex;gap:3px;justify-content:center;margin-top:5px;flex-wrap:wrap}
-#oracle-page .bpn{font-family:var(--bebas);font-size:14px;color:var(--accent2)}
+#oracle-page .bpn{font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--accent2)}
 #oracle-page .bint{font-size:11px;color:var(--muted2);padding:4px 0;border-bottom:1px solid var(--border);margin-top:8px;line-height:1.5}
 #oracle-page .bint:last-child{border-bottom:none}
 #oracle-page .bint b{color:var(--teal)}
@@ -2577,7 +2625,7 @@ async function initFromHash() {
 #oracle-page .irow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
 #oracle-page .ibox{flex:1;min-width:70px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
 #oracle-page .isym{font-size:22px;margin-bottom:3px}
-#oracle-page .iname{font-family:var(--bebas);font-size:12px;letter-spacing:.05em;color:var(--teal)}
+#oracle-page .iname{font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.05em;color:var(--teal)}
 #oracle-page .imsg{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.5}
 #oracle-page .ichange{font-size:11px;color:var(--muted2);margin-top:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;line-height:1.6}
 #oracle-page .ichange b{color:var(--teal)}
@@ -2589,14 +2637,14 @@ async function initFromHash() {
 #oracle-page .hnum{
   display:inline-flex;align-items:center;justify-content:center;
   width:29px;height:29px;border-radius:6px;
-  font-family:var(--bebas);font-size:14px;
+  font-family:'Bebas Neue',sans-serif;font-size:14px;
   margin:2px;
   background:rgba(245,200,66,.08);
   border:1px solid rgba(245,200,66,.22);
   color:var(--gold);
 }
 #oracle-page .sfrow{display:flex;align-items:center;gap:6px;margin-bottom:5px}
-#oracle-page .sflabel{font-family:var(--bebas);font-size:13px;width:22px;text-align:center;flex-shrink:0}
+#oracle-page .sflabel{font-family:'Bebas Neue',sans-serif;font-size:13px;width:22px;text-align:center;flex-shrink:0}
 #oracle-page .sfwrap{flex:1;background:var(--bg);border-radius:3px;height:5px;overflow:hidden}
 #oracle-page .sffill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--gold));transition:width 1s cubic-bezier(.16,1,.3,1)}
 #oracle-page .sfval{font-size:9px;color:var(--muted);width:22px;text-align:right;flex-shrink:0}
