@@ -17,6 +17,7 @@
     body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;padding-bottom:var(--nav-h);}
     .page{display:none;min-height:100vh;}
     .page.active{display:block;}
+    #oracle-page{min-height:0!important;height:auto!important;}
 
     /* TOP BAR */
     .topbar{position:sticky;top:0;z-index:90;height:var(--top-h);display:flex;align-items:center;gap:10px;padding:0 14px;background:rgba(7,9,15,0.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);}
@@ -2139,7 +2140,7 @@ async function initFromHash() {
   }
 
   // Tab pages
-  const tabMap = {anime:'anime-page',tv:'tv-page',movies:'movies-page',search:'search-page'};
+  const tabMap = {anime:'anime-page',tv:'tv-page',movies:'movies-page',search:'search-page',oracle:'oracle-page'};
   if (tabMap[hash]) {
     showPage(tabMap[hash]); setNav(hash); loadHome();
     if(hash==='anime')  loadAnimeSub('trending',document.querySelector('#anime-tabs .ctab'));
@@ -2157,16 +2158,18 @@ async function initFromHash() {
 initFromHash();
 </script>
 <!-- ORACLE PAGE -->
-<div id="oracle-page" class="page" style="background:#0a0a0f;">
-  <iframe id="oracle-iframe" srcdoc="<!DOCTYPE html>
-<html lang=&quot;en&quot;>
-<head>
-<meta charset=&quot;UTF-8&quot;/>
-<meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1.0,viewport-fit=cover&quot;/>
-<meta name=&quot;theme-color&quot; content=&quot;#0a0a0f&quot;/>
-<title>JOMERPB Lotto Oracle</title>
-<link href=&quot;https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap&quot; rel=&quot;stylesheet&quot;/>
+<div id="oracle-page" class="page">
 <style>
+#oracle-page{background:#0a0a0f;color:#e8e8f4;font-family:'Inter',sans-serif;padding-bottom:70px;min-height:0!important;}
+#oracle-page *{box-sizing:border-box;}
+#oracle-page .game-wrap.page{display:block!important;min-height:0!important;}
+#oracle-page .page{min-height:0!important;}
+#oracle-page .loader{display:none;}
+#oracle-page #loader{display:none;}
+#oracle-page #results{display:none;}
+#oracle-page .hero{aspect-ratio:auto!important;max-height:none!important;height:auto!important;}
+#oracle-page .hero img{display:none!important;}
+
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   /* JOMERPB Brand Tokens */
@@ -2206,7 +2209,7 @@ body{
 /* ══════════════════════════════════
    HERO
 ══════════════════════════════════ */
-.hero{
+#oracle-page .hero{
   background:linear-gradient(170deg,#0d0d18 0%,#110e2a 45%,#0a0a10 100%);
   border-bottom:1px solid var(--border);
   padding:36px 16px 28px;
@@ -2214,26 +2217,26 @@ body{
   position:relative;
   overflow:hidden;
 }
-.hero::before{
+#oracle-page .hero::before{
   content:'';position:absolute;
   top:-100px;left:50%;transform:translateX(-50%);
   width:500px;height:300px;
   background:radial-gradient(ellipse,rgba(124,92,252,.18) 0%,transparent 70%);
   pointer-events:none;
 }
-.hero::after{
+#oracle-page .hero::after{
   content:'';position:absolute;
   bottom:-40px;left:50%;transform:translateX(-50%);
   width:300px;height:100px;
   background:radial-gradient(ellipse,rgba(245,200,66,.06) 0%,transparent 70%);
   pointer-events:none;
 }
-.hero-brand{
+#oracle-page .hero-brand{
   font-size:10px;font-weight:700;
   letter-spacing:.28em;color:var(--accent2);
   text-transform:uppercase;margin-bottom:8px;
 }
-.hero h1{
+#oracle-page .hero h1{
   font-family:var(--bebas);
   font-size:clamp(48px,12vw,80px);
   letter-spacing:.04em;line-height:.9;
@@ -2242,15 +2245,15 @@ body{
   background-clip:text;
   margin-bottom:8px;
 }
-.hero-sub{
+#oracle-page .hero-sub{
   font-size:11px;color:var(--muted2);
   line-height:1.8;margin-bottom:14px;
 }
-.hero-layers{
+#oracle-page .hero-layers{
   display:flex;gap:5px;
   justify-content:center;flex-wrap:wrap;
 }
-.hlayer{
+#oracle-page .hlayer{
   background:rgba(124,92,252,.08);
   border:1px solid rgba(124,92,252,.2);
   border-radius:20px;padding:3px 10px;
@@ -2258,7 +2261,7 @@ body{
   letter-spacing:.1em;color:var(--accent2);
   text-transform:uppercase;
 }
-.hlayer.new{
+#oracle-page .hlayer.new{
   background:rgba(245,200,66,.07);
   border-color:rgba(245,200,66,.22);
   color:var(--gold);
@@ -2267,19 +2270,19 @@ body{
 /* ══════════════════════════════════
    LAYOUT
 ══════════════════════════════════ */
-.page{max-width:600px;margin:0 auto;padding:0 14px}
+#oracle-page .page{max-width:600px;margin:0 auto;padding:0 14px}
 
 /* ══════════════════════════════════
    SECTION LABELS
 ══════════════════════════════════ */
-.slabel{
+#oracle-page .slabel{
   font-family:var(--bebas);
   font-size:11px;letter-spacing:.22em;
   color:var(--muted);
   margin:20px 0 8px 2px;
   display:flex;align-items:center;gap:8px;
 }
-.slabel::after{
+#oracle-page .slabel::after{
   content:'';flex:1;height:1px;
   background:var(--border);
 }
@@ -2287,42 +2290,42 @@ body{
 /* ══════════════════════════════════
    GAME SELECTOR
 ══════════════════════════════════ */
-.game-wrap{padding:20px 14px 0}
-.game-eyebrow{
+#oracle-page .game-wrap{padding:20px 14px 0}
+#oracle-page .game-eyebrow{
   font-size:10px;font-weight:700;
   letter-spacing:.18em;text-transform:uppercase;
   color:var(--muted);margin-bottom:10px;
 }
-.game-grid{
+#oracle-page .game-grid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
   gap:8px;margin-bottom:16px;
 }
-.gbtn{
+#oracle-page .gbtn{
   padding:12px 6px;
   border:1px solid var(--border);
   background:var(--surface);
   border-radius:12px;cursor:pointer;
   transition:all .2s;text-align:center;
 }
-.gbtn .gn{
+#oracle-page .gbtn .gn{
   font-family:var(--bebas);
   font-size:18px;letter-spacing:.06em;
   color:var(--muted2);display:block;
   transition:color .2s;
 }
-.gbtn .gs{
+#oracle-page .gbtn .gs{
   font-size:9px;color:var(--muted);
   display:block;margin-top:2px;
   letter-spacing:.05em;
 }
-.gbtn.active{
+#oracle-page .gbtn.active{
   border-color:var(--accent);
   background:rgba(124,92,252,.08);
 }
-.gbtn.active .gn{color:var(--gold)}
-.gbtn.active .gs{color:var(--accent2)}
-.gbtn:hover:not(.active){
+#oracle-page .gbtn.active .gn{color:var(--gold)}
+#oracle-page .gbtn.active .gs{color:var(--accent2)}
+#oracle-page .gbtn:hover:not(.active){
   border-color:var(--border2);
   background:var(--card);
 }
@@ -2330,7 +2333,7 @@ body{
 /* ══════════════════════════════════
    RUN BUTTON
 ══════════════════════════════════ */
-.run-btn{
+#oracle-page .run-btn{
   width:100%;padding:16px;
   background:linear-gradient(135deg,var(--accent) 0%,#5533cc 100%);
   border:none;border-radius:12px;
@@ -2341,17 +2344,17 @@ body{
   box-shadow:0 4px 24px rgba(124,92,252,.25);
   margin-bottom:8px;
 }
-.run-btn:hover{opacity:.88}
-.run-btn:active{transform:scale(.98)}
+#oracle-page .run-btn:hover{opacity:.88}
+#oracle-page .run-btn:active{transform:scale(.98)}
 
 /* ══════════════════════════════════
    LOADER
 ══════════════════════════════════ */
-.loader{
+#oracle-page .loader{
   display:none;text-align:center;
   padding:44px 0;
 }
-.lring{
+#oracle-page .lring{
   width:46px;height:46px;
   border:3px solid var(--border);
   border-top-color:var(--accent);
@@ -2360,8 +2363,8 @@ body{
   margin:0 auto 14px;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
-.ltitle{font-size:13px;color:var(--muted2);margin-bottom:8px}
-.lsteps{
+#oracle-page .ltitle{font-size:13px;color:var(--muted2);margin-bottom:8px}
+#oracle-page .lsteps{
   font-size:10px;color:var(--muted);
   line-height:2.3;
 }
@@ -2369,37 +2372,37 @@ body{
 /* ══════════════════════════════════
    RESULTS
 ══════════════════════════════════ */
-#results{display:none}
+#oracle-page #results{display:none}
 
 /* ══════════════════════════════════
    ENERGY FLOW CARD
 ══════════════════════════════════ */
-.eflow{
+#oracle-page .eflow{
   background:var(--card);
   border:1px solid var(--border2);
   border-radius:var(--radius);
   padding:16px;margin-bottom:8px;
 }
-.eflow-title{
+#oracle-page .eflow-title{
   font-family:var(--bebas);
   font-size:13px;letter-spacing:.14em;
   color:var(--muted2);margin-bottom:14px;
 }
-.erow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.elabel{font-size:10px;color:var(--muted2);width:82px;flex-shrink:0}
-.ebar-wrap{flex:1;background:var(--surface);border-radius:4px;height:7px;overflow:hidden}
-.ebar{height:100%;border-radius:4px;transition:width 1.1s cubic-bezier(.16,1,.3,1)}
-.ef{background:linear-gradient(90deg,#fc5c3c,var(--gold))}
-.ew{background:linear-gradient(90deg,var(--teal),var(--accent))}
-.ewod{background:linear-gradient(90deg,#4cfc9a,#22aa55)}
-.emet{background:linear-gradient(90deg,#c8d4f0,#ffffff)}
-.eear{background:linear-gradient(90deg,var(--gold),#aa8800)}
-.epct{font-family:var(--bebas);font-size:15px;width:36px;text-align:right;flex-shrink:0}
+#oracle-page .erow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+#oracle-page .elabel{font-size:10px;color:var(--muted2);width:82px;flex-shrink:0}
+#oracle-page .ebar-wrap{flex:1;background:var(--surface);border-radius:4px;height:7px;overflow:hidden}
+#oracle-page .ebar{height:100%;border-radius:4px;transition:width 1.1s cubic-bezier(.16,1,.3,1)}
+#oracle-page .ef{background:linear-gradient(90deg,#fc5c3c,var(--gold))}
+#oracle-page .ew{background:linear-gradient(90deg,var(--teal),var(--accent))}
+#oracle-page .ewod{background:linear-gradient(90deg,#4cfc9a,#22aa55)}
+#oracle-page .emet{background:linear-gradient(90deg,#c8d4f0,#ffffff)}
+#oracle-page .eear{background:linear-gradient(90deg,var(--gold),#aa8800)}
+#oracle-page .epct{font-family:var(--bebas);font-size:15px;width:36px;text-align:right;flex-shrink:0}
 
 /* ══════════════════════════════════
    BALLS
 ══════════════════════════════════ */
-.balls-card{
+#oracle-page .balls-card{
   background:var(--card);
   border:1px solid var(--border2);
   border-radius:var(--radius);
@@ -2407,17 +2410,17 @@ body{
   margin-bottom:8px;
   text-align:center;
 }
-.balls-eyebrow{
+#oracle-page .balls-eyebrow{
   font-size:9px;font-weight:700;
   letter-spacing:.2em;text-transform:uppercase;
   color:var(--muted);margin-bottom:14px;
 }
-.balls-row{
+#oracle-page .balls-row{
   display:flex;gap:8px;
   justify-content:center;flex-wrap:wrap;
   margin-bottom:10px;
 }
-.ball{
+#oracle-page .ball{
   width:52px;height:52px;
   border-radius:50%;
   display:flex;align-items:center;justify-content:center;
@@ -2426,14 +2429,14 @@ body{
   box-shadow:0 4px 16px rgba(0,0,0,.5);
   transition:transform .2s;
 }
-.ball:hover{transform:scale(1.08)}
-.b1{background:radial-gradient(circle at 35% 30%,#ffe88a,var(--gold) 55%,#a07800);color:#1a1000;border:2px solid rgba(255,220,80,.5)}
-.b2{background:radial-gradient(circle at 35% 30%,#d8e0f4,var(--silver) 55%,#5a6878);color:#1a1e2a;border:2px solid rgba(168,178,200,.5)}
-.b3{background:radial-gradient(circle at 35% 30%,#e0b080,#b87333 55%,#6a3f10);color:#fff;border:2px solid rgba(184,115,51,.4)}
-.b4{background:radial-gradient(circle at 35% 30%,#aa88ff,var(--accent) 55%,#3a1aaa);color:#fff;border:2px solid rgba(124,92,252,.5)}
-.b5{background:radial-gradient(circle at 35% 30%,#66dd99,#22aa55 55%,#115528);color:#fff;border:2px solid rgba(76,200,120,.4)}
-.b6{background:radial-gradient(circle at 35% 30%,#ff88aa,var(--red) 55%,#aa1133);color:#fff;border:2px solid rgba(252,92,124,.4)}
-.btag{
+#oracle-page .ball:hover{transform:scale(1.08)}
+#oracle-page .b1{background:radial-gradient(circle at 35% 30%,#ffe88a,var(--gold) 55%,#a07800);color:#1a1000;border:2px solid rgba(255,220,80,.5)}
+#oracle-page .b2{background:radial-gradient(circle at 35% 30%,#d8e0f4,var(--silver) 55%,#5a6878);color:#1a1e2a;border:2px solid rgba(168,178,200,.5)}
+#oracle-page .b3{background:radial-gradient(circle at 35% 30%,#e0b080,#b87333 55%,#6a3f10);color:#fff;border:2px solid rgba(184,115,51,.4)}
+#oracle-page .b4{background:radial-gradient(circle at 35% 30%,#aa88ff,var(--accent) 55%,#3a1aaa);color:#fff;border:2px solid rgba(124,92,252,.5)}
+#oracle-page .b5{background:radial-gradient(circle at 35% 30%,#66dd99,#22aa55 55%,#115528);color:#fff;border:2px solid rgba(76,200,120,.4)}
+#oracle-page .b6{background:radial-gradient(circle at 35% 30%,#ff88aa,var(--red) 55%,#aa1133);color:#fff;border:2px solid rgba(252,92,124,.4)}
+#oracle-page .btag{
   position:absolute;bottom:-4px;right:-4px;
   background:rgba(0,0,0,.85);
   border:1px solid var(--border2);
@@ -2442,25 +2445,25 @@ body{
   font-family:var(--inter);font-weight:700;
   white-space:nowrap;
 }
-.balls-note{
+#oracle-page .balls-note{
   font-size:10px;color:var(--muted);
   line-height:1.7;
 }
 
 /* alt combo */
-.alt-card{
+#oracle-page .alt-card{
   background:var(--surface);
   border:1px solid var(--border);
   border-radius:12px;padding:12px;
   text-align:center;margin-bottom:8px;
 }
-.alt-label{
+#oracle-page .alt-label{
   font-size:9px;font-weight:700;
   letter-spacing:.15em;text-transform:uppercase;
   color:var(--muted);margin-bottom:10px;
 }
-.alt-row{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
-.aball{
+#oracle-page .alt-row{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
+#oracle-page .aball{
   width:42px;height:42px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
   font-family:var(--bebas);font-size:17px;
@@ -2469,86 +2472,86 @@ body{
   color:var(--accent2);
   transition:transform .2s;
 }
-.aball:hover{transform:scale(1.08)}
+#oracle-page .aball:hover{transform:scale(1.08)}
 
 /* ══════════════════════════════════
    DIGIT CONVERGENCE
 ══════════════════════════════════ */
-.dgrid{
+#oracle-page .dgrid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
   gap:7px;margin-bottom:7px;
 }
-.dcard{
+#oracle-page .dcard{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:11px;padding:11px 6px;
   text-align:center;transition:border-color .2s;
 }
-.dcard.s8{border-color:var(--gold);background:linear-gradient(160deg,rgba(245,200,66,.1),var(--card))}
-.dcard.s7{border-color:var(--gold)}
-.dcard.s6{border-color:var(--accent)}
-.dcard.s5{border-color:#6644cc}
-.dcard.s4{border-color:#3a3a5a}
-.dnum{font-family:var(--bebas);font-size:28px;line-height:1}
-.dcard.s8 .dnum,.dcard.s7 .dnum{color:var(--gold)}
-.dcard.s6 .dnum{color:var(--accent2)}
-.dcard.s5 .dnum,.dcard.s4 .dnum{color:var(--muted2)}
-.dscore{font-size:9px;color:var(--muted);margin-top:3px}
-.ddots{display:flex;gap:2px;justify-content:center;margin-top:5px;flex-wrap:wrap}
-.dot{
+#oracle-page .dcard.s8{border-color:var(--gold);background:linear-gradient(160deg,rgba(245,200,66,.1),var(--card))}
+#oracle-page .dcard.s7{border-color:var(--gold)}
+#oracle-page .dcard.s6{border-color:var(--accent)}
+#oracle-page .dcard.s5{border-color:#6644cc}
+#oracle-page .dcard.s4{border-color:#3a3a5a}
+#oracle-page .dnum{font-family:var(--bebas);font-size:28px;line-height:1}
+#oracle-page .dcard.s8 .dnum,#oracle-page .dcard.s7 .dnum{color:var(--gold)}
+#oracle-page .dcard.s6 .dnum{color:var(--accent2)}
+#oracle-page .dcard.s5 .dnum,#oracle-page .dcard.s4 .dnum{color:var(--muted2)}
+#oracle-page .dscore{font-size:9px;color:var(--muted);margin-top:3px}
+#oracle-page .ddots{display:flex;gap:2px;justify-content:center;margin-top:5px;flex-wrap:wrap}
+#oracle-page .dot{
   width:15px;height:15px;border-radius:3px;
   display:flex;align-items:center;justify-content:center;
   font-size:7px;font-weight:700;
   border:1px solid transparent;
 }
-.dot.on{background:rgba(124,92,252,.2);border-color:var(--accent);color:var(--accent2)}
-.dot.gold{background:rgba(245,200,66,.15);border-color:rgba(245,200,66,.4);color:var(--gold)}
-.dot.teal{background:rgba(76,200,252,.1);border-color:rgba(76,200,252,.3);color:var(--teal)}
-.dot.off{background:var(--surface);color:var(--muted)}
+#oracle-page .dot.on{background:rgba(124,92,252,.2);border-color:var(--accent);color:var(--accent2)}
+#oracle-page .dot.gold{background:rgba(245,200,66,.15);border-color:rgba(245,200,66,.4);color:var(--gold)}
+#oracle-page .dot.teal{background:rgba(76,200,252,.1);border-color:rgba(76,200,252,.3);color:var(--teal)}
+#oracle-page .dot.off{background:var(--surface);color:var(--muted)}
 
 /* ══════════════════════════════════
    NUMBER MAP
 ══════════════════════════════════ */
-.maprow{
+#oracle-page .maprow{
   display:flex;align-items:center;
   gap:8px;padding:8px 0;
   border-bottom:1px solid var(--border);
 }
-.maprow:last-child{border-bottom:none}
-.mapdig{
+#oracle-page .maprow:last-child{border-bottom:none}
+#oracle-page .mapdig{
   font-family:var(--bebas);font-size:12px;
   color:var(--muted);width:54px;flex-shrink:0;
 }
-.mapnums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
-.mn{
+#oracle-page .mapnums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+#oracle-page .mn{
   font-family:var(--bebas);font-size:15px;
   padding:2px 7px;border-radius:5px;
   border:1px solid var(--border);
 }
-.mn.hot{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
-.mn.warm{background:rgba(124,92,252,.1);border-color:rgba(124,92,252,.3);color:var(--accent2)}
-.mn.cold{background:var(--surface);color:var(--muted2)}
+#oracle-page .mn.hot{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
+#oracle-page .mn.warm{background:rgba(124,92,252,.1);border-color:rgba(124,92,252,.3);color:var(--accent2)}
+#oracle-page .mn.cold{background:var(--surface);color:var(--muted2)}
 
 /* ══════════════════════════════════
    LAYER CARDS
 ══════════════════════════════════ */
-.lcard{
+#oracle-page .lcard{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:var(--radius);
   padding:14px;margin-bottom:8px;
   overflow:hidden;
 }
-.lhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.licon{
+#oracle-page .lhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+#oracle-page .licon{
   width:36px;height:36px;border-radius:9px;
   background:var(--surface);border:1px solid var(--border2);
   display:flex;align-items:center;justify-content:center;
   font-size:16px;flex-shrink:0;
 }
-.lname{font-family:var(--bebas);font-size:15px;letter-spacing:.08em}
-.lnew{
+#oracle-page .lname{font-family:var(--bebas);font-size:15px;letter-spacing:.08em}
+#oracle-page .lnew{
   font-size:8px;font-weight:700;letter-spacing:.1em;
   text-transform:uppercase;
   background:rgba(245,200,66,.1);
@@ -2556,62 +2559,62 @@ body{
   color:var(--gold);border-radius:4px;
   padding:2px 6px;margin-left:6px;
 }
-.lpills{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
-.pill{
+#oracle-page .lpills{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+#oracle-page .pill{
   background:rgba(124,92,252,.1);
   border:1px solid rgba(124,92,252,.28);
   border-radius:5px;padding:2px 8px;
   font-family:var(--bebas);font-size:15px;
   color:var(--accent2);
 }
-.pill.g{background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.25);color:var(--gold)}
-.pill.t{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.25);color:var(--teal)}
-.lsteps{
+#oracle-page .pill.g{background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.25);color:var(--gold)}
+#oracle-page .pill.t{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.25);color:var(--teal)}
+#oracle-page .lsteps{
   font-size:11px;color:var(--muted2);
   line-height:1.9;
   border-top:1px solid var(--border);
   padding-top:10px;
 }
-.lsteps b{color:var(--text)}
-.lsteps .ok{color:var(--green)}
-.lsteps .warn{color:var(--orange)}
+#oracle-page .lsteps b{color:var(--text)}
+#oracle-page .lsteps .ok{color:var(--green)}
+#oracle-page .lsteps .warn{color:var(--orange)}
 
 /* horary sub-grid */
-.hgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.hbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
-.hbox-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
-.hbox-val{font-family:var(--bebas);font-size:15px;color:var(--text);margin-bottom:3px}
-.hbox-sub{font-size:10px;color:var(--muted2);line-height:1.55}
-.arow{font-size:11px;color:var(--muted2);padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5}
-.arow:last-child{border-bottom:none}
-.arow b{color:var(--text)}
+#oracle-page .hgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+#oracle-page .hbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
+#oracle-page .hbox-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
+#oracle-page .hbox-val{font-family:var(--bebas);font-size:15px;color:var(--text);margin-bottom:3px}
+#oracle-page .hbox-sub{font-size:10px;color:var(--muted2);line-height:1.55}
+#oracle-page .arow{font-size:11px;color:var(--muted2);padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5}
+#oracle-page .arow:last-child{border-bottom:none}
+#oracle-page .arow b{color:var(--text)}
 
 /* bazi pillars */
-.bpillars{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
-.bp{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 6px;text-align:center}
-.bp-role{font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-.bp-stem{font-family:var(--bebas);font-size:13px;color:var(--text);line-height:1.3}
-.bp-branch{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.4}
-.bp-nums{display:flex;gap:3px;justify-content:center;margin-top:5px;flex-wrap:wrap}
-.bpn{font-family:var(--bebas);font-size:14px;color:var(--accent2)}
-.bint{font-size:11px;color:var(--muted2);padding:4px 0;border-bottom:1px solid var(--border);margin-top:8px;line-height:1.5}
-.bint:last-child{border-bottom:none}
-.bint b{color:var(--teal)}
+#oracle-page .bpillars{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+#oracle-page .bp{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 6px;text-align:center}
+#oracle-page .bp-role{font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+#oracle-page .bp-stem{font-family:var(--bebas);font-size:13px;color:var(--text);line-height:1.3}
+#oracle-page .bp-branch{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.4}
+#oracle-page .bp-nums{display:flex;gap:3px;justify-content:center;margin-top:5px;flex-wrap:wrap}
+#oracle-page .bpn{font-family:var(--bebas);font-size:14px;color:var(--accent2)}
+#oracle-page .bint{font-size:11px;color:var(--muted2);padding:4px 0;border-bottom:1px solid var(--border);margin-top:8px;line-height:1.5}
+#oracle-page .bint:last-child{border-bottom:none}
+#oracle-page .bint b{color:var(--teal)}
 
 /* i ching */
-.irow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
-.ibox{flex:1;min-width:70px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
-.isym{font-size:22px;margin-bottom:3px}
-.iname{font-family:var(--bebas);font-size:12px;letter-spacing:.05em;color:var(--teal)}
-.imsg{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.5}
-.ichange{font-size:11px;color:var(--muted2);margin-top:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;line-height:1.6}
-.ichange b{color:var(--teal)}
+#oracle-page .irow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+#oracle-page .ibox{flex:1;min-width:70px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
+#oracle-page .isym{font-size:22px;margin-bottom:3px}
+#oracle-page .iname{font-family:var(--bebas);font-size:12px;letter-spacing:.05em;color:var(--teal)}
+#oracle-page .imsg{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.5}
+#oracle-page .ichange{font-size:11px;color:var(--muted2);margin-top:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;line-height:1.6}
+#oracle-page .ichange b{color:var(--teal)}
 
 /* stats */
-.st-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.stbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
-.stitle{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
-.hnum{
+#oracle-page .st-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+#oracle-page .stbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
+#oracle-page .stitle{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+#oracle-page .hnum{
   display:inline-flex;align-items:center;justify-content:center;
   width:29px;height:29px;border-radius:6px;
   font-family:var(--bebas);font-size:14px;
@@ -2620,19 +2623,19 @@ body{
   border:1px solid rgba(245,200,66,.22);
   color:var(--gold);
 }
-.sfrow{display:flex;align-items:center;gap:6px;margin-bottom:5px}
-.sflabel{font-family:var(--bebas);font-size:13px;width:22px;text-align:center;flex-shrink:0}
-.sfwrap{flex:1;background:var(--bg);border-radius:3px;height:5px;overflow:hidden}
-.sffill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--gold));transition:width 1s cubic-bezier(.16,1,.3,1)}
-.sfval{font-size:9px;color:var(--muted);width:22px;text-align:right;flex-shrink:0}
+#oracle-page .sfrow{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+#oracle-page .sflabel{font-family:var(--bebas);font-size:13px;width:22px;text-align:center;flex-shrink:0}
+#oracle-page .sfwrap{flex:1;background:var(--bg);border-radius:3px;height:5px;overflow:hidden}
+#oracle-page .sffill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--gold));transition:width 1s cubic-bezier(.16,1,.3,1)}
+#oracle-page .sfval{font-size:9px;color:var(--muted);width:22px;text-align:right;flex-shrink:0}
 
 /* legend */
-.legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.leg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
-.ldot{width:10px;height:10px;border-radius:2px}
+#oracle-page .legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+#oracle-page .leg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
+#oracle-page .ldot{width:10px;height:10px;border-radius:2px}
 
 /* disclaimer */
-.disc{
+#oracle-page .disc{
   background:var(--surface);
   border:1px solid var(--border);
   border-left:3px solid var(--red);
@@ -2644,7 +2647,7 @@ body{
 /* ══════════════════════════════════
    BOTTOM NAV (JOMERPB style)
 ══════════════════════════════════ */
-.bnav{
+#oracle-page .bnav{
   position:fixed;bottom:0;left:0;right:0;
   height:var(--nav-h);
   background:rgba(10,10,15,.92);
@@ -2656,118 +2659,121 @@ body{
   padding:0 8px;
   z-index:100;
 }
-.bnavitem{
+#oracle-page .bnavitem{
   display:flex;flex-direction:column;
   align-items:center;gap:3px;
   padding:6px 12px;border-radius:10px;
   cursor:pointer;transition:all .2s;
   text-decoration:none;flex:1;
 }
-.bnavitem.active{background:rgba(124,92,252,.12)}
-.bnavitem .bni{font-size:20px}
-.bnavitem .bnl{
+#oracle-page .bnavitem.active{background:rgba(124,92,252,.12)}
+#oracle-page .bnavitem .bni{font-size:20px}
+#oracle-page .bnavitem .bnl{
   font-size:9px;font-weight:700;
   letter-spacing:.08em;text-transform:uppercase;
   color:var(--muted);transition:color .2s;
 }
-.bnavitem.active .bnl{color:var(--accent2)}
+#oracle-page .bnavitem.active .bnl{color:var(--accent2)}
 
 /* ══════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════ */
 @media(max-width:380px){
-  .ball{width:46px;height:46px;font-size:17px}
-  .game-grid{grid-template-columns:repeat(3,1fr)}
-  .bpillars{grid-template-columns:repeat(2,1fr)}
+#oracle-page .ball{width:46px;height:46px;font-size:17px}
+#oracle-page .game-grid{grid-template-columns:repeat(3,1fr)}
+#oracle-page .bpillars{grid-template-columns:repeat(2,1fr)}
 }
-</style>
-</head>
-<body>
 
+</style>
 <!-- HERO -->
-<div class=&quot;hero&quot;>
-  <div class=&quot;hero-brand&quot;>JOMERPB · PH Lotto Oracle</div>
+<div class="hero">
+  <div class="hero-brand">JOMERPB · PH Lotto Oracle</div>
   <h1>LOTTO<br>ORACLE</h1>
-  <p class=&quot;hero-sub&quot;>
+  <p class="hero-sub">
     Current cosmic energy flow · No personal data needed<br>
-    All readings based on what the universe is doing <b style=&quot;color:var(--gold)&quot;>right now</b>
+    All readings based on what the universe is doing <b style="color:var(--gold)">right now</b>
   </p>
-  <div class=&quot;hero-layers&quot;>
-    <span class=&quot;hlayer&quot;>Pythagorean</span>
-    <span class=&quot;hlayer&quot;>Chaldean</span>
-    <span class=&quot;hlayer&quot;>Astrology</span>
-    <span class=&quot;hlayer new&quot;>★ Horary</span>
-    <span class=&quot;hlayer new&quot;>★ Part of Fortune</span>
-    <span class=&quot;hlayer new&quot;>★ Dignities</span>
-    <span class=&quot;hlayer&quot;>BaZi</span>
-    <span class=&quot;hlayer new&quot;>★ Clashes</span>
-    <span class=&quot;hlayer&quot;>Feng Shui</span>
-    <span class=&quot;hlayer new&quot;>★ Lo Shu</span>
-    <span class=&quot;hlayer new&quot;>★ I Ching</span>
-    <span class=&quot;hlayer&quot;>PCSO Data</span>
+  <div class="hero-layers">
+    <span class="hlayer">Pythagorean</span>
+    <span class="hlayer">Chaldean</span>
+    <span class="hlayer">Astrology</span>
+    <span class="hlayer new">★ Horary</span>
+    <span class="hlayer new">★ Part of Fortune</span>
+    <span class="hlayer new">★ Dignities</span>
+    <span class="hlayer">BaZi</span>
+    <span class="hlayer new">★ Clashes</span>
+    <span class="hlayer">Feng Shui</span>
+    <span class="hlayer new">★ Lo Shu</span>
+    <span class="hlayer new">★ I Ching</span>
+    <span class="hlayer">PCSO Data</span>
   </div>
 </div>
 
 <!-- GAME SELECTOR -->
-<div class=&quot;game-wrap page&quot;>
-  <div class=&quot;game-eyebrow&quot;>▸ Select Game</div>
-  <div class=&quot;game-grid&quot; id=&quot;gameGrid&quot;>
-    <button class=&quot;gbtn active&quot; onclick=&quot;setGame('ez2',this)&quot;>
-      <span class=&quot;gn&quot;>EZ2</span><span class=&quot;gs&quot;>2PM · 5PM · 9PM</span>
+<div class="game-wrap page">
+  <div class="game-eyebrow">▸ Select Game</div>
+  <div class="game-grid" id="gameGrid">
+    <button class="gbtn active" onclick="setGame('ez2',this)">
+      <span class="gn">EZ2</span><span class="gs">2PM · 5PM · 9PM</span>
     </button>
-    <button class=&quot;gbtn&quot; onclick=&quot;setGame('642',this)&quot;>
-      <span class=&quot;gn&quot;>6/42</span><span class=&quot;gs&quot;>Tue·Thu·Sat 9PM</span>
+    <button class="gbtn" onclick="setGame('642',this)">
+      <span class="gn">6/42</span><span class="gs">Tue·Thu·Sat 9PM</span>
     </button>
-    <button class=&quot;gbtn&quot; onclick=&quot;setGame('645',this)&quot;>
-      <span class=&quot;gn&quot;>6/45</span><span class=&quot;gs&quot;>Mon·Wed·Fri 9PM</span>
+    <button class="gbtn" onclick="setGame('645',this)">
+      <span class="gn">6/45</span><span class="gs">Mon·Wed·Fri 9PM</span>
     </button>
-    <button class=&quot;gbtn&quot; onclick=&quot;setGame('649',this)&quot;>
-      <span class=&quot;gn&quot;>6/49</span><span class=&quot;gs&quot;>Tue·Thu·Sun 9PM</span>
+    <button class="gbtn" onclick="setGame('649',this)">
+      <span class="gn">6/49</span><span class="gs">Tue·Thu·Sun 9PM</span>
     </button>
-    <button class=&quot;gbtn&quot; onclick=&quot;setGame('655',this)&quot;>
-      <span class=&quot;gn&quot;>6/55</span><span class=&quot;gs&quot;>Mon·Wed·Sat 9PM</span>
+    <button class="gbtn" onclick="setGame('655',this)">
+      <span class="gn">6/55</span><span class="gs">Mon·Wed·Sat 9PM</span>
     </button>
-    <button class=&quot;gbtn&quot; onclick=&quot;setGame('658',this)&quot;>
-      <span class=&quot;gn&quot;>6/58</span><span class=&quot;gs&quot;>Tue·Fri·Sun 9PM</span>
+    <button class="gbtn" onclick="setGame('658',this)">
+      <span class="gn">6/58</span><span class="gs">Tue·Fri·Sun 9PM</span>
     </button>
   </div>
 
   <!-- EZ2 draw time (only shows for EZ2) -->
-  <div id=&quot;ez2wrap&quot; style=&quot;margin-bottom:14px&quot;>
-    <div class=&quot;game-eyebrow&quot;>▸ EZ2 Draw Time</div>
-    <div style=&quot;display:grid;grid-template-columns:repeat(3,1fr);gap:8px&quot;>
-      <button class=&quot;gbtn&quot; onclick=&quot;setDraw('2PM',this)&quot; id=&quot;d2pm&quot;>
-        <span class=&quot;gn&quot;>2PM</span>
+  <div id="ez2wrap" style="margin-bottom:14px">
+    <div class="game-eyebrow">▸ EZ2 Draw Time</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <button class="gbtn" onclick="setDraw('2PM',this)" id="d2pm">
+        <span class="gn">2PM</span>
       </button>
-      <button class=&quot;gbtn&quot; onclick=&quot;setDraw('5PM',this)&quot; id=&quot;d5pm&quot;>
-        <span class=&quot;gn&quot;>5PM</span>
+      <button class="gbtn" onclick="setDraw('5PM',this)" id="d5pm">
+        <span class="gn">5PM</span>
       </button>
-      <button class=&quot;gbtn active&quot; onclick=&quot;setDraw('9PM',this)&quot; id=&quot;d9pm&quot;>
-        <span class=&quot;gn&quot;>9PM</span>
+      <button class="gbtn active" onclick="setDraw('9PM',this)" id="d9pm">
+        <span class="gn">9PM</span>
       </button>
     </div>
   </div>
 
-  <button class=&quot;run-btn&quot; onclick=&quot;generate()&quot;>⚡ RUN EXPERT ORACLE</button>
+  <button class="run-btn" onclick="generate()">⚡ RUN EXPERT ORACLE</button>
 </div>
 
 <!-- LOADER -->
-<div class=&quot;loader page&quot; id=&quot;loader&quot;>
-  <div class=&quot;lring&quot;></div>
-  <div class=&quot;ltitle&quot;>Running 12-layer expert analysis…</div>
-  <div class=&quot;lsteps&quot; id=&quot;lsteps&quot;></div>
+<div class="loader" id="loader">
+  <div class="lring"></div>
+  <div class="ltitle">Running 12-layer expert analysis…</div>
+  <div class="lsteps" id="lsteps"></div>
 </div>
 
 <!-- RESULTS -->
-<div id=&quot;results&quot; class=&quot;page&quot;></div>
+<div id="results"></div>
 
 
 
 <script>
+var _phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
+var _phMo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var TODAY_PH=_phMo[_phNow.getMonth()]+' '+_phNow.getDate()+' '+_phNow.getFullYear();
+var TODAY_PH_FULL=TODAY_PH;
+
 // ══════════════════════════
 // PCSO REAL HISTORICAL DATA
 // ══════════════════════════
-const GAMES={
+var GAMES={
   ez2:{
     name:'EZ2 2D Lotto',short:'EZ2',max:31,
     draws:{
@@ -2813,26 +2819,26 @@ function pad(n){ return String(n).padStart(2,'0'); }
 // ══════════════════════════
 function layerNumerology(drawHour){
   // Pythagorean
-  const ud=reduce(2+7+6+2+0+2+6); // Universal Day: 25→7
-  const h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
-  const combined=reduce(ud+h);
-  const saturn=8; // Saturday=Saturn rules=8
-  const monthYear=reduce(6+1); // June(6)+2026→1=7
+  var ud=reduce(2+7+6+2+0+2+6); // Universal Day: 25→7
+  var h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
+  var combined=reduce(ud+h);
+  var saturn=8; // Saturday=Saturn rules=8
+  var monthYear=reduce(6+1); // June(6)+2026→1=7
   // Day of month = 27 → 2+7=9
-  const dayReduction=reduce(27);
+  var dayReduction=reduce(27);
   // Pythagorean: active digits
-  const pyNums=[...new Set([ud,h,combined,saturn,monthYear,dayReduction])];
+  var pyNums=[...new Set([ud,h,combined,saturn,monthYear,dayReduction])];
 
   // Chaldean system
-  // &quot;PCSO&quot;: P=8,C=3,S=3,O=7 = 21 → 3
-  const pcso=reduce(8+3+3+7); // 3
-  // &quot;LOTTO&quot;: L=3,O=7,T=4,T=4,O=7 = 25 → 7
-  const lotto=reduce(3+7+4+4+7); // 7
-  // &quot;PHILIPPINES&quot;: P=8,H=5,I=1,L=3,I=1,P=8,P=8,I=1,N=5,E=5,S=3 = 48→12→3
-  const phils=reduce(8+5+1+3+1+8+8+1+5+5+3); // 3
-  const chNums=[...new Set([pcso,lotto,phils])];
+  // "PCSO": P=8,C=3,S=3,O=7 = 21 → 3
+  var pcso=reduce(8+3+3+7); // 3
+  // "LOTTO": L=3,O=7,T=4,T=4,O=7 = 25 → 7
+  var lotto=reduce(3+7+4+4+7); // 7
+  // "PHILIPPINES": P=8,H=5,I=1,L=3,I=1,P=8,P=8,I=1,N=5,E=5,S=3 = 48→12→3
+  var phils=reduce(8+5+1+3+1+8+8+1+5+5+3); // 3
+  var chNums=[...new Set([pcso,lotto,phils])];
 
-  const allNums=[...new Set([...pyNums,...chNums])];
+  var allNums=[...new Set([...pyNums,...chNums])];
   return {
     nums:allNums, pyNums, chNums,
     ud,h,combined,saturn,monthYear,dayReduction,
@@ -2843,9 +2849,9 @@ function layerNumerology(drawHour){
       `<b>Draw hour ${drawHour}:</b> → <b>${h}</b> · Combined ${ud}+${h}=${ud+h} → <b>${combined}</b>`,
       `<b>Saturday=Saturn:</b> → <b>${saturn}</b>`,
       `<b>Month(6)+Year(2026→1):</b> → <b>${monthYear}</b>`,
-      `<b>Chaldean — &quot;PCSO&quot;:</b> P(8)+C(3)+S(3)+O(7)=21 → <b>${pcso}</b>`,
-      `<b>Chaldean — &quot;LOTTO&quot;:</b> L(3)+O(7)+T(4)+T(4)+O(7)=25 → <b>${lotto}</b>`,
-      `<b>Chaldean — &quot;PHILIPPINES&quot;:</b> =48→12 → <b>${phils}</b>`,
+      `<b>Chaldean — "PCSO":</b> P(8)+C(3)+S(3)+O(7)=21 → <b>${pcso}</b>`,
+      `<b>Chaldean — "LOTTO":</b> L(3)+O(7)+T(4)+T(4)+O(7)=25 → <b>${lotto}</b>`,
+      `<b>Chaldean — "PHILIPPINES":</b> =48→12 → <b>${phils}</b>`,
     ]
   };
 }
@@ -2855,70 +2861,70 @@ function layerNumerology(drawHour){
 // Real ephemeris + dignities + aspects + Horary + PoF
 // ══════════════════════════
 function layerAstrology(drawHour){
-  // REAL Jun 27 2026 planetary positions (verified)
-  const planets=[
-    {name:'Jupiter ♃',pos:&quot;29°16' Cancer&quot;,sign:'Cancer',deg:29.26,
+  // REAL planetary positions
+  var planets=[
+    {name:'Jupiter ♃',pos:"29°16' Cancer",sign:'Cancer',deg:29.26,
      dignity:'Exalted', // Jupiter is EXALTED in Cancer = maximum strength
      nums:[2,3,7],note:'EXALTED at anaretic 29° = peak power before sign change → luck amplified'},
-    {name:'Moon ☽',pos:&quot;0°45' Sagittarius&quot;,sign:'Sagittarius',deg:0.75,
+    {name:'Moon ☽',pos:"0°45' Sagittarius",sign:'Sagittarius',deg:0.75,
      dignity:'Neutral',phase:'Waxing Gibbous',
      nums:[1,3,9],note:'Waxing=favorable for gain · Sag=3,9 · 0°=new cycle beginning'},
-    {name:'Venus ♀',pos:&quot;15°27' Leo&quot;,sign:'Leo',deg:15.45,
+    {name:'Venus ♀',pos:"15°27' Leo",sign:'Leo',deg:15.45,
      dignity:'Peregrine', // no special dignity in Leo
      nums:[1,4,6],note:'Peregrine but strong by position · Leo=power · Fortune=6'},
-    {name:'Mars ♂',pos:&quot;28°35' Taurus&quot;,sign:'Taurus',deg:28.58,
+    {name:'Mars ♂',pos:"28°35' Taurus",sign:'Taurus',deg:28.58,
      dignity:'Detriment', // Mars in Taurus = detriment (weak)
      nums:[9],note:'In DETRIMENT = weak aggressive energy · cautious number'},
-    {name:'Mercury ☿',pos:&quot;25°56' Cancer&quot;,sign:'Cancer',deg:25.93,
+    {name:'Mercury ☿',pos:"25°56' Cancer",sign:'Cancer',deg:25.93,
      dignity:'Peregrine',rx:'Pre-Rx shadow',
      nums:[2,7],note:'Almost stationary pre-Rx · concentrated mental energy'},
-    {name:'Saturn ♄',pos:&quot;13°59' Aries&quot;,sign:'Aries',deg:13.98,
+    {name:'Saturn ♄',pos:"13°59' Aries",sign:'Aries',deg:13.98,
      dignity:'Detriment', // Saturn in Aries = detriment
      nums:[4,8],note:'In DETRIMENT · structure challenged · 13°=4'},
-    {name:'Sun ☉',pos:&quot;6°12' Cancer&quot;,sign:'Cancer',deg:6.12,
+    {name:'Sun ☉',pos:"6°12' Cancer",sign:'Cancer',deg:6.12,
      dignity:'Neutral',
      nums:[6,1],note:'6°=6 · Cancer=2 · vitality energy'},
   ];
 
   // Essential dignity summary — use only planets with dignity
-  const strongPlanets=planets.filter(p=>p.dignity==='Exalted'||p.dignity==='Domicile');
+  var strongPlanets=planets.filter(p=>p.dignity==='Exalted'||p.dignity==='Domicile');
   // Jupiter exalted = dominant influence → 2,3,7 heavily weighted
 
-  // HORARY ASTROLOGY — 9PM Manila Jun 27 2026 (Regiomontanus system)
+  // HORARY ASTROLOGY
   // At 9PM Manila UTC+8 = 13:00 UTC
   // Approximate ASC at Manila 9PM: Capricorn ~10-15° rising
   // Check strictures: ASC ~12° Capricorn = OK (3-27° range = radical chart)
   // Moon is NOT void of course (Moon in Sag still making aspects to Jupiter)
   // Moon NOT in Via Combusta (15°Libra-15°Scorpio) → Sag is clear
   // Chart is RADICAL = valid for judgment
-  const horaryASC='Capricorn ~12°';
-  const horaryASCRuler='Saturn (traditional)';
+  var horaryASC='Capricorn ~12°';
+  var horaryASCRuler='Saturn (traditional)';
   // 5th house from Capricorn = Taurus
-  const h5sign='Taurus';
-  const h5ruler='Venus'; // Taurus ruler = Venus
-  const h5rulerPos=&quot;15°27' Leo&quot;;
-  const h5dignity='Peregrine (but in strong Leo)';
+  var h5sign='Taurus';
+  var h5ruler='Venus'; // Taurus ruler = Venus
+  var h5rulerPos="15°27' Leo";
+  var h5dignity='Peregrine (but in strong Leo)';
   // Venus applies to aspect? Venus at 15°Leo, applying sextile to Jupiter at 29°Cancer
   // Sextile = 60° apart → Leo 15° to Cancer 29° = difference ~46° ≈ separating
   // BUT: Venus applying to conjunction with Sun (same sign Leo, Sun at ~6°, Venus at 15° → Sun moving away)
   // Venus is APPLYING to North Node area = positive for fortune
-  const h5aspect='Venus separating from Sun, applying toward North Node — fortune energy building';
-  const h5nums=[6,1,4];
+  var h5aspect='Venus separating from Sun, applying toward North Node — fortune energy building';
+  var h5nums=[6,1,4];
 
   // Part of Fortune (day chart: Sun above horizon at 9PM? No, Sun sets ~7:47PM Manila)
   // 9PM = night chart
   // Night chart PoF = ASC + Sun - Moon
   // ASC ~285° (Capricorn 15°), Sun ~96° (Cancer 6°), Moon ~241° (Sag 1°)
   // Night: PoF = 285 + 96 - 241 = 140° = 20° Leo
-  const pofSign='Leo';
-  const pofDeg=20;
+  var pofSign='Leo';
+  var pofDeg=20;
   // 20° Leo = 2+0=2
-  const pofDigit=reduce(20);
-  const pofRuler='Sun';
-  const pofNums=[pofDigit,1,4]; // Leo+Sun
+  var pofDigit=reduce(20);
+  var pofRuler='Sun';
+  var pofNums=[pofDigit,1,4]; // Leo+Sun
 
   // Key planetary aspects (applying only = valid in horary)
-  const aspects=[
+  var aspects=[
     {asp:'Moon ☽ trine Jupiter ♃',nature:'favorable',
      note:'Applying (Moon at 0°Sag → Jupiter at 29°Cancer = fire/water signs, 121° = trine)',
      nums:[9,3,7]},
@@ -2939,7 +2945,7 @@ function layerAstrology(drawHour){
      nums:[7,2]},
   ];
 
-  const allNums=[...new Set([
+  var allNums=[...new Set([
     ...planets.flatMap(p=>p.nums),
     ...h5nums,...pofNums,
     ...aspects.filter(a=>a.nature==='favorable').flatMap(a=>a.nums)
@@ -2963,24 +2969,24 @@ function layerAstrology(drawHour){
 // Exact pillars + clashes + combines + hidden stems
 // ══════════════════════════
 function layerBazi(drawHour){
-  // EXACT Jun 27 2026 pillars (verified: Jun 26=Metal Goat, Jun 27=Water Monkey)
-  const year ={stem:'Bing 丙',stemEl:'Yang Fire',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire',nums:[2,7]};
-  const month={stem:'Wu 戊',stemEl:'Yang Earth',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire+Earth',nums:[2,5,7]};
-  const day  ={stem:'Ren 壬',stemEl:'Yang Water',branch:'Shen 申',branchEl:'Monkey/Metal',el:'Water+Metal',nums:[1,6,7]};
+  // EXACT BaZi pillars
+  var year ={stem:'Bing 丙',stemEl:'Yang Fire',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire',nums:[2,7]};
+  var month={stem:'Wu 戊',stemEl:'Yang Earth',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire+Earth',nums:[2,5,7]};
+  var day  ={stem:'Ren 壬',stemEl:'Yang Water',branch:'Shen 申',branchEl:'Monkey/Metal',el:'Water+Metal',nums:[1,6,7]};
 
   // Hour pillar: Ren day → Hai hour (9PM) stem = Jia (Yang Wood)
   // 2PM = Wei(Goat) hour → Geng stem (Yang Metal) → Earth+Metal → 6,7,8
   // 5PM = You(Rooster) → Ren stem (Yang Water) → Metal+Water → 1,6,7
   // 9PM = Hai(Pig) → Jia stem (Yang Wood) → Wood+Water → 1,3,6
-  const hourMap={
+  var hourMap={
     '2PM':{stem:'Geng 庚',stemEl:'Yang Metal',branch:'Wei 未',branchEl:'Goat/Earth',el:'Metal+Earth',nums:[6,7,8]},
     '5PM':{stem:'Ren 壬',stemEl:'Yang Water',branch:'You 酉',branchEl:'Rooster/Metal',el:'Water+Metal',nums:[1,6,7]},
     '9PM':{stem:'Jia 甲',stemEl:'Yang Wood',branch:'Hai 亥',branchEl:'Pig/Water',el:'Wood+Water',nums:[1,3,6]},
   };
-  const hour=hourMap[drawHour];
+  var hour=hourMap[drawHour];
 
   // HIDDEN STEMS in earthly branches
-  const hidden={
+  var hidden={
     'Wu午':'Ding(Fire)+Ji(Earth) → 2,5',
     'Shen申':'Geng(Metal)+Ren(Water)+Wu(Earth) → 1,5,6,7',
     'Hai亥':'Ren(Water)+Jia(Wood) → 1,3,6',
@@ -3002,7 +3008,7 @@ function layerBazi(drawHour){
   // Wu(Horse)+Wei(Goat) = Fire+Earth combination = at 2PM: year Wu + hour Wei = combine
 
   // Element balance (dominant)
-  const elemCount={Fire:3,Earth:2,Metal:2,Water:3,Wood:1};
+  var elemCount={Fire:3,Earth:2,Metal:2,Water:3,Wood:1};
   if(drawHour==='2PM'){ elemCount.Metal+=1; elemCount.Earth+=1; }
   if(drawHour==='5PM'){ elemCount.Water+=1; elemCount.Metal+=1; }
   if(drawHour==='9PM'){ elemCount.Water+=1; elemCount.Wood+=1; }
@@ -3011,7 +3017,7 @@ function layerBazi(drawHour){
   // Water conquers Fire (year element) = Fire slightly weakened
   // Metal (month day branch Shen) produces Water = Water very strong today
 
-  const interactions=[
+  var interactions=[
     {type:'Day Master',desc:'Ren 壬 (Yang Water) = your reading anchor · Water controls Fire (year) · strongest element today'},
     {type:'Day Branch Shen',desc:'Hidden stems: Geng(Metal)+Ren(Water)+Wu(Earth) → Metal feeds Water → <b>1,6,7</b> reinforced'},
     {type:'Year+Month Wu+Wu',desc:'Double Horse = Fire amplification · No clash (same branch) → stable Fire → <b>2,7</b> steady'},
@@ -3019,7 +3025,7 @@ function layerBazi(drawHour){
     {type:'Dominant Elements',desc:`Fire×${elemCount.Fire} + Water×${elemCount.Water} = equal peak · dynamic tension = numbers fluctuate`},
   ];
 
-  const allNums=[...new Set([...year.nums,...month.nums,...day.nums,...hour.nums])];
+  var allNums=[...new Set([...year.nums,...month.nums,...day.nums,...hour.nums])];
   return {
     nums:allNums,year,month,day,hour,hidden,elemCount,interactions,
     steps:[
@@ -3041,7 +3047,7 @@ function layerFengshui(){
   // Annual 2026 base star = 9
   // Monthly June 2026 base = 8 (Gen/Earth/NE)
   // Lo Shu grid for June 2026 (monthly star 8 in center)
-  const loShu={
+  var loShu={
     NW:6, N:2, NE:4,
     W:7,  C:8,  E:9,
     SW:3, S:1, SE:5
@@ -3092,14 +3098,14 @@ function layerIChing(drawHour){
   // Meaning: Great gathering, assembly, collective energy
   // For speculation/lottery: favorable — collective fortune energy concentrated
   // King comes to temple = auspicious ceremony = official blessing
-  const hex={
+  var hex={
     num:45,name:'Cui 萃',english:'Gathering / Assembly',
     upper:{sym:'☷',name:'Kun (Earth)'},
     lower:{sym:'☱',name:'Dui (Lake/Joy)'},
     meaning:'Collective energy gathers · Water collects under Earth · Great assembly of fortune',
     gambling:'Highly auspicious — energy is converging and concentrating · Favorable for joining collective games like lottery · Fortune assembles when people gather around common goal',
     nums:[5,8,2], // Earth+Water = 5,8 + gathering=2
-    changingLine:`Hour of ${drawHour} activates Line 4: &quot;Great good fortune — no blame&quot; · Receiving blessings from above`,
+    changingLine:`Hour of ${drawHour} activates Line 4: "Great good fortune — no blame" · Receiving blessings from above`,
     nuclear:{num:53,name:'Jian (Gradual Progress)'},
   };
 
@@ -3121,30 +3127,30 @@ function layerIChing(drawHour){
 // LAYER 6: STATS — Game-specific
 // ══════════════════════════
 function layerStats(gameKey,drawHour){
-  const game=GAMES[gameKey];
-  const isEZ2=gameKey==='ez2';
-  const draws=isEZ2?game.draws[drawHour]:game.recent;
-  const hotNums=isEZ2?game.hot[drawHour]:game.hot;
+  var game=GAMES[gameKey];
+  var isEZ2=gameKey==='ez2';
+  var draws=isEZ2?game.draws[drawHour]:game.recent;
+  var hotNums=isEZ2?game.hot[drawHour]:game.hot;
 
-  const freq={};
-  for(let i=1;i<=game.max;i++) freq[i]=0;
-  draws.forEach(draw=>draw.forEach(n=>{ if(n>=1&amp;&amp;n<=game.max) freq[n]++; }));
+  var freq={};
+  for(var i=1;i<=game.max;i++) freq[i]=0;
+  draws.forEach(draw=>draw.forEach(n=>{ if(n>=1&&n<=game.max) freq[n]++; }));
 
-  const lastSeen={};
-  for(let i=0;i<draws.length;i++)
+  var lastSeen={};
+  for(var i=0;i<draws.length;i++)
     draws[i].forEach(n=>{ if(!(n in lastSeen)) lastSeen[n]=i; });
 
-  const digitWeight={};
-  for(let d=1;d<=9;d++) digitWeight[d]=0;
-  for(let n=1;n<=game.max;n++){
-    const d=digitOf(n);
-    let w=(freq[n]||0)*6; // boosted from 4 to 6 (stats=3x weight)
-    if(hotNums.includes(n)) w+=9; // boosted from 6 to 9
-    const gap=lastSeen[n]??draws.length;
-    if(gap>=Math.floor(draws.length*0.5)) w+=7; // boosted from 5 to 7
+  var digitWeight={};
+  for(var d=1;d<=9;d++) digitWeight[d]=0;
+  for(var n=1;n<=game.max;n++){
+    var d=digitOf(n);
+    var w=(freq[n]||0)*4;
+    if(hotNums.includes(n)) w+=6;
+    var gap=lastSeen[n]??draws.length;
+    if(gap>=Math.floor(draws.length*0.5)) w+=5; // overdue
     digitWeight[d]=(digitWeight[d]||0)+w;
   }
-  const topDigits=Object.entries(digitWeight).sort((a,b)=>b[1]-a[1]).map(e=>parseInt(e[0]));
+  var topDigits=Object.entries(digitWeight).sort((a,b)=>b[1]-a[1]).map(e=>parseInt(e[0]));
 
   return {freq,lastSeen,digitWeight,topDigits,nums:topDigits.slice(0,5),hotNums,draws};
 }
@@ -3153,7 +3159,7 @@ function layerStats(gameKey,drawHour){
 // ELEMENT ENERGY
 // ══════════════════════════
 function calcEnergy(bazi,astro,fs){
-  const el={Fire:0,Water:0,Wood:0,Metal:0,Earth:0};
+  var el={Fire:0,Water:0,Wood:0,Metal:0,Earth:0};
   // BaZi weight
   el.Fire+=bazi.elemCount.Fire||0;
   el.Water+=bazi.elemCount.Water||0;
@@ -3164,7 +3170,7 @@ function calcEnergy(bazi,astro,fs){
   el.Water+=3; el.Fire+=2; el.Earth+=1;
   // FS: Period9=Fire, Star8=Earth
   el.Fire+=2; el.Earth+=2;
-  const total=Object.values(el).reduce((a,b)=>a+b,0);
+  var total=Object.values(el).reduce((a,b)=>a+b,0);
   return Object.fromEntries(Object.entries(el).map(([k,v])=>[k,{val:v,pct:Math.round(v/total*100)}]));
 }
 
@@ -3172,71 +3178,63 @@ function calcEnergy(bazi,astro,fs){
 // MASTER CONVERGENCE — 8 digit sources
 // ══════════════════════════
 function convergence(layers,gameKey){
-  const game=GAMES[gameKey];
-  const LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
-  // RECALIBRATED WEIGHTS (based on Jun 27 2026 2PM+5PM confirmed results)
-  // Astrology=3pts, Stats=3pts, PoF=2pts, all others=1pt
-  // Hit rates: Astrology=75%, Stats=75%, PoF=50%, others=25%
-  const WEIGHTS=[1,1,3,1,1,1,2,3]; // Py,Ch,As,Ba,Fs,IC,PoF,St
-  const digitScores={};
-  for(let d=1;d<=9;d++){
-    const inL=[];
-    let weightedScore=0;
-    const checks=[
-      layers.num.pyNums.includes(d),
-      layers.num.chNums.map(n=>reduce(n)).includes(d),
-      layers.astro.nums.includes(d),
-      layers.bazi.nums.includes(d),
-      layers.fs.nums.includes(d),
-      layers.iching.nums.includes(d),
-      layers.astro.pofNums.includes(d),
-      layers.stats.topDigits.slice(0,4).includes(d),
-    ];
-    checks.forEach((hit,i)=>{ if(hit){ inL.push(i); weightedScore+=WEIGHTS[i]; } });
-    digitScores[d]={count:inL.length,layers:inL,statWeight:layers.stats.digitWeight[d]||0,weightedScore};
+  var game=GAMES[gameKey];
+  var LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
+  var digitScores={};
+  for(var d=1;d<=9;d++){
+    var inL=[];
+    if(layers.num.pyNums.includes(d)) inL.push(0);
+    if(layers.num.chNums.map(n=>reduce(n)).includes(d)) inL.push(1);
+    if(layers.astro.nums.includes(d)) inL.push(2);
+    if(layers.bazi.nums.includes(d)) inL.push(3);
+    if(layers.fs.nums.includes(d)) inL.push(4);
+    if(layers.iching.nums.includes(d)) inL.push(5);
+    if(layers.astro.pofNums.includes(d)) inL.push(6);
+    if(layers.stats.topDigits.slice(0,4).includes(d)) inL.push(7);
+    digitScores[d]={count:inL.length,layers:inL,statWeight:layers.stats.digitWeight[d]||0};
   }
-  const sorted=Object.entries(digitScores)
+  var sorted=Object.entries(digitScores)
     .map(([d,s])=>({digit:parseInt(d),...s}))
-    .sort((a,b)=>b.weightedScore-a.weightedScore||b.statWeight-a.statWeight);
+    .sort((a,b)=>b.count-a.count||b.statWeight-a.statWeight);
 
-  const digitToNums={};
-  for(let d=1;d<=9;d++){
+  var digitToNums={};
+  for(var d=1;d<=9;d++){
     digitToNums[d]=[];
-    for(let n=1;n<=game.max;n++)
+    for(var n=1;n<=game.max;n++)
       if(digitOf(n)===d) digitToNums[d].push(n);
   }
 
-  const hotNums=layers.stats.hotNums;
+  var hotNums=layers.stats.hotNums;
   function bestNums(digit){
     return (digitToNums[digit]||[]).sort((a,b)=>{
-      const sA=(layers.stats.freq[a]||0)*4+(hotNums.includes(a)?6:0);
-      const sB=(layers.stats.freq[b]||0)*4+(hotNums.includes(b)?6:0);
+      var sA=(layers.stats.freq[a]||0)*4+(hotNums.includes(a)?6:0);
+      var sB=(layers.stats.freq[b]||0)*4+(hotNums.includes(b)?6:0);
       return sB-sA;
     });
   }
 
-  const isEZ2=gameKey==='ez2';
-  const needed=isEZ2?2:6;
-  const picks=[];
-  for(const ds of sorted){
+  var isEZ2=gameKey==='ez2';
+  var needed=isEZ2?2:6;
+  var picks=[];
+  for(var ds of sorted){
     if(picks.length>=needed) break;
-    const bns=bestNums(ds.digit);
-    if(bns.length&amp;&amp;!picks.includes(bns[0])) picks.push(bns[0]);
+    var bns=bestNums(ds.digit);
+    if(bns.length&&!picks.includes(bns[0])) picks.push(bns[0]);
   }
   if(picks.length<needed){
-    for(const ds of sorted){
+    for(var ds of sorted){
       if(picks.length>=needed) break;
-      for(const n of bestNums(ds.digit))
+      for(var n of bestNums(ds.digit))
         if(!picks.includes(n)){ picks.push(n); break; }
     }
   }
   picks.sort((a,b)=>a-b);
 
-  const altPicks=[];
-  for(const ds of sorted){
+  var altPicks=[];
+  for(var ds of sorted){
     if(altPicks.length>=needed) break;
-    const bns=bestNums(ds.digit);
-    const alt=bns.find(n=>!picks.includes(n)&amp;&amp;!altPicks.includes(n));
+    var bns=bestNums(ds.digit);
+    var alt=bns.find(n=>!picks.includes(n)&&!altPicks.includes(n));
     if(alt) altPicks.push(alt);
   }
   altPicks.sort((a,b)=>a-b);
@@ -3247,8 +3245,8 @@ function convergence(layers,gameKey){
 // ══════════════════════════
 // STATE
 // ══════════════════════════
-let currentGame='ez2';
-let currentDraw='9PM';
+var currentGame='ez2';
+var currentDraw='9PM';
 
 function setGame(g,btn){
   currentGame=g;
@@ -3264,12 +3262,15 @@ function setDraw(d,btn){
 }
 
 function generate(){
-  const dh=currentGame==='ez2'?currentDraw:'9PM';
+  var dh=currentGame==='ez2'?currentDraw:'9PM';
   document.getElementById('results').style.display='none';
   document.getElementById('loader').style.display='block';
-  const game=GAMES[currentGame];
-  const msgs=[
-    `🔢 Pythagorean + Chaldean numerology · Jun 27 2026 ${dh}…`,
+  var gw=document.querySelector('#oracle-page .game-wrap');
+  if(gw) gw.style.display='none';
+  document.getElementById('loader').scrollIntoView({behavior:'smooth',block:'start'});
+  var game=GAMES[currentGame];
+  var msgs=[
+    `🔢 Pythagorean + Chaldean numerology · ${TODAY_PH} ${dh}…`,
     `🪐 Real planetary positions + essential dignities…`,
     `🏛️ Horary chart — Regiomontanus · 5th house gambling…`,
     `⭐ Part of Fortune · night chart calculation…`,
@@ -3281,24 +3282,26 @@ function generate(){
     `📊 PCSO ${game.short} historical data · freq+hot+overdue…`,
     `🎯 8-source digit convergence · mapping to 1–${game.max}…`,
   ];
-  let si=0;
-  const el=document.getElementById('lsteps');
+  var si=0;
+  var el=document.getElementById('lsteps');
   el.innerHTML='';
-  const iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
+  var iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
   setTimeout(()=>{
     clearInterval(iv);
-    const num=layerNumerology(dh);
-    const astro=layerAstrology(dh);
-    const bazi=layerBazi(dh);
-    const fs=layerFengshui();
-    const iching=layerIChing(dh);
-    const stats=layerStats(currentGame,dh);
-    const energy=calcEnergy(bazi,astro,fs);
-    const layers={num,astro,bazi,fs,iching,stats};
-    const conv=convergence(layers,currentGame);
+    var num=layerNumerology(dh);
+    var astro=layerAstrology(dh);
+    var bazi=layerBazi(dh);
+    var fs=layerFengshui();
+    var iching=layerIChing(dh);
+    var stats=layerStats(currentGame,dh);
+    var energy=calcEnergy(bazi,astro,fs);
+    var layers={num,astro,bazi,fs,iching,stats};
+    var conv=convergence(layers,currentGame);
     document.getElementById('loader').style.display='none';
     renderResults(layers,conv,energy,currentGame,dh);
     document.getElementById('results').style.display='block';
+    var gw2=document.querySelector('#oracle-page .game-wrap');
+    if(gw2) gw2.style.display='block';
     document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
     setTimeout(animateBars,180);
   },2800);
@@ -3307,235 +3310,230 @@ function generate(){
 // ══════════════════════════
 // RENDER
 // ══════════════════════════
-const BTIERS=['b1','b2','b3','b4','b5','b6'];
+var BTIERS=['b1','b2','b3','b4','b5','b6'];
 function dotHTML(idxs,labels){
-  const icons=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
-  const cls=['on','on','on','on','on','teal','teal','gold'];
-  return labels.map((l,i)=>`<span class=&quot;dot ${idxs.includes(i)?cls[i]:'off'}&quot; title=&quot;${l}&quot;>${icons[i]}</span>`).join('');
+  var icons=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
+  var cls=['on','on','on','on','on','teal','teal','gold'];
+  return labels.map((l,i)=>`<span class="dot ${idxs.includes(i)?cls[i]:'off'}" title="${l}">${icons[i]}</span>`).join('');
 }
-function dCls(c,w){ w=w||c; return w>=10?'s8':w>=8?'s7':w>=6?'s6':w>=4?'s5':'s4'; }
+function dCls(c){ return c>=8?'s8':c>=7?'s7':c>=6?'s6':c>=5?'s5':'s4'; }
 
 function renderResults(layers,conv,energy,gameKey,drawHour){
-  const game=GAMES[gameKey];
-  const isEZ2=gameKey==='ez2';
+  var game=GAMES[gameKey];
+  var isEZ2=gameKey==='ez2';
 
   // Energy bars
-  const elOrder=['Fire','Water','Wood','Metal','Earth'];
-  const elCls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
-  const elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
-  const energyHTML=elOrder.map(e=>`
-    <div class=&quot;erow&quot;>
-      <span class=&quot;elabel&quot;>${elEmoji[e]} ${e}</span>
-      <div class=&quot;ebar-wrap&quot;><div class=&quot;ebar ${elCls[e]}&quot; style=&quot;width:0%&quot; data-w=&quot;${energy[e].pct}%&quot;></div></div>
-      <span class=&quot;epct&quot; style=&quot;color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}&quot;>${energy[e].pct}%</span>
+  var elOrder=['Fire','Water','Wood','Metal','Earth'];
+  var elCls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
+  var elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
+  var energyHTML=elOrder.map(e=>`
+    <div class="erow">
+      <span class="elabel">${elEmoji[e]} ${e}</span>
+      <div class="ebar-wrap"><div class="ebar ${elCls[e]}" style="width:0%" data-w="${energy[e].pct}%"></div></div>
+      <span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span>
     </div>`).join('');
 
   // Balls
-  const ballsHTML=conv.picks.map((n,i)=>{
-    const d=digitOf(n);
-    const ds=conv.digitScores[d];
-    return `<div class=&quot;ball ${BTIERS[Math.min(i,5)]}&quot;>
-      ${pad(n)}<span class=&quot;btag&quot;>d${d}·w${ds.weightedScore}</span>
+  var ballsHTML=conv.picks.map((n,i)=>{
+    var d=digitOf(n);
+    var ds=conv.digitScores[d];
+    return `<div class="ball ${BTIERS[Math.min(i,5)]}">
+      ${pad(n)}<span class="btag">d${d}·${ds.count}/8</span>
     </div>`;
   }).join('');
-  const altHTML=conv.altPicks.map(n=>`<div class=&quot;aball&quot;>${pad(n)}</div>`).join('');
+  var altHTML=conv.altPicks.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
 
   // Digit cards
-  const digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
-    <div class=&quot;dcard ${dCls(s.count,s.weightedScore)}&quot;>
-      <div class=&quot;dnum&quot;>${s.digit}</div>
-      <div class=&quot;dscore&quot;>${s.count}/8 · Wt:${s.weightedScore}</div>
-      <div class=&quot;ddots&quot;>${dotHTML(s.layers,conv.LABELS)}</div>
+  var digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
+    <div class="dcard ${dCls(s.count)}">
+      <div class="dnum">${s.digit}</div>
+      <div class="dscore">${s.count}/8 layers</div>
+      <div class="ddots">${dotHTML(s.layers,conv.LABELS)}</div>
     </div>`).join('');
 
   // Map
-  const hotNums=layers.stats.hotNums;
-  const mapHTML=conv.sorted.slice(0,5).map(s=>{
-    const nums=conv.digitToNums[s.digit]||[];
-    return `<div class=&quot;maprow&quot;>
-      <span class=&quot;mapdig&quot;>Digit <b>${s.digit}</b> <span style=&quot;color:var(--muted)&quot;>(${s.count}/8)</span></span>
-      <div class=&quot;mapnums&quot;>${nums.map(n=>{
-        const cls=hotNums.includes(n)?'hot':(layers.stats.freq[n]||0)>=2?'warm':'cold';
-        return `<span class=&quot;mn ${cls}&quot;>${pad(n)}</span>`;
+  var hotNums=layers.stats.hotNums;
+  var mapHTML=conv.sorted.slice(0,5).map(s=>{
+    var nums=conv.digitToNums[s.digit]||[];
+    return `<div class="maprow">
+      <span class="mapdig">Digit <b>${s.digit}</b> <span style="color:var(--muted)">(${s.count}/8)</span></span>
+      <div class="mapnums">${nums.map(n=>{
+        var cls=hotNums.includes(n)?'hot':(layers.stats.freq[n]||0)>=2?'warm':'cold';
+        return `<span class="mn ${cls}">${pad(n)}</span>`;
       }).join('')}</div>
     </div>`;
   }).join('');
 
   // Horary sub-panel
-  const horaryHTML=`
-    <div class=&quot;hgrid&quot;>
-      <div class=&quot;hbox&quot;>
-        <div class=&quot;hbox-title&quot;>Ascendant</div>
-        <div class=&quot;hbox-val&quot;>${layers.astro.horaryASC}</div>
-        <div class=&quot;hbox-sub&quot;>Ruler: ${layers.astro.horaryASCRuler}<br>Chart is radical ✓<br>Moon not void ✓<br>Not Via Combusta ✓</div>
+  var horaryHTML=`
+    <div class="hgrid">
+      <div class="hbox">
+        <div class="hbox-title">Ascendant</div>
+        <div class="hbox-val">${layers.astro.horaryASC}</div>
+        <div class="hbox-sub">Ruler: ${layers.astro.horaryASCRuler}<br>Chart is radical ✓<br>Moon not void ✓<br>Not Via Combusta ✓</div>
       </div>
-      <div class=&quot;hbox&quot;>
-        <div class=&quot;hbox-title&quot;>5th House (Gambling)</div>
-        <div class=&quot;hbox-val&quot;>${layers.astro.h5sign}</div>
-        <div class=&quot;hbox-sub&quot;>Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}</div>
+      <div class="hbox">
+        <div class="hbox-title">5th House (Gambling)</div>
+        <div class="hbox-val">${layers.astro.h5sign}</div>
+        <div class="hbox-sub">Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}</div>
       </div>
-      <div class=&quot;hbox&quot;>
-        <div class=&quot;hbox-title&quot;>Part of Fortune ⊕</div>
-        <div class=&quot;hbox-val&quot;>~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
-        <div class=&quot;hbox-sub&quot;>Night chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
+      <div class="hbox">
+        <div class="hbox-title">Part of Fortune ⊕</div>
+        <div class="hbox-val">~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
+        <div class="hbox-sub">Night chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
       </div>
-      <div class=&quot;hbox&quot;>
-        <div class=&quot;hbox-title&quot;>Jupiter Status</div>
-        <div class=&quot;hbox-val&quot; style=&quot;color:var(--green)&quot;>EXALTED ★</div>
-        <div class=&quot;hbox-sub&quot;>29°16' Cancer<br>Anaretic degree<br>Peak luck energy</div>
+      <div class="hbox">
+        <div class="hbox-title">Jupiter Status</div>
+        <div class="hbox-val" style="color:var(--green)">EXALTED ★</div>
+        <div class="hbox-sub">29°16' Cancer<br>Anaretic degree<br>Peak luck energy</div>
       </div>
     </div>
-    <div style=&quot;margin-top:8px&quot;>
-      ${layers.astro.aspects.map(a=>`<div class=&quot;arow&quot;>
-        <span style=&quot;color:${a.nature==='favorable'?'var(--green)':a.nature==='caution'?'var(--orange)':'var(--red)'}&quot;>${a.nature==='favorable'?'✓':a.nature==='caution'?'⚠':'⚡'}</span>
+    <div style="margin-top:8px">
+      ${layers.astro.aspects.map(a=>`<div class="arow">
+        <span style="color:${a.nature==='favorable'?'var(--green)':a.nature==='caution'?'var(--orange)':'var(--red)'}">${a.nature==='favorable'?'✓':a.nature==='caution'?'⚠':'⚡'}</span>
         <b> ${a.asp}</b> — ${a.note}
       </div>`).join('')}
     </div>`;
 
   // BaZi panel
-  const baziHTML=`
-    <div class=&quot;bpillars&quot;>
+  var baziHTML=`
+    <div class="bpillars">
       ${[layers.bazi.year,layers.bazi.month,layers.bazi.day,layers.bazi.hour].map((p,i)=>`
-        <div class=&quot;bp&quot;>
-          <div class=&quot;bp-role&quot;>${['Year','Month','Day','Hour'][i]}</div>
-          <div class=&quot;bp-stem&quot;>${p.stem}</div>
-          <div class=&quot;bp-branch&quot;>${p.branch}</div>
-          <div class=&quot;bp-nums&quot;>${p.nums.map(n=>`<span class=&quot;bpn&quot;>${n}</span>`).join('')}</div>
+        <div class="bp">
+          <div class="bp-role">${['Year','Month','Day','Hour'][i]}</div>
+          <div class="bp-stem">${p.stem}</div>
+          <div class="bp-branch">${p.branch}</div>
+          <div class="bp-nums">${p.nums.map(n=>`<span class="bpn">${n}</span>`).join('')}</div>
         </div>`).join('')}
     </div>
-    ${layers.bazi.interactions.map(x=>`<div class=&quot;bint&quot;><b>${x.type}:</b> ${x.desc}</div>`).join('')}`;
+    ${layers.bazi.interactions.map(x=>`<div class="bint"><b>${x.type}:</b> ${x.desc}</div>`).join('')}`;
 
   // I Ching panel
-  const ichingHTML=`
-    <div class=&quot;irow&quot;>
-      <div class=&quot;ibox&quot;>
-        <div class=&quot;isym&quot;>${layers.iching.hex.upper.sym}</div>
-        <div class=&quot;iname&quot;>${layers.iching.hex.upper.name}</div>
-        <div class=&quot;imsg&quot;>Upper</div>
+  var ichingHTML=`
+    <div class="irow">
+      <div class="ibox">
+        <div class="isym">${layers.iching.hex.upper.sym}</div>
+        <div class="iname">${layers.iching.hex.upper.name}</div>
+        <div class="imsg">Upper</div>
       </div>
-      <div class=&quot;ibox&quot; style=&quot;flex:2&quot;>
-        <div class=&quot;isym&quot;>卦${layers.iching.hex.num}</div>
-        <div class=&quot;iname&quot;>${layers.iching.hex.name} · ${layers.iching.hex.english}</div>
-        <div class=&quot;imsg&quot;>${layers.iching.hex.gambling}</div>
+      <div class="ibox" style="flex:2">
+        <div class="isym">卦${layers.iching.hex.num}</div>
+        <div class="iname">${layers.iching.hex.name} · ${layers.iching.hex.english}</div>
+        <div class="imsg">${layers.iching.hex.gambling}</div>
       </div>
-      <div class=&quot;ibox&quot;>
-        <div class=&quot;isym&quot;>${layers.iching.hex.lower.sym}</div>
-        <div class=&quot;iname&quot;>${layers.iching.hex.lower.name}</div>
-        <div class=&quot;imsg&quot;>Lower</div>
+      <div class="ibox">
+        <div class="isym">${layers.iching.hex.lower.sym}</div>
+        <div class="iname">${layers.iching.hex.lower.name}</div>
+        <div class="imsg">Lower</div>
       </div>
     </div>
-    <div class=&quot;ichange&quot;><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}</div>`;
+    <div class="ichange"><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}</div>`;
 
   // Stats panel
-  const maxF=Math.max(...Object.values(layers.stats.freq))||1;
-  const freqBarsHTML=Object.entries(layers.stats.freq)
+  var maxF=Math.max(...Object.values(layers.stats.freq))||1;
+  var freqBarsHTML=Object.entries(layers.stats.freq)
     .sort((a,b)=>b[1]-a[1]).slice(0,8)
-    .map(([n,c])=>`<div class=&quot;sfrow&quot;>
-      <span class=&quot;sflabel&quot;>${pad(parseInt(n))}</span>
-      <div class=&quot;sfwrap&quot;><div class=&quot;sffill&quot; style=&quot;width:0%&quot; data-w=&quot;${(c/maxF*100).toFixed(0)}%&quot;></div></div>
-      <span class=&quot;sfval&quot;>${c}x</span>
+    .map(([n,c])=>`<div class="sfrow">
+      <span class="sflabel">${pad(parseInt(n))}</span>
+      <div class="sfwrap"><div class="sffill" style="width:0%" data-w="${(c/maxF*100).toFixed(0)}%"></div></div>
+      <span class="sfval">${c}x</span>
     </div>`).join('');
 
   function lcard(icon,name,nums,steps,extra='',isNew=false){
-    return `<div class=&quot;lcard&quot;>
-      <div class=&quot;lhead&quot;>
-        <div class=&quot;licon&quot;>${icon}</div>
+    return `<div class="lcard">
+      <div class="lhead">
+        <div class="licon">${icon}</div>
         <div>
-          <div class=&quot;lname&quot;>${name}${isNew?'<span class=&quot;lnew&quot;>★ Expert</span>':''}</div>
-          <div class=&quot;lpills&quot;>${nums.map(n=>`<span class=&quot;pill&quot;>${n}</span>`).join('')}</div>
+          <div class="lname">${name}${isNew?'<span class="lnew">★ Expert</span>':''}</div>
+          <div class="lpills">${nums.map(n=>`<span class="pill">${n}</span>`).join('')}</div>
         </div>
       </div>
-      <div class=&quot;lsteps&quot;>${steps.map(s=>`• ${s}`).join('<br>')}</div>
+      <div class="lsteps">${steps.map(s=>`• ${s}`).join('<br>')}</div>
       ${extra}
     </div>`;
   }
 
   document.getElementById('results').innerHTML=`
-    <div class=&quot;slabel&quot;>Current Energy Flow · Jun 27 2026 · ${drawHour}</div>
-    <div class=&quot;eflow&quot;>
-      <div class=&quot;eflow-title&quot;>⚡ Elemental Energy Balance — All 12 Layers</div>
+    <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
+    <div class="eflow">
+      <div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>
       ${energyHTML}
     </div>
 
-    <div class=&quot;slabel&quot;>${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
-    <div class=&quot;balls-card&quot;>
-      <div class=&quot;balls-eyebrow&quot;>Primary Pick — 12-Layer Expert Oracle</div>
-      <div class=&quot;balls-row&quot;>${ballsHTML}</div>
-      <div class=&quot;balls-note&quot;>
+    <div class="slabel">${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
+    <div class="balls-card">
+      <div class="balls-eyebrow">Primary Pick — 12-Layer Expert Oracle</div>
+      <div class="balls-row">${ballsHTML}</div>
+      <div class="balls-note">
         Ball tag = digit (d) + convergence score out of 8 sources<br>
         Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · St=Stats
       </div>
     </div>
-    <div class=&quot;alt-card&quot;>
-      <div class=&quot;alt-label&quot;>Alternate Combination</div>
-      <div class=&quot;alt-row&quot;>${altHTML}</div>
+    <div class="alt-card">
+      <div class="alt-label">Alternate Combination</div>
+      <div class="alt-row">${altHTML}</div>
     </div>
 
-    <div class=&quot;slabel&quot;>Step 1 — Digit Convergence · 8 Sources</div>
-    <div class=&quot;legend&quot;>
-      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--accent)&quot;></span>Metaphysical</span>
-      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--teal)&quot;></span>I Ching · PoF</span>
-      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--gold)&quot;></span>Chaldean · Stats</span>
-      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--surface);border:1px solid var(--border)&quot;></span>Not in layer</span>
+    <div class="slabel">Step 1 — Digit Convergence · 8 Sources</div>
+    <div class="legend">
+      <span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span>
+      <span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF</span>
+      <span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span>
+      <span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span>
     </div>
-    <div class=&quot;dgrid&quot;>${digitCardsHTML}</div>
+    <div class="dgrid">${digitCardsHTML}</div>
 
-    <div class=&quot;slabel&quot;>Step 2 — Digit → Number Map · 1–${game.max}</div>
-    <div class=&quot;lcard&quot;>
-      <div class=&quot;lsteps&quot; style=&quot;border:none;padding:0;margin-bottom:10px&quot;>
-        🔥 Gold = Game hot number &amp;nbsp; 💜 Purple = Appeared 2+ times recently &amp;nbsp; Gray = Cold
+    <div class="slabel">Step 2 — Digit → Number Map · 1–${game.max}</div>
+    <div class="lcard">
+      <div class="lsteps" style="border:none;padding:0;margin-bottom:10px">
+        🔥 Gold = Game hot number &nbsp; 💜 Purple = Appeared 2+ times recently &nbsp; Gray = Cold
       </div>${mapHTML}
     </div>
 
-    <div class=&quot;slabel&quot;>Full 12-Layer Breakdown</div>
+    <div class="slabel">Full 12-Layer Breakdown</div>
     ${lcard('🔢','Numerology — Pythagorean + Chaldean',layers.num.nums,layers.num.steps)}
     ${lcard('🪐','Astrology — Dignities + Aspects + Horary',layers.astro.nums.slice(0,7),layers.astro.steps,horaryHTML,true)}
     ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
     ${lcard('🏮','Feng Shui — Flying Star + Lo Shu + Fixed Stars',layers.fs.nums,layers.fs.steps,'',false)}
     ${lcard('☯','I Ching — Hexagram 45 + Nuclear + Changing Line',layers.iching.nums,layers.iching.steps,ichingHTML,true)}
-    <div class=&quot;lcard&quot;>
-      <div class=&quot;lhead&quot;>
-        <div class=&quot;licon&quot;>📊</div>
+    <div class="lcard">
+      <div class="lhead">
+        <div class="licon">📊</div>
         <div>
-          <div class=&quot;lname&quot;>PCSO ${game.short} — Historical Data</div>
-          <div class=&quot;lpills&quot;>${layers.stats.topDigits.slice(0,5).map(d=>`<span class=&quot;pill g&quot;>${d}</span>`).join('')}</div>
+          <div class="lname">PCSO ${game.short} — Historical Data</div>
+          <div class="lpills">${layers.stats.topDigits.slice(0,5).map(d=>`<span class="pill g">${d}</span>`).join('')}</div>
         </div>
       </div>
-      <div class=&quot;lsteps&quot;>
+      <div class="lsteps">
         • <b>Hot numbers (${game.short}${isEZ2?' '+drawHour:''}):</b> ${hotNums.map(n=>pad(n)).join(', ')}<br>
         • <b>Top stat digits:</b> ${layers.stats.topDigits.slice(0,5).join(', ')} (freq×4 + hot×6 + overdue×5)<br>
         • <b>Recent draws analyzed:</b> ${layers.stats.draws.length} draws · Game pool: 1–${game.max}
       </div>
-      <div class=&quot;st-grid&quot;>
-        <div class=&quot;stbox&quot;><div class=&quot;stitle&quot;>🔥 Hot Numbers</div>${hotNums.map(n=>`<span class=&quot;hnum&quot;>${pad(n)}</span>`).join('')}</div>
-        <div class=&quot;stbox&quot;><div class=&quot;stitle&quot;>📈 Recent Frequency</div>${freqBarsHTML}</div>
+      <div class="st-grid">
+        <div class="stbox"><div class="stitle">🔥 Hot Numbers</div>${hotNums.map(n=>`<span class="hnum">${pad(n)}</span>`).join('')}</div>
+        <div class="stbox"><div class="stitle">📈 Recent Frequency</div>${freqBarsHTML}</div>
       </div>
     </div>
 
-    <div class=&quot;disc&quot;>
-      ⚡ Recalibrated Jun 27 2026 · Astrology×3 · Stats×3 · PoF×2 based on confirmed 2PM+5PM results · ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified Jun 27 2026 ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (Ren Shen day · ${drawHour==='2PM'?'Geng Wei hour':drawHour==='5PM'?'Ren You hour':'Jia Hai hour'}) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching Hexagram 45 Cui with nuclear and changing line, and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
+    <div class="disc">
+      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified ${TODAY_PH} ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (Ren Shen day · ${drawHour==='2PM'?'Geng Wei hour':drawHour==='5PM'?'Ren You hour':'Jia Hai hour'}) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching Hexagram 45 Cui with nuclear and changing line, and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
     </div>
   `;
 }
 
 function animateBars(){
   document.querySelectorAll('[data-w]').forEach(el=>{
-    const w=el.getAttribute('data-w');
+    var w=el.getAttribute('data-w');
     el.style.width='0%';
     requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.style.width=w; }));
   });
 }
 
-
+function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
 
 // Init
 document.getElementById('ez2wrap').style.display='block';
 </script>
-</body>
-</html>
-"
-    style="width:100%;height:calc(100vh - 60px);border:none;display:block;background:#0a0a0f;"
-    scrolling="yes" title="JOMERPB Lotto Oracle"></iframe>
 </div>
 </body>
 </html>
