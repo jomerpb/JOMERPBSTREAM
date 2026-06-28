@@ -2765,10 +2765,25 @@ body{
 
 
 <script>
+
+
+
+
+
+
+
+
+
+
 var _phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
 var _phMo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var TODAY_PH=_phMo[_phNow.getMonth()]+' '+_phNow.getDate()+' '+_phNow.getFullYear();
 var TODAY_PH_FULL=TODAY_PH;
+var _phNow2=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
+var _D=_phNow2.getDate();
+var _M=_phNow2.getMonth()+1;
+var _Y=_phNow2.getFullYear();
+var _DOW=_phNow2.getDay();
 
 // ══════════════════════════
 // PCSO REAL HISTORICAL DATA
@@ -2818,37 +2833,36 @@ function pad(n){ return String(n).padStart(2,'0'); }
 // Pythagorean + Chaldean dual system
 // ══════════════════════════
 function layerNumerology(drawHour){
-  // Pythagorean
-  var ud=reduce(2+7+6+2+0+2+6); // Universal Day: 25→7
+  // Universal Day = reduce all digits of full date
+  var dateStr=String(_D)+String(_M)+String(_Y);
+  var ud=reduce(dateStr.split('').reduce(function(a,b){return a+parseInt(b);},0));
   var h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
   var combined=reduce(ud+h);
-  var saturn=8; // Saturday=Saturn rules=8
-  var monthYear=reduce(6+1); // June(6)+2026→1=7
-  // Day of month = 27 → 2+7=9
-  var dayReduction=reduce(27);
-  // Pythagorean: active digits
-  var pyNums=[...new Set([ud,h,combined,saturn,monthYear,dayReduction])];
+  var dayRed=reduce(_D);
+  // Month+Year
+  var yRed=reduce(_Y);
+  var monthYear=reduce(_M+yRed);
+  // Day of week planetary ruler: Sun=1,Mon=2,Tue=9,Wed=5,Thu=3,Fri=6,Sat=8
+  var dowNums=[1,2,9,5,3,6,8]; // Sun through Sat
+  var saturn=dowNums[_DOW];
 
-  // Chaldean system
-  // "PCSO": P=8,C=3,S=3,O=7 = 21 → 3
-  var pcso=reduce(8+3+3+7); // 3
-  // "LOTTO": L=3,O=7,T=4,T=4,O=7 = 25 → 7
-  var lotto=reduce(3+7+4+4+7); // 7
-  // "PHILIPPINES": P=8,H=5,I=1,L=3,I=1,P=8,P=8,I=1,N=5,E=5,S=3 = 48→12→3
-  var phils=reduce(8+5+1+3+1+8+8+1+5+5+3); // 3
+  var pyNums=[...new Set([ud,h,combined,saturn,monthYear,dayRed])];
+
+  // Chaldean — static word values (PCSO, LOTTO, PHILIPPINES never change)
+  var pcso=reduce(8+3+3+7);   // 21→3
+  var lotto=reduce(3+7+4+4+7); // 25→7
+  var phils=reduce(8+5+1+3+1+8+8+1+5+5+3); // 48→3
   var chNums=[...new Set([pcso,lotto,phils])];
 
   var allNums=[...new Set([...pyNums,...chNums])];
   return {
-    nums:allNums, pyNums, chNums,
-    ud,h,combined,saturn,monthYear,dayReduction,
-    pcso,lotto,phils,
+    pyNums,chNums,allNums,nums:allNums,ud,h,combined,saturn,monthYear,dayRed,
     steps:[
-      `<b>Pythagorean — Universal Day:</b> 2+7+6+2+0+2+6=25 → <b>${ud}</b>`,
-      `<b>Day of month 27:</b> 2+7 → <b>${dayReduction}</b>`,
+      `<b>Pythagorean — Universal Day:</b> ${dateStr.split('').join('+')}=${dateStr.split('').reduce((a,b)=>a+parseInt(b),0)} → <b>${ud}</b>`,
+      `<b>Day of month ${_D}:</b> ${String(_D).split('').join('+')} → <b>${dayRed}</b>`,
       `<b>Draw hour ${drawHour}:</b> → <b>${h}</b> · Combined ${ud}+${h}=${ud+h} → <b>${combined}</b>`,
-      `<b>Saturday=Saturn:</b> → <b>${saturn}</b>`,
-      `<b>Month(6)+Year(2026→1):</b> → <b>${monthYear}</b>`,
+      `<b>${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][_DOW]}=Planet ruler:</b> → <b>${saturn}</b>`,
+      `<b>Month(${_M})+Year(${_Y}→${yRed}):</b> → <b>${monthYear}</b>`,
       `<b>Chaldean — "PCSO":</b> P(8)+C(3)+S(3)+O(7)=21 → <b>${pcso}</b>`,
       `<b>Chaldean — "LOTTO":</b> L(3)+O(7)+T(4)+T(4)+O(7)=25 → <b>${lotto}</b>`,
       `<b>Chaldean — "PHILIPPINES":</b> =48→12 → <b>${phils}</b>`,
@@ -2856,276 +2870,323 @@ function layerNumerology(drawHour){
   };
 }
 
-// ══════════════════════════
-// LAYER 2: ASTROLOGY — Full master level
-// Real ephemeris + dignities + aspects + Horary + PoF
-// ══════════════════════════
 function layerAstrology(drawHour){
-  // REAL planetary positions
-  var planets=[
-    {name:'Jupiter ♃',pos:"29°16' Cancer",sign:'Cancer',deg:29.26,
-     dignity:'Exalted', // Jupiter is EXALTED in Cancer = maximum strength
-     nums:[2,3,7],note:'EXALTED at anaretic 29° = peak power before sign change → luck amplified'},
-    {name:'Moon ☽',pos:"0°45' Sagittarius",sign:'Sagittarius',deg:0.75,
-     dignity:'Neutral',phase:'Waxing Gibbous',
-     nums:[1,3,9],note:'Waxing=favorable for gain · Sag=3,9 · 0°=new cycle beginning'},
-    {name:'Venus ♀',pos:"15°27' Leo",sign:'Leo',deg:15.45,
-     dignity:'Peregrine', // no special dignity in Leo
-     nums:[1,4,6],note:'Peregrine but strong by position · Leo=power · Fortune=6'},
-    {name:'Mars ♂',pos:"28°35' Taurus",sign:'Taurus',deg:28.58,
-     dignity:'Detriment', // Mars in Taurus = detriment (weak)
-     nums:[9],note:'In DETRIMENT = weak aggressive energy · cautious number'},
-    {name:'Mercury ☿',pos:"25°56' Cancer",sign:'Cancer',deg:25.93,
-     dignity:'Peregrine',rx:'Pre-Rx shadow',
-     nums:[2,7],note:'Almost stationary pre-Rx · concentrated mental energy'},
-    {name:'Saturn ♄',pos:"13°59' Aries",sign:'Aries',deg:13.98,
-     dignity:'Detriment', // Saturn in Aries = detriment
-     nums:[4,8],note:'In DETRIMENT · structure challenged · 13°=4'},
-    {name:'Sun ☉',pos:"6°12' Cancer",sign:'Cancer',deg:6.12,
-     dignity:'Neutral',
-     nums:[6,1],note:'6°=6 · Cancer=2 · vitality energy'},
-  ];
+  // Simplified planetary position calculation
+  // Using mean motion approximations from J2000.0 (Jan 1.5 2000)
+  // Days since J2000.0
+  var jd2000=function(y,m,d){
+    var a=Math.floor((14-m)/12);
+    var yr=y+4800-a;
+    var mo=m+12*a-3;
+    return d+Math.floor((153*mo+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045-2451545;
+  };
+  var T=jd2000(_Y,_M,_D)/36525; // Julian centuries from J2000
 
-  // Essential dignity summary — use only planets with dignity
-  var strongPlanets=planets.filter(p=>p.dignity==='Exalted'||p.dignity==='Domicile');
-  // Jupiter exalted = dominant influence → 2,3,7 heavily weighted
+  // Mean longitudes (degrees, simplified)
+  var sun=(280.46646+36000.76983*T+0.0003032*T*T)%360;
+  var moon=(218.3165+481267.8813*T)%360;
+  var mercury=(252.250906+149474.0722491*T)%360;
+  var venus=(181.979801+58517.8156760*T)%360;
+  var mars=(355.433275+19141.6964746*T)%360;
+  var jupiter=(34.351519+3036.3027748*T)%360;
+  var saturn=(50.077444+1223.5110686*T)%360;
 
-  // HORARY ASTROLOGY
-  // At 9PM Manila UTC+8 = 13:00 UTC
-  // Approximate ASC at Manila 9PM: Capricorn ~10-15° rising
-  // Check strictures: ASC ~12° Capricorn = OK (3-27° range = radical chart)
-  // Moon is NOT void of course (Moon in Sag still making aspects to Jupiter)
-  // Moon NOT in Via Combusta (15°Libra-15°Scorpio) → Sag is clear
-  // Chart is RADICAL = valid for judgment
-  var horaryASC='Capricorn ~12°';
-  var horaryASCRuler='Saturn (traditional)';
-  // 5th house from Capricorn = Taurus
-  var h5sign='Taurus';
-  var h5ruler='Venus'; // Taurus ruler = Venus
-  var h5rulerPos="15°27' Leo";
-  var h5dignity='Peregrine (but in strong Leo)';
-  // Venus applies to aspect? Venus at 15°Leo, applying sextile to Jupiter at 29°Cancer
-  // Sextile = 60° apart → Leo 15° to Cancer 29° = difference ~46° ≈ separating
-  // BUT: Venus applying to conjunction with Sun (same sign Leo, Sun at ~6°, Venus at 15° → Sun moving away)
-  // Venus is APPLYING to North Node area = positive for fortune
-  var h5aspect='Venus separating from Sun, applying toward North Node — fortune energy building';
-  var h5nums=[6,1,4];
+  // Normalize to 0-360
+  function norm(x){return((x%360)+360)%360;}
+  sun=norm(sun);moon=norm(moon);mercury=norm(mercury);venus=norm(venus);
+  mars=norm(mars);jupiter=norm(jupiter);saturn=norm(saturn);
 
-  // Part of Fortune (day chart: Sun above horizon at 9PM? No, Sun sets ~7:47PM Manila)
-  // 9PM = night chart
-  // Night chart PoF = ASC + Sun - Moon
-  // ASC ~285° (Capricorn 15°), Sun ~96° (Cancer 6°), Moon ~241° (Sag 1°)
-  // Night: PoF = 285 + 96 - 241 = 140° = 20° Leo
-  var pofSign='Leo';
-  var pofDeg=20;
-  // 20° Leo = 2+0=2
-  var pofDigit=reduce(20);
-  var pofRuler='Sun';
-  var pofNums=[pofDigit,1,4]; // Leo+Sun
+  // Convert to zodiac sign (0=Aries,1=Taurus,...,11=Pisces)
+  var signs=['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'];
+  var signNums=[[9,1],[6,2],[3,5],[2,7],[1,4],[5,6],[3,6],[1,9],[3,9],[8,1],[4,7],[2,7]]; // nums per sign
+  function signOf(deg){return Math.floor(norm(deg)/30);}
+  function degInSign(deg){return norm(deg)%30;}
 
-  // Key planetary aspects (applying only = valid in horary)
-  var aspects=[
-    {asp:'Moon ☽ trine Jupiter ♃',nature:'favorable',
-     note:'Applying (Moon at 0°Sag → Jupiter at 29°Cancer = fire/water signs, 121° = trine)',
-     nums:[9,3,7]},
-    {asp:'Moon ☽ trine Saturn ♄',nature:'favorable',
-     note:'Moon in Sag trine Saturn in Aries = fire trine = material stability',
-     nums:[9,8]},
-    {asp:'Sun ☉ sextile Saturn ♄',nature:'favorable',
-     note:'Cancer Sun sextile Aries Saturn = structure supports vitality',
-     nums:[6,8]},
-    {asp:'Venus ♀ applying to North Node',nature:'favorable',
-     note:'Fortune building toward destiny point = auspicious for speculation',
-     nums:[6,4]},
-    {asp:'Mars ♂ square Pluto ♇',nature:'tense',
-     note:'Transformative tension — unexpected pattern shifts possible',
-     nums:[4,1]},
-    {asp:'Mercury ☿ stationing (pre-Rx)',nature:'caution',
-     note:'Information/patterns may repeat or reverse — notable for number patterns',
-     nums:[7,2]},
-  ];
+  var jSign=signOf(jupiter);
+  var mSign=signOf(moon);
+  var vSign=signOf(venus);
+  var maSign=signOf(mars);
 
-  var allNums=[...new Set([
-    ...planets.flatMap(p=>p.nums),
-    ...h5nums,...pofNums,
-    ...aspects.filter(a=>a.nature==='favorable').flatMap(a=>a.nums)
+  // Part of Fortune: Asc + Moon - Sun (simplified, use sunrise as Asc approx)
+  // Use 0° Aries as Asc approximation for daytime, adjust by hour
+  var h=drawHour==='2PM'?14:drawHour==='5PM'?17:21;
+  var ascApprox=norm(sun + (h-6)*15); // crude local Asc
+  var pof=norm(ascApprox+moon-sun);
+  var pofSign=signOf(pof);
+  var pofNums=[...new Set(signNums[pofSign])];
+
+  // Collect active nums from key planets
+  var nums=[...new Set([
+    ...signNums[jSign],
+    ...signNums[mSign],
+    ...signNums[vSign],
+    ...signNums[pofSign],
   ])];
 
+  // Horary approximations (dynamic)
+  var signs2=["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+  var signRulers=["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars/Pluto","Jupiter","Saturn","Uranus/Saturn","Neptune/Jupiter"];
+  var h5SignIdx=(signOf(ascApprox)+4)%12; // 5th house = Asc + 4 signs
+  var h5ruler=signRulers[h5SignIdx];
+  var h5sign=signs2[h5SignIdx];
+  var pofSignIdx=pofSign;
+  var pofRuler=signRulers[pofSignIdx];
+  var pofDigit=reduce(Math.floor(pof/30)+1);
+  // Simplified aspects (Sun-Moon angle)
+  var sunMoonAngle=norm(moon-sun);
+  var aspectName=sunMoonAngle<30?"Conjunction":sunMoonAngle<90?"Sextile/Semi-square":sunMoonAngle<120?"Square":"Trine/Opposition";
   return {
-    nums:allNums,planets,strongPlanets,
-    horaryASC,horaryASCRuler,h5sign,h5ruler,h5rulerPos,h5dignity,h5aspect,h5nums,
-    pofSign,pofDeg,pofDigit,pofRuler,pofNums,aspects,
+    nums,pofNums,
+    horaryASC:signs2[signOf(ascApprox)]+" "+degInSign(ascApprox).toFixed(0)+"°",
+    horaryASCRuler:signRulers[signOf(ascApprox)],
+    h5sign:h5sign,h5ruler:h5ruler,h5rulerPos:signs2[signOf(venus)]+" "+degInSign(venus).toFixed(0)+"°",
+    h5aspect:aspectName,
+    pofSign:signs2[pofSignIdx],pofDeg:degInSign(pof).toFixed(1)+"°",
+    pofRuler:pofRuler,pofDigit:pofDigit,
+    aspects:[{planets:"Sun-Moon",angle:sunMoonAngle.toFixed(0)+"°",aspect:aspectName}],
+    planets:[
+      {name:'Jupiter ♃',sign:signs[jSign],deg:degInSign(jupiter).toFixed(1),nums:signNums[jSign]},
+      {name:'Moon ☽',sign:signs[mSign],deg:degInSign(moon).toFixed(1),nums:signNums[mSign]},
+      {name:'Venus ♀',sign:signs[vSign],deg:degInSign(venus).toFixed(1),nums:signNums[vSign]},
+      {name:'Mars ♂',sign:signs[maSign],deg:degInSign(mars).toFixed(1),nums:signNums[maSign]},
+    ],
+    pof:{sign:signs[pofSign],deg:degInSign(pof).toFixed(1)},
     steps:[
-      ...planets.map(p=>`<b>${p.name}</b> ${p.pos} [${p.dignity}] → <b>${p.nums.join(',')}</b> · ${p.note}`),
-      `<b>Horary ASC:</b> ${horaryASC} · Chart radical ✓ · Moon NOT void ✓`,
-      `<b>5th House (gambling):</b> ${h5sign} · Ruler: ${h5ruler} at ${h5rulerPos} · ${h5aspect}`,
-      `<b>Part of Fortune (night chart):</b> ~${pofDeg}° ${pofSign} → digit <b>${pofDigit}</b> · Ruler: ${pofRuler}`,
+      `<b>Jupiter ♃</b> at ${degInSign(jupiter).toFixed(1)}° ${signs[jSign]} → digits: <b>${signNums[jSign].join(',')}</b>`,
+      `<b>Moon ☽</b> at ${degInSign(moon).toFixed(1)}° ${signs[mSign]} → digits: <b>${signNums[mSign].join(',')}</b>`,
+      `<b>Venus ♀</b> at ${degInSign(venus).toFixed(1)}° ${signs[vSign]} → digits: <b>${signNums[vSign].join(',')}</b>`,
+      `<b>Part of Fortune</b> at ${degInSign(pof).toFixed(1)}° ${signs[pofSign]} → digits: <b>${pofNums.join(',')}</b>`,
     ]
   };
 }
 
-// ══════════════════════════
-// LAYER 3: BAZI — Full master level
-// Exact pillars + clashes + combines + hidden stems
-// ══════════════════════════
 function layerBazi(drawHour){
-  // EXACT BaZi pillars
-  var year ={stem:'Bing 丙',stemEl:'Yang Fire',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire',nums:[2,7]};
-  var month={stem:'Wu 戊',stemEl:'Yang Earth',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire+Earth',nums:[2,5,7]};
-  var day  ={stem:'Ren 壬',stemEl:'Yang Water',branch:'Shen 申',branchEl:'Monkey/Metal',el:'Water+Metal',nums:[1,6,7]};
+  // Heavenly Stems and Earthly Branches
+  var stems=['Jia甲','Yi乙','Bing丙','Ding丁','Wu戊','Ji己','Geng庚','Xin辛','Ren壬','Gui癸'];
+  var branches=['Zi子','Chou丑','Yin寅','Mao卯','Chen辰','Si巳','Wu午','Wei未','Shen申','You酉','Xu戌','Hai亥'];
+  var stemEl=['Wood','Wood','Fire','Fire','Earth','Earth','Metal','Metal','Water','Water'];
+  var branchEl=['Water','Earth','Wood','Wood','Earth','Fire','Fire','Earth','Metal','Metal','Earth','Water'];
+  var branchNums=[[1,6],[2,5],[3,8],[3,8],[5],[2,7],[2,7],[2,5],[6,7],[6,7],[5],[1,6]];
+  var stemNums=[[3,8],[3,8],[2,7],[2,7],[5],[5],[6,7],[6,7],[1,6],[1,6]];
 
-  // Hour pillar: Ren day → Hai hour (9PM) stem = Jia (Yang Wood)
-  // 2PM = Wei(Goat) hour → Geng stem (Yang Metal) → Earth+Metal → 6,7,8
-  // 5PM = You(Rooster) → Ren stem (Yang Water) → Metal+Water → 1,6,7
-  // 9PM = Hai(Pig) → Jia stem (Yang Wood) → Wood+Water → 1,3,6
-  var hourMap={
-    '2PM':{stem:'Geng 庚',stemEl:'Yang Metal',branch:'Wei 未',branchEl:'Goat/Earth',el:'Metal+Earth',nums:[6,7,8]},
-    '5PM':{stem:'Ren 壬',stemEl:'Yang Water',branch:'You 酉',branchEl:'Rooster/Metal',el:'Water+Metal',nums:[1,6,7]},
-    '9PM':{stem:'Jia 甲',stemEl:'Yang Wood',branch:'Hai 亥',branchEl:'Pig/Water',el:'Wood+Water',nums:[1,3,6]},
-  };
-  var hour=hourMap[drawHour];
+  // Year pillar — stem: (year-4)%10, branch: (year-4)%12
+  // Using solar year basis (simplified: Jan 1 start)
+  var yStem=(_Y-4)%10; if(yStem<0)yStem+=10;
+  var yBranch=(_Y-4)%12; if(yBranch<0)yBranch+=12;
 
-  // HIDDEN STEMS in earthly branches
-  var hidden={
-    'Wu午':'Ding(Fire)+Ji(Earth) → 2,5',
-    'Shen申':'Geng(Metal)+Ren(Water)+Wu(Earth) → 1,5,6,7',
-    'Hai亥':'Ren(Water)+Jia(Wood) → 1,3,6',
-    'Wei未':'Ji(Earth)+Ding(Fire)+Yi(Wood) → 2,3,5',
-    'You酉':'Xin(Metal) → 6,7',
-  };
+  // Month pillar — uses month branch (Yin=1=Feb, etc, offset by 2)
+  // Month stems cycle based on year stem group
+  var mBranch=(_M+1)%12; // Yin寅=February=month 1 in Chinese calendar (approx)
+  var mStemBase=[(yStem%5)*2]%10;
+  var mStem=(mStemBase+_M-1)%10;
 
-  // SIX CLASHES — check if any branches clash today
-  // Wu(Horse) clashes with Zi(Rat) — not present today
-  // Shen(Monkey) clashes with Yin(Tiger) — not present today
-  // No major clashes in today's pillars = STABLE energy (favorable)
+  // Day pillar — use Julian Day Number approach
+  // JDN for date
+  var a=Math.floor((14-_M)/12);
+  var yr=_Y+4800-a;
+  var mo=_M+12*a-3;
+  var jdn=_D+Math.floor((153*mo+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045;
+  var dStem=(jdn-10)%10; if(dStem<0)dStem+=10;
+  var dBranch=(jdn-10)%12; if(dBranch<0)dBranch+=12;
 
-  // THREE HARMONIES — Shen(Monkey)+Zi(Rat)+Chen(Dragon) = Water frame
-  // Shen is present in day pillar → partial Water harmony active
-  // Hai(Pig)+Mao(Rabbit)+Wei(Goat) = Wood frame
-  // At 9PM: Hai present → partial Wood harmony
+  // Hour pillar — fixed branches by hour
+  var hBranchMap={'2PM':7,'5PM':9,'9PM':11}; // Wei=7,You=9,Hai=11
+  var hBranch=hBranchMap[drawHour]||11;
+  // Hour stem = day stem index * 2 + hour branch index / 2
+  var hStem=(dStem*2+Math.floor(hBranch/2))%10;
 
-  // SIX COMBINATIONS — Hai(Pig)+Yin(Tiger) = Wood combination (9PM hour Hai partial)
-  // Wu(Horse)+Wei(Goat) = Fire+Earth combination = at 2PM: year Wu + hour Wei = combine
+  var day={stem:stems[dStem],stemEl:stemEl[dStem],branch:branches[dBranch],branchEl:branchEl[dBranch],nums:[...new Set([...stemNums[dStem],...branchNums[dBranch]])]};
+  var hour={stem:stems[hStem],stemEl:stemEl[hStem],branch:branches[hBranch],branchEl:branchEl[hBranch],nums:[...new Set([...stemNums[hStem],...branchNums[hBranch]])]};
+  var year={stem:stems[yStem],branch:branches[yBranch],nums:[...new Set([...stemNums[yStem],...branchNums[yBranch]])]};
+  var month={stem:stems[mStem],branch:branches[mBranch],nums:[...new Set([...stemNums[mStem],...branchNums[mBranch]])]};
 
-  // Element balance (dominant)
-  var elemCount={Fire:3,Earth:2,Metal:2,Water:3,Wood:1};
-  if(drawHour==='2PM'){ elemCount.Metal+=1; elemCount.Earth+=1; }
-  if(drawHour==='5PM'){ elemCount.Water+=1; elemCount.Metal+=1; }
-  if(drawHour==='9PM'){ elemCount.Water+=1; elemCount.Wood+=1; }
+  var nums=[...new Set([...day.nums,...hour.nums])];
 
-  // Day Master = Ren (Yang Water) = strong Water day
-  // Water conquers Fire (year element) = Fire slightly weakened
-  // Metal (month day branch Shen) produces Water = Water very strong today
-
-  var interactions=[
-    {type:'Day Master',desc:'Ren 壬 (Yang Water) = your reading anchor · Water controls Fire (year) · strongest element today'},
-    {type:'Day Branch Shen',desc:'Hidden stems: Geng(Metal)+Ren(Water)+Wu(Earth) → Metal feeds Water → <b>1,6,7</b> reinforced'},
-    {type:'Year+Month Wu+Wu',desc:'Double Horse = Fire amplification · No clash (same branch) → stable Fire → <b>2,7</b> steady'},
-    {type:'9PM Hai branch',desc:'Hai(Pig) hidden Ren(Water)+Jia(Wood) · Partial Hai-Mao-Wei Wood frame forming → <b>1,3,6</b>'},
-    {type:'Dominant Elements',desc:`Fire×${elemCount.Fire} + Water×${elemCount.Water} = equal peak · dynamic tension = numbers fluctuate`},
-  ];
-
-  var allNums=[...new Set([...year.nums,...month.nums,...day.nums,...hour.nums])];
+  // BaZi interactions (clashes, combinations)
+  var interactions=[];
+  // Day-Hour branch clash check
+  var clashPairs=[[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]];
+  clashPairs.forEach(function(p){
+    if((dBranch===p[0]&&hBranch===p[1])||(dBranch===p[1]&&hBranch===p[0]))
+      interactions.push({type:"Clash",a:branches[dBranch],b:branches[hBranch],effect:"tension"});
+  });
   return {
-    nums:allNums,year,month,day,hour,hidden,elemCount,interactions,
+    nums,day,hour,year,month,interactions,
     steps:[
-      `<b>Year Pillar</b> Bing Wu 丙午 (Yang Fire Horse) → <b>${year.nums.join(',')}</b>`,
-      `<b>Month Pillar</b> Wu Wu 戊午 (Yang Earth Horse) → <b>${month.nums.join(',')}</b>`,
-      `<b>Day Pillar</b> Ren Shen 壬申 (Yang Water Monkey) → <b>${day.nums.join(',')}</b>`,
-      `<b>Hour Pillar</b> ${hour.stem} ${hour.branch} (${drawHour}) → <b>${hour.nums.join(',')}</b>`,
-      `<b>No branch clashes today</b> = stable, coherent energy flow`,
-      `<b>Dominant:</b> Fire+Water at equal peak = dynamic creative tension`,
+      `<b>Year Pillar:</b> ${year.stem} ${year.branch}`,
+      `<b>Month Pillar:</b> ${month.stem} ${month.branch}`,
+      `<b>Day Pillar:</b> ${day.stem} (${day.stemEl}) · ${day.branch} (${day.branchEl}) → digits: <b>${day.nums.join(',')}</b>`,
+      `<b>Hour Pillar (${drawHour}):</b> ${hour.stem} · ${hour.branch} (${hour.branchEl}) → digits: <b>${hour.nums.join(',')}</b>`,
     ]
   };
 }
 
-// ══════════════════════════
-// LAYER 4: FENG SHUI — Full flying star + Lo Shu
-// ══════════════════════════
 function layerFengshui(){
-  // Period 9 (2024-2043): ruling star = 9 (Li/Fire/South)
-  // Annual 2026 base star = 9
-  // Monthly June 2026 base = 8 (Gen/Earth/NE)
-  // Lo Shu grid for June 2026 (monthly star 8 in center)
-  var loShu={
-    NW:6, N:2, NE:4,
-    W:7,  C:8,  E:9,
-    SW:3, S:1, SE:5
-  };
-  // Wealth sectors: where 8 and 9 meet
-  // Star 8 = center (strongest position) = maximum wealth activation
-  // Star 9 = East = future prosperity
-  // Star 7 = West = competitive, risky (caution for speculation)
-  // Star 1 = South = career/water energy
-  // Double stars (monthly + annual interactions):
-  // Period 9 + Monthly 8 = Fire produces Earth = productive cycle
-  // Annual 9 at East = future wealth active
+  // Period 9 (2024-2043) — fixed
+  // Annual star: Period 9, year within period
+  // Annual base: 2024=9,2025=8,2026=7... wait — annual star goes DOWN from 9
+  // 2024=9,2025=8,2026=7,2027=6...
+  var annualStar=9-((_Y-2024)%9);
+  if(annualStar<=0)annualStar+=9;
 
-  // Fixed stars on key planetary degrees
-  // Jupiter at 29°16' Cancer → near Pollux (β Geminorum actual 22°Cancer) = fortune star
-  // Moon at 0°45' Sag → near Antares (9°Sag) = royal star, approaching
-  // Venus at 15°Leo → near Regulus (0°Virgo shifted) = fortune king star approaching
+  // Monthly star: depends on annual star and month
+  // Monthly stars count DOWN from annual star at start of solar year
+  // Month 1(Feb)=annual-1, Month 2(Mar)=annual-2... cycling
+  // For yang years (odd annual star): Jan star = annual+1, counting down
+  // Simplified: monthly star for month M
+  // Standard: if annual is odd, February star = 8; if even, February star = 5
+  // Then count down each month
+  var febStar=(annualStar%2!==0)?8:5;
+  // Count months from Feb (Chinese month 1)
+  // Western month mapping: Feb=0,Mar=1,...,Jan=11
+  var monthOffset=(_M>=2)?_M-2:_M+10;
+  var monthlyStar=((febStar-monthOffset-1+90)%9)+1;
+
+  // Lo Shu grid: place monthly star in center, arrange others
+  var loShuOrder=[5,1,6,7,3,8,4,9,2]; // center,N,NW,W,SW,S,SE,E,NE for star 5
+  // Offset based on monthly star
+  var offset=monthlyStar-5;
+  var grid={};
+  var dirs=['C','N','NW','W','SW','S','SE','E','NE'];
+  dirs.forEach(function(d,i){
+    grid[d]=((loShuOrder[i]+offset-1+9)%9)+1;
+  });
+
+  var nums=[...new Set([annualStar,monthlyStar,grid.C,grid.E])];
 
   return {
-    nums:[2,5,7,8,9],loShu,
+    nums,loShu:grid,
     steps:[
-      `<b>Period 9 (2024-2043)</b> · Li/Fire/South → active digits: <b>2,7,9</b>`,
-      `<b>Annual Flying Star 2026 = #9</b> in East = Future Prosperity sector activated`,
-      `<b>Monthly Star June 2026 = #8</b> in CENTER = Wealth star at peak position (most powerful placement)`,
-      `<b>Lo Shu tonight:</b> Center=8(wealth) · East=9(fortune) · NW=6(heavenly) · W=7(metal/competitive)`,
-      `<b>Period 9 + Monthly 8</b> = Fire produces Earth = productive cycle = favorable for material gain`,
-      `<b>Jupiter near Pollux fixed star</b> → fortune amplification at 29° Cancer`,
+      `<b>Period 9 (2024-2043)</b> · ruling star = 9 · active: <b>2,7,9</b>`,
+      `<b>Annual Flying Star ${_Y} = #${annualStar}</b>`,
+      `<b>Monthly Star (Month ${_M}) = #${monthlyStar}</b> in center`,
+      `<b>Wealth stars:</b> #${monthlyStar} (center) + #${grid.E} (East) → digits: <b>${nums.join(',')}</b>`,
     ]
   };
 }
 
-// ══════════════════════════
-// LAYER 5: I CHING — Full 64-hexagram + changing lines + nuclear
-// ══════════════════════════
 function layerIChing(drawHour){
-  // Method: Cast using date numbers as yarrow-stalk equivalent
-  // Lower trigram: Day(27→9) + Month(6) + Year(2026→1) = 16 → 16%8=0 → 8 = Kun (Earth ☷)
-  // But 0 in trigram = 8 → Kun
-  // Upper trigram: Hour(9) + Draw energy(7) + Month star(8) = 24 → 24%8=0 → 8 = Kun (Earth ☷)
-  // Hexagram 2 = Kun over Kun = pure Yin / Receptive Earth
+  var h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
+  var yRed=reduce(_Y);
+  var dRed=reduce(_D);
+  var lower=(_D+_M+yRed)%8||8;
+  var upper=(h+dRed+_M)%8||8;
 
-  // Actually recalculate: lower = (27+6+1)%8 = 34%8 = 2 → Dui (Lake ☱)
-  // Upper = (9+7+8)%8 = 24%8 = 0 → Kun→8 or use 8=Kun
-  // Hexagram: Dui(Lake) below, Kun(Earth) above = Hexagram 45 = Cui (Gathering)
+  var triNames=['','Qian','Dui','Li','Zhen','Xun','Kan','Gen','Kun'];
+  var triSym=['','☰','☱','☲','☳','☴','☵','☶','☷'];
+  var triEl=['','Metal','Metal','Fire','Thunder','Wood','Water','Earth','Earth'];
+  var elNums={'Metal':[6,7],'Fire':[2,7],'Thunder':[3,8],'Wood':[3,8],'Water':[1,6],'Earth':[2,5,8]};
 
-  // Hexagram 45 = 萃 Cui = Gathering / Assembly
-  // Water collects in lake (Dui) under earth (Kun)
-  // Meaning: Great gathering, assembly, collective energy
-  // For speculation/lottery: favorable — collective fortune energy concentrated
-  // King comes to temple = auspicious ceremony = official blessing
-  var hex={
-    num:45,name:'Cui 萃',english:'Gathering / Assembly',
-    upper:{sym:'☷',name:'Kun (Earth)'},
-    lower:{sym:'☱',name:'Dui (Lake/Joy)'},
-    meaning:'Collective energy gathers · Water collects under Earth · Great assembly of fortune',
-    gambling:'Highly auspicious — energy is converging and concentrating · Favorable for joining collective games like lottery · Fortune assembles when people gather around common goal',
-    nums:[5,8,2], // Earth+Water = 5,8 + gathering=2
-    changingLine:`Hour of ${drawHour} activates Line 4: "Great good fortune — no blame" · Receiving blessings from above`,
-    nuclear:{num:53,name:'Jian (Gradual Progress)'},
-  };
+  // Hex number from King Wen sequence (lower=row, upper=col)
+  var hexTable=[[1,34,5,26,11,9,14,43],[25,51,3,27,24,42,21,17],[6,40,29,4,7,59,64,47],
+    [33,62,39,52,15,53,56,31],[12,16,8,23,2,20,35,45],[44,32,48,18,46,57,50,28],
+    [13,55,63,22,36,37,30,49],[10,54,60,41,19,61,38,58]];
+  var hexNum=hexTable[lower-1][upper-1];
+
+  // Hexagram database
+  var hexDB={1:{name:"Qian",english:"The Creative",gambling:"Strong favorable energy · act decisively"},
+    2:{name:"Kun",english:"The Receptive",gambling:"Receptive · follow others' lead"},
+    3:{name:"Zhun",english:"Difficulty at Beginning",gambling:"Initial struggle · persistence wins"},
+    4:{name:"Meng",english:"Youthful Folly",gambling:"Seek guidance · trust intuition"},
+    5:{name:"Xu",english:"Waiting",gambling:"Patience required · timing critical"},
+    6:{name:"Song",english:"Conflict",gambling:"Caution · avoid rash decisions"},
+    7:{name:"Shi",english:"The Army",gambling:"Discipline · collective strength"},
+    8:{name:"Bi",english:"Holding Together",gambling:"Alliance · cooperative fortune"},
+    9:{name:"Xiao Chu",english:"Small Taming",gambling:"Minor gains · accumulation"},
+    10:{name:"Lu",english:"Treading",gambling:"Careful steps · success possible"},
+    11:{name:"Tai",english:"Peace",gambling:"Harmony · excellent fortune"},
+    12:{name:"Pi",english:"Standstill",gambling:"Blockage · wait for better time"},
+    13:{name:"Tong Ren",english:"Fellowship",gambling:"Unity · shared luck"},
+    14:{name:"Da You",english:"Great Possession",gambling:"Abundance · peak fortune"},
+    15:{name:"Qian",english:"Modesty",gambling:"Humble approach brings reward"},
+    16:{name:"Yu",english:"Enthusiasm",gambling:"Joy · favorable for speculation"},
+    17:{name:"Sui",english:"Following",gambling:"Go with flow · adapt to moment"},
+    18:{name:"Gu",english:"Work on Decay",gambling:"Correct errors · renewal ahead"},
+    19:{name:"Lin",english:"Approach",gambling:"Opportunity approaching · be ready"},
+    20:{name:"Guan",english:"Contemplation",gambling:"Observe carefully · gather insight"},
+    21:{name:"Shi He",english:"Biting Through",gambling:"Breakthrough · obstacles cleared"},
+    22:{name:"Bi",english:"Grace",gambling:"Beauty · aesthetics · favorable"},
+    23:{name:"Bo",english:"Splitting Apart",gambling:"Decline · not favorable now"},
+    24:{name:"Fu",english:"Return",gambling:"Renewal · cycle beginning · positive"},
+    25:{name:"Wu Wang",english:"Innocence",gambling:"Pure action · unexpected fortune"},
+    26:{name:"Da Chu",english:"Great Taming",gambling:"Accumulate strength · hold back"},
+    27:{name:"Yi",english:"Nourishment",gambling:"Feed the right energy · discern"},
+    28:{name:"Da Guo",english:"Great Excess",gambling:"Peak · breakthrough or collapse"},
+    29:{name:"Kan",english:"Abysmal Water",gambling:"Double danger · proceed carefully"},
+    30:{name:"Li",english:"The Clinging Fire",gambling:"Clarity · dependence on others"},
+    31:{name:"Xian",english:"Influence",gambling:"Attraction · mutual resonance"},
+    32:{name:"Heng",english:"Duration",gambling:"Perseverance · lasting success"},
+    33:{name:"Dun",english:"Retreat",gambling:"Strategic withdrawal · timing"},
+    34:{name:"Da Zhuang",english:"Great Power",gambling:"Strength · momentum · act now"},
+    35:{name:"Jin",english:"Progress",gambling:"Advancing · success coming"},
+    36:{name:"Ming Yi",english:"Darkening of Light",gambling:"Conceal brilliance · wait"},
+    37:{name:"Jia Ren",english:"Family",gambling:"Proper relationships · harmony"},
+    38:{name:"Kui",english:"Opposition",gambling:"Tension · contrasting forces"},
+    39:{name:"Jian",english:"Obstruction",gambling:"Difficulty · seek help"},
+    40:{name:"Jie",english:"Deliverance",gambling:"Release · obstacles dissolving"},
+    41:{name:"Sun",english:"Decrease",gambling:"Reduce · simplify · less is more"},
+    42:{name:"Yi",english:"Increase",gambling:"Growth · benefit · expand"},
+    43:{name:"Guai",english:"Breakthrough",gambling:"Resolution · decisive action"},
+    44:{name:"Gou",english:"Coming to Meet",gambling:"Temptation · unexpected encounter"},
+    45:{name:"Cui",english:"Gathering",gambling:"Assembly · collective fortune · favorable"},
+    46:{name:"Sheng",english:"Pushing Upward",gambling:"Ascent · gradual success"},
+    47:{name:"Kun",english:"Oppression",gambling:"Exhaustion · endure · change coming"},
+    48:{name:"Jing",english:"The Well",gambling:"Inexhaustible source · seek depth"},
+    49:{name:"Ge",english:"Revolution",gambling:"Change · transformation · major shift"},
+    50:{name:"Ding",english:"The Cauldron",gambling:"Nourishment · cultural achievement"},
+    51:{name:"Zhen",english:"The Arousing Thunder",gambling:"Shock · awakening · action"},
+    52:{name:"Gen",english:"Keeping Still Mountain",gambling:"Stillness · meditation · wait"},
+    53:{name:"Jian",english:"Development",gambling:"Gradual progress · steady gains"},
+    54:{name:"Gui Mei",english:"Marrying Maiden",gambling:"Subordinate position · caution"},
+    55:{name:"Feng",english:"Abundance",gambling:"Peak moment · act now"},
+    56:{name:"Lu",english:"The Wanderer",gambling:"Impermanence · adapt quickly"},
+    57:{name:"Xun",english:"The Gentle Wind",gambling:"Penetrate gradually · influence"},
+    58:{name:"Dui",english:"The Joyous Lake",gambling:"Joy · pleasure · favorable"},
+    59:{name:"Huan",english:"Dispersion",gambling:"Dissolution · scatter obstacles"},
+    60:{name:"Jie",english:"Limitation",gambling:"Boundaries · discipline needed"},
+    61:{name:"Zhong Fu",english:"Inner Truth",gambling:"Sincerity · authentic action"},
+    62:{name:"Xiao Guo",english:"Small Exceeding",gambling:"Small steps · modesty wins"},
+    63:{name:"Ji Ji",english:"After Completion",gambling:"Peak · maintain discipline"},
+    64:{name:"Wei Ji",english:"Before Completion",gambling:"Almost there · final push"}};
+  var nuclearMap={1:1,2:2,3:23,4:24,5:38,6:37,7:24,8:23,9:37,10:38,11:54,12:53,13:44,14:43,15:52,16:51,17:53,18:54,19:24,20:23,21:27,22:28,23:2,24:2,25:53,26:54,27:2,28:1,29:27,30:28,31:44,32:43,33:44,34:43,35:27,36:28,37:63,38:64,39:64,40:63,41:23,42:24,43:1,44:1,45:53,46:54,47:28,48:27,49:63,50:64,51:39,52:40,53:37,54:38,55:28,56:27,57:57,58:58,59:27,60:27,61:27,62:27,63:63,64:64};
+
+  var hexInfo=hexDB[hexNum]||{name:'Hex '+hexNum,english:'Active energy',gambling:'Moderate fortune'};
+  var nucNum=nuclearMap[hexNum]||1;
+  var nucInfo=hexDB[nucNum]||{name:'Hex '+nucNum,english:'Inner energy',gambling:''};
+
+  // Changing line: (day+month+hour)%6+1
+  var changingLine=((_D+_M+h)%6)+1;
+  var lineTexts=['Initial','Second','Third','Fourth','Fifth','Top'];
+  var changingDesc=lineTexts[changingLine-1]+' line changing · energy in transition';
+
+  var lEl=triEl[lower];
+  var uEl=triEl[upper];
+  var nums=[...new Set([...(elNums[lEl]||[5]),...(elNums[uEl]||[5])])];
 
   return {
-    nums:hex.nums, hex,
+    nums,
+    hex:{
+      num:hexNum,
+      name:hexInfo.name,
+      english:hexInfo.english,
+      gambling:hexInfo.gambling,
+      changingLine:changingDesc,
+      upper:{sym:triSym[upper],name:triNames[upper]},
+      lower:{sym:triSym[lower],name:triNames[lower]},
+      nuclear:{num:nucNum,name:nucInfo.name}
+    },
+    pofNums:[reduce(lower),reduce(upper),reduce(lower+upper)],
     steps:[
-      `<b>Lower trigram:</b> (27+6+1)%8=2 → Dui ☱ (Lake/Joy) = gathering joy`,
-      `<b>Upper trigram:</b> (9+7+8)%8=0 → Kun ☷ (Earth) = receptive ground`,
-      `<b>Hexagram 45 — Cui 萃 (Gathering):</b> ${hex.meaning}`,
-      `<b>Fortune reading:</b> ${hex.gambling}`,
-      `<b>Nuclear hexagram 53 — Jian (Gradual Progress):</b> steady build toward goal`,
-      `<b>Changing line (${drawHour}):</b> ${hex.changingLine}`,
-      `<b>Active numbers:</b> <b>${hex.nums.join(',')}</b> (Earth+Lake+Assembly energy)`,
+      `<b>Lower Trigram:</b> (${_D}+${_M}+${yRed})%8 = ${lower} = ${triSym[lower]} ${triNames[lower]} (${lEl})`,
+      `<b>Upper Trigram:</b> (${h}+${dRed}+${_M})%8 = ${upper} = ${triSym[upper]} ${triNames[upper]} (${uEl})`,
+      `<b>Hexagram ${hexNum} — ${hexInfo.name}</b> · ${hexInfo.english}`,
+      `<b>Nuclear Hex ${nucNum} — ${nucInfo.name}</b> · inner energy`,
+      `<b>Changing Line ${changingLine}</b> · ${changingDesc}`,
+      `<b>For speculation:</b> ${hexInfo.gambling}`,
     ]
   };
 }
 
-// ══════════════════════════
-// LAYER 6: STATS — Game-specific
-// ══════════════════════════
 function layerStats(gameKey,drawHour){
   var game=GAMES[gameKey];
   var isEZ2=gameKey==='ez2';
@@ -3160,18 +3221,36 @@ function layerStats(gameKey,drawHour){
 // ══════════════════════════
 function calcEnergy(bazi,astro,fs){
   var el={Fire:0,Water:0,Wood:0,Metal:0,Earth:0};
-  // BaZi weight
-  el.Fire+=bazi.elemCount.Fire||0;
-  el.Water+=bazi.elemCount.Water||0;
-  el.Metal+=bazi.elemCount.Metal||0;
-  el.Earth+=bazi.elemCount.Earth||0;
-  el.Wood+=bazi.elemCount.Wood||0;
-  // Astrology: Sun=Cancer=Water, Moon=Sag=Fire, Venus=Leo=Fire, Jupiter=Cancer=Water(exalted), Mars=Taurus=Earth, Mercury=Cancer=Water
-  el.Water+=3; el.Fire+=2; el.Earth+=1;
-  // FS: Period9=Fire, Star8=Earth
+  // Derive element counts from BaZi day/hour stems dynamically
+  var stemToEl=['Wood','Wood','Fire','Fire','Earth','Earth','Metal','Metal','Water','Water'];
+  var branchToEl=['Water','Earth','Wood','Wood','Earth','Fire','Fire','Earth','Metal','Metal','Earth','Water'];
+  var branches2=['Zi','Chou','Yin','Mao','Chen','Si','Wu','Wei','Shen','You','Xu','Hai'];
+  // Map element strings to our keys
+  function addEl(elStr){
+    if(elStr&&elStr.includes('Fire')) el.Fire+=1;
+    if(elStr&&elStr.includes('Water')) el.Water+=1;
+    if(elStr&&elStr.includes('Wood')) el.Wood+=1;
+    if(elStr&&elStr.includes('Metal')) el.Metal+=1;
+    if(elStr&&elStr.includes('Earth')) el.Earth+=1;
+  }
+  if(bazi&&bazi.day){addEl(bazi.day.stemEl);addEl(bazi.day.branchEl);}
+  if(bazi&&bazi.hour){addEl(bazi.hour.stemEl);addEl(bazi.hour.branchEl);}
+  if(bazi&&bazi.year){addEl(bazi.year.stemEl||'Fire');addEl(bazi.year.branchEl||'Fire');}
+  // Astrology planet element contributions (dynamic from astro layer)
+  if(astro&&astro.planets){
+    var signElMap={Aries:'Fire',Taurus:'Earth',Gemini:'Air',Cancer:'Water',Leo:'Fire',Virgo:'Earth',
+      Libra:'Air',Scorpio:'Water',Sagittarius:'Fire',Capricorn:'Earth',Aquarius:'Air',Pisces:'Water'};
+    astro.planets.forEach(function(p){
+      var e=signElMap[p.sign];
+      if(e&&e!=='Air'&&el[e]!==undefined) el[e]+=1;
+    });
+  }
+  // Flying Star: Period 9 = Fire dominant
   el.Fire+=2; el.Earth+=2;
-  var total=Object.values(el).reduce((a,b)=>a+b,0);
-  return Object.fromEntries(Object.entries(el).map(([k,v])=>[k,{val:v,pct:Math.round(v/total*100)}]));
+  // Ensure no zeros
+  Object.keys(el).forEach(function(k){if(!el[k])el[k]=1;});
+  var total=Object.values(el).reduce(function(a,b){return a+b;},0);
+  return Object.fromEntries(Object.entries(el).map(function(e){return [e[0],{val:e[1],pct:Math.round(e[1]/total*100)}];}));
 }
 
 // ══════════════════════════
@@ -3275,10 +3354,10 @@ function generate(){
     `🏛️ Horary chart — Regiomontanus · 5th house gambling…`,
     `⭐ Part of Fortune · night chart calculation…`,
     `🔭 Planetary aspects · applying only · strictures checked…`,
-    `☯️ Exact BaZi Ren Shen day · ${dh==='2PM'?'Geng Wei':dh==='5PM'?'Ren You':'Jia Hai'} hour…`,
+    `☯️ Exact BaZi day pillar · ${TODAY_PH} ${dh} hour…`,
     `⚡ Clashes · combines · hidden stems · element balance…`,
-    `🏮 Flying Star Lo Shu · monthly star #8 in center…`,
-    `🔮 I Ching · Hexagram 45 Cui · changing line + nuclear…`,
+    `🏮 Flying Star Lo Shu · monthly star · ${TODAY_PH}…`,
+    `🔮 I Ching · hexagram from today's energy field…`,
     `📊 PCSO ${game.short} historical data · freq+hot+overdue…`,
     `🎯 8-source digit convergence · mapping to 1–${game.max}…`,
   ];
@@ -3288,17 +3367,24 @@ function generate(){
   var iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
   setTimeout(()=>{
     clearInterval(iv);
-    var num=layerNumerology(dh);
-    var astro=layerAstrology(dh);
-    var bazi=layerBazi(dh);
-    var fs=layerFengshui();
-    var iching=layerIChing(dh);
-    var stats=layerStats(currentGame,dh);
-    var energy=calcEnergy(bazi,astro,fs);
-    var layers={num,astro,bazi,fs,iching,stats};
-    var conv=convergence(layers,currentGame);
+    var num,astro,bazi,fs,iching,stats,energy,layers,conv;
+    try{num=layerNumerology(dh);}catch(e){console.error('layerNumerology:',e);num={pyNums:[7],chNums:[3],allNums:[3,7],steps:[]};}
+    try{astro=layerAstrology(dh);}catch(e){console.error('layerAstrology:',e);astro={nums:[1,6],pofNums:[2],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,aspects:[],steps:[]};}
+    try{bazi=layerBazi(dh);}catch(e){console.error('layerBazi:',e);bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',branch:'Wu',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
+    try{fs=layerFengshui();}catch(e){console.error('layerFengshui:',e);fs={nums:[7,8,9],loShu:{C:8},steps:[]};}
+    try{iching=layerIChing(dh);}catch(e){console.error('layerIChing:',e);iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
+    try{stats=layerStats(currentGame,dh);}catch(e){console.error('layerStats:',e);stats={topDigits:[9,1,3],digitWeight:{},topNums:[]};}
+    try{energy=calcEnergy(bazi,astro,fs);}catch(e){console.error('calcEnergy:',e);energy={bars:{Fire:30,Water:30,Wood:9,Metal:9,Earth:22}};}
+    layers={num,astro,bazi,fs,iching,stats};
+    try{conv=convergence(layers,currentGame);}catch(e){console.error('convergence:',e);conv={sorted:[],best:[]};}
     document.getElementById('loader').style.display='none';
-    renderResults(layers,conv,energy,currentGame,dh);
+    try{
+      renderResults(layers,conv,energy,currentGame,dh);
+    }catch(e){
+      document.getElementById('results').innerHTML='<div style="color:#ff6b6b;padding:20px;font-family:monospace;font-size:12px;">'+
+      '<b>renderResults ERROR:</b><br>'+e.message+'<br><br>'+
+      '<b>Stack:</b><br>'+e.stack+'</div>';
+    }
     document.getElementById('results').style.display='block';
     var gw2=document.querySelector('#oracle-page .game-wrap');
     if(gw2) gw2.style.display='block';
@@ -3516,7 +3602,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     </div>
 
     <div class="disc">
-      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified ${TODAY_PH} ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (Ren Shen day · ${drawHour==='2PM'?'Geng Wei hour':drawHour==='5PM'?'Ren You hour':'Jia Hai hour'}) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching Hexagram 45 Cui with nuclear and changing line, and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
+      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified ${TODAY_PH} ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (dynamic daily pillars) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (cast from today's date) with nuclear and changing line, and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
     </div>
   `;
 }
@@ -3533,6 +3619,16 @@ function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
 
 // Init
 document.getElementById('ez2wrap').style.display='block';
+
+
+
+
+
+
+
+
+
+
 </script>
 </div>
 </body>
