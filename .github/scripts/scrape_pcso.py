@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-PCSO Results Scraper v14
-Source: pwedeh.com (dated page only — no homepage fallback)
-Parser: h2/h3-tag based, handles dash-separated and concatenated formats
+PCSO Results Scraper v15
+Source: businesslist.ph (separate pages per game)
 No 'date' field in balls output entries
 """
 
@@ -17,6 +16,7 @@ HEADERS = {
                   '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
+    'Referer': 'https://www.businesslist.ph/lottery',
 }
 
 SCHED = {
@@ -27,97 +27,87 @@ SCHED = {
     '6/42': [2, 4, 6],
 }
 
-MONTHS = [
-    'january','february','march','april','may','june',
-    'july','august','september','october','november','december'
-]
+BALL_URLS = {
+    '6/58': ('https://www.businesslist.ph/lottery/result/ultra-lotto-658', 58),
+    '6/55': ('https://www.businesslist.ph/lottery/result/grand-lotto-655', 55),
+    '6/49': ('https://www.businesslist.ph/lottery/result/superlotto-649', 49),
+    '6/45': ('https://www.businesslist.ph/lottery/result/megalotto-645', 45),
+    '6/42': ('https://www.businesslist.ph/lottery/result/lotto-642', 42),
+}
 
-SKIP_PHRASES = [
-    'waiting', 'not yet', 'pending', 'tba', 'no result',
-    'to be', 'available soon', 'check back', 'draw not',
-]
-
-
-def build_url(dt):
-    m = MONTHS[dt.month - 1]
-    return f"https://pwedeh.com/lotto-result-{m}-{dt.day}-{dt.year}/"
+EZ2_URL = 'https://www.businesslist.ph/lottery/result/ez2-lotto'
 
 
-def is_pending(text):
-    return any(p in text.lower() for p in SKIP_PHRASES)
+def fetch(url):
+    print(f"  Fetching {url} ...")
+    r = requests.get(url, headers=HEADERS, timeout=20)
+    r.raise_for_status()
+    print(f"  HTTP {r.status_code} | {len(r.text)} chars")
+    return r.text
 
 
-def parse_nums_smart(text, count, max_val=58):
-    """Handle both dash-separated (14-23) and concatenated (1423) formats."""
-    text = re.sub(r'\d+/\d+', '', text)
-
-    if '-' in text:
-        nums = re.findall(r'\b(\d{1,2})\b', text)
-        result = [int(n) for n in nums if 1 <= int(n) <= max_val]
-        return result[:count] if len(result) >= count else []
-
-    digits_only = re.sub(r'\D', '', text)
-    if len(digits_only) == count * 2:
-        pairs = [int(digits_only[i:i+2]) for i in range(0, len(digits_only), 2)]
-        if all(1 <= n <= max_val for n in pairs):
-            return pairs
-
-    return []
-
-
-def parse(html):
+def parse_ez2(html):
+    """Extract today's EZ2 2PM/5PM/9PM from businesslist.ph."""
     soup = BeautifulSoup(html, 'html.parser')
-    ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
-    balls_map = {}
+    text = soup.get_text(separator='\n')
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
 
-    headings = soup.find_all(['h2', 'h3'])
-    print(f"  {len(headings)} headings — FULL DUMP:")
+    ez2 = {'2PM': [], '5PM': [], '9PM': []}
+    in_today = False
+    current_draw = None
+    nums_buf = []
 
-    for h in headings:
-        heading = h.get_text(strip=True)
-
-        content_parts = []
-        for sib in h.next_siblings:
-            if sib.name in ['h2', 'h3']:
-                break
-            if hasattr(sib, 'get_text'):
-                t = sib.get_text(strip=True)
-                if t:
-                    content_parts.append(t)
-            elif isinstance(sib, str) and sib.strip():
-                content_parts.append(sib.strip())
-
-        fc = content_parts[0] if content_parts else ''
-        print(f"    '{heading[:55]}' → '{fc[:45]}'")
-
-        if not fc or is_pending(fc):
+    for line in lines:
+        if 'EZ2 Result Today' in line or '2D EZ2 Result Today' in line:
+            in_today = True
+            continue
+        if in_today and ('Yesterday' in line or 'History' in line):
+            break
+        if not in_today:
             continue
 
-        # EZ2 / 2D
-        if re.search(r'2D Lotto|EZ2', heading, re.I):
-            draw = None
-            if re.search(r'2:00|2PM', heading): draw = '2PM'
-            elif re.search(r'5:00|5PM', heading): draw = '5PM'
-            elif re.search(r'9:00|9PM', heading): draw = '9PM'
-            if draw and not ez2_map[draw]:
-                nums = parse_nums_smart(fc, 2, 31)
-                if len(nums) == 2:
-                    ez2_map[draw] = nums
-                    print(f"      -> EZ2 {draw}: {nums}")
+        if line in ('2PM', '5PM', '9PM'):
+            if current_draw and len(nums_buf) == 2:
+                ez2[current_draw] = nums_buf
+            current_draw = line
+            nums_buf = []
+        elif current_draw and re.match(r'^\d{1,2}$', line):
+            n = int(line)
+            if 1 <= n <= 31:
+                nums_buf.append(n)
 
-        # 6-ball games
-        for game, label, mx in [
-            ('6/58', '6/58', 58), ('6/55', '6/55', 55),
-            ('6/49', '6/49', 49), ('6/45', '6/45', 45),
-            ('6/42', '6/42', 42),
-        ]:
-            if label in heading and game not in balls_map:
-                nums = parse_nums_smart(fc, 6, mx)
-                if len(nums) == 6:
-                    balls_map[game] = nums
-                    print(f"      -> {game}: {nums}")
+    if current_draw and len(nums_buf) == 2:
+        ez2[current_draw] = nums_buf
 
-    return ez2_map, balls_map
+    return ez2
+
+
+def parse_ball(html, max_val):
+    """Extract today's 6-ball result from businesslist.ph game page."""
+    soup = BeautifulSoup(html, 'html.parser')
+    text = soup.get_text(separator='\n')
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+
+    in_today = False
+    nums = []
+
+    for line in lines:
+        if 'Result Today' in line:
+            in_today = True
+            continue
+        if in_today and ('Yesterday' in line or 'History' in line):
+            break
+        if not in_today:
+            continue
+
+        if re.match(r'^\d{1,2}$', line):
+            n = int(line)
+            if 1 <= n <= max_val:
+                nums.append(n)
+            if len(nums) == 6:
+                break
+
+    return nums if len(nums) == 6 else []
 
 
 def build_output(ez2_map, balls_map):
@@ -145,21 +135,33 @@ def build_output(ez2_map, balls_map):
 
 def main():
     now_ph = datetime.now(PH_TZ)
-    print(f"\nPCSO Scraper v14 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
+    print(f"\nPCSO Scraper v15 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
     print('=' * 50)
 
     ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
     balls_map = {}
-    url = build_url(now_ph)
 
+    # EZ2
     try:
-        print(f"Fetching {url} ...")
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        r.raise_for_status()
-        print(f"HTTP {r.status_code} | {len(r.text)} chars")
-        ez2_map, balls_map = parse(r.text)
+        html = fetch(EZ2_URL)
+        ez2_map = parse_ez2(html)
+        ez2_found = sum(1 for v in ez2_map.values() if v)
+        print(f"  EZ2: {ez2_found}/3 draws found → {ez2_map}")
     except Exception as e:
-        print(f"ERROR: {type(e).__name__}: {e}")
+        print(f"  EZ2 ERROR: {type(e).__name__}: {e}")
+
+    # 6-ball games
+    for game, (url, max_val) in BALL_URLS.items():
+        try:
+            html = fetch(url)
+            nums = parse_ball(html, max_val)
+            if nums:
+                balls_map[game] = nums
+                print(f"  {game}: {nums}")
+            else:
+                print(f"  {game}: no draw today or pending")
+        except Exception as e:
+            print(f"  {game} ERROR: {type(e).__name__}: {e}")
 
     output = build_output(ez2_map, balls_map)
 
