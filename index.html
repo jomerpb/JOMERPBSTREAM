@@ -3733,7 +3733,7 @@ function pcsoRender(){
       }
       meta='<div class="pcso-meta-row"><span class="pcso-jackpot">'+g.jackpot+' jackpot</span><span class="pcso-winners">'+wLabel+sched+'</span></div>';
     }
-    h+='<div class="pcso-row" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;align-items:center;gap:8px;width:100%"><span class="pcso-game">'+g.game+'</span><span class="pcso-draw" style="font-size:9px;color:var(--muted)">'+g.date+'</span><div class="pcso-nums">'+n+'</div></div>'+meta+'</div>';
+    h+='<div class="pcso-row" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;align-items:center;gap:8px;width:100%"><span class="pcso-game">'+g.game+'</span><div class="pcso-nums">'+n+'</div></div>'+meta+'</div>';
   });
   var grid=document.getElementById('pcso-grid');
   if(grid) grid.innerHTML=h;
@@ -3761,7 +3761,7 @@ async function pcsoAIFetch(){
     if(data.balls&&Array.isArray(data.balls)){
       var sched={'6/58':[0,2,5],'6/55':[1,3,6],'6/49':[0,2,4],'6/45':[1,3,5],'6/42':[2,4,6]};
       PCSO_DATA.balls=data.balls.map(function(g){
-        return{game:g.game,date:g.date,nums:g.nums||[],done:!!(g.nums&&g.nums.length>0),
+        return{game:g.game,nums:g.nums||[],done:!!(g.nums&&g.nums.length>0),
           jackpot:g.jackpot||'',winners:g.winners||0,days:g.days||sched[g.game]||[]};
       });
     }
