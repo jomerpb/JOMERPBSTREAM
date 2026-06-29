@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-29T17:20:33.616550+08:00",
+  "updated": "2026-06-29T17:35:04.834152+08:00",
   "date": "June 29, 2026",
   "ez2": [
     {
@@ -20,10 +20,7 @@
     },
     {
       "draw": "9PM",
-      "nums": [
-        17,
-        13
-      ],
+      "nums": [],
       "cutoff": 21
     }
   ],
@@ -40,6 +37,7 @@
       ],
       "done": true,
       "jackpot": "",
+      "draw_date": "",
       "winners": 0,
       "days": [
         0,
@@ -52,6 +50,7 @@
       "nums": [],
       "done": false,
       "jackpot": "",
+      "draw_date": "",
       "winners": 0,
       "days": [
         1,
@@ -64,6 +63,7 @@
       "nums": [],
       "done": false,
       "jackpot": "",
+      "draw_date": "",
       "winners": 0,
       "days": [
         0,
@@ -83,6 +83,7 @@
       ],
       "done": true,
       "jackpot": "",
+      "draw_date": "",
       "winners": 0,
       "days": [
         1,
@@ -95,6 +96,7 @@
       "nums": [],
       "done": false,
       "jackpot": "",
+      "draw_date": "",
       "winners": 0,
       "days": [
         2,
