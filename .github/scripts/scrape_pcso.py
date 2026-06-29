@@ -121,6 +121,10 @@ def parse_individual(html, max_val):
     """Get jackpot + draw_date from individual game page. Today first, yesterday fallback."""
     soup = BeautifulSoup(html, 'html.parser')
 
+    # Print all h2s for diagnosis
+    all_h2 = [h.get_text(strip=True) for h in soup.find_all('h2')]
+    print(f"    h2 headings: {all_h2[:6]}")
+
     for section in ['Today', 'Yesterday']:
         h2 = None
         for h in soup.find_all('h2'):
@@ -128,6 +132,7 @@ def parse_individual(html, max_val):
                 h2 = h
                 break
         if not h2:
+            print(f"    '{section}' heading not found — skipping")
             continue
 
         nums, jackpot, draw_date = [], '', ''
@@ -147,6 +152,7 @@ def parse_individual(html, max_val):
                 if m_dt:
                     draw_date = m_dt.group(1)
 
+        print(f"    '{section}': nums={nums} jp='{jackpot}' date='{draw_date}'")
         if len(nums) == 6:
             return {'nums': nums[:6], 'jackpot': jackpot, 'draw_date': draw_date}
 
