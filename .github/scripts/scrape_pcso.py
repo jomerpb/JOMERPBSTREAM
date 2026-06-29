@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-PCSO Results Scraper v10
-Source: pwedeh.com (daily dated pages)
-Parser: h3-tag based (not markdown split)
+PCSO Results Scraper v11
+Source: pwedeh.com (dated page → homepage fallback)
+Parser: h2/h3-tag based with debug logging
 No 'date' field in balls output entries
 """
 
@@ -33,29 +33,31 @@ MONTHS = [
 ]
 
 
-def build_url(dt):
+def build_urls(dt):
     m = MONTHS[dt.month - 1]
-    return f"https://pwedeh.com/lotto-result-{m}-{dt.day}-{dt.year}/"
+    dated = f"https://pwedeh.com/lotto-result-{m}-{dt.day}-{dt.year}/"
+    return [dated, "https://pwedeh.com/"]
 
 
 def parse_nums(text, count, max_val=58):
-    """Extract exactly `count` valid lotto numbers, stripping game label fractions."""
     text = re.sub(r'\d+/\d+', '', text)
     nums = re.findall(r'\b(\d{1,2})\b', text)
     result = [int(n) for n in nums if 1 <= int(n) <= max_val]
     return result[:count] if len(result) >= count else []
 
 
-def parse(html):
+def parse(html, url_label):
     soup = BeautifulSoup(html, 'html.parser')
     ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
     balls_map = {}
 
-    # Iterate over all h2/h3 headings
-    for h in soup.find_all(['h2', 'h3']):
+    headings = soup.find_all(['h2', 'h3'])
+    print(f"  [{url_label}] {len(headings)} headings found")
+
+    for h in headings:
         heading = h.get_text(strip=True)
 
-        # Collect sibling content until the next heading
+        # Collect sibling content until next heading
         content_parts = []
         for sib in h.next_siblings:
             if sib.name in ['h2', 'h3']:
@@ -69,10 +71,9 @@ def parse(html):
 
         if not content_parts:
             continue
-
         first_content = content_parts[0]
 
-        # Skip if not drawn yet
+        # Skip pending
         if 'Waiting' in first_content:
             continue
 
@@ -86,7 +87,7 @@ def parse(html):
                 nums = parse_nums(first_content, 2, 31)
                 if len(nums) == 2:
                     ez2_map[draw] = nums
-                    print(f"  EZ2 {draw}: {nums}")
+                    print(f"    EZ2 {draw}: {nums}")
 
         # 6-ball games
         for game, label, mx in [
@@ -98,9 +99,20 @@ def parse(html):
                 nums = parse_nums(first_content, 6, mx)
                 if len(nums) == 6:
                     balls_map[game] = nums
-                    print(f"  {game}: {nums}")
+                    print(f"    {game}: {nums}")
 
     return ez2_map, balls_map
+
+
+def merge(ez2_base, balls_base, ez2_new, balls_new):
+    """Fill in gaps from a secondary source."""
+    for d in ['2PM', '5PM', '9PM']:
+        if not ez2_base[d] and ez2_new.get(d):
+            ez2_base[d] = ez2_new[d]
+    for g in ['6/58', '6/55', '6/49', '6/45', '6/42']:
+        if g not in balls_base and g in balls_new:
+            balls_base[g] = balls_new[g]
+    return ez2_base, balls_base
 
 
 def scrape(url):
@@ -136,18 +148,25 @@ def build_output(ez2_map, balls_map):
 
 def main():
     now_ph = datetime.now(PH_TZ)
-    print(f"\nPCSO Scraper v10 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
+    print(f"\nPCSO Scraper v11 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
     print('=' * 50)
 
     ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
     balls_map = {}
-    url = build_url(now_ph)
+    urls = build_urls(now_ph)
 
-    try:
-        html = scrape(url)
-        ez2_map, balls_map = parse(html)
-    except Exception as e:
-        print(f"ERROR: {type(e).__name__}: {e}")
+    for i, url in enumerate(urls):
+        try:
+            html = scrape(url)
+            ez2_new, balls_new = parse(html, f"URL{i+1}")
+            ez2_map, balls_map = merge(ez2_map, balls_map, ez2_new, balls_new)
+
+            found = sum(1 for e in ez2_map.values() if e) + sum(1 for b in balls_map.values() if b)
+            if found > 0:
+                print(f"  Got {found} results from URL{i+1} — stopping")
+                break
+        except Exception as e:
+            print(f"  URL{i+1} ERROR: {type(e).__name__}: {e}")
 
     output = build_output(ez2_map, balls_map)
 
