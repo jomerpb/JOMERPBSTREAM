@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-PCSO Results Scraper v11
+PCSO Results Scraper v12
 Source: pwedeh.com (dated page → homepage fallback)
-Parser: h2/h3-tag based with debug logging
+Parser: h2/h3-tag based with full heading dump + extended skip phrases
 No 'date' field in balls output entries
 """
 
@@ -32,11 +32,21 @@ MONTHS = [
     'july','august','september','october','november','december'
 ]
 
+SKIP_PHRASES = [
+    'waiting', 'not yet', 'pending', 'tba', 'no result',
+    'to be', 'available soon', 'check back', 'draw not',
+]
+
 
 def build_urls(dt):
     m = MONTHS[dt.month - 1]
     dated = f"https://pwedeh.com/lotto-result-{m}-{dt.day}-{dt.year}/"
     return [dated, "https://pwedeh.com/"]
+
+
+def is_pending(text):
+    t = text.lower()
+    return any(p in t for p in SKIP_PHRASES)
 
 
 def parse_nums(text, count, max_val=58):
@@ -52,7 +62,7 @@ def parse(html, url_label):
     balls_map = {}
 
     headings = soup.find_all(['h2', 'h3'])
-    print(f"  [{url_label}] {len(headings)} headings found")
+    print(f"  [{url_label}] {len(headings)} headings — FULL DUMP:")
 
     for h in headings:
         heading = h.get_text(strip=True)
@@ -69,25 +79,23 @@ def parse(html, url_label):
             elif isinstance(sib, str) and sib.strip():
                 content_parts.append(sib.strip())
 
-        if not content_parts:
-            continue
-        first_content = content_parts[0]
+        fc = content_parts[0] if content_parts else ''
+        print(f"    '{heading[:55]}' → '{fc[:45]}'")
 
-        # Skip pending
-        if 'Waiting' in first_content:
+        if not fc or is_pending(fc):
             continue
 
-        # EZ2 / 2D
-        if '2D Lotto' in heading:
+        # EZ2 / 2D — match any variant
+        if re.search(r'2D Lotto|EZ2', heading, re.I):
             draw = None
-            if '2:00' in heading:   draw = '2PM'
-            elif '5:00' in heading: draw = '5PM'
-            elif '9:00' in heading: draw = '9PM'
+            if re.search(r'2:00|2PM', heading): draw = '2PM'
+            elif re.search(r'5:00|5PM', heading): draw = '5PM'
+            elif re.search(r'9:00|9PM', heading): draw = '9PM'
             if draw and not ez2_map[draw]:
-                nums = parse_nums(first_content, 2, 31)
+                nums = parse_nums(fc, 2, 31)
                 if len(nums) == 2:
                     ez2_map[draw] = nums
-                    print(f"    EZ2 {draw}: {nums}")
+                    print(f"      -> EZ2 {draw}: {nums}")
 
         # 6-ball games
         for game, label, mx in [
@@ -96,16 +104,15 @@ def parse(html, url_label):
             ('6/42', '6/42', 42),
         ]:
             if label in heading and game not in balls_map:
-                nums = parse_nums(first_content, 6, mx)
+                nums = parse_nums(fc, 6, mx)
                 if len(nums) == 6:
                     balls_map[game] = nums
-                    print(f"    {game}: {nums}")
+                    print(f"      -> {game}: {nums}")
 
     return ez2_map, balls_map
 
 
 def merge(ez2_base, balls_base, ez2_new, balls_new):
-    """Fill in gaps from a secondary source."""
     for d in ['2PM', '5PM', '9PM']:
         if not ez2_base[d] and ez2_new.get(d):
             ez2_base[d] = ez2_new[d]
@@ -148,7 +155,7 @@ def build_output(ez2_map, balls_map):
 
 def main():
     now_ph = datetime.now(PH_TZ)
-    print(f"\nPCSO Scraper v11 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
+    print(f"\nPCSO Scraper v12 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
     print('=' * 50)
 
     ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
@@ -161,7 +168,8 @@ def main():
             ez2_new, balls_new = parse(html, f"URL{i+1}")
             ez2_map, balls_map = merge(ez2_map, balls_map, ez2_new, balls_new)
 
-            found = sum(1 for e in ez2_map.values() if e) + sum(1 for b in balls_map.values() if b)
+            found = sum(1 for e in ez2_map.values() if e) + \
+                    sum(1 for b in balls_map.values() if b)
             if found > 0:
                 print(f"  Got {found} results from URL{i+1} — stopping")
                 break
