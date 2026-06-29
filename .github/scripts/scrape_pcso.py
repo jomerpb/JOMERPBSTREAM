@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-PCSO Results Scraper v15
+PCSO Results Scraper v16
 Source: businesslist.ph (separate pages per game)
+Parser: h2 sibling traversal — no get_text() table merging issue
 No 'date' field in balls output entries
 """
 
@@ -47,34 +48,39 @@ def fetch(url):
 
 
 def parse_ez2(html):
-    """Extract today's EZ2 2PM/5PM/9PM from businesslist.ph."""
+    """Parse EZ2 using h2 sibling traversal — avoids table merging."""
     soup = BeautifulSoup(html, 'html.parser')
-    text = soup.get_text(separator='\n')
-    lines = [l.strip() for l in text.split('\n') if l.strip()]
-
     ez2 = {'2PM': [], '5PM': [], '9PM': []}
-    in_today = False
+
+    # Find the Today h2
+    today_h2 = None
+    for h in soup.find_all('h2'):
+        txt = h.get_text(strip=True)
+        if 'Today' in txt and 'EZ2' in txt:
+            today_h2 = h
+            break
+
+    if not today_h2:
+        print("  EZ2: 'Today' heading not found")
+        return ez2
+
     current_draw = None
     nums_buf = []
 
-    for line in lines:
-        if 'EZ2 Result Today' in line or '2D EZ2 Result Today' in line:
-            in_today = True
-            continue
-        if in_today and ('Yesterday' in line or 'History' in line):
+    for sib in today_h2.next_siblings:
+        if sib.name == 'h2':
             break
-        if not in_today:
-            continue
-
-        if line in ('2PM', '5PM', '9PM'):
-            if current_draw and len(nums_buf) == 2:
-                ez2[current_draw] = nums_buf
-            current_draw = line
-            nums_buf = []
-        elif current_draw and re.match(r'^\d{1,2}$', line):
-            n = int(line)
-            if 1 <= n <= 31:
-                nums_buf.append(n)
+        if sib.name == 'p':
+            t = sib.get_text(strip=True)
+            if t in ('2PM', '5PM', '9PM'):
+                if current_draw and len(nums_buf) == 2:
+                    ez2[current_draw] = nums_buf
+                current_draw = t
+                nums_buf = []
+            elif current_draw and re.match(r'^\d{1,2}$', t):
+                n = int(t)
+                if 1 <= n <= 31:
+                    nums_buf.append(n)
 
     if current_draw and len(nums_buf) == 2:
         ez2[current_draw] = nums_buf
@@ -83,29 +89,31 @@ def parse_ez2(html):
 
 
 def parse_ball(html, max_val):
-    """Extract today's 6-ball result from businesslist.ph game page."""
+    """Parse 6-ball using h2 sibling traversal."""
     soup = BeautifulSoup(html, 'html.parser')
-    text = soup.get_text(separator='\n')
-    lines = [l.strip() for l in text.split('\n') if l.strip()]
 
-    in_today = False
+    today_h2 = None
+    for h in soup.find_all('h2'):
+        if 'Result Today' in h.get_text(strip=True):
+            today_h2 = h
+            break
+
+    if not today_h2:
+        return []
+
     nums = []
 
-    for line in lines:
-        if 'Result Today' in line:
-            in_today = True
-            continue
-        if in_today and ('Yesterday' in line or 'History' in line):
+    for sib in today_h2.next_siblings:
+        if sib.name == 'h2':
             break
-        if not in_today:
-            continue
-
-        if re.match(r'^\d{1,2}$', line):
-            n = int(line)
-            if 1 <= n <= max_val:
-                nums.append(n)
-            if len(nums) == 6:
-                break
+        if sib.name == 'p':
+            t = sib.get_text(strip=True)
+            if re.match(r'^\d{1,2}$', t):
+                n = int(t)
+                if 1 <= n <= max_val:
+                    nums.append(n)
+                if len(nums) == 6:
+                    break
 
     return nums if len(nums) == 6 else []
 
@@ -135,7 +143,7 @@ def build_output(ez2_map, balls_map):
 
 def main():
     now_ph = datetime.now(PH_TZ)
-    print(f"\nPCSO Scraper v15 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
+    print(f"\nPCSO Scraper v16 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
     print('=' * 50)
 
     ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
@@ -146,7 +154,7 @@ def main():
         html = fetch(EZ2_URL)
         ez2_map = parse_ez2(html)
         ez2_found = sum(1 for v in ez2_map.values() if v)
-        print(f"  EZ2: {ez2_found}/3 draws found → {ez2_map}")
+        print(f"  EZ2: {ez2_found}/3 → {ez2_map}")
     except Exception as e:
         print(f"  EZ2 ERROR: {type(e).__name__}: {e}")
 
