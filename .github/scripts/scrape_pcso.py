@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-PCSO Results Scraper v7
+PCSO Results Scraper v8
 Uses requests + BeautifulSoup against lottopcso.com
+Handles both same-line and next-line number formats
 No 'date' field in balls output entries
 """
 
-import json, re, sys, requests
+import json, re, requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
 
@@ -30,9 +31,21 @@ SCHED = {
 
 
 def parse_nums(text, count, max_val=58):
+    """Extract exactly `count` valid lotto numbers from text."""
+    text = re.sub(r'\d+/\d+', '', text)  # strip fractions like 6/58, 6/55
     nums = re.findall(r'\b(\d{1,2})\b', text)
     result = [int(n) for n in nums if 1 <= int(n) <= max_val]
     return result[:count] if len(result) >= count else []
+
+
+def get_nums(label_line, next_line, count, max_val):
+    """Try same-line first (dash/colon separator), then next-line fallback."""
+    if '–' in label_line or (':' in label_line and re.search(r'\d{2}-\d{2}', label_line)):
+        part = re.split(r'[–:]', label_line)[-1]
+        n = parse_nums(part, count, max_val)
+        if len(n) == count:
+            return n
+    return parse_nums(next_line, count, max_val)
 
 
 def scrape():
@@ -50,23 +63,19 @@ def parse(html):
     ez2_map = {'2PM': [], '5PM': [], '9PM': []}
     balls_map = {}
 
-    for line in text.split('\n'):
-        line = line.strip()
-        if not line:
-            continue
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+
+    for i, line in enumerate(lines):
+        next_line = lines[i + 1] if i + 1 < len(lines) else ''
 
         # EZ2 / 2D
         if re.search(r'EZ2|2D Lotto', line, re.I):
             draw = None
-            if re.search(r'2\s*PM|2:00', line, re.I):
-                draw = '2PM'
-            elif re.search(r'5\s*PM|5:00', line, re.I):
-                draw = '5PM'
-            elif re.search(r'9\s*PM|9:00', line, re.I):
-                draw = '9PM'
+            if re.search(r'2\s*PM', line): draw = '2PM'
+            elif re.search(r'5\s*PM', line): draw = '5PM'
+            elif re.search(r'9\s*PM', line): draw = '9PM'
             if draw and not ez2_map[draw]:
-                part = re.split(r'[–\-]', line)[-1]
-                nums = parse_nums(part, 2, 31)
+                nums = get_nums(line, next_line, 2, 31)
                 if len(nums) == 2:
                     ez2_map[draw] = nums
                     print(f"  EZ2 {draw}: {nums}")
@@ -78,8 +87,7 @@ def parse(html):
             ('6/42', '6/42', 42),
         ]:
             if label in line and game not in balls_map:
-                part = re.split(r'[–\-]', line)[-1]
-                nums = parse_nums(part, 6, mx)
+                nums = get_nums(line, next_line, 6, mx)
                 if len(nums) == 6:
                     balls_map[game] = nums
                     print(f"  {game}: {nums}")
@@ -112,7 +120,7 @@ def build_output(ez2_map, balls_map):
 
 def main():
     now_ph = datetime.now(PH_TZ)
-    print(f"\nPCSO Scraper v7 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
+    print(f"\nPCSO Scraper v8 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
     print('=' * 50)
 
     ez2_map = {'2PM': [], '5PM': [], '9PM': []}
