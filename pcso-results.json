@@ -1,0 +1,83 @@
+{
+  "updated": "2026-06-29T13:30:55.859132+08:00",
+  "date": "June 29, 2026",
+  "ez2": [
+    {
+      "draw": "2PM",
+      "nums": [],
+      "cutoff": 14
+    },
+    {
+      "draw": "5PM",
+      "nums": [],
+      "cutoff": 17
+    },
+    {
+      "draw": "9PM",
+      "nums": [],
+      "cutoff": 21
+    }
+  ],
+  "balls": [
+    {
+      "game": "6/58",
+      "nums": [],
+      "done": false,
+      "jackpot": "",
+      "winners": 0,
+      "days": [
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "game": "6/55",
+      "nums": [],
+      "done": false,
+      "jackpot": "",
+      "winners": 0,
+      "days": [
+        1,
+        3,
+        6
+      ]
+    },
+    {
+      "game": "6/49",
+      "nums": [],
+      "done": false,
+      "jackpot": "",
+      "winners": 0,
+      "days": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "game": "6/45",
+      "nums": [],
+      "done": false,
+      "jackpot": "",
+      "winners": 0,
+      "days": [
+        1,
+        3,
+        5
+      ]
+    },
+    {
+      "game": "6/42",
+      "nums": [],
+      "done": false,
+      "jackpot": "",
+      "winners": 0,
+      "days": [
+        2,
+        4,
+        6
+      ]
+    }
+  ]
+}
