@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4 pytz PCSOLotto-Webscraper
+        run: pip install requests beautifulsoup4
 
       - name: Run PCSO scraper
         run: python3 .github/scripts/scrape_pcso.py
@@ -33,5 +33,5 @@ jobs:
           git config user.name "PCSO Bot"
           git config user.email "pcso-bot@jomerpb.com"
           git add pcso-results.json
-          git diff --staged --quiet || git commit -m "Auto-update PCSO results $(date +'%Y-%m-%d %H:%M') PHT"
+          git diff --staged --quiet || git commit -m "chore: update PCSO results $(date -u +'%Y-%m-%d %H:%M') UTC"
           git push
