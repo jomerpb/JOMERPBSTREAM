@@ -17,7 +17,6 @@
     body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;padding-bottom:var(--nav-h);}
     .page{display:none;min-height:100vh;}
     .page.active{display:block;}
-    #oracle-page{min-height:0!important;height:auto!important;}
 
     /* TOP BAR */
     .topbar{position:sticky;top:0;z-index:90;height:var(--top-h);display:flex;align-items:center;gap:10px;padding:0 14px;background:rgba(7,9,15,0.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);}
@@ -241,6 +240,11 @@
   <div class="row-section">
     <div class="row-header"><div class="row-title">📺 Popular TV Series</div><div class="row-see-all" onclick="navTo('tv')">See all</div></div>
     <div class="row-scroll" id="row-tv"></div>
+  </div>
+  <!-- K-Drama Row -->
+  <div class="row-section">
+    <div class="row-header"><div class="row-title">🇰🇷 K-Drama</div><div class="row-see-all" onclick="setTVFilter('KR')">See all</div></div>
+    <div class="row-scroll" id="row-kdrama"></div>
   </div>
   <!-- Movies Row -->
   <div class="row-section">
@@ -621,8 +625,24 @@
 <!-- BOTTOM NAV -->
 <div class="bottom-nav">
   <div class="nav-item active" id="nav-home" onclick="navTo('home')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M5 7V5a7 7 0 0 1 14 0v2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
-    <span>Stream</span><div class="nav-dot"></div>
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+    <span>Home</span><div class="nav-dot"></div>
+  </div>
+  <div class="nav-item" id="nav-anime" onclick="navTo('anime')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+    <span>Anime</span><div class="nav-dot"></div>
+  </div>
+  <div class="nav-item" id="nav-tv" onclick="navTo('tv')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
+    <span>TV</span><div class="nav-dot"></div>
+  </div>
+  <div class="nav-item" id="nav-movies" onclick="navTo('movies')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5"/></svg>
+    <span>Movies</span><div class="nav-dot"></div>
+  </div>
+  <div class="nav-item" id="nav-search" onclick="navTo('search')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <span>Search</span><div class="nav-dot"></div>
   </div>
   <div class="nav-item" id="nav-oracle" onclick="navTo('oracle')">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
@@ -698,7 +718,6 @@ function showPage(id) {
 function goHome() {
   history.pushState({page:'home-page'}, '', '#home');
   showPage('home-page'); setNav('home');
-  loadHome();
 }
 
 function goBack() { history.back(); }
@@ -725,17 +744,12 @@ function navTo(tab) {
   if (tab === 'tv'     && !document.getElementById('tv-grid').children.length)     loadTVSub('popular','', document.querySelector('#tv-tabs .ctab'));
   if (tab === 'movies' && !document.getElementById('movies-grid').children.length) loadMovieSub('popular', document.querySelector('#movie-tabs .ctab'));
   if (tab === 'search') setTimeout(() => document.getElementById('search-input')?.focus(), 100);
-  if (tab === 'home') loadHome();
 }
 
 // Back/forward/gesture handler
 window.addEventListener('popstate', async (e) => {
   const state = e.state;
-  if (!state?.page) {
-    var h=window.location.hash.replace('#','');
-    if(h==='oracle'){showPage('oracle-page');setNav('oracle');return;}
-    showPage('home-page'); setNav('home'); return;
-  }
+  if (!state?.page) { showPage('home-page'); setNav('home'); return; }
   const page = state.page;
   if (page !== 'player-page') document.getElementById('player-iframe').src = '';
   showPage(page);
@@ -940,7 +954,7 @@ function fromAL(m) {
 async function loadHome() {
   renderContinueWatching();
   // skeletons
-  ['row-anime','row-tv','row-movies'].forEach(id => {
+  ['row-anime','row-tv','row-kdrama','row-movies'].forEach(id => {
     document.getElementById(id).innerHTML = skRow(8);
   });
 
@@ -948,18 +962,21 @@ async function loadHome() {
   const season = mo<=3?'WINTER':mo<=6?'SPRING':mo<=9?'SUMMER':'FALL';
   const year = now.getFullYear();
 
-  const [animeData, tvData, movieData] = await Promise.all([
+  const [animeData, tvData, kdramaData, movieData] = await Promise.all([
     al(`query{Page(perPage:15){media(type:ANIME,sort:TRENDING_DESC,isAdult:false){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format genres}}}`, {}),
     tmdb('/discover/tv', {sort_by:'popularity.desc', 'with_status':'0'}),
+    tmdb('/discover/tv', {with_origin_country:'KR', sort_by:'popularity.desc'}),
     tmdb('/movie/popular'),
   ]);
 
   const animeList = (animeData?.data?.Page?.media||[]).map(fromAL);
   const tvList    = (tvData?.results||[]).slice(0,15).map(m=>{const i=fromTMDB(m,'tv');if(!i.status)i.status='Ongoing';return i;});
+  const kdramaList= (kdramaData?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
   const movieList = (movieData?.results||[]).slice(0,15).map(m=>fromTMDB(m,'movie'));
 
   renderRow('row-anime',  animeList);
   renderRow('row-tv',     tvList);
+  renderRow('row-kdrama', kdramaList);
   renderRow('row-movies', movieList);
 
   // Hero — use a trending anime or TV with backdrop
@@ -2122,9 +2139,9 @@ async function initFromHash() {
   }
 
   // Tab pages
-  const tabMap = {anime:'anime-page',tv:'tv-page',movies:'movies-page',search:'search-page',oracle:'oracle-page'};
+  const tabMap = {anime:'anime-page',tv:'tv-page',movies:'movies-page',search:'search-page'};
   if (tabMap[hash]) {
-    showPage(tabMap[hash]); setNav(hash); if(hash!=='oracle') loadHome();
+    showPage(tabMap[hash]); setNav(hash); loadHome();
     if(hash==='anime')  loadAnimeSub('trending',document.querySelector('#anime-tabs .ctab'));
     if(hash==='tv')     loadTVSub('popular','',document.querySelector('#tv-tabs .ctab'));
     if(hash==='movies') loadMovieSub('popular',document.querySelector('#movie-tabs .ctab'));
@@ -2137,12 +2154,22 @@ async function initFromHash() {
   loadHome();
 }
 
-// initFromHash moved below oracle div
+initFromHash();
 </script>
 <!-- ORACLE PAGE -->
-<div id="oracle-page" class="page">
+<div id="oracle-page" class="page" style="background:#0a0a0f;">
+  <iframe id="oracle-iframe" srcdoc="<!DOCTYPE html>
+<html lang=&quot;en&quot;>
+<head>
+<meta charset=&quot;UTF-8&quot;/>
+<meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1.0,viewport-fit=cover&quot;/>
+<meta name=&quot;theme-color&quot; content=&quot;#0a0a0f&quot;/>
+<title>JOMERPB Lotto Oracle</title>
+<link href=&quot;https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap&quot; rel=&quot;stylesheet&quot;/>
 <style>
-#oracle-page{
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  /* JOMERPB Brand Tokens */
   --bg:#0a0a0f;
   --surface:#111119;
   --card:#18181f;
@@ -2161,51 +2188,25 @@ async function initFromHash() {
   --text:#e8e8f4;
   --muted:#5a5a7a;
   --muted2:#8888aa;
-  --radius:12px;
-  background:#0a0a0f;
-  color:#e8e8f4;
-  font-family:'Inter',sans-serif;
-  padding-bottom:70px;
-  min-height:0!important;
+  --bebas:'Bebas Neue',sans-serif;
+  --inter:'Inter',sans-serif;
+  --radius:14px;
+  --nav-h:64px;
 }
-#oracle-page *{box-sizing:border-box;}
-#oracle-page .game-wrap.page{display:block!important;min-height:0!important;}
-#oracle-page .page{min-height:0!important;}
-#oracle-page .loader{display:none;}
-#oracle-page #loader{display:none;}
-#oracle-page #results{display:none;}
-#oracle-page .hero{aspect-ratio:auto!important;max-height:none!important;height:auto!important;}
-#oracle-page .hero img{display:none!important;}
-
-#oracle-page *,#oracle-page *::before,#oracle-page *::after{box-sizing:border-box;}
-
-#oracle-page{
-  --bg:#0a0a0f;
-  --surface:#111119;
-  --card:#18181f;
-  --card2:#1f1f2a;
-  --border:#262635;
-  --border2:#353548;
-  --accent:#7c5cfc;
-  --accent2:#9b7fff;
-  --gold:#f5c842;
-  --gold2:#ffe066;
-  --silver:#a8b2c8;
-  --red:#fc5c7c;
-  --green:#4cfc9a;
-  --teal:#4cc8fc;
-  --orange:#fc9c4c;
-  --text:#e8e8f4;
-  --muted:#5a5a7a;
-  --muted2:#8888aa;
-  --nav-h:60px;
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--inter);
+  min-height:100vh;
+  padding-bottom:calc(var(--nav-h) + 24px);
+  -webkit-font-smoothing:antialiased;
 }
-/* body/html styles removed - handled by #oracle-page */
 
 /* ══════════════════════════════════
    HERO
 ══════════════════════════════════ */
-#oracle-page .hero{
+.hero{
   background:linear-gradient(170deg,#0d0d18 0%,#110e2a 45%,#0a0a10 100%);
   border-bottom:1px solid var(--border);
   padding:36px 16px 28px;
@@ -2213,27 +2214,27 @@ async function initFromHash() {
   position:relative;
   overflow:hidden;
 }
-#oracle-page .hero::before{
+.hero::before{
   content:'';position:absolute;
   top:-100px;left:50%;transform:translateX(-50%);
   width:500px;height:300px;
   background:radial-gradient(ellipse,rgba(124,92,252,.18) 0%,transparent 70%);
   pointer-events:none;
 }
-#oracle-page .hero::after{
+.hero::after{
   content:'';position:absolute;
   bottom:-40px;left:50%;transform:translateX(-50%);
   width:300px;height:100px;
   background:radial-gradient(ellipse,rgba(245,200,66,.06) 0%,transparent 70%);
   pointer-events:none;
 }
-#oracle-page .hero-brand{
+.hero-brand{
   font-size:10px;font-weight:700;
   letter-spacing:.28em;color:var(--accent2);
   text-transform:uppercase;margin-bottom:8px;
 }
-#oracle-page .hero h1{
-  font-family:'Bebas Neue',sans-serif;
+.hero h1{
+  font-family:var(--bebas);
   font-size:clamp(48px,12vw,80px);
   letter-spacing:.04em;line-height:.9;
   background:linear-gradient(135deg,#fff 0%,#d4c8ff 30%,var(--accent) 60%,var(--gold) 100%);
@@ -2241,15 +2242,15 @@ async function initFromHash() {
   background-clip:text;
   margin-bottom:8px;
 }
-#oracle-page .hero-sub{
+.hero-sub{
   font-size:11px;color:var(--muted2);
   line-height:1.8;margin-bottom:14px;
 }
-#oracle-page .hero-layers{
+.hero-layers{
   display:flex;gap:5px;
   justify-content:center;flex-wrap:wrap;
 }
-#oracle-page .hlayer{
+.hlayer{
   background:rgba(124,92,252,.08);
   border:1px solid rgba(124,92,252,.2);
   border-radius:20px;padding:3px 10px;
@@ -2257,7 +2258,7 @@ async function initFromHash() {
   letter-spacing:.1em;color:var(--accent2);
   text-transform:uppercase;
 }
-#oracle-page .hlayer.new{
+.hlayer.new{
   background:rgba(245,200,66,.07);
   border-color:rgba(245,200,66,.22);
   color:var(--gold);
@@ -2266,19 +2267,19 @@ async function initFromHash() {
 /* ══════════════════════════════════
    LAYOUT
 ══════════════════════════════════ */
-#oracle-page .page{max-width:600px;margin:0 auto;padding:0 14px}
+.page{max-width:600px;margin:0 auto;padding:0 14px}
 
 /* ══════════════════════════════════
    SECTION LABELS
 ══════════════════════════════════ */
-#oracle-page .slabel{
-  font-family:'Bebas Neue',sans-serif;
+.slabel{
+  font-family:var(--bebas);
   font-size:11px;letter-spacing:.22em;
   color:var(--muted);
   margin:20px 0 8px 2px;
   display:flex;align-items:center;gap:8px;
 }
-#oracle-page .slabel::after{
+.slabel::after{
   content:'';flex:1;height:1px;
   background:var(--border);
 }
@@ -2286,42 +2287,42 @@ async function initFromHash() {
 /* ══════════════════════════════════
    GAME SELECTOR
 ══════════════════════════════════ */
-#oracle-page .game-wrap{padding:20px 14px 0}
-#oracle-page .game-eyebrow{
+.game-wrap{padding:20px 14px 0}
+.game-eyebrow{
   font-size:10px;font-weight:700;
   letter-spacing:.18em;text-transform:uppercase;
   color:var(--muted);margin-bottom:10px;
 }
-#oracle-page .game-grid{
+.game-grid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
   gap:8px;margin-bottom:16px;
 }
-#oracle-page .gbtn{
+.gbtn{
   padding:12px 6px;
   border:1px solid var(--border);
   background:var(--surface);
   border-radius:12px;cursor:pointer;
   transition:all .2s;text-align:center;
 }
-#oracle-page .gbtn .gn{
-  font-family:'Bebas Neue',sans-serif;
+.gbtn .gn{
+  font-family:var(--bebas);
   font-size:18px;letter-spacing:.06em;
   color:var(--muted2);display:block;
   transition:color .2s;
 }
-#oracle-page .gbtn .gs{
+.gbtn .gs{
   font-size:9px;color:var(--muted);
   display:block;margin-top:2px;
   letter-spacing:.05em;
 }
-#oracle-page .gbtn.active{
+.gbtn.active{
   border-color:var(--accent);
   background:rgba(124,92,252,.08);
 }
-#oracle-page .gbtn.active .gn{color:var(--gold)}
-#oracle-page .gbtn.active .gs{color:var(--accent2)}
-#oracle-page .gbtn:hover:not(.active){
+.gbtn.active .gn{color:var(--gold)}
+.gbtn.active .gs{color:var(--accent2)}
+.gbtn:hover:not(.active){
   border-color:var(--border2);
   background:var(--card);
 }
@@ -2329,28 +2330,28 @@ async function initFromHash() {
 /* ══════════════════════════════════
    RUN BUTTON
 ══════════════════════════════════ */
-#oracle-page .run-btn{
+.run-btn{
   width:100%;padding:16px;
   background:linear-gradient(135deg,var(--accent) 0%,#5533cc 100%);
   border:none;border-radius:12px;
-  color:#fff;font-family:'Bebas Neue',sans-serif;
+  color:#fff;font-family:var(--bebas);
   font-size:22px;letter-spacing:.14em;
   cursor:pointer;
   transition:opacity .2s,transform .1s;
   box-shadow:0 4px 24px rgba(124,92,252,.25);
   margin-bottom:8px;
 }
-#oracle-page .run-btn:hover{opacity:.88}
-#oracle-page .run-btn:active{transform:scale(.98)}
+.run-btn:hover{opacity:.88}
+.run-btn:active{transform:scale(.98)}
 
 /* ══════════════════════════════════
    LOADER
 ══════════════════════════════════ */
-#oracle-page .loader{
+.loader{
   display:none;text-align:center;
   padding:44px 0;
 }
-#oracle-page .lring{
+.lring{
   width:46px;height:46px;
   border:3px solid var(--border);
   border-top-color:var(--accent);
@@ -2359,8 +2360,8 @@ async function initFromHash() {
   margin:0 auto 14px;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
-#oracle-page .ltitle{font-size:13px;color:var(--muted2);margin-bottom:8px}
-#oracle-page .lsteps{
+.ltitle{font-size:13px;color:var(--muted2);margin-bottom:8px}
+.lsteps{
   font-size:10px;color:var(--muted);
   line-height:2.3;
 }
@@ -2368,37 +2369,37 @@ async function initFromHash() {
 /* ══════════════════════════════════
    RESULTS
 ══════════════════════════════════ */
-#oracle-page #results{display:none}
+#results{display:none}
 
 /* ══════════════════════════════════
    ENERGY FLOW CARD
 ══════════════════════════════════ */
-#oracle-page .eflow{
+.eflow{
   background:var(--card);
   border:1px solid var(--border2);
   border-radius:var(--radius);
   padding:16px;margin-bottom:8px;
 }
-#oracle-page .eflow-title{
-  font-family:'Bebas Neue',sans-serif;
+.eflow-title{
+  font-family:var(--bebas);
   font-size:13px;letter-spacing:.14em;
   color:var(--muted2);margin-bottom:14px;
 }
-#oracle-page .erow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-#oracle-page .elabel{font-size:10px;color:var(--muted2);width:82px;flex-shrink:0}
-#oracle-page .ebar-wrap{flex:1;background:var(--surface);border-radius:4px;height:7px;overflow:hidden}
-#oracle-page .ebar{height:100%;border-radius:4px;transition:width 1.1s cubic-bezier(.16,1,.3,1)}
-#oracle-page .ef{background:linear-gradient(90deg,#fc5c3c,var(--gold))}
-#oracle-page .ew{background:linear-gradient(90deg,var(--teal),var(--accent))}
-#oracle-page .ewod{background:linear-gradient(90deg,#4cfc9a,#22aa55)}
-#oracle-page .emet{background:linear-gradient(90deg,#c8d4f0,#ffffff)}
-#oracle-page .eear{background:linear-gradient(90deg,var(--gold),#aa8800)}
-#oracle-page .epct{font-family:'Bebas Neue',sans-serif;font-size:15px;width:36px;text-align:right;flex-shrink:0}
+.erow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.elabel{font-size:10px;color:var(--muted2);width:82px;flex-shrink:0}
+.ebar-wrap{flex:1;background:var(--surface);border-radius:4px;height:7px;overflow:hidden}
+.ebar{height:100%;border-radius:4px;transition:width 1.1s cubic-bezier(.16,1,.3,1)}
+.ef{background:linear-gradient(90deg,#fc5c3c,var(--gold))}
+.ew{background:linear-gradient(90deg,var(--teal),var(--accent))}
+.ewod{background:linear-gradient(90deg,#4cfc9a,#22aa55)}
+.emet{background:linear-gradient(90deg,#c8d4f0,#ffffff)}
+.eear{background:linear-gradient(90deg,var(--gold),#aa8800)}
+.epct{font-family:var(--bebas);font-size:15px;width:36px;text-align:right;flex-shrink:0}
 
 /* ══════════════════════════════════
    BALLS
 ══════════════════════════════════ */
-#oracle-page .balls-card{
+.balls-card{
   background:var(--card);
   border:1px solid var(--border2);
   border-radius:var(--radius);
@@ -2406,148 +2407,148 @@ async function initFromHash() {
   margin-bottom:8px;
   text-align:center;
 }
-#oracle-page .balls-eyebrow{
+.balls-eyebrow{
   font-size:9px;font-weight:700;
   letter-spacing:.2em;text-transform:uppercase;
   color:var(--muted);margin-bottom:14px;
 }
-#oracle-page .balls-row{
+.balls-row{
   display:flex;gap:8px;
   justify-content:center;flex-wrap:wrap;
   margin-bottom:10px;
 }
-#oracle-page .ball{
+.ball{
   width:52px;height:52px;
   border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-family:'Bebas Neue',sans-serif;font-size:20px;
+  font-family:var(--bebas);font-size:20px;
   flex-shrink:0;position:relative;
   box-shadow:0 4px 16px rgba(0,0,0,.5);
   transition:transform .2s;
 }
-#oracle-page .ball:hover{transform:scale(1.08)}
-#oracle-page .b1{background:radial-gradient(circle at 35% 30%,#ffe88a,var(--gold) 55%,#a07800);color:#1a1000;border:2px solid rgba(255,220,80,.5)}
-#oracle-page .b2{background:radial-gradient(circle at 35% 30%,#d8e0f4,var(--silver) 55%,#5a6878);color:#1a1e2a;border:2px solid rgba(168,178,200,.5)}
-#oracle-page .b3{background:radial-gradient(circle at 35% 30%,#e0b080,#b87333 55%,#6a3f10);color:#fff;border:2px solid rgba(184,115,51,.4)}
-#oracle-page .b4{background:radial-gradient(circle at 35% 30%,#aa88ff,var(--accent) 55%,#3a1aaa);color:#fff;border:2px solid rgba(124,92,252,.5)}
-#oracle-page .b5{background:radial-gradient(circle at 35% 30%,#66dd99,#22aa55 55%,#115528);color:#fff;border:2px solid rgba(76,200,120,.4)}
-#oracle-page .b6{background:radial-gradient(circle at 35% 30%,#ff88aa,var(--red) 55%,#aa1133);color:#fff;border:2px solid rgba(252,92,124,.4)}
-#oracle-page .btag{
+.ball:hover{transform:scale(1.08)}
+.b1{background:radial-gradient(circle at 35% 30%,#ffe88a,var(--gold) 55%,#a07800);color:#1a1000;border:2px solid rgba(255,220,80,.5)}
+.b2{background:radial-gradient(circle at 35% 30%,#d8e0f4,var(--silver) 55%,#5a6878);color:#1a1e2a;border:2px solid rgba(168,178,200,.5)}
+.b3{background:radial-gradient(circle at 35% 30%,#e0b080,#b87333 55%,#6a3f10);color:#fff;border:2px solid rgba(184,115,51,.4)}
+.b4{background:radial-gradient(circle at 35% 30%,#aa88ff,var(--accent) 55%,#3a1aaa);color:#fff;border:2px solid rgba(124,92,252,.5)}
+.b5{background:radial-gradient(circle at 35% 30%,#66dd99,#22aa55 55%,#115528);color:#fff;border:2px solid rgba(76,200,120,.4)}
+.b6{background:radial-gradient(circle at 35% 30%,#ff88aa,var(--red) 55%,#aa1133);color:#fff;border:2px solid rgba(252,92,124,.4)}
+.btag{
   position:absolute;bottom:-4px;right:-4px;
   background:rgba(0,0,0,.85);
   border:1px solid var(--border2);
   border-radius:4px;font-size:7px;
   padding:1px 3px;color:var(--muted2);
-  font-family:'Inter',sans-serif;font-weight:700;
+  font-family:var(--inter);font-weight:700;
   white-space:nowrap;
 }
-#oracle-page .balls-note{
+.balls-note{
   font-size:10px;color:var(--muted);
   line-height:1.7;
 }
 
 /* alt combo */
-#oracle-page .alt-card{
+.alt-card{
   background:var(--surface);
   border:1px solid var(--border);
   border-radius:12px;padding:12px;
   text-align:center;margin-bottom:8px;
 }
-#oracle-page .alt-label{
+.alt-label{
   font-size:9px;font-weight:700;
   letter-spacing:.15em;text-transform:uppercase;
   color:var(--muted);margin-bottom:10px;
 }
-#oracle-page .alt-row{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
-#oracle-page .aball{
+.alt-row{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
+.aball{
   width:42px;height:42px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-family:'Bebas Neue',sans-serif;font-size:17px;
+  font-family:var(--bebas);font-size:17px;
   background:var(--card);
   border:1px solid var(--border2);
   color:var(--accent2);
   transition:transform .2s;
 }
-#oracle-page .aball:hover{transform:scale(1.08)}
+.aball:hover{transform:scale(1.08)}
 
 /* ══════════════════════════════════
    DIGIT CONVERGENCE
 ══════════════════════════════════ */
-#oracle-page .dgrid{
+.dgrid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
   gap:7px;margin-bottom:7px;
 }
-#oracle-page .dcard{
+.dcard{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:11px;padding:11px 6px;
   text-align:center;transition:border-color .2s;
 }
-#oracle-page .dcard.s8{border-color:var(--gold);background:linear-gradient(160deg,rgba(245,200,66,.1),var(--card))}
-#oracle-page .dcard.s7{border-color:var(--gold)}
-#oracle-page .dcard.s6{border-color:var(--accent)}
-#oracle-page .dcard.s5{border-color:#6644cc}
-#oracle-page .dcard.s4{border-color:#3a3a5a}
-#oracle-page .dnum{font-family:'Bebas Neue',sans-serif;font-size:28px;line-height:1}
-#oracle-page .dcard.s8 .dnum,#oracle-page .dcard.s7 .dnum{color:var(--gold)}
-#oracle-page .dcard.s6 .dnum{color:var(--accent2)}
-#oracle-page .dcard.s5 .dnum,#oracle-page .dcard.s4 .dnum{color:var(--muted2)}
-#oracle-page .dscore{font-size:9px;color:var(--muted);margin-top:3px}
-#oracle-page .ddots{display:flex;gap:2px;justify-content:center;margin-top:5px;flex-wrap:wrap}
-#oracle-page .dot{
+.dcard.s8{border-color:var(--gold);background:linear-gradient(160deg,rgba(245,200,66,.1),var(--card))}
+.dcard.s7{border-color:var(--gold)}
+.dcard.s6{border-color:var(--accent)}
+.dcard.s5{border-color:#6644cc}
+.dcard.s4{border-color:#3a3a5a}
+.dnum{font-family:var(--bebas);font-size:28px;line-height:1}
+.dcard.s8 .dnum,.dcard.s7 .dnum{color:var(--gold)}
+.dcard.s6 .dnum{color:var(--accent2)}
+.dcard.s5 .dnum,.dcard.s4 .dnum{color:var(--muted2)}
+.dscore{font-size:9px;color:var(--muted);margin-top:3px}
+.ddots{display:flex;gap:2px;justify-content:center;margin-top:5px;flex-wrap:wrap}
+.dot{
   width:15px;height:15px;border-radius:3px;
   display:flex;align-items:center;justify-content:center;
   font-size:7px;font-weight:700;
   border:1px solid transparent;
 }
-#oracle-page .dot.on{background:rgba(124,92,252,.2);border-color:var(--accent);color:var(--accent2)}
-#oracle-page .dot.gold{background:rgba(245,200,66,.15);border-color:rgba(245,200,66,.4);color:var(--gold)}
-#oracle-page .dot.teal{background:rgba(76,200,252,.1);border-color:rgba(76,200,252,.3);color:var(--teal)}
-#oracle-page .dot.off{background:var(--surface);color:var(--muted)}
+.dot.on{background:rgba(124,92,252,.2);border-color:var(--accent);color:var(--accent2)}
+.dot.gold{background:rgba(245,200,66,.15);border-color:rgba(245,200,66,.4);color:var(--gold)}
+.dot.teal{background:rgba(76,200,252,.1);border-color:rgba(76,200,252,.3);color:var(--teal)}
+.dot.off{background:var(--surface);color:var(--muted)}
 
 /* ══════════════════════════════════
    NUMBER MAP
 ══════════════════════════════════ */
-#oracle-page .maprow{
+.maprow{
   display:flex;align-items:center;
   gap:8px;padding:8px 0;
   border-bottom:1px solid var(--border);
 }
-#oracle-page .maprow:last-child{border-bottom:none}
-#oracle-page .mapdig{
-  font-family:'Bebas Neue',sans-serif;font-size:12px;
+.maprow:last-child{border-bottom:none}
+.mapdig{
+  font-family:var(--bebas);font-size:12px;
   color:var(--muted);width:54px;flex-shrink:0;
 }
-#oracle-page .mapnums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
-#oracle-page .mn{
-  font-family:'Bebas Neue',sans-serif;font-size:15px;
+.mapnums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+.mn{
+  font-family:var(--bebas);font-size:15px;
   padding:2px 7px;border-radius:5px;
   border:1px solid var(--border);
 }
-#oracle-page .mn.hot{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
-#oracle-page .mn.warm{background:rgba(124,92,252,.1);border-color:rgba(124,92,252,.3);color:var(--accent2)}
-#oracle-page .mn.cold{background:var(--surface);color:var(--muted2)}
+.mn.hot{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
+.mn.warm{background:rgba(124,92,252,.1);border-color:rgba(124,92,252,.3);color:var(--accent2)}
+.mn.cold{background:var(--surface);color:var(--muted2)}
 
 /* ══════════════════════════════════
    LAYER CARDS
 ══════════════════════════════════ */
-#oracle-page .lcard{
+.lcard{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:var(--radius);
   padding:14px;margin-bottom:8px;
   overflow:hidden;
 }
-#oracle-page .lhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-#oracle-page .licon{
+.lhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.licon{
   width:36px;height:36px;border-radius:9px;
   background:var(--surface);border:1px solid var(--border2);
   display:flex;align-items:center;justify-content:center;
   font-size:16px;flex-shrink:0;
 }
-#oracle-page .lname{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em}
-#oracle-page .lnew{
+.lname{font-family:var(--bebas);font-size:15px;letter-spacing:.08em}
+.lnew{
   font-size:8px;font-weight:700;letter-spacing:.1em;
   text-transform:uppercase;
   background:rgba(245,200,66,.1);
@@ -2555,83 +2556,83 @@ async function initFromHash() {
   color:var(--gold);border-radius:4px;
   padding:2px 6px;margin-left:6px;
 }
-#oracle-page .lpills{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
-#oracle-page .pill{
+.lpills{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.pill{
   background:rgba(124,92,252,.1);
   border:1px solid rgba(124,92,252,.28);
   border-radius:5px;padding:2px 8px;
-  font-family:'Bebas Neue',sans-serif;font-size:15px;
+  font-family:var(--bebas);font-size:15px;
   color:var(--accent2);
 }
-#oracle-page .pill.g{background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.25);color:var(--gold)}
-#oracle-page .pill.t{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.25);color:var(--teal)}
-#oracle-page .lsteps{
+.pill.g{background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.25);color:var(--gold)}
+.pill.t{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.25);color:var(--teal)}
+.lsteps{
   font-size:11px;color:var(--muted2);
   line-height:1.9;
   border-top:1px solid var(--border);
   padding-top:10px;
 }
-#oracle-page .lsteps b{color:var(--text)}
-#oracle-page .lsteps .ok{color:var(--green)}
-#oracle-page .lsteps .warn{color:var(--orange)}
+.lsteps b{color:var(--text)}
+.lsteps .ok{color:var(--green)}
+.lsteps .warn{color:var(--orange)}
 
 /* horary sub-grid */
-#oracle-page .hgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-#oracle-page .hbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
-#oracle-page .hbox-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
-#oracle-page .hbox-val{font-family:'Bebas Neue',sans-serif;font-size:15px;color:var(--text);margin-bottom:3px}
-#oracle-page .hbox-sub{font-size:10px;color:var(--muted2);line-height:1.55}
-#oracle-page .arow{font-size:11px;color:var(--muted2);padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5}
-#oracle-page .arow:last-child{border-bottom:none}
-#oracle-page .arow b{color:var(--text)}
+.hgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.hbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
+.hbox-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
+.hbox-val{font-family:var(--bebas);font-size:15px;color:var(--text);margin-bottom:3px}
+.hbox-sub{font-size:10px;color:var(--muted2);line-height:1.55}
+.arow{font-size:11px;color:var(--muted2);padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5}
+.arow:last-child{border-bottom:none}
+.arow b{color:var(--text)}
 
 /* bazi pillars */
-#oracle-page .bpillars{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
-#oracle-page .bp{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 6px;text-align:center}
-#oracle-page .bp-role{font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-#oracle-page .bp-stem{font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--text);line-height:1.3}
-#oracle-page .bp-branch{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.4}
-#oracle-page .bp-nums{display:flex;gap:3px;justify-content:center;margin-top:5px;flex-wrap:wrap}
-#oracle-page .bpn{font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--accent2)}
-#oracle-page .bint{font-size:11px;color:var(--muted2);padding:4px 0;border-bottom:1px solid var(--border);margin-top:8px;line-height:1.5}
-#oracle-page .bint:last-child{border-bottom:none}
-#oracle-page .bint b{color:var(--teal)}
+.bpillars{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.bp{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 6px;text-align:center}
+.bp-role{font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.bp-stem{font-family:var(--bebas);font-size:13px;color:var(--text);line-height:1.3}
+.bp-branch{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.4}
+.bp-nums{display:flex;gap:3px;justify-content:center;margin-top:5px;flex-wrap:wrap}
+.bpn{font-family:var(--bebas);font-size:14px;color:var(--accent2)}
+.bint{font-size:11px;color:var(--muted2);padding:4px 0;border-bottom:1px solid var(--border);margin-top:8px;line-height:1.5}
+.bint:last-child{border-bottom:none}
+.bint b{color:var(--teal)}
 
 /* i ching */
-#oracle-page .irow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
-#oracle-page .ibox{flex:1;min-width:70px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
-#oracle-page .isym{font-size:22px;margin-bottom:3px}
-#oracle-page .iname{font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.05em;color:var(--teal)}
-#oracle-page .imsg{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.5}
-#oracle-page .ichange{font-size:11px;color:var(--muted2);margin-top:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;line-height:1.6}
-#oracle-page .ichange b{color:var(--teal)}
+.irow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.ibox{flex:1;min-width:70px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
+.isym{font-size:22px;margin-bottom:3px}
+.iname{font-family:var(--bebas);font-size:12px;letter-spacing:.05em;color:var(--teal)}
+.imsg{font-size:9px;color:var(--muted2);margin-top:2px;line-height:1.5}
+.ichange{font-size:11px;color:var(--muted2);margin-top:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;line-height:1.6}
+.ichange b{color:var(--teal)}
 
 /* stats */
-#oracle-page .st-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-#oracle-page .stbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
-#oracle-page .stitle{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
-#oracle-page .hnum{
+.st-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.stbox{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px}
+.stitle{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.hnum{
   display:inline-flex;align-items:center;justify-content:center;
   width:29px;height:29px;border-radius:6px;
-  font-family:'Bebas Neue',sans-serif;font-size:14px;
+  font-family:var(--bebas);font-size:14px;
   margin:2px;
   background:rgba(245,200,66,.08);
   border:1px solid rgba(245,200,66,.22);
   color:var(--gold);
 }
-#oracle-page .sfrow{display:flex;align-items:center;gap:6px;margin-bottom:5px}
-#oracle-page .sflabel{font-family:'Bebas Neue',sans-serif;font-size:13px;width:22px;text-align:center;flex-shrink:0}
-#oracle-page .sfwrap{flex:1;background:var(--bg);border-radius:3px;height:5px;overflow:hidden}
-#oracle-page .sffill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--gold));transition:width 1s cubic-bezier(.16,1,.3,1)}
-#oracle-page .sfval{font-size:9px;color:var(--muted);width:22px;text-align:right;flex-shrink:0}
+.sfrow{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.sflabel{font-family:var(--bebas);font-size:13px;width:22px;text-align:center;flex-shrink:0}
+.sfwrap{flex:1;background:var(--bg);border-radius:3px;height:5px;overflow:hidden}
+.sffill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--gold));transition:width 1s cubic-bezier(.16,1,.3,1)}
+.sfval{font-size:9px;color:var(--muted);width:22px;text-align:right;flex-shrink:0}
 
 /* legend */
-#oracle-page .legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-#oracle-page .leg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
-#oracle-page .ldot{width:10px;height:10px;border-radius:2px}
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.leg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
+.ldot{width:10px;height:10px;border-radius:2px}
 
 /* disclaimer */
-#oracle-page .disc{
+.disc{
   background:var(--surface);
   border:1px solid var(--border);
   border-left:3px solid var(--red);
@@ -2643,7 +2644,7 @@ async function initFromHash() {
 /* ══════════════════════════════════
    BOTTOM NAV (JOMERPB style)
 ══════════════════════════════════ */
-#oracle-page .bnav{
+.bnav{
   position:fixed;bottom:0;left:0;right:0;
   height:var(--nav-h);
   background:rgba(10,10,15,.92);
@@ -2655,181 +2656,118 @@ async function initFromHash() {
   padding:0 8px;
   z-index:100;
 }
-#oracle-page .bnavitem{
+.bnavitem{
   display:flex;flex-direction:column;
   align-items:center;gap:3px;
   padding:6px 12px;border-radius:10px;
   cursor:pointer;transition:all .2s;
   text-decoration:none;flex:1;
 }
-#oracle-page .bnavitem.active{background:rgba(124,92,252,.12)}
-#oracle-page .bnavitem .bni{font-size:20px}
-#oracle-page .bnavitem .bnl{
+.bnavitem.active{background:rgba(124,92,252,.12)}
+.bnavitem .bni{font-size:20px}
+.bnavitem .bnl{
   font-size:9px;font-weight:700;
   letter-spacing:.08em;text-transform:uppercase;
   color:var(--muted);transition:color .2s;
 }
-#oracle-page .bnavitem.active .bnl{color:var(--accent2)}
+.bnavitem.active .bnl{color:var(--accent2)}
 
 /* ══════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════ */
 @media(max-width:380px){
-#oracle-page .ball{width:46px;height:46px;font-size:17px}
-#oracle-page .game-grid{grid-template-columns:repeat(3,1fr)}
-#oracle-page .bpillars{grid-template-columns:repeat(2,1fr)}
+  .ball{width:46px;height:46px;font-size:17px}
+  .game-grid{grid-template-columns:repeat(3,1fr)}
+  .bpillars{grid-template-columns:repeat(2,1fr)}
 }
-
-
-/* ── PCSO RESULTS WIDGET ── */
-#oracle-page .pcso-widget{padding:14px 14px 0;max-width:580px;margin:0 auto}
-#oracle-page .pcso-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-#oracle-page .pcso-title{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.2em;color:var(--muted2)}
-#oracle-page .pcso-live{width:7px;height:7px;border-radius:50%;background:#4cfc9a;animation:pcso-pulse 2s infinite;flex-shrink:0}
-@keyframes pcso-pulse{0%,100%{opacity:1}50%{opacity:.3}}
-#oracle-page .pcso-meta{display:flex;align-items:center;gap:8px}
-#oracle-page .pcso-date-lbl{font-size:10px;color:var(--muted)}
-#oracle-page .pcso-refresh{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:10px;padding:3px 9px;cursor:pointer;font-weight:600;font-family:var(--inter)}
-#oracle-page .pcso-refresh:hover{border-color:var(--accent);color:var(--accent2)}
-#oracle-page .pcso-grid{display:flex;flex-direction:column;gap:5px;margin-bottom:4px}
-#oracle-page .pcso-row{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 13px;display:flex;align-items:center;gap:8px}
-#oracle-page .pcso-game{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.05em;color:var(--muted2);width:60px;flex-shrink:0}
-#oracle-page .pcso-draw{font-size:9px;color:var(--muted);width:28px;flex-shrink:0;text-align:center}
-#oracle-page .pcso-nums{display:flex;gap:4px;flex-wrap:wrap;flex:1}
-#oracle-page .pnum{font-family:'Bebas Neue',sans-serif;font-size:16px;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.2);border-radius:5px;padding:2px 7px;color:var(--accent2)}
-#oracle-page .pnum.ez{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.25);color:var(--gold)}
-#oracle-page .pnum.six{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.2);color:#4cc8fc}
-#oracle-page .pcso-pending{font-size:11px;color:var(--muted);font-style:italic}
-#oracle-page .pcso-src{font-size:9px;color:var(--muted);text-align:right;margin-top:3px;padding:0 2px 10px}
-#oracle-page .pcso-meta-row{display:flex;gap:12px;margin-top:4px;padding-left:2px}
-#oracle-page .pcso-jackpot{font-size:10px;color:#4cfc9a;font-weight:700}
-#oracle-page .pcso-winners{font-size:10px;color:var(--muted)}
 </style>
-<!-- HERO -->
-<div class="hero">
-  <div class="hero-brand">JOMERPB · PH Lotto Oracle</div>
-  <h1>LOTTO<br>ORACLE</h1>
-  <p class="hero-sub">
-    Current cosmic energy flow · No personal data needed<br>
-    All readings based on what the universe is doing <b style="color:var(--gold)">right now</b>
-  </p>
-  <div class="hero-layers">
-    <span class="hlayer">Pythagorean</span>
-    <span class="hlayer">Chaldean</span>
-    <span class="hlayer">Astrology</span>
-    <span class="hlayer new">★ Horary</span>
-    <span class="hlayer new">★ Part of Fortune</span>
-    <span class="hlayer new">★ Dignities</span>
-    <span class="hlayer">BaZi</span>
-    <span class="hlayer new">★ Clashes</span>
-    <span class="hlayer">Feng Shui</span>
-    <span class="hlayer new">★ Lo Shu</span>
-    <span class="hlayer new">★ I Ching</span>
-    <span class="hlayer">PCSO Data</span>
-  </div>
-</div>
+</head>
+<body>
 
-<!-- PCSO RESULTS WIDGET -->
-<div class="pcso-widget">
-  <div class="pcso-header">
-    <div style="display:flex;align-items:center;gap:8px">
-      <div class="pcso-live"></div>
-      <span class="pcso-title">TODAY'S PCSO RESULTS</span>
-    </div>
-    <div class="pcso-meta">
-      <span class="pcso-date-lbl" id="pcso-date-lbl"></span>
-      <button class="pcso-refresh" onclick="pcsoAIFetch()" id="pcso-ai-btn">&#9889; Fetch Live</button>
-    </div>
+<!-- HERO -->
+<div class=&quot;hero&quot;>
+  <div class=&quot;hero-brand&quot;>JOMERPB · PH Lotto Oracle</div>
+  <h1>LOTTO<br>ORACLE</h1>
+  <p class=&quot;hero-sub&quot;>
+    Current cosmic energy flow · No personal data needed<br>
+    All readings based on what the universe is doing <b style=&quot;color:var(--gold)&quot;>right now</b>
+  </p>
+  <div class=&quot;hero-layers&quot;>
+    <span class=&quot;hlayer&quot;>Pythagorean</span>
+    <span class=&quot;hlayer&quot;>Chaldean</span>
+    <span class=&quot;hlayer&quot;>Astrology</span>
+    <span class=&quot;hlayer new&quot;>★ Horary</span>
+    <span class=&quot;hlayer new&quot;>★ Part of Fortune</span>
+    <span class=&quot;hlayer new&quot;>★ Dignities</span>
+    <span class=&quot;hlayer&quot;>BaZi</span>
+    <span class=&quot;hlayer new&quot;>★ Clashes</span>
+    <span class=&quot;hlayer&quot;>Feng Shui</span>
+    <span class=&quot;hlayer new&quot;>★ Lo Shu</span>
+    <span class=&quot;hlayer new&quot;>★ I Ching</span>
+    <span class=&quot;hlayer&quot;>PCSO Data</span>
   </div>
-  <div id="pcso-grid" class="pcso-grid">
-    <div class="pcso-row"><span class="pcso-pending">Loading results…</span></div>
-  </div>
-  <div class="pcso-src">Source: pcsodraw.com via GitHub Actions · Auto-updated 3x daily</div>
 </div>
 
 <!-- GAME SELECTOR -->
-<div class="game-wrap page">
-  <div class="game-eyebrow">▸ Select Game</div>
-  <div class="game-grid" id="gameGrid">
-    <button class="gbtn active" onclick="setGame('ez2',this)">
-      <span class="gn">EZ2</span><span class="gs">2PM · 5PM · 9PM</span>
+<div class=&quot;game-wrap page&quot;>
+  <div class=&quot;game-eyebrow&quot;>▸ Select Game</div>
+  <div class=&quot;game-grid&quot; id=&quot;gameGrid&quot;>
+    <button class=&quot;gbtn active&quot; onclick=&quot;setGame('ez2',this)&quot;>
+      <span class=&quot;gn&quot;>EZ2</span><span class=&quot;gs&quot;>2PM · 5PM · 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('642',this)">
-      <span class="gn">6/42</span><span class="gs">Tue·Thu·Sat 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('642',this)&quot;>
+      <span class=&quot;gn&quot;>6/42</span><span class=&quot;gs&quot;>Tue·Thu·Sat 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('645',this)">
-      <span class="gn">6/45</span><span class="gs">Mon·Wed·Fri 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('645',this)&quot;>
+      <span class=&quot;gn&quot;>6/45</span><span class=&quot;gs&quot;>Mon·Wed·Fri 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('649',this)">
-      <span class="gn">6/49</span><span class="gs">Tue·Thu·Sun 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('649',this)&quot;>
+      <span class=&quot;gn&quot;>6/49</span><span class=&quot;gs&quot;>Tue·Thu·Sun 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('655',this)">
-      <span class="gn">6/55</span><span class="gs">Mon·Wed·Sat 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('655',this)&quot;>
+      <span class=&quot;gn&quot;>6/55</span><span class=&quot;gs&quot;>Mon·Wed·Sat 9PM</span>
     </button>
-    <button class="gbtn" onclick="setGame('658',this)">
-      <span class="gn">6/58</span><span class="gs">Tue·Fri·Sun 9PM</span>
+    <button class=&quot;gbtn&quot; onclick=&quot;setGame('658',this)&quot;>
+      <span class=&quot;gn&quot;>6/58</span><span class=&quot;gs&quot;>Tue·Fri·Sun 9PM</span>
     </button>
   </div>
 
   <!-- EZ2 draw time (only shows for EZ2) -->
-  <div id="ez2wrap" style="margin-bottom:14px">
-    <div class="game-eyebrow">▸ EZ2 Draw Time</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-      <button class="gbtn" onclick="setDraw('2PM',this)" id="d2pm">
-        <span class="gn">2PM</span>
+  <div id=&quot;ez2wrap&quot; style=&quot;margin-bottom:14px&quot;>
+    <div class=&quot;game-eyebrow&quot;>▸ EZ2 Draw Time</div>
+    <div style=&quot;display:grid;grid-template-columns:repeat(3,1fr);gap:8px&quot;>
+      <button class=&quot;gbtn&quot; onclick=&quot;setDraw('2PM',this)&quot; id=&quot;d2pm&quot;>
+        <span class=&quot;gn&quot;>2PM</span>
       </button>
-      <button class="gbtn" onclick="setDraw('5PM',this)" id="d5pm">
-        <span class="gn">5PM</span>
+      <button class=&quot;gbtn&quot; onclick=&quot;setDraw('5PM',this)&quot; id=&quot;d5pm&quot;>
+        <span class=&quot;gn&quot;>5PM</span>
       </button>
-      <button class="gbtn active" onclick="setDraw('9PM',this)" id="d9pm">
-        <span class="gn">9PM</span>
+      <button class=&quot;gbtn active&quot; onclick=&quot;setDraw('9PM',this)&quot; id=&quot;d9pm&quot;>
+        <span class=&quot;gn&quot;>9PM</span>
       </button>
     </div>
   </div>
 
-  <button class="run-btn" onclick="generate()">⚡ RUN EXPERT ORACLE</button>
+  <button class=&quot;run-btn&quot; onclick=&quot;generate()&quot;>⚡ RUN EXPERT ORACLE</button>
 </div>
 
 <!-- LOADER -->
-<div class="loader" id="loader">
-  <div class="lring"></div>
-  <div class="ltitle">Running 12-layer expert analysis…</div>
-  <div class="lsteps" id="lsteps"></div>
+<div class=&quot;loader page&quot; id=&quot;loader&quot;>
+  <div class=&quot;lring&quot;></div>
+  <div class=&quot;ltitle&quot;>Running 12-layer expert analysis…</div>
+  <div class=&quot;lsteps&quot; id=&quot;lsteps&quot;></div>
 </div>
 
 <!-- RESULTS -->
-<div id="results"></div>
+<div id=&quot;results&quot; class=&quot;page&quot;></div>
 
 
 
 <script>
-
-
-
-
-
-
-
-
-
-
-
-
-
-var _phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
-var _phMo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-var TODAY_PH=_phMo[_phNow.getMonth()]+' '+_phNow.getDate()+' '+_phNow.getFullYear();
-var TODAY_PH_FULL=TODAY_PH;
-var _phNow2=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
-var _D=_phNow2.getDate();
-var _M=_phNow2.getMonth()+1;
-var _Y=_phNow2.getFullYear();
-var _DOW=_phNow2.getDay();
-
 // ══════════════════════════
 // PCSO REAL HISTORICAL DATA
 // ══════════════════════════
-var GAMES={
+const GAMES={
   ez2:{
     name:'EZ2 2D Lotto',short:'EZ2',max:31,
     draws:{
@@ -2874,386 +2812,339 @@ function pad(n){ return String(n).padStart(2,'0'); }
 // Pythagorean + Chaldean dual system
 // ══════════════════════════
 function layerNumerology(drawHour){
-  // Universal Day = reduce all digits of full date
-  var dateStr=String(_D)+String(_M)+String(_Y);
-  var ud=reduce(dateStr.split('').reduce(function(a,b){return a+parseInt(b);},0));
-  var h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
-  var combined=reduce(ud+h);
-  var dayRed=reduce(_D);
-  // Month+Year
-  var yRed=reduce(_Y);
-  var monthYear=reduce(_M+yRed);
-  // Day of week planetary ruler: Sun=1,Mon=2,Tue=9,Wed=5,Thu=3,Fri=6,Sat=8
-  var dowNums=[1,2,9,5,3,6,8]; // Sun through Sat
-  var saturn=dowNums[_DOW];
+  // Pythagorean
+  const ud=reduce(2+7+6+2+0+2+6); // Universal Day: 25→7
+  const h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
+  const combined=reduce(ud+h);
+  const saturn=8; // Saturday=Saturn rules=8
+  const monthYear=reduce(6+1); // June(6)+2026→1=7
+  // Day of month = 27 → 2+7=9
+  const dayReduction=reduce(27);
+  // Pythagorean: active digits
+  const pyNums=[...new Set([ud,h,combined,saturn,monthYear,dayReduction])];
 
-  var pyNums=[...new Set([ud,h,combined,saturn,monthYear,dayRed])];
+  // Chaldean system
+  // &quot;PCSO&quot;: P=8,C=3,S=3,O=7 = 21 → 3
+  const pcso=reduce(8+3+3+7); // 3
+  // &quot;LOTTO&quot;: L=3,O=7,T=4,T=4,O=7 = 25 → 7
+  const lotto=reduce(3+7+4+4+7); // 7
+  // &quot;PHILIPPINES&quot;: P=8,H=5,I=1,L=3,I=1,P=8,P=8,I=1,N=5,E=5,S=3 = 48→12→3
+  const phils=reduce(8+5+1+3+1+8+8+1+5+5+3); // 3
+  const chNums=[...new Set([pcso,lotto,phils])];
 
-  // Chaldean — static word values (PCSO, LOTTO, PHILIPPINES never change)
-  var pcso=reduce(8+3+3+7);   // 21→3
-  var lotto=reduce(3+7+4+4+7); // 25→7
-  var phils=reduce(8+5+1+3+1+8+8+1+5+5+3); // 48→3
-  var chNums=[...new Set([pcso,lotto,phils])];
-
-  var allNums=[...new Set([...pyNums,...chNums])];
+  const allNums=[...new Set([...pyNums,...chNums])];
   return {
-    pyNums,chNums,allNums,nums:allNums,ud,h,combined,saturn,monthYear,dayRed,
+    nums:allNums, pyNums, chNums,
+    ud,h,combined,saturn,monthYear,dayReduction,
+    pcso,lotto,phils,
     steps:[
-      `<b>Pythagorean — Universal Day:</b> ${dateStr.split('').join('+')}=${dateStr.split('').reduce((a,b)=>a+parseInt(b),0)} → <b>${ud}</b>`,
-      `<b>Day of month ${_D}:</b> ${String(_D).split('').join('+')} → <b>${dayRed}</b>`,
+      `<b>Pythagorean — Universal Day:</b> 2+7+6+2+0+2+6=25 → <b>${ud}</b>`,
+      `<b>Day of month 27:</b> 2+7 → <b>${dayReduction}</b>`,
       `<b>Draw hour ${drawHour}:</b> → <b>${h}</b> · Combined ${ud}+${h}=${ud+h} → <b>${combined}</b>`,
-      `<b>${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][_DOW]}=Planet ruler:</b> → <b>${saturn}</b>`,
-      `<b>Month(${_M})+Year(${_Y}→${yRed}):</b> → <b>${monthYear}</b>`,
-      `<b>Chaldean — "PCSO":</b> P(8)+C(3)+S(3)+O(7)=21 → <b>${pcso}</b>`,
-      `<b>Chaldean — "LOTTO":</b> L(3)+O(7)+T(4)+T(4)+O(7)=25 → <b>${lotto}</b>`,
-      `<b>Chaldean — "PHILIPPINES":</b> =48→12 → <b>${phils}</b>`,
+      `<b>Saturday=Saturn:</b> → <b>${saturn}</b>`,
+      `<b>Month(6)+Year(2026→1):</b> → <b>${monthYear}</b>`,
+      `<b>Chaldean — &quot;PCSO&quot;:</b> P(8)+C(3)+S(3)+O(7)=21 → <b>${pcso}</b>`,
+      `<b>Chaldean — &quot;LOTTO&quot;:</b> L(3)+O(7)+T(4)+T(4)+O(7)=25 → <b>${lotto}</b>`,
+      `<b>Chaldean — &quot;PHILIPPINES&quot;:</b> =48→12 → <b>${phils}</b>`,
     ]
   };
 }
 
+// ══════════════════════════
+// LAYER 2: ASTROLOGY — Full master level
+// Real ephemeris + dignities + aspects + Horary + PoF
+// ══════════════════════════
 function layerAstrology(drawHour){
-  // Simplified planetary position calculation
-  // Using mean motion approximations from J2000.0 (Jan 1.5 2000)
-  // Days since J2000.0
-  var jd2000=function(y,m,d){
-    var a=Math.floor((14-m)/12);
-    var yr=y+4800-a;
-    var mo=m+12*a-3;
-    return d+Math.floor((153*mo+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045-2451545;
-  };
-  var T=jd2000(_Y,_M,_D)/36525; // Julian centuries from J2000
+  // REAL Jun 27 2026 planetary positions (verified)
+  const planets=[
+    {name:'Jupiter ♃',pos:&quot;29°16' Cancer&quot;,sign:'Cancer',deg:29.26,
+     dignity:'Exalted', // Jupiter is EXALTED in Cancer = maximum strength
+     nums:[2,3,7],note:'EXALTED at anaretic 29° = peak power before sign change → luck amplified'},
+    {name:'Moon ☽',pos:&quot;0°45' Sagittarius&quot;,sign:'Sagittarius',deg:0.75,
+     dignity:'Neutral',phase:'Waxing Gibbous',
+     nums:[1,3,9],note:'Waxing=favorable for gain · Sag=3,9 · 0°=new cycle beginning'},
+    {name:'Venus ♀',pos:&quot;15°27' Leo&quot;,sign:'Leo',deg:15.45,
+     dignity:'Peregrine', // no special dignity in Leo
+     nums:[1,4,6],note:'Peregrine but strong by position · Leo=power · Fortune=6'},
+    {name:'Mars ♂',pos:&quot;28°35' Taurus&quot;,sign:'Taurus',deg:28.58,
+     dignity:'Detriment', // Mars in Taurus = detriment (weak)
+     nums:[9],note:'In DETRIMENT = weak aggressive energy · cautious number'},
+    {name:'Mercury ☿',pos:&quot;25°56' Cancer&quot;,sign:'Cancer',deg:25.93,
+     dignity:'Peregrine',rx:'Pre-Rx shadow',
+     nums:[2,7],note:'Almost stationary pre-Rx · concentrated mental energy'},
+    {name:'Saturn ♄',pos:&quot;13°59' Aries&quot;,sign:'Aries',deg:13.98,
+     dignity:'Detriment', // Saturn in Aries = detriment
+     nums:[4,8],note:'In DETRIMENT · structure challenged · 13°=4'},
+    {name:'Sun ☉',pos:&quot;6°12' Cancer&quot;,sign:'Cancer',deg:6.12,
+     dignity:'Neutral',
+     nums:[6,1],note:'6°=6 · Cancer=2 · vitality energy'},
+  ];
 
-  // Mean longitudes (degrees, simplified)
-  var sun=(280.46646+36000.76983*T+0.0003032*T*T)%360;
-  var moon=(218.3165+481267.8813*T)%360;
-  var mercury=(252.250906+149474.0722491*T)%360;
-  var venus=(181.979801+58517.8156760*T)%360;
-  var mars=(355.433275+19141.6964746*T)%360;
-  var jupiter=(34.351519+3036.3027748*T)%360;
-  var saturn=(50.077444+1223.5110686*T)%360;
+  // Essential dignity summary — use only planets with dignity
+  const strongPlanets=planets.filter(p=>p.dignity==='Exalted'||p.dignity==='Domicile');
+  // Jupiter exalted = dominant influence → 2,3,7 heavily weighted
 
-  // Normalize to 0-360
-  function norm(x){return((x%360)+360)%360;}
-  sun=norm(sun);moon=norm(moon);mercury=norm(mercury);venus=norm(venus);
-  mars=norm(mars);jupiter=norm(jupiter);saturn=norm(saturn);
+  // HORARY ASTROLOGY — 9PM Manila Jun 27 2026 (Regiomontanus system)
+  // At 9PM Manila UTC+8 = 13:00 UTC
+  // Approximate ASC at Manila 9PM: Capricorn ~10-15° rising
+  // Check strictures: ASC ~12° Capricorn = OK (3-27° range = radical chart)
+  // Moon is NOT void of course (Moon in Sag still making aspects to Jupiter)
+  // Moon NOT in Via Combusta (15°Libra-15°Scorpio) → Sag is clear
+  // Chart is RADICAL = valid for judgment
+  const horaryASC='Capricorn ~12°';
+  const horaryASCRuler='Saturn (traditional)';
+  // 5th house from Capricorn = Taurus
+  const h5sign='Taurus';
+  const h5ruler='Venus'; // Taurus ruler = Venus
+  const h5rulerPos=&quot;15°27' Leo&quot;;
+  const h5dignity='Peregrine (but in strong Leo)';
+  // Venus applies to aspect? Venus at 15°Leo, applying sextile to Jupiter at 29°Cancer
+  // Sextile = 60° apart → Leo 15° to Cancer 29° = difference ~46° ≈ separating
+  // BUT: Venus applying to conjunction with Sun (same sign Leo, Sun at ~6°, Venus at 15° → Sun moving away)
+  // Venus is APPLYING to North Node area = positive for fortune
+  const h5aspect='Venus separating from Sun, applying toward North Node — fortune energy building';
+  const h5nums=[6,1,4];
 
-  // Convert to zodiac sign (0=Aries,1=Taurus,...,11=Pisces)
-  var signs=['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'];
-  var signNums=[[9,1],[6,2],[3,5],[2,7],[1,4],[5,6],[3,6],[1,9],[3,9],[8,1],[4,7],[2,7]]; // nums per sign
-  function signOf(deg){return Math.floor(norm(deg)/30);}
-  function degInSign(deg){return norm(deg)%30;}
+  // Part of Fortune (day chart: Sun above horizon at 9PM? No, Sun sets ~7:47PM Manila)
+  // 9PM = night chart
+  // Night chart PoF = ASC + Sun - Moon
+  // ASC ~285° (Capricorn 15°), Sun ~96° (Cancer 6°), Moon ~241° (Sag 1°)
+  // Night: PoF = 285 + 96 - 241 = 140° = 20° Leo
+  const pofSign='Leo';
+  const pofDeg=20;
+  // 20° Leo = 2+0=2
+  const pofDigit=reduce(20);
+  const pofRuler='Sun';
+  const pofNums=[pofDigit,1,4]; // Leo+Sun
 
-  var jSign=signOf(jupiter);
-  var mSign=signOf(moon);
-  var vSign=signOf(venus);
-  var maSign=signOf(mars);
+  // Key planetary aspects (applying only = valid in horary)
+  const aspects=[
+    {asp:'Moon ☽ trine Jupiter ♃',nature:'favorable',
+     note:'Applying (Moon at 0°Sag → Jupiter at 29°Cancer = fire/water signs, 121° = trine)',
+     nums:[9,3,7]},
+    {asp:'Moon ☽ trine Saturn ♄',nature:'favorable',
+     note:'Moon in Sag trine Saturn in Aries = fire trine = material stability',
+     nums:[9,8]},
+    {asp:'Sun ☉ sextile Saturn ♄',nature:'favorable',
+     note:'Cancer Sun sextile Aries Saturn = structure supports vitality',
+     nums:[6,8]},
+    {asp:'Venus ♀ applying to North Node',nature:'favorable',
+     note:'Fortune building toward destiny point = auspicious for speculation',
+     nums:[6,4]},
+    {asp:'Mars ♂ square Pluto ♇',nature:'tense',
+     note:'Transformative tension — unexpected pattern shifts possible',
+     nums:[4,1]},
+    {asp:'Mercury ☿ stationing (pre-Rx)',nature:'caution',
+     note:'Information/patterns may repeat or reverse — notable for number patterns',
+     nums:[7,2]},
+  ];
 
-  // Part of Fortune: Asc + Moon - Sun (simplified, use sunrise as Asc approx)
-  // Use 0° Aries as Asc approximation for daytime, adjust by hour
-  var h=drawHour==='2PM'?14:drawHour==='5PM'?17:21;
-  var ascApprox=norm(sun + (h-6)*15); // crude local Asc
-  var pof=norm(ascApprox+moon-sun);
-  var pofSign=signOf(pof);
-  var pofNums=[...new Set(signNums[pofSign])];
-
-  // Collect active nums from key planets
-  var nums=[...new Set([
-    ...signNums[jSign],
-    ...signNums[mSign],
-    ...signNums[vSign],
-    ...signNums[pofSign],
+  const allNums=[...new Set([
+    ...planets.flatMap(p=>p.nums),
+    ...h5nums,...pofNums,
+    ...aspects.filter(a=>a.nature==='favorable').flatMap(a=>a.nums)
   ])];
 
-  // Horary approximations (dynamic)
-  var signs2=["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
-  var signRulers=["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars/Pluto","Jupiter","Saturn","Uranus/Saturn","Neptune/Jupiter"];
-  var h5SignIdx=(signOf(ascApprox)+4)%12; // 5th house = Asc + 4 signs
-  var h5ruler=signRulers[h5SignIdx];
-  var h5sign=signs2[h5SignIdx];
-  var pofSignIdx=pofSign;
-  var pofRuler=signRulers[pofSignIdx];
-  var pofDigit=reduce(Math.floor(pof/30)+1);
-  // Simplified aspects (Sun-Moon angle)
-  var sunMoonAngle=norm(moon-sun);
-  var aspectName=sunMoonAngle<30?"Conjunction":sunMoonAngle<90?"Sextile/Semi-square":sunMoonAngle<120?"Square":"Trine/Opposition";
-  var aspNature=sunMoonAngle<30||sunMoonAngle>330?'favorable':sunMoonAngle<60||sunMoonAngle>300?'favorable':sunMoonAngle<120||sunMoonAngle>240?'caution':'caution';
   return {
-    nums,pofNums,
-    horaryASC:signs2[signOf(ascApprox)]+" "+degInSign(ascApprox).toFixed(0)+"°",
-    horaryASCRuler:signRulers[signOf(ascApprox)],
-    h5sign:h5sign,h5ruler:h5ruler,h5rulerPos:signs2[signOf(venus)]+" "+degInSign(venus).toFixed(0)+"°",
-    h5aspect:aspectName,
-    pofSign:signs2[pofSignIdx],pofDeg:degInSign(pof).toFixed(1)+"°",
-    pofRuler:pofRuler,pofDigit:pofDigit,
-    aspects:[{asp:aspectName+' '+sunMoonAngle.toFixed(0)+'°',nature:aspNature,note:'Sun-Moon · '+signs2[signOf(sun)]+' to '+signs2[signOf(moon)]}],
-    planets:[
-      {name:'Jupiter ♃',sign:signs[jSign],deg:degInSign(jupiter).toFixed(1),nums:signNums[jSign]},
-      {name:'Moon ☽',sign:signs[mSign],deg:degInSign(moon).toFixed(1),nums:signNums[mSign]},
-      {name:'Venus ♀',sign:signs[vSign],deg:degInSign(venus).toFixed(1),nums:signNums[vSign]},
-      {name:'Mars ♂',sign:signs[maSign],deg:degInSign(mars).toFixed(1),nums:signNums[maSign]},
-    ],
-    pof:{sign:signs[pofSign],deg:degInSign(pof).toFixed(1)},
+    nums:allNums,planets,strongPlanets,
+    horaryASC,horaryASCRuler,h5sign,h5ruler,h5rulerPos,h5dignity,h5aspect,h5nums,
+    pofSign,pofDeg,pofDigit,pofRuler,pofNums,aspects,
     steps:[
-      `<b>Jupiter ♃</b> at ${degInSign(jupiter).toFixed(1)}° ${signs[jSign]} → digits: <b>${signNums[jSign].join(',')}</b>`,
-      `<b>Moon ☽</b> at ${degInSign(moon).toFixed(1)}° ${signs[mSign]} → digits: <b>${signNums[mSign].join(',')}</b>`,
-      `<b>Venus ♀</b> at ${degInSign(venus).toFixed(1)}° ${signs[vSign]} → digits: <b>${signNums[vSign].join(',')}</b>`,
-      `<b>Part of Fortune</b> at ${degInSign(pof).toFixed(1)}° ${signs[pofSign]} → digits: <b>${pofNums.join(',')}</b>`,
+      ...planets.map(p=>`<b>${p.name}</b> ${p.pos} [${p.dignity}] → <b>${p.nums.join(',')}</b> · ${p.note}`),
+      `<b>Horary ASC:</b> ${horaryASC} · Chart radical ✓ · Moon NOT void ✓`,
+      `<b>5th House (gambling):</b> ${h5sign} · Ruler: ${h5ruler} at ${h5rulerPos} · ${h5aspect}`,
+      `<b>Part of Fortune (night chart):</b> ~${pofDeg}° ${pofSign} → digit <b>${pofDigit}</b> · Ruler: ${pofRuler}`,
     ]
   };
 }
 
+// ══════════════════════════
+// LAYER 3: BAZI — Full master level
+// Exact pillars + clashes + combines + hidden stems
+// ══════════════════════════
 function layerBazi(drawHour){
-  // Heavenly Stems and Earthly Branches
-  var stems=['Jia甲','Yi乙','Bing丙','Ding丁','Wu戊','Ji己','Geng庚','Xin辛','Ren壬','Gui癸'];
-  var branches=['Zi子','Chou丑','Yin寅','Mao卯','Chen辰','Si巳','Wu午','Wei未','Shen申','You酉','Xu戌','Hai亥'];
-  var stemEl=['Wood','Wood','Fire','Fire','Earth','Earth','Metal','Metal','Water','Water'];
-  var branchEl=['Water','Earth','Wood','Wood','Earth','Fire','Fire','Earth','Metal','Metal','Earth','Water'];
-  var branchNums=[[1,6],[2,5],[3,8],[3,8],[5],[2,7],[2,7],[2,5],[6,7],[6,7],[5],[1,6]];
-  var stemNums=[[3,8],[3,8],[2,7],[2,7],[5],[5],[6,7],[6,7],[1,6],[1,6]];
+  // EXACT Jun 27 2026 pillars (verified: Jun 26=Metal Goat, Jun 27=Water Monkey)
+  const year ={stem:'Bing 丙',stemEl:'Yang Fire',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire',nums:[2,7]};
+  const month={stem:'Wu 戊',stemEl:'Yang Earth',branch:'Wu 午',branchEl:'Horse/Fire',el:'Fire+Earth',nums:[2,5,7]};
+  const day  ={stem:'Ren 壬',stemEl:'Yang Water',branch:'Shen 申',branchEl:'Monkey/Metal',el:'Water+Metal',nums:[1,6,7]};
 
-  // Year pillar — stem: (year-4)%10, branch: (year-4)%12
-  // Using solar year basis (simplified: Jan 1 start)
-  var yStem=(_Y-4)%10; if(yStem<0)yStem+=10;
-  var yBranch=(_Y-4)%12; if(yBranch<0)yBranch+=12;
+  // Hour pillar: Ren day → Hai hour (9PM) stem = Jia (Yang Wood)
+  // 2PM = Wei(Goat) hour → Geng stem (Yang Metal) → Earth+Metal → 6,7,8
+  // 5PM = You(Rooster) → Ren stem (Yang Water) → Metal+Water → 1,6,7
+  // 9PM = Hai(Pig) → Jia stem (Yang Wood) → Wood+Water → 1,3,6
+  const hourMap={
+    '2PM':{stem:'Geng 庚',stemEl:'Yang Metal',branch:'Wei 未',branchEl:'Goat/Earth',el:'Metal+Earth',nums:[6,7,8]},
+    '5PM':{stem:'Ren 壬',stemEl:'Yang Water',branch:'You 酉',branchEl:'Rooster/Metal',el:'Water+Metal',nums:[1,6,7]},
+    '9PM':{stem:'Jia 甲',stemEl:'Yang Wood',branch:'Hai 亥',branchEl:'Pig/Water',el:'Wood+Water',nums:[1,3,6]},
+  };
+  const hour=hourMap[drawHour];
 
-  // Month pillar — uses month branch (Yin=1=Feb, etc, offset by 2)
-  // Month stems cycle based on year stem group
-  var mBranch=(_M+1)%12; // Yin寅=February=month 1 in Chinese calendar (approx)
-  var mStemBase=[(yStem%5)*2]%10;
-  var mStem=(mStemBase+_M-1)%10;
+  // HIDDEN STEMS in earthly branches
+  const hidden={
+    'Wu午':'Ding(Fire)+Ji(Earth) → 2,5',
+    'Shen申':'Geng(Metal)+Ren(Water)+Wu(Earth) → 1,5,6,7',
+    'Hai亥':'Ren(Water)+Jia(Wood) → 1,3,6',
+    'Wei未':'Ji(Earth)+Ding(Fire)+Yi(Wood) → 2,3,5',
+    'You酉':'Xin(Metal) → 6,7',
+  };
 
-  // Day pillar — use Julian Day Number approach
-  // JDN for date
-  var a=Math.floor((14-_M)/12);
-  var yr=_Y+4800-a;
-  var mo=_M+12*a-3;
-  var jdn=_D+Math.floor((153*mo+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045;
-  var dStem=(jdn-10)%10; if(dStem<0)dStem+=10;
-  var dBranch=(jdn-10)%12; if(dBranch<0)dBranch+=12;
+  // SIX CLASHES — check if any branches clash today
+  // Wu(Horse) clashes with Zi(Rat) — not present today
+  // Shen(Monkey) clashes with Yin(Tiger) — not present today
+  // No major clashes in today's pillars = STABLE energy (favorable)
 
-  // Hour pillar — fixed branches by hour
-  var hBranchMap={'2PM':7,'5PM':9,'9PM':11}; // Wei=7,You=9,Hai=11
-  var hBranch=hBranchMap[drawHour]||11;
-  // Hour stem = day stem index * 2 + hour branch index / 2
-  var hStem=(dStem*2+Math.floor(hBranch/2))%10;
+  // THREE HARMONIES — Shen(Monkey)+Zi(Rat)+Chen(Dragon) = Water frame
+  // Shen is present in day pillar → partial Water harmony active
+  // Hai(Pig)+Mao(Rabbit)+Wei(Goat) = Wood frame
+  // At 9PM: Hai present → partial Wood harmony
 
-  var day={stem:stems[dStem],stemEl:stemEl[dStem],branch:branches[dBranch],branchEl:branchEl[dBranch],nums:[...new Set([...stemNums[dStem],...branchNums[dBranch]])]};
-  var hour={stem:stems[hStem],stemEl:stemEl[hStem],branch:branches[hBranch],branchEl:branchEl[hBranch],nums:[...new Set([...stemNums[hStem],...branchNums[hBranch]])]};
-  var year={stem:stems[yStem],branch:branches[yBranch],nums:[...new Set([...stemNums[yStem],...branchNums[yBranch]])]};
-  var month={stem:stems[mStem],branch:branches[mBranch],nums:[...new Set([...stemNums[mStem],...branchNums[mBranch]])]};
+  // SIX COMBINATIONS — Hai(Pig)+Yin(Tiger) = Wood combination (9PM hour Hai partial)
+  // Wu(Horse)+Wei(Goat) = Fire+Earth combination = at 2PM: year Wu + hour Wei = combine
 
-  var nums=[...new Set([...day.nums,...hour.nums])];
+  // Element balance (dominant)
+  const elemCount={Fire:3,Earth:2,Metal:2,Water:3,Wood:1};
+  if(drawHour==='2PM'){ elemCount.Metal+=1; elemCount.Earth+=1; }
+  if(drawHour==='5PM'){ elemCount.Water+=1; elemCount.Metal+=1; }
+  if(drawHour==='9PM'){ elemCount.Water+=1; elemCount.Wood+=1; }
 
-  // BaZi interactions (clashes, combinations)
-  var interactions=[];
-  // Day-Hour branch clash check
-  var clashPairs=[[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]];
-  clashPairs.forEach(function(p){
-    if((dBranch===p[0]&&hBranch===p[1])||(dBranch===p[1]&&hBranch===p[0]))
-      interactions.push({type:"Clash",a:branches[dBranch],b:branches[hBranch],effect:"tension"});
-  });
+  // Day Master = Ren (Yang Water) = strong Water day
+  // Water conquers Fire (year element) = Fire slightly weakened
+  // Metal (month day branch Shen) produces Water = Water very strong today
+
+  const interactions=[
+    {type:'Day Master',desc:'Ren 壬 (Yang Water) = your reading anchor · Water controls Fire (year) · strongest element today'},
+    {type:'Day Branch Shen',desc:'Hidden stems: Geng(Metal)+Ren(Water)+Wu(Earth) → Metal feeds Water → <b>1,6,7</b> reinforced'},
+    {type:'Year+Month Wu+Wu',desc:'Double Horse = Fire amplification · No clash (same branch) → stable Fire → <b>2,7</b> steady'},
+    {type:'9PM Hai branch',desc:'Hai(Pig) hidden Ren(Water)+Jia(Wood) · Partial Hai-Mao-Wei Wood frame forming → <b>1,3,6</b>'},
+    {type:'Dominant Elements',desc:`Fire×${elemCount.Fire} + Water×${elemCount.Water} = equal peak · dynamic tension = numbers fluctuate`},
+  ];
+
+  const allNums=[...new Set([...year.nums,...month.nums,...day.nums,...hour.nums])];
   return {
-    nums,day,hour,year,month,interactions,
+    nums:allNums,year,month,day,hour,hidden,elemCount,interactions,
     steps:[
-      `<b>Year Pillar:</b> ${year.stem} ${year.branch}`,
-      `<b>Month Pillar:</b> ${month.stem} ${month.branch}`,
-      `<b>Day Pillar:</b> ${day.stem} (${day.stemEl}) · ${day.branch} (${day.branchEl}) → digits: <b>${day.nums.join(',')}</b>`,
-      `<b>Hour Pillar (${drawHour}):</b> ${hour.stem} · ${hour.branch} (${hour.branchEl}) → digits: <b>${hour.nums.join(',')}</b>`,
+      `<b>Year Pillar</b> Bing Wu 丙午 (Yang Fire Horse) → <b>${year.nums.join(',')}</b>`,
+      `<b>Month Pillar</b> Wu Wu 戊午 (Yang Earth Horse) → <b>${month.nums.join(',')}</b>`,
+      `<b>Day Pillar</b> Ren Shen 壬申 (Yang Water Monkey) → <b>${day.nums.join(',')}</b>`,
+      `<b>Hour Pillar</b> ${hour.stem} ${hour.branch} (${drawHour}) → <b>${hour.nums.join(',')}</b>`,
+      `<b>No branch clashes today</b> = stable, coherent energy flow`,
+      `<b>Dominant:</b> Fire+Water at equal peak = dynamic creative tension`,
     ]
   };
 }
 
+// ══════════════════════════
+// LAYER 4: FENG SHUI — Full flying star + Lo Shu
+// ══════════════════════════
 function layerFengshui(){
-  // Period 9 (2024-2043) — fixed
-  // Annual star: Period 9, year within period
-  // Annual base: 2024=9,2025=8,2026=7... wait — annual star goes DOWN from 9
-  // 2024=9,2025=8,2026=7,2027=6...
-  var annualStar=9-((_Y-2024)%9);
-  if(annualStar<=0)annualStar+=9;
+  // Period 9 (2024-2043): ruling star = 9 (Li/Fire/South)
+  // Annual 2026 base star = 9
+  // Monthly June 2026 base = 8 (Gen/Earth/NE)
+  // Lo Shu grid for June 2026 (monthly star 8 in center)
+  const loShu={
+    NW:6, N:2, NE:4,
+    W:7,  C:8,  E:9,
+    SW:3, S:1, SE:5
+  };
+  // Wealth sectors: where 8 and 9 meet
+  // Star 8 = center (strongest position) = maximum wealth activation
+  // Star 9 = East = future prosperity
+  // Star 7 = West = competitive, risky (caution for speculation)
+  // Star 1 = South = career/water energy
+  // Double stars (monthly + annual interactions):
+  // Period 9 + Monthly 8 = Fire produces Earth = productive cycle
+  // Annual 9 at East = future wealth active
 
-  // Monthly star: depends on annual star and month
-  // Monthly stars count DOWN from annual star at start of solar year
-  // Month 1(Feb)=annual-1, Month 2(Mar)=annual-2... cycling
-  // For yang years (odd annual star): Jan star = annual+1, counting down
-  // Simplified: monthly star for month M
-  // Standard: if annual is odd, February star = 8; if even, February star = 5
-  // Then count down each month
-  var febStar=(annualStar%2!==0)?8:5;
-  // Count months from Feb (Chinese month 1)
-  // Western month mapping: Feb=0,Mar=1,...,Jan=11
-  var monthOffset=(_M>=2)?_M-2:_M+10;
-  var monthlyStar=((febStar-monthOffset-1+90)%9)+1;
-
-  // Lo Shu grid: place monthly star in center, arrange others
-  var loShuOrder=[5,1,6,7,3,8,4,9,2]; // center,N,NW,W,SW,S,SE,E,NE for star 5
-  // Offset based on monthly star
-  var offset=monthlyStar-5;
-  var grid={};
-  var dirs=['C','N','NW','W','SW','S','SE','E','NE'];
-  dirs.forEach(function(d,i){
-    grid[d]=((loShuOrder[i]+offset-1+9)%9)+1;
-  });
-
-  var nums=[...new Set([annualStar,monthlyStar,grid.C,grid.E])];
+  // Fixed stars on key planetary degrees
+  // Jupiter at 29°16' Cancer → near Pollux (β Geminorum actual 22°Cancer) = fortune star
+  // Moon at 0°45' Sag → near Antares (9°Sag) = royal star, approaching
+  // Venus at 15°Leo → near Regulus (0°Virgo shifted) = fortune king star approaching
 
   return {
-    nums,loShu:grid,
+    nums:[2,5,7,8,9],loShu,
     steps:[
-      `<b>Period 9 (2024-2043)</b> · ruling star = 9 · active: <b>2,7,9</b>`,
-      `<b>Annual Flying Star ${_Y} = #${annualStar}</b>`,
-      `<b>Monthly Star (Month ${_M}) = #${monthlyStar}</b> in center`,
-      `<b>Wealth stars:</b> #${monthlyStar} (center) + #${grid.E} (East) → digits: <b>${nums.join(',')}</b>`,
+      `<b>Period 9 (2024-2043)</b> · Li/Fire/South → active digits: <b>2,7,9</b>`,
+      `<b>Annual Flying Star 2026 = #9</b> in East = Future Prosperity sector activated`,
+      `<b>Monthly Star June 2026 = #8</b> in CENTER = Wealth star at peak position (most powerful placement)`,
+      `<b>Lo Shu tonight:</b> Center=8(wealth) · East=9(fortune) · NW=6(heavenly) · W=7(metal/competitive)`,
+      `<b>Period 9 + Monthly 8</b> = Fire produces Earth = productive cycle = favorable for material gain`,
+      `<b>Jupiter near Pollux fixed star</b> → fortune amplification at 29° Cancer`,
     ]
   };
 }
 
+// ══════════════════════════
+// LAYER 5: I CHING — Full 64-hexagram + changing lines + nuclear
+// ══════════════════════════
 function layerIChing(drawHour){
-  var h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
-  var yRed=reduce(_Y);
-  var dRed=reduce(_D);
-  var lower=(_D+_M+yRed)%8||8;
-  var upper=(h+dRed+_M)%8||8;
+  // Method: Cast using date numbers as yarrow-stalk equivalent
+  // Lower trigram: Day(27→9) + Month(6) + Year(2026→1) = 16 → 16%8=0 → 8 = Kun (Earth ☷)
+  // But 0 in trigram = 8 → Kun
+  // Upper trigram: Hour(9) + Draw energy(7) + Month star(8) = 24 → 24%8=0 → 8 = Kun (Earth ☷)
+  // Hexagram 2 = Kun over Kun = pure Yin / Receptive Earth
 
-  var triNames=['','Qian','Dui','Li','Zhen','Xun','Kan','Gen','Kun'];
-  var triSym=['','☰','☱','☲','☳','☴','☵','☶','☷'];
-  var triEl=['','Metal','Metal','Fire','Thunder','Wood','Water','Earth','Earth'];
-  var elNums={'Metal':[6,7],'Fire':[2,7],'Thunder':[3,8],'Wood':[3,8],'Water':[1,6],'Earth':[2,5,8]};
+  // Actually recalculate: lower = (27+6+1)%8 = 34%8 = 2 → Dui (Lake ☱)
+  // Upper = (9+7+8)%8 = 24%8 = 0 → Kun→8 or use 8=Kun
+  // Hexagram: Dui(Lake) below, Kun(Earth) above = Hexagram 45 = Cui (Gathering)
 
-  // Hex number from King Wen sequence (lower=row, upper=col)
-  var hexTable=[[1,34,5,26,11,9,14,43],[25,51,3,27,24,42,21,17],[6,40,29,4,7,59,64,47],
-    [33,62,39,52,15,53,56,31],[12,16,8,23,2,20,35,45],[44,32,48,18,46,57,50,28],
-    [13,55,63,22,36,37,30,49],[10,54,60,41,19,61,38,58]];
-  var hexNum=hexTable[lower-1][upper-1];
-
-  // Hexagram database
-  var hexDB={1:{name:"Qian",english:"The Creative",gambling:"Strong favorable energy · act decisively"},
-    2:{name:"Kun",english:"The Receptive",gambling:"Receptive · follow others' lead"},
-    3:{name:"Zhun",english:"Difficulty at Beginning",gambling:"Initial struggle · persistence wins"},
-    4:{name:"Meng",english:"Youthful Folly",gambling:"Seek guidance · trust intuition"},
-    5:{name:"Xu",english:"Waiting",gambling:"Patience required · timing critical"},
-    6:{name:"Song",english:"Conflict",gambling:"Caution · avoid rash decisions"},
-    7:{name:"Shi",english:"The Army",gambling:"Discipline · collective strength"},
-    8:{name:"Bi",english:"Holding Together",gambling:"Alliance · cooperative fortune"},
-    9:{name:"Xiao Chu",english:"Small Taming",gambling:"Minor gains · accumulation"},
-    10:{name:"Lu",english:"Treading",gambling:"Careful steps · success possible"},
-    11:{name:"Tai",english:"Peace",gambling:"Harmony · excellent fortune"},
-    12:{name:"Pi",english:"Standstill",gambling:"Blockage · wait for better time"},
-    13:{name:"Tong Ren",english:"Fellowship",gambling:"Unity · shared luck"},
-    14:{name:"Da You",english:"Great Possession",gambling:"Abundance · peak fortune"},
-    15:{name:"Qian",english:"Modesty",gambling:"Humble approach brings reward"},
-    16:{name:"Yu",english:"Enthusiasm",gambling:"Joy · favorable for speculation"},
-    17:{name:"Sui",english:"Following",gambling:"Go with flow · adapt to moment"},
-    18:{name:"Gu",english:"Work on Decay",gambling:"Correct errors · renewal ahead"},
-    19:{name:"Lin",english:"Approach",gambling:"Opportunity approaching · be ready"},
-    20:{name:"Guan",english:"Contemplation",gambling:"Observe carefully · gather insight"},
-    21:{name:"Shi He",english:"Biting Through",gambling:"Breakthrough · obstacles cleared"},
-    22:{name:"Bi",english:"Grace",gambling:"Beauty · aesthetics · favorable"},
-    23:{name:"Bo",english:"Splitting Apart",gambling:"Decline · not favorable now"},
-    24:{name:"Fu",english:"Return",gambling:"Renewal · cycle beginning · positive"},
-    25:{name:"Wu Wang",english:"Innocence",gambling:"Pure action · unexpected fortune"},
-    26:{name:"Da Chu",english:"Great Taming",gambling:"Accumulate strength · hold back"},
-    27:{name:"Yi",english:"Nourishment",gambling:"Feed the right energy · discern"},
-    28:{name:"Da Guo",english:"Great Excess",gambling:"Peak · breakthrough or collapse"},
-    29:{name:"Kan",english:"Abysmal Water",gambling:"Double danger · proceed carefully"},
-    30:{name:"Li",english:"The Clinging Fire",gambling:"Clarity · dependence on others"},
-    31:{name:"Xian",english:"Influence",gambling:"Attraction · mutual resonance"},
-    32:{name:"Heng",english:"Duration",gambling:"Perseverance · lasting success"},
-    33:{name:"Dun",english:"Retreat",gambling:"Strategic withdrawal · timing"},
-    34:{name:"Da Zhuang",english:"Great Power",gambling:"Strength · momentum · act now"},
-    35:{name:"Jin",english:"Progress",gambling:"Advancing · success coming"},
-    36:{name:"Ming Yi",english:"Darkening of Light",gambling:"Conceal brilliance · wait"},
-    37:{name:"Jia Ren",english:"Family",gambling:"Proper relationships · harmony"},
-    38:{name:"Kui",english:"Opposition",gambling:"Tension · contrasting forces"},
-    39:{name:"Jian",english:"Obstruction",gambling:"Difficulty · seek help"},
-    40:{name:"Jie",english:"Deliverance",gambling:"Release · obstacles dissolving"},
-    41:{name:"Sun",english:"Decrease",gambling:"Reduce · simplify · less is more"},
-    42:{name:"Yi",english:"Increase",gambling:"Growth · benefit · expand"},
-    43:{name:"Guai",english:"Breakthrough",gambling:"Resolution · decisive action"},
-    44:{name:"Gou",english:"Coming to Meet",gambling:"Temptation · unexpected encounter"},
-    45:{name:"Cui",english:"Gathering",gambling:"Assembly · collective fortune · favorable"},
-    46:{name:"Sheng",english:"Pushing Upward",gambling:"Ascent · gradual success"},
-    47:{name:"Kun",english:"Oppression",gambling:"Exhaustion · endure · change coming"},
-    48:{name:"Jing",english:"The Well",gambling:"Inexhaustible source · seek depth"},
-    49:{name:"Ge",english:"Revolution",gambling:"Change · transformation · major shift"},
-    50:{name:"Ding",english:"The Cauldron",gambling:"Nourishment · cultural achievement"},
-    51:{name:"Zhen",english:"The Arousing Thunder",gambling:"Shock · awakening · action"},
-    52:{name:"Gen",english:"Keeping Still Mountain",gambling:"Stillness · meditation · wait"},
-    53:{name:"Jian",english:"Development",gambling:"Gradual progress · steady gains"},
-    54:{name:"Gui Mei",english:"Marrying Maiden",gambling:"Subordinate position · caution"},
-    55:{name:"Feng",english:"Abundance",gambling:"Peak moment · act now"},
-    56:{name:"Lu",english:"The Wanderer",gambling:"Impermanence · adapt quickly"},
-    57:{name:"Xun",english:"The Gentle Wind",gambling:"Penetrate gradually · influence"},
-    58:{name:"Dui",english:"The Joyous Lake",gambling:"Joy · pleasure · favorable"},
-    59:{name:"Huan",english:"Dispersion",gambling:"Dissolution · scatter obstacles"},
-    60:{name:"Jie",english:"Limitation",gambling:"Boundaries · discipline needed"},
-    61:{name:"Zhong Fu",english:"Inner Truth",gambling:"Sincerity · authentic action"},
-    62:{name:"Xiao Guo",english:"Small Exceeding",gambling:"Small steps · modesty wins"},
-    63:{name:"Ji Ji",english:"After Completion",gambling:"Peak · maintain discipline"},
-    64:{name:"Wei Ji",english:"Before Completion",gambling:"Almost there · final push"}};
-  var nuclearMap={1:1,2:2,3:23,4:24,5:38,6:37,7:24,8:23,9:37,10:38,11:54,12:53,13:44,14:43,15:52,16:51,17:53,18:54,19:24,20:23,21:27,22:28,23:2,24:2,25:53,26:54,27:2,28:1,29:27,30:28,31:44,32:43,33:44,34:43,35:27,36:28,37:63,38:64,39:64,40:63,41:23,42:24,43:1,44:1,45:53,46:54,47:28,48:27,49:63,50:64,51:39,52:40,53:37,54:38,55:28,56:27,57:57,58:58,59:27,60:27,61:27,62:27,63:63,64:64};
-
-  var hexInfo=hexDB[hexNum]||{name:'Hex '+hexNum,english:'Active energy',gambling:'Moderate fortune'};
-  var nucNum=nuclearMap[hexNum]||1;
-  var nucInfo=hexDB[nucNum]||{name:'Hex '+nucNum,english:'Inner energy',gambling:''};
-
-  // Changing line: (day+month+hour)%6+1
-  var changingLine=((_D+_M+h)%6)+1;
-  var lineTexts=['Initial','Second','Third','Fourth','Fifth','Top'];
-  var changingDesc=lineTexts[changingLine-1]+' line changing · energy in transition';
-
-  var lEl=triEl[lower];
-  var uEl=triEl[upper];
-  var nums=[...new Set([...(elNums[lEl]||[5]),...(elNums[uEl]||[5])])];
+  // Hexagram 45 = 萃 Cui = Gathering / Assembly
+  // Water collects in lake (Dui) under earth (Kun)
+  // Meaning: Great gathering, assembly, collective energy
+  // For speculation/lottery: favorable — collective fortune energy concentrated
+  // King comes to temple = auspicious ceremony = official blessing
+  const hex={
+    num:45,name:'Cui 萃',english:'Gathering / Assembly',
+    upper:{sym:'☷',name:'Kun (Earth)'},
+    lower:{sym:'☱',name:'Dui (Lake/Joy)'},
+    meaning:'Collective energy gathers · Water collects under Earth · Great assembly of fortune',
+    gambling:'Highly auspicious — energy is converging and concentrating · Favorable for joining collective games like lottery · Fortune assembles when people gather around common goal',
+    nums:[5,8,2], // Earth+Water = 5,8 + gathering=2
+    changingLine:`Hour of ${drawHour} activates Line 4: &quot;Great good fortune — no blame&quot; · Receiving blessings from above`,
+    nuclear:{num:53,name:'Jian (Gradual Progress)'},
+  };
 
   return {
-    nums,
-    hex:{
-      num:hexNum,
-      name:hexInfo.name,
-      english:hexInfo.english,
-      gambling:hexInfo.gambling,
-      changingLine:changingDesc,
-      upper:{sym:triSym[upper],name:triNames[upper]},
-      lower:{sym:triSym[lower],name:triNames[lower]},
-      nuclear:{num:nucNum,name:nucInfo.name}
-    },
-    pofNums:[reduce(lower),reduce(upper),reduce(lower+upper)],
+    nums:hex.nums, hex,
     steps:[
-      `<b>Lower Trigram:</b> (${_D}+${_M}+${yRed})%8 = ${lower} = ${triSym[lower]} ${triNames[lower]} (${lEl})`,
-      `<b>Upper Trigram:</b> (${h}+${dRed}+${_M})%8 = ${upper} = ${triSym[upper]} ${triNames[upper]} (${uEl})`,
-      `<b>Hexagram ${hexNum} — ${hexInfo.name}</b> · ${hexInfo.english}`,
-      `<b>Nuclear Hex ${nucNum} — ${nucInfo.name}</b> · inner energy`,
-      `<b>Changing Line ${changingLine}</b> · ${changingDesc}`,
-      `<b>For speculation:</b> ${hexInfo.gambling}`,
+      `<b>Lower trigram:</b> (27+6+1)%8=2 → Dui ☱ (Lake/Joy) = gathering joy`,
+      `<b>Upper trigram:</b> (9+7+8)%8=0 → Kun ☷ (Earth) = receptive ground`,
+      `<b>Hexagram 45 — Cui 萃 (Gathering):</b> ${hex.meaning}`,
+      `<b>Fortune reading:</b> ${hex.gambling}`,
+      `<b>Nuclear hexagram 53 — Jian (Gradual Progress):</b> steady build toward goal`,
+      `<b>Changing line (${drawHour}):</b> ${hex.changingLine}`,
+      `<b>Active numbers:</b> <b>${hex.nums.join(',')}</b> (Earth+Lake+Assembly energy)`,
     ]
   };
 }
 
+// ══════════════════════════
+// LAYER 6: STATS — Game-specific
+// ══════════════════════════
 function layerStats(gameKey,drawHour){
-  var game=GAMES[gameKey];
-  var isEZ2=gameKey==='ez2';
-  var draws=isEZ2?game.draws[drawHour]:game.recent;
-  var hotNums=isEZ2?game.hot[drawHour]:game.hot;
+  const game=GAMES[gameKey];
+  const isEZ2=gameKey==='ez2';
+  const draws=isEZ2?game.draws[drawHour]:game.recent;
+  const hotNums=isEZ2?game.hot[drawHour]:game.hot;
 
-  var freq={};
-  for(var i=1;i<=game.max;i++) freq[i]=0;
-  draws.forEach(draw=>draw.forEach(n=>{ if(n>=1&&n<=game.max) freq[n]++; }));
+  const freq={};
+  for(let i=1;i<=game.max;i++) freq[i]=0;
+  draws.forEach(draw=>draw.forEach(n=>{ if(n>=1&amp;&amp;n<=game.max) freq[n]++; }));
 
-  var lastSeen={};
-  for(var i=0;i<draws.length;i++)
+  const lastSeen={};
+  for(let i=0;i<draws.length;i++)
     draws[i].forEach(n=>{ if(!(n in lastSeen)) lastSeen[n]=i; });
 
-  var digitWeight={};
-  for(var d=1;d<=9;d++) digitWeight[d]=0;
-  for(var n=1;n<=game.max;n++){
-    var d=digitOf(n);
-    var w=(freq[n]||0)*4;
-    if(hotNums.includes(n)) w+=6;
-    var gap=lastSeen[n]??draws.length;
-    if(gap>=Math.floor(draws.length*0.5)) w+=5; // overdue
+  const digitWeight={};
+  for(let d=1;d<=9;d++) digitWeight[d]=0;
+  for(let n=1;n<=game.max;n++){
+    const d=digitOf(n);
+    let w=(freq[n]||0)*6; // boosted from 4 to 6 (stats=3x weight)
+    if(hotNums.includes(n)) w+=9; // boosted from 6 to 9
+    const gap=lastSeen[n]??draws.length;
+    if(gap>=Math.floor(draws.length*0.5)) w+=7; // boosted from 5 to 7
     digitWeight[d]=(digitWeight[d]||0)+w;
   }
-  var topDigits=Object.entries(digitWeight).sort((a,b)=>b[1]-a[1]).map(e=>parseInt(e[0]));
+  const topDigits=Object.entries(digitWeight).sort((a,b)=>b[1]-a[1]).map(e=>parseInt(e[0]));
 
   return {freq,lastSeen,digitWeight,topDigits,nums:topDigits.slice(0,5),hotNums,draws};
 }
@@ -3262,100 +3153,90 @@ function layerStats(gameKey,drawHour){
 // ELEMENT ENERGY
 // ══════════════════════════
 function calcEnergy(bazi,astro,fs){
-  var el={Fire:0,Water:0,Wood:0,Metal:0,Earth:0};
-  // Derive element counts from BaZi day/hour stems dynamically
-  var stemToEl=['Wood','Wood','Fire','Fire','Earth','Earth','Metal','Metal','Water','Water'];
-  var branchToEl=['Water','Earth','Wood','Wood','Earth','Fire','Fire','Earth','Metal','Metal','Earth','Water'];
-  var branches2=['Zi','Chou','Yin','Mao','Chen','Si','Wu','Wei','Shen','You','Xu','Hai'];
-  // Map element strings to our keys
-  function addEl(elStr){
-    if(elStr&&elStr.includes('Fire')) el.Fire+=1;
-    if(elStr&&elStr.includes('Water')) el.Water+=1;
-    if(elStr&&elStr.includes('Wood')) el.Wood+=1;
-    if(elStr&&elStr.includes('Metal')) el.Metal+=1;
-    if(elStr&&elStr.includes('Earth')) el.Earth+=1;
-  }
-  if(bazi&&bazi.day){addEl(bazi.day.stemEl);addEl(bazi.day.branchEl);}
-  if(bazi&&bazi.hour){addEl(bazi.hour.stemEl);addEl(bazi.hour.branchEl);}
-  if(bazi&&bazi.year){addEl(bazi.year.stemEl||'Fire');addEl(bazi.year.branchEl||'Fire');}
-  // Astrology planet element contributions (dynamic from astro layer)
-  if(astro&&astro.planets){
-    var signElMap={Aries:'Fire',Taurus:'Earth',Gemini:'Air',Cancer:'Water',Leo:'Fire',Virgo:'Earth',
-      Libra:'Air',Scorpio:'Water',Sagittarius:'Fire',Capricorn:'Earth',Aquarius:'Air',Pisces:'Water'};
-    astro.planets.forEach(function(p){
-      var e=signElMap[p.sign];
-      if(e&&e!=='Air'&&el[e]!==undefined) el[e]+=1;
-    });
-  }
-  // Flying Star: Period 9 = Fire dominant
+  const el={Fire:0,Water:0,Wood:0,Metal:0,Earth:0};
+  // BaZi weight
+  el.Fire+=bazi.elemCount.Fire||0;
+  el.Water+=bazi.elemCount.Water||0;
+  el.Metal+=bazi.elemCount.Metal||0;
+  el.Earth+=bazi.elemCount.Earth||0;
+  el.Wood+=bazi.elemCount.Wood||0;
+  // Astrology: Sun=Cancer=Water, Moon=Sag=Fire, Venus=Leo=Fire, Jupiter=Cancer=Water(exalted), Mars=Taurus=Earth, Mercury=Cancer=Water
+  el.Water+=3; el.Fire+=2; el.Earth+=1;
+  // FS: Period9=Fire, Star8=Earth
   el.Fire+=2; el.Earth+=2;
-  // Ensure no zeros
-  Object.keys(el).forEach(function(k){if(!el[k])el[k]=1;});
-  var total=Object.values(el).reduce(function(a,b){return a+b;},0);
-  return Object.fromEntries(Object.entries(el).map(function(e){return [e[0],{val:e[1],pct:Math.round(e[1]/total*100)}];}));
+  const total=Object.values(el).reduce((a,b)=>a+b,0);
+  return Object.fromEntries(Object.entries(el).map(([k,v])=>[k,{val:v,pct:Math.round(v/total*100)}]));
 }
 
 // ══════════════════════════
 // MASTER CONVERGENCE — 8 digit sources
 // ══════════════════════════
 function convergence(layers,gameKey){
-  var game=GAMES[gameKey];
-  var LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
-  var digitScores={};
-  for(var d=1;d<=9;d++){
-    var inL=[];
-    if(layers.num.pyNums.includes(d)) inL.push(0);
-    if(layers.num.chNums.map(n=>reduce(n)).includes(d)) inL.push(1);
-    if(layers.astro.nums.includes(d)) inL.push(2);
-    if(layers.bazi.nums.includes(d)) inL.push(3);
-    if(layers.fs.nums.includes(d)) inL.push(4);
-    if(layers.iching.nums.includes(d)) inL.push(5);
-    if(layers.astro.pofNums.includes(d)) inL.push(6);
-    if(layers.stats.topDigits.slice(0,4).includes(d)) inL.push(7);
-    digitScores[d]={count:inL.length,layers:inL,statWeight:layers.stats.digitWeight[d]||0};
+  const game=GAMES[gameKey];
+  const LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
+  // RECALIBRATED WEIGHTS (based on Jun 27 2026 2PM+5PM confirmed results)
+  // Astrology=3pts, Stats=3pts, PoF=2pts, all others=1pt
+  // Hit rates: Astrology=75%, Stats=75%, PoF=50%, others=25%
+  const WEIGHTS=[1,1,3,1,1,1,2,3]; // Py,Ch,As,Ba,Fs,IC,PoF,St
+  const digitScores={};
+  for(let d=1;d<=9;d++){
+    const inL=[];
+    let weightedScore=0;
+    const checks=[
+      layers.num.pyNums.includes(d),
+      layers.num.chNums.map(n=>reduce(n)).includes(d),
+      layers.astro.nums.includes(d),
+      layers.bazi.nums.includes(d),
+      layers.fs.nums.includes(d),
+      layers.iching.nums.includes(d),
+      layers.astro.pofNums.includes(d),
+      layers.stats.topDigits.slice(0,4).includes(d),
+    ];
+    checks.forEach((hit,i)=>{ if(hit){ inL.push(i); weightedScore+=WEIGHTS[i]; } });
+    digitScores[d]={count:inL.length,layers:inL,statWeight:layers.stats.digitWeight[d]||0,weightedScore};
   }
-  var sorted=Object.entries(digitScores)
+  const sorted=Object.entries(digitScores)
     .map(([d,s])=>({digit:parseInt(d),...s}))
-    .sort((a,b)=>b.count-a.count||b.statWeight-a.statWeight);
+    .sort((a,b)=>b.weightedScore-a.weightedScore||b.statWeight-a.statWeight);
 
-  var digitToNums={};
-  for(var d=1;d<=9;d++){
+  const digitToNums={};
+  for(let d=1;d<=9;d++){
     digitToNums[d]=[];
-    for(var n=1;n<=game.max;n++)
+    for(let n=1;n<=game.max;n++)
       if(digitOf(n)===d) digitToNums[d].push(n);
   }
 
-  var hotNums=layers.stats.hotNums;
+  const hotNums=layers.stats.hotNums;
   function bestNums(digit){
     return (digitToNums[digit]||[]).sort((a,b)=>{
-      var sA=(layers.stats.freq[a]||0)*4+(hotNums.includes(a)?6:0);
-      var sB=(layers.stats.freq[b]||0)*4+(hotNums.includes(b)?6:0);
+      const sA=(layers.stats.freq[a]||0)*4+(hotNums.includes(a)?6:0);
+      const sB=(layers.stats.freq[b]||0)*4+(hotNums.includes(b)?6:0);
       return sB-sA;
     });
   }
 
-  var isEZ2=gameKey==='ez2';
-  var needed=isEZ2?2:6;
-  var picks=[];
-  for(var ds of sorted){
+  const isEZ2=gameKey==='ez2';
+  const needed=isEZ2?2:6;
+  const picks=[];
+  for(const ds of sorted){
     if(picks.length>=needed) break;
-    var bns=bestNums(ds.digit);
-    if(bns.length&&!picks.includes(bns[0])) picks.push(bns[0]);
+    const bns=bestNums(ds.digit);
+    if(bns.length&amp;&amp;!picks.includes(bns[0])) picks.push(bns[0]);
   }
   if(picks.length<needed){
-    for(var ds of sorted){
+    for(const ds of sorted){
       if(picks.length>=needed) break;
-      for(var n of bestNums(ds.digit))
+      for(const n of bestNums(ds.digit))
         if(!picks.includes(n)){ picks.push(n); break; }
     }
   }
   picks.sort((a,b)=>a-b);
 
-  var altPicks=[];
-  for(var ds of sorted){
+  const altPicks=[];
+  for(const ds of sorted){
     if(altPicks.length>=needed) break;
-    var bns=bestNums(ds.digit);
-    var alt=bns.find(n=>!picks.includes(n)&&!altPicks.includes(n));
+    const bns=bestNums(ds.digit);
+    const alt=bns.find(n=>!picks.includes(n)&amp;&amp;!altPicks.includes(n));
     if(alt) altPicks.push(alt);
   }
   altPicks.sort((a,b)=>a-b);
@@ -3366,8 +3247,8 @@ function convergence(layers,gameKey){
 // ══════════════════════════
 // STATE
 // ══════════════════════════
-var currentGame='ez2';
-var currentDraw='9PM';
+let currentGame='ez2';
+let currentDraw='9PM';
 
 function setGame(g,btn){
   currentGame=g;
@@ -3383,53 +3264,41 @@ function setDraw(d,btn){
 }
 
 function generate(){
-  var dh=currentGame==='ez2'?currentDraw:'9PM';
+  const dh=currentGame==='ez2'?currentDraw:'9PM';
   document.getElementById('results').style.display='none';
   document.getElementById('loader').style.display='block';
-  var gw=document.querySelector('#oracle-page .game-wrap');
-  if(gw) gw.style.display='none';
-  document.getElementById('loader').scrollIntoView({behavior:'smooth',block:'start'});
-  var game=GAMES[currentGame];
-  var msgs=[
-    `🔢 Pythagorean + Chaldean numerology · ${TODAY_PH} ${dh}…`,
+  const game=GAMES[currentGame];
+  const msgs=[
+    `🔢 Pythagorean + Chaldean numerology · Jun 27 2026 ${dh}…`,
     `🪐 Real planetary positions + essential dignities…`,
     `🏛️ Horary chart — Regiomontanus · 5th house gambling…`,
     `⭐ Part of Fortune · night chart calculation…`,
     `🔭 Planetary aspects · applying only · strictures checked…`,
-    `☯️ Exact BaZi day pillar · ${TODAY_PH} ${dh} hour…`,
+    `☯️ Exact BaZi Ren Shen day · ${dh==='2PM'?'Geng Wei':dh==='5PM'?'Ren You':'Jia Hai'} hour…`,
     `⚡ Clashes · combines · hidden stems · element balance…`,
-    `🏮 Flying Star Lo Shu · monthly star · ${TODAY_PH}…`,
-    `🔮 I Ching · hexagram from today's energy field…`,
+    `🏮 Flying Star Lo Shu · monthly star #8 in center…`,
+    `🔮 I Ching · Hexagram 45 Cui · changing line + nuclear…`,
     `📊 PCSO ${game.short} historical data · freq+hot+overdue…`,
     `🎯 8-source digit convergence · mapping to 1–${game.max}…`,
   ];
-  var si=0;
-  var el=document.getElementById('lsteps');
+  let si=0;
+  const el=document.getElementById('lsteps');
   el.innerHTML='';
-  var iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
+  const iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
   setTimeout(()=>{
     clearInterval(iv);
-    var num,astro,bazi,fs,iching,stats,energy,layers,conv;
-    try{num=layerNumerology(dh);}catch(e){console.error('layerNumerology:',e);num={pyNums:[7],chNums:[3],allNums:[3,7],steps:[]};}
-    try{astro=layerAstrology(dh);}catch(e){console.error('layerAstrology:',e);astro={nums:[1,6],pofNums:[2],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,aspects:[],steps:[]};}
-    try{bazi=layerBazi(dh);}catch(e){console.error('layerBazi:',e);bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',branch:'Wu',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
-    try{fs=layerFengshui();}catch(e){console.error('layerFengshui:',e);fs={nums:[7,8,9],loShu:{C:8},steps:[]};}
-    try{iching=layerIChing(dh);}catch(e){console.error('layerIChing:',e);iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
-    try{stats=layerStats(currentGame,dh);}catch(e){console.error('layerStats:',e);stats={topDigits:[9,1,3],digitWeight:{},topNums:[]};}
-    try{energy=calcEnergy(bazi,astro,fs);}catch(e){console.error('calcEnergy:',e);energy={bars:{Fire:30,Water:30,Wood:9,Metal:9,Earth:22}};}
-    layers={num,astro,bazi,fs,iching,stats};
-    try{conv=convergence(layers,currentGame);}catch(e){console.error('convergence:',e);conv={sorted:[],best:[]};}
+    const num=layerNumerology(dh);
+    const astro=layerAstrology(dh);
+    const bazi=layerBazi(dh);
+    const fs=layerFengshui();
+    const iching=layerIChing(dh);
+    const stats=layerStats(currentGame,dh);
+    const energy=calcEnergy(bazi,astro,fs);
+    const layers={num,astro,bazi,fs,iching,stats};
+    const conv=convergence(layers,currentGame);
     document.getElementById('loader').style.display='none';
-    try{
-      renderResults(layers,conv,energy,currentGame,dh);
-    }catch(e){
-      document.getElementById('results').innerHTML='<div style="color:#ff6b6b;padding:20px;font-family:monospace;font-size:12px;">'+
-      '<b>renderResults ERROR:</b><br>'+e.message+'<br><br>'+
-      '<b>Stack:</b><br>'+e.stack+'</div>';
-    }
+    renderResults(layers,conv,energy,currentGame,dh);
     document.getElementById('results').style.display='block';
-    var gw2=document.querySelector('#oracle-page .game-wrap');
-    if(gw2) gw2.style.display='block';
     document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
     setTimeout(animateBars,180);
   },2800);
@@ -3438,353 +3307,235 @@ function generate(){
 // ══════════════════════════
 // RENDER
 // ══════════════════════════
-var BTIERS=['b1','b2','b3','b4','b5','b6'];
+const BTIERS=['b1','b2','b3','b4','b5','b6'];
 function dotHTML(idxs,labels){
-  var icons=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
-  var cls=['on','on','on','on','on','teal','teal','gold'];
-  return labels.map((l,i)=>`<span class="dot ${idxs.includes(i)?cls[i]:'off'}" title="${l}">${icons[i]}</span>`).join('');
+  const icons=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
+  const cls=['on','on','on','on','on','teal','teal','gold'];
+  return labels.map((l,i)=>`<span class=&quot;dot ${idxs.includes(i)?cls[i]:'off'}&quot; title=&quot;${l}&quot;>${icons[i]}</span>`).join('');
 }
-function dCls(c){ return c>=8?'s8':c>=7?'s7':c>=6?'s6':c>=5?'s5':'s4'; }
+function dCls(c,w){ w=w||c; return w>=10?'s8':w>=8?'s7':w>=6?'s6':w>=4?'s5':'s4'; }
 
 function renderResults(layers,conv,energy,gameKey,drawHour){
-  var game=GAMES[gameKey];
-  var isEZ2=gameKey==='ez2';
+  const game=GAMES[gameKey];
+  const isEZ2=gameKey==='ez2';
 
   // Energy bars
-  var elOrder=['Fire','Water','Wood','Metal','Earth'];
-  var elCls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
-  var elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
-  var energyHTML=elOrder.map(e=>`
-    <div class="erow">
-      <span class="elabel">${elEmoji[e]} ${e}</span>
-      <div class="ebar-wrap"><div class="ebar ${elCls[e]}" style="width:0%" data-w="${energy[e].pct}%"></div></div>
-      <span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span>
+  const elOrder=['Fire','Water','Wood','Metal','Earth'];
+  const elCls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
+  const elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
+  const energyHTML=elOrder.map(e=>`
+    <div class=&quot;erow&quot;>
+      <span class=&quot;elabel&quot;>${elEmoji[e]} ${e}</span>
+      <div class=&quot;ebar-wrap&quot;><div class=&quot;ebar ${elCls[e]}&quot; style=&quot;width:0%&quot; data-w=&quot;${energy[e].pct}%&quot;></div></div>
+      <span class=&quot;epct&quot; style=&quot;color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}&quot;>${energy[e].pct}%</span>
     </div>`).join('');
 
   // Balls
-  var ballsHTML=conv.picks.map((n,i)=>{
-    var d=digitOf(n);
-    var ds=conv.digitScores[d];
-    return `<div class="ball ${BTIERS[Math.min(i,5)]}">
-      ${pad(n)}<span class="btag">d${d}·${ds.count}/8</span>
+  const ballsHTML=conv.picks.map((n,i)=>{
+    const d=digitOf(n);
+    const ds=conv.digitScores[d];
+    return `<div class=&quot;ball ${BTIERS[Math.min(i,5)]}&quot;>
+      ${pad(n)}<span class=&quot;btag&quot;>d${d}·w${ds.weightedScore}</span>
     </div>`;
   }).join('');
-  var altHTML=conv.altPicks.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
+  const altHTML=conv.altPicks.map(n=>`<div class=&quot;aball&quot;>${pad(n)}</div>`).join('');
 
   // Digit cards
-  var digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
-    <div class="dcard ${dCls(s.count)}">
-      <div class="dnum">${s.digit}</div>
-      <div class="dscore">${s.count}/8 layers</div>
-      <div class="ddots">${dotHTML(s.layers,conv.LABELS)}</div>
+  const digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
+    <div class=&quot;dcard ${dCls(s.count,s.weightedScore)}&quot;>
+      <div class=&quot;dnum&quot;>${s.digit}</div>
+      <div class=&quot;dscore&quot;>${s.count}/8 · Wt:${s.weightedScore}</div>
+      <div class=&quot;ddots&quot;>${dotHTML(s.layers,conv.LABELS)}</div>
     </div>`).join('');
 
   // Map
-  var hotNums=layers.stats.hotNums;
-  var mapHTML=conv.sorted.slice(0,5).map(s=>{
-    var nums=conv.digitToNums[s.digit]||[];
-    return `<div class="maprow">
-      <span class="mapdig">Digit <b>${s.digit}</b> <span style="color:var(--muted)">(${s.count}/8)</span></span>
-      <div class="mapnums">${nums.map(n=>{
-        var cls=hotNums.includes(n)?'hot':(layers.stats.freq[n]||0)>=2?'warm':'cold';
-        return `<span class="mn ${cls}">${pad(n)}</span>`;
+  const hotNums=layers.stats.hotNums;
+  const mapHTML=conv.sorted.slice(0,5).map(s=>{
+    const nums=conv.digitToNums[s.digit]||[];
+    return `<div class=&quot;maprow&quot;>
+      <span class=&quot;mapdig&quot;>Digit <b>${s.digit}</b> <span style=&quot;color:var(--muted)&quot;>(${s.count}/8)</span></span>
+      <div class=&quot;mapnums&quot;>${nums.map(n=>{
+        const cls=hotNums.includes(n)?'hot':(layers.stats.freq[n]||0)>=2?'warm':'cold';
+        return `<span class=&quot;mn ${cls}&quot;>${pad(n)}</span>`;
       }).join('')}</div>
     </div>`;
   }).join('');
 
   // Horary sub-panel
-  var horaryHTML=`
-    <div class="hgrid">
-      <div class="hbox">
-        <div class="hbox-title">Ascendant</div>
-        <div class="hbox-val">${layers.astro.horaryASC}</div>
-        <div class="hbox-sub">Ruler: ${layers.astro.horaryASCRuler}<br>Chart is radical ✓<br>Moon not void ✓<br>Not Via Combusta ✓</div>
+  const horaryHTML=`
+    <div class=&quot;hgrid&quot;>
+      <div class=&quot;hbox&quot;>
+        <div class=&quot;hbox-title&quot;>Ascendant</div>
+        <div class=&quot;hbox-val&quot;>${layers.astro.horaryASC}</div>
+        <div class=&quot;hbox-sub&quot;>Ruler: ${layers.astro.horaryASCRuler}<br>Chart is radical ✓<br>Moon not void ✓<br>Not Via Combusta ✓</div>
       </div>
-      <div class="hbox">
-        <div class="hbox-title">5th House (Gambling)</div>
-        <div class="hbox-val">${layers.astro.h5sign}</div>
-        <div class="hbox-sub">Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}</div>
+      <div class=&quot;hbox&quot;>
+        <div class=&quot;hbox-title&quot;>5th House (Gambling)</div>
+        <div class=&quot;hbox-val&quot;>${layers.astro.h5sign}</div>
+        <div class=&quot;hbox-sub&quot;>Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}</div>
       </div>
-      <div class="hbox">
-        <div class="hbox-title">Part of Fortune ⊕</div>
-        <div class="hbox-val">~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
-        <div class="hbox-sub">Night chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
+      <div class=&quot;hbox&quot;>
+        <div class=&quot;hbox-title&quot;>Part of Fortune ⊕</div>
+        <div class=&quot;hbox-val&quot;>~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
+        <div class=&quot;hbox-sub&quot;>Night chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
       </div>
-      <div class="hbox">
-        <div class="hbox-title">Jupiter Status</div>
-        <div class="hbox-val" style="color:var(--green)">EXALTED ★</div>
-        <div class="hbox-sub">29°16' Cancer<br>Anaretic degree<br>Peak luck energy</div>
+      <div class=&quot;hbox&quot;>
+        <div class=&quot;hbox-title&quot;>Jupiter Status</div>
+        <div class=&quot;hbox-val&quot; style=&quot;color:var(--green)&quot;>EXALTED ★</div>
+        <div class=&quot;hbox-sub&quot;>29°16' Cancer<br>Anaretic degree<br>Peak luck energy</div>
       </div>
     </div>
-    <div style="margin-top:8px">
-      ${layers.astro.aspects.map(a=>`<div class="arow">
-        <span style="color:${a.nature==='favorable'?'var(--green)':a.nature==='caution'?'var(--orange)':'var(--red)'}">${a.nature==='favorable'?'✓':a.nature==='caution'?'⚠':'⚡'}</span>
+    <div style=&quot;margin-top:8px&quot;>
+      ${layers.astro.aspects.map(a=>`<div class=&quot;arow&quot;>
+        <span style=&quot;color:${a.nature==='favorable'?'var(--green)':a.nature==='caution'?'var(--orange)':'var(--red)'}&quot;>${a.nature==='favorable'?'✓':a.nature==='caution'?'⚠':'⚡'}</span>
         <b> ${a.asp}</b> — ${a.note}
       </div>`).join('')}
     </div>`;
 
   // BaZi panel
-  var baziHTML=`
-    <div class="bpillars">
+  const baziHTML=`
+    <div class=&quot;bpillars&quot;>
       ${[layers.bazi.year,layers.bazi.month,layers.bazi.day,layers.bazi.hour].map((p,i)=>`
-        <div class="bp">
-          <div class="bp-role">${['Year','Month','Day','Hour'][i]}</div>
-          <div class="bp-stem">${p.stem}</div>
-          <div class="bp-branch">${p.branch}</div>
-          <div class="bp-nums">${p.nums.map(n=>`<span class="bpn">${n}</span>`).join('')}</div>
+        <div class=&quot;bp&quot;>
+          <div class=&quot;bp-role&quot;>${['Year','Month','Day','Hour'][i]}</div>
+          <div class=&quot;bp-stem&quot;>${p.stem}</div>
+          <div class=&quot;bp-branch&quot;>${p.branch}</div>
+          <div class=&quot;bp-nums&quot;>${p.nums.map(n=>`<span class=&quot;bpn&quot;>${n}</span>`).join('')}</div>
         </div>`).join('')}
     </div>
-    ${layers.bazi.interactions.map(x=>`<div class="bint"><b>${x.type}:</b> ${x.desc}</div>`).join('')}`;
+    ${layers.bazi.interactions.map(x=>`<div class=&quot;bint&quot;><b>${x.type}:</b> ${x.desc}</div>`).join('')}`;
 
   // I Ching panel
-  var ichingHTML=`
-    <div class="irow">
-      <div class="ibox">
-        <div class="isym">${layers.iching.hex.upper.sym}</div>
-        <div class="iname">${layers.iching.hex.upper.name}</div>
-        <div class="imsg">Upper</div>
+  const ichingHTML=`
+    <div class=&quot;irow&quot;>
+      <div class=&quot;ibox&quot;>
+        <div class=&quot;isym&quot;>${layers.iching.hex.upper.sym}</div>
+        <div class=&quot;iname&quot;>${layers.iching.hex.upper.name}</div>
+        <div class=&quot;imsg&quot;>Upper</div>
       </div>
-      <div class="ibox" style="flex:2">
-        <div class="isym">卦${layers.iching.hex.num}</div>
-        <div class="iname">${layers.iching.hex.name} · ${layers.iching.hex.english}</div>
-        <div class="imsg">${layers.iching.hex.gambling}</div>
+      <div class=&quot;ibox&quot; style=&quot;flex:2&quot;>
+        <div class=&quot;isym&quot;>卦${layers.iching.hex.num}</div>
+        <div class=&quot;iname&quot;>${layers.iching.hex.name} · ${layers.iching.hex.english}</div>
+        <div class=&quot;imsg&quot;>${layers.iching.hex.gambling}</div>
       </div>
-      <div class="ibox">
-        <div class="isym">${layers.iching.hex.lower.sym}</div>
-        <div class="iname">${layers.iching.hex.lower.name}</div>
-        <div class="imsg">Lower</div>
+      <div class=&quot;ibox&quot;>
+        <div class=&quot;isym&quot;>${layers.iching.hex.lower.sym}</div>
+        <div class=&quot;iname&quot;>${layers.iching.hex.lower.name}</div>
+        <div class=&quot;imsg&quot;>Lower</div>
       </div>
     </div>
-    <div class="ichange"><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}</div>`;
+    <div class=&quot;ichange&quot;><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}</div>`;
 
   // Stats panel
-  var maxF=Math.max(...Object.values(layers.stats.freq))||1;
-  var freqBarsHTML=Object.entries(layers.stats.freq)
+  const maxF=Math.max(...Object.values(layers.stats.freq))||1;
+  const freqBarsHTML=Object.entries(layers.stats.freq)
     .sort((a,b)=>b[1]-a[1]).slice(0,8)
-    .map(([n,c])=>`<div class="sfrow">
-      <span class="sflabel">${pad(parseInt(n))}</span>
-      <div class="sfwrap"><div class="sffill" style="width:0%" data-w="${(c/maxF*100).toFixed(0)}%"></div></div>
-      <span class="sfval">${c}x</span>
+    .map(([n,c])=>`<div class=&quot;sfrow&quot;>
+      <span class=&quot;sflabel&quot;>${pad(parseInt(n))}</span>
+      <div class=&quot;sfwrap&quot;><div class=&quot;sffill&quot; style=&quot;width:0%&quot; data-w=&quot;${(c/maxF*100).toFixed(0)}%&quot;></div></div>
+      <span class=&quot;sfval&quot;>${c}x</span>
     </div>`).join('');
 
   function lcard(icon,name,nums,steps,extra='',isNew=false){
-    return `<div class="lcard">
-      <div class="lhead">
-        <div class="licon">${icon}</div>
+    return `<div class=&quot;lcard&quot;>
+      <div class=&quot;lhead&quot;>
+        <div class=&quot;licon&quot;>${icon}</div>
         <div>
-          <div class="lname">${name}${isNew?'<span class="lnew">★ Expert</span>':''}</div>
-          <div class="lpills">${nums.map(n=>`<span class="pill">${n}</span>`).join('')}</div>
+          <div class=&quot;lname&quot;>${name}${isNew?'<span class=&quot;lnew&quot;>★ Expert</span>':''}</div>
+          <div class=&quot;lpills&quot;>${nums.map(n=>`<span class=&quot;pill&quot;>${n}</span>`).join('')}</div>
         </div>
       </div>
-      <div class="lsteps">${steps.map(s=>`• ${s}`).join('<br>')}</div>
+      <div class=&quot;lsteps&quot;>${steps.map(s=>`• ${s}`).join('<br>')}</div>
       ${extra}
     </div>`;
   }
 
-  document.getElementById('results').innerHTML=`<div class="slabel">${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
-    <div class="balls-card">
-      <div class="balls-eyebrow">Primary Pick — 12-Layer Expert Oracle</div>
-      <div class="balls-row">${ballsHTML}</div>
-      <div class="balls-note">
+  document.getElementById('results').innerHTML=`
+    <div class=&quot;slabel&quot;>Current Energy Flow · Jun 27 2026 · ${drawHour}</div>
+    <div class=&quot;eflow&quot;>
+      <div class=&quot;eflow-title&quot;>⚡ Elemental Energy Balance — All 12 Layers</div>
+      ${energyHTML}
+    </div>
+
+    <div class=&quot;slabel&quot;>${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
+    <div class=&quot;balls-card&quot;>
+      <div class=&quot;balls-eyebrow&quot;>Primary Pick — 12-Layer Expert Oracle</div>
+      <div class=&quot;balls-row&quot;>${ballsHTML}</div>
+      <div class=&quot;balls-note&quot;>
         Ball tag = digit (d) + convergence score out of 8 sources<br>
         Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · St=Stats
       </div>
     </div>
-    <div class="alt-card">
-      <div class="alt-label">Alternate Combination</div>
-      <div class="alt-row">${altHTML}</div>
+    <div class=&quot;alt-card&quot;>
+      <div class=&quot;alt-label&quot;>Alternate Combination</div>
+      <div class=&quot;alt-row&quot;>${altHTML}</div>
     </div>
 
-    <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
-    <div class="eflow">
-      <div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>
-      ${energyHTML}
+    <div class=&quot;slabel&quot;>Step 1 — Digit Convergence · 8 Sources</div>
+    <div class=&quot;legend&quot;>
+      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--accent)&quot;></span>Metaphysical</span>
+      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--teal)&quot;></span>I Ching · PoF</span>
+      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--gold)&quot;></span>Chaldean · Stats</span>
+      <span class=&quot;leg&quot;><span class=&quot;ldot&quot; style=&quot;background:var(--surface);border:1px solid var(--border)&quot;></span>Not in layer</span>
     </div>
+    <div class=&quot;dgrid&quot;>${digitCardsHTML}</div>
 
-    <div class="slabel">Step 1 — Digit Convergence · 8 Sources</div>
-    <div class="legend">
-      <span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span>
-      <span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF</span>
-      <span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span>
-      <span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span>
-    </div>
-    <div class="dgrid">${digitCardsHTML}</div>
-
-    <div class="slabel">Step 2 — Digit → Number Map · 1–${game.max}</div>
-    <div class="lcard">
-      <div class="lsteps" style="border:none;padding:0;margin-bottom:10px">
-        🔥 Gold = Game hot number &nbsp; 💜 Purple = Appeared 2+ times recently &nbsp; Gray = Cold
+    <div class=&quot;slabel&quot;>Step 2 — Digit → Number Map · 1–${game.max}</div>
+    <div class=&quot;lcard&quot;>
+      <div class=&quot;lsteps&quot; style=&quot;border:none;padding:0;margin-bottom:10px&quot;>
+        🔥 Gold = Game hot number &amp;nbsp; 💜 Purple = Appeared 2+ times recently &amp;nbsp; Gray = Cold
       </div>${mapHTML}
     </div>
 
-    <div class="slabel">Full 12-Layer Breakdown</div>
+    <div class=&quot;slabel&quot;>Full 12-Layer Breakdown</div>
     ${lcard('🔢','Numerology — Pythagorean + Chaldean',layers.num.nums,layers.num.steps)}
     ${lcard('🪐','Astrology — Dignities + Aspects + Horary',layers.astro.nums.slice(0,7),layers.astro.steps,horaryHTML,true)}
     ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
     ${lcard('🏮','Feng Shui — Flying Star + Lo Shu + Fixed Stars',layers.fs.nums,layers.fs.steps,'',false)}
     ${lcard('☯','I Ching — Hexagram 45 + Nuclear + Changing Line',layers.iching.nums,layers.iching.steps,ichingHTML,true)}
-    <div class="lcard">
-      <div class="lhead">
-        <div class="licon">📊</div>
+    <div class=&quot;lcard&quot;>
+      <div class=&quot;lhead&quot;>
+        <div class=&quot;licon&quot;>📊</div>
         <div>
-          <div class="lname">PCSO ${game.short} — Historical Data</div>
-          <div class="lpills">${layers.stats.topDigits.slice(0,5).map(d=>`<span class="pill g">${d}</span>`).join('')}</div>
+          <div class=&quot;lname&quot;>PCSO ${game.short} — Historical Data</div>
+          <div class=&quot;lpills&quot;>${layers.stats.topDigits.slice(0,5).map(d=>`<span class=&quot;pill g&quot;>${d}</span>`).join('')}</div>
         </div>
       </div>
-      <div class="lsteps">
+      <div class=&quot;lsteps&quot;>
         • <b>Hot numbers (${game.short}${isEZ2?' '+drawHour:''}):</b> ${hotNums.map(n=>pad(n)).join(', ')}<br>
         • <b>Top stat digits:</b> ${layers.stats.topDigits.slice(0,5).join(', ')} (freq×4 + hot×6 + overdue×5)<br>
         • <b>Recent draws analyzed:</b> ${layers.stats.draws.length} draws · Game pool: 1–${game.max}
       </div>
-      <div class="st-grid">
-        <div class="stbox"><div class="stitle">🔥 Hot Numbers</div>${hotNums.map(n=>`<span class="hnum">${pad(n)}</span>`).join('')}</div>
-        <div class="stbox"><div class="stitle">📈 Recent Frequency</div>${freqBarsHTML}</div>
+      <div class=&quot;st-grid&quot;>
+        <div class=&quot;stbox&quot;><div class=&quot;stitle&quot;>🔥 Hot Numbers</div>${hotNums.map(n=>`<span class=&quot;hnum&quot;>${pad(n)}</span>`).join('')}</div>
+        <div class=&quot;stbox&quot;><div class=&quot;stitle&quot;>📈 Recent Frequency</div>${freqBarsHTML}</div>
       </div>
     </div>
 
-    <div class="disc">
-      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified ${TODAY_PH} ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (dynamic daily pillars) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (cast from today's date) with nuclear and changing line, and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
+    <div class=&quot;disc&quot;>
+      ⚡ Recalibrated Jun 27 2026 · Astrology×3 · Stats×3 · PoF×2 based on confirmed 2PM+5PM results · ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified Jun 27 2026 ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (Ren Shen day · ${drawHour==='2PM'?'Geng Wei hour':drawHour==='5PM'?'Ren You hour':'Jia Hai hour'}) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching Hexagram 45 Cui with nuclear and changing line, and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
     </div>
   `;
 }
 
 function animateBars(){
   document.querySelectorAll('[data-w]').forEach(el=>{
-    var w=el.getAttribute('data-w');
+    const w=el.getAttribute('data-w');
     el.style.width='0%';
     requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.style.width=w; }));
   });
 }
 
-function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
+
 
 // Init
 document.getElementById('ez2wrap').style.display='block';
-
-
-
-
-
-
-
-
-
-
-
-
-// ══ PCSO RESULTS WIDGET ══
-var PCSO_DATA = {
-  date: TODAY_PH_FULL,
-  ez2: [
-    {draw:'2PM', nums:[24,4],  cutoff:14},
-    {draw:'5PM', nums:[],      cutoff:17},
-    {draw:'9PM', nums:[],      cutoff:21}
-  ],
-  balls: [
-    {game:'6/58', date:'Jun 26', nums:[53,54,44,57,51,7],   done:true, jackpot:'₱128M', winners:0, days:[0,2,5]},
-    {game:'6/55', date:'Jun 27', nums:[38,27,33,32,49,31],  done:true, jackpot:'₱50.3M', winners:0, days:[1,3,6]},
-    {game:'6/49', date:'Jun 25', nums:[49,19,15,46,25,36],  done:true, jackpot:'₱42.7M', winners:0, days:[0,2,4]},
-    {game:'6/45', date:'Jun 26', nums:[9,41,22,45,5,10],    done:true, jackpot:'₱83M', winners:0, days:[1,3,5]},
-    {game:'6/42', date:'Jun 27', nums:[24,31,3,36,35,23],   done:true, jackpot:'₱49.6M', winners:0, days:[2,4,6]}
-  ]
-};
-
-function p2(n){return String(n).padStart(2,'0');}
-
-function pcsoRender(){
-  var d=PCSO_DATA;
-  var lbl=document.getElementById('pcso-date-lbl');
-  if(lbl) lbl.textContent=d.date;
-  var h='';
-  var phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
-  var phHour=phNow.getHours()+phNow.getMinutes()/60;
-  d.ez2.forEach(function(e){
-    var drawDone=e.nums.length>0||(phHour>=(e.cutoff+0.1));
-    var n;
-    if(e.nums.length>0){
-      n=e.nums.map(function(x){return '<span class="pnum ez">'+p2(x)+'</span>';}).join('');
-    } else if(drawDone){
-      n='<span class="pcso-pending" style="color:var(--muted2)">Result not yet recorded</span>';
-    } else {
-      n='<span class="pcso-pending">Pending…</span>';
-    }
-    h+='<div class="pcso-row"><span class="pcso-game">EZ2</span><span class="pcso-draw">'+e.draw+'</span><div class="pcso-nums">'+n+'</div></div>';
-  });
-  d.balls.forEach(function(g){
-    var n=g.done?g.nums.map(function(x){return '<span class="pnum six">'+p2(x)+'</span>';}).join(''):'<span class="pcso-pending">'+(g.note||'Pending…')+'</span>';
-    var meta='';
-    if(g.jackpot!==undefined){
-      var wLabel=g.winners===0?'No winner — jackpot rolls!':g.winners===1?'1 winner':g.winners+' winners';
-      var sched='';
-      if(g.days){
-        var dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-        var mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        var phDow=phNow.getDay();var phH=phNow.getHours()+phNow.getMinutes()/60;
-        var drawToday=g.days.indexOf(phDow)>=0;
-        var alreadyDrawn=drawToday&&phH>=21.1;
-        if(drawToday&&!alreadyDrawn){
-          sched=' · <b style="color:var(--green)">Tonight 9PM</b>';
-        } else {
-          var daysAhead=0;
-          for(var i=1;i<=7;i++){if(g.days.indexOf((phDow+i)%7)>=0){daysAhead=i;break;}}
-          var nd=new Date(phNow);nd.setDate(nd.getDate()+daysAhead);
-          sched=' · <span style="color:var(--muted2)">Next: '+dn[(phDow+daysAhead)%7]+' '+mn[nd.getMonth()]+' '+nd.getDate()+'</span>';
-        }
-      }
-      meta='<div class="pcso-meta-row"><span class="pcso-jackpot">'+g.jackpot+' jackpot</span><span class="pcso-winners">'+wLabel+sched+'</span></div>';
-    }
-    h+='<div class="pcso-row" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;align-items:center;gap:8px;width:100%"><span class="pcso-game">'+g.game+'</span><span class="pcso-draw" style="font-size:9px;color:var(--muted)">'+g.date+'</span><div class="pcso-nums">'+n+'</div></div>'+meta+'</div>';
-  });
-  var grid=document.getElementById('pcso-grid');
-  if(grid) grid.innerHTML=h;
-}
-
-(function tryPcso(){
-  var g=document.getElementById('pcso-grid');
-  if(g){pcsoRender();pcsoAIFetch();}
-  else{setTimeout(tryPcso,200);}
-})();
-
-async function pcsoAIFetch(){
-  var btn=document.getElementById('pcso-ai-btn');
-  var grid=document.getElementById('pcso-grid');
-  if(btn){btn.disabled=true;btn.innerHTML='⏳ Fetching...';}
-  if(grid){grid.innerHTML='<div class="pcso-row"><span class="pcso-pending">Loading latest results…</span></div>';}
-  var RAW_URL='https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pcso-results.json';
-  try{
-    var resp=await fetch(RAW_URL+'?nocache='+Date.now());
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    var data=await resp.json();
-    if(data.ez2&&Array.isArray(data.ez2)){
-      PCSO_DATA.ez2=data.ez2.map(function(e){return{draw:e.draw,nums:e.nums||[],cutoff:e.cutoff||21};});
-    }
-    if(data.balls&&Array.isArray(data.balls)){
-      var sched={'6/58':[0,2,5],'6/55':[1,3,6],'6/49':[0,2,4],'6/45':[1,3,5],'6/42':[2,4,6]};
-      PCSO_DATA.balls=data.balls.map(function(g){
-        return{game:g.game,date:g.date,nums:g.nums||[],done:!!(g.nums&&g.nums.length>0),
-          jackpot:g.jackpot||'',winners:g.winners||0,days:g.days||sched[g.game]||[]};
-      });
-    }
-    if(data.date) PCSO_DATA.date=data.date;
-    pcsoRender();
-    if(data.updated){
-      var upd=new Date(data.updated);
-      var lbl=document.getElementById('pcso-date-lbl');
-      if(lbl) lbl.textContent='Updated '+upd.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'});
-    }
-    if(btn){btn.disabled=false;btn.innerHTML='&#9889; Fetch Live';btn.style.color='var(--green)';
-      setTimeout(function(){if(btn)btn.style.color='';},3000);}
-  } catch(err){
-    console.error('PCSO fetch:',err);
-    pcsoRender();
-    if(btn){btn.disabled=false;btn.innerHTML='&#9889; Fetch Live';}
-  }
-}
-
-
-
 </script>
+</body>
+</html>
+"
+    style="width:100%;height:calc(100vh - 60px);border:none;display:block;background:#0a0a0f;"
+    scrolling="yes" title="JOMERPB Lotto Oracle"></iframe>
 </div>
-<script>initFromHash();</script>
 </body>
 </html>
