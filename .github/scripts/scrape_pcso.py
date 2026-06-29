@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-PCSO Results Scraper v9
+PCSO Results Scraper v10
 Source: pwedeh.com (daily dated pages)
+Parser: h3-tag based (not markdown split)
 No 'date' field in balls output entries
 """
 
@@ -38,7 +39,7 @@ def build_url(dt):
 
 
 def parse_nums(text, count, max_val=58):
-    """Extract exactly `count` valid lotto numbers, stripping game labels."""
+    """Extract exactly `count` valid lotto numbers, stripping game label fractions."""
     text = re.sub(r'\d+/\d+', '', text)
     nums = re.findall(r'\b(\d{1,2})\b', text)
     result = [int(n) for n in nums if 1 <= int(n) <= max_val]
@@ -47,38 +48,42 @@ def parse_nums(text, count, max_val=58):
 
 def parse(html):
     soup = BeautifulSoup(html, 'html.parser')
-    text = soup.get_text(separator='\n')
-
-    ez2_map  = {'2PM': [], '5PM': [], '9PM': []}
+    ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
     balls_map = {}
 
-    # Split on headings (### Section)
-    sections = re.split(r'###\s+', text)
+    # Iterate over all h2/h3 headings
+    for h in soup.find_all(['h2', 'h3']):
+        heading = h.get_text(strip=True)
 
-    for section in sections:
-        if not section.strip():
+        # Collect sibling content until the next heading
+        content_parts = []
+        for sib in h.next_siblings:
+            if sib.name in ['h2', 'h3']:
+                break
+            if hasattr(sib, 'get_text'):
+                t = sib.get_text(strip=True)
+                if t:
+                    content_parts.append(t)
+            elif isinstance(sib, str) and sib.strip():
+                content_parts.append(sib.strip())
+
+        if not content_parts:
             continue
-        lines = [l.strip() for l in section.split('\n') if l.strip()]
-        if not lines:
+
+        first_content = content_parts[0]
+
+        # Skip if not drawn yet
+        if 'Waiting' in first_content:
             continue
-
-        heading = lines[0]
-        content = '\n'.join(lines[1:])
-
-        # Skip sections with no results yet
-        if 'Waiting' in content or len(lines) < 2:
-            continue
-
-        num_line = lines[1]
 
         # EZ2 / 2D
         if '2D Lotto' in heading:
             draw = None
-            if '2:00' in heading: draw = '2PM'
+            if '2:00' in heading:   draw = '2PM'
             elif '5:00' in heading: draw = '5PM'
             elif '9:00' in heading: draw = '9PM'
             if draw and not ez2_map[draw]:
-                nums = parse_nums(num_line, 2, 31)
+                nums = parse_nums(first_content, 2, 31)
                 if len(nums) == 2:
                     ez2_map[draw] = nums
                     print(f"  EZ2 {draw}: {nums}")
@@ -90,7 +95,7 @@ def parse(html):
             ('6/42', '6/42', 42),
         ]:
             if label in heading and game not in balls_map:
-                nums = parse_nums(num_line, 6, mx)
+                nums = parse_nums(first_content, 6, mx)
                 if len(nums) == 6:
                     balls_map[game] = nums
                     print(f"  {game}: {nums}")
@@ -131,12 +136,11 @@ def build_output(ez2_map, balls_map):
 
 def main():
     now_ph = datetime.now(PH_TZ)
-    print(f"\nPCSO Scraper v9 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
+    print(f"\nPCSO Scraper v10 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
     print('=' * 50)
 
-    ez2_map  = {'2PM': [], '5PM': [], '9PM': []}
+    ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
     balls_map = {}
-
     url = build_url(now_ph)
 
     try:
