@@ -2,9 +2,9 @@ name: PCSO Results Scraper
 
 on:
   schedule:
-    - cron: '15 6 * * *'
-    - cron: '15 9 * * *'
-    - cron: '45 13 * * *'
+    - cron: '15 6 * * *'   # 2:15 PM PH
+    - cron: '15 9 * * *'   # 5:15 PM PH
+    - cron: '45 13 * * *'  # 9:45 PM PH
   workflow_dispatch:
 
 jobs:
@@ -23,9 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install requests beautifulsoup4 pytz playwright
-          playwright install chromium --with-deps
+        run: pip install requests beautifulsoup4 pytz PCSOLotto-Webscraper
 
       - name: Run PCSO scraper
         run: python3 .github/scripts/scrape_pcso.py
@@ -33,7 +31,7 @@ jobs:
       - name: Commit results
         run: |
           git config user.name "PCSO Bot"
-          git config user.email "pcso-bot@jomerpb.com"
+          git config user.email "pcso-bot@jomerpb.github.io"
           git add pcso-results.json
-          git diff --staged --quiet || git commit -m "Auto-update PCSO results $(date +'%Y-%m-%d %H:%M') PHT"
+          git diff --staged --quiet || git commit -m "chore: update PCSO results $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push
