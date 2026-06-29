@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-PCSO Results Scraper v17
-Source: businesslist.ph/lottery/pcso-lotto-results-today (single page, all games)
-Strategy: today's results first, yesterday's as fallback for undrawn games
-No 'date' field in balls output entries
+PCSO Results Scraper v18
+- Consolidated page: businesslist.ph/lottery/pcso-lotto-results-today
+  → EZ2 today only (no yesterday fallback)
+  → 6-ball winning numbers (today first, yesterday fallback)
+- Individual game pages: jackpot + draw date per game
+No 'date' field collision — uses 'draw_date' key for ball entries
 """
 
 import json, re, requests
@@ -20,7 +22,15 @@ HEADERS = {
     'Referer': 'https://www.businesslist.ph/lottery',
 }
 
-URL = 'https://www.businesslist.ph/lottery/pcso-lotto-results-today'
+CONSOLIDATED_URL = 'https://www.businesslist.ph/lottery/pcso-lotto-results-today'
+
+BALL_PAGES = {
+    '6/58': ('https://www.businesslist.ph/lottery/result/ultra-lotto-658', 58),
+    '6/55': ('https://www.businesslist.ph/lottery/result/grand-lotto-655', 55),
+    '6/49': ('https://www.businesslist.ph/lottery/result/superlotto-649', 49),
+    '6/45': ('https://www.businesslist.ph/lottery/result/megalotto-645', 45),
+    '6/42': ('https://www.businesslist.ph/lottery/result/lotto-642', 42),
+}
 
 SCHED = {
     '6/58': [0, 2, 5],
@@ -30,13 +40,26 @@ SCHED = {
     '6/42': [2, 4, 6],
 }
 
-MAX_VAL = {
-    '6/58': 58, '6/55': 55, '6/49': 49, '6/45': 45, '6/42': 42,
-}
+
+def fetch(url):
+    r = requests.get(url, headers=HEADERS, timeout=20)
+    r.raise_for_status()
+    print(f"  {url.split('/')[-1]} → HTTP {r.status_code} | {len(r.text)} chars")
+    return r.text
+
+
+def format_jackpot(raw):
+    try:
+        v = float(raw.replace(',', '').replace('₱', '').strip())
+        if v >= 1_000_000:
+            return f'₱{v/1_000_000:.1f}M'
+        return f'₱{v:,.0f}'
+    except:
+        return raw
 
 
 def parse_ez2_cell(text):
-    """Extract 2PM/5PM/9PM pairs from a cell like '2PM   21   24      5PM   ?   ?'"""
+    """EZ2 cell: '2PM   21   24      5PM   27   30      9PM   ?   ?'"""
     ez2 = {'2PM': [], '5PM': [], '9PM': []}
     parts = re.split(r'\b(2PM|5PM|9PM)\b', text)
     current = None
@@ -53,76 +76,81 @@ def parse_ez2_cell(text):
     return ez2
 
 
-def parse_ball_cell(text, max_val):
-    """Extract 6 numbers from a cell like '46   56   08   01   03   05'"""
-    text = re.sub(r'\b(2PM|5PM|9PM|10:30|3PM|7PM)\b', '', text)
-    nums = re.findall(r'\b(\d{1,2})\b', text)
-    result = [int(n) for n in nums if 1 <= int(n) <= max_val]
-    return result[:6] if len(result) >= 6 else []
-
-
-def parse_page(html):
+def parse_consolidated(html):
+    """Parse consolidated page for EZ2 (today only) and 6-ball nums."""
     soup = BeautifulSoup(html, 'html.parser')
-
-    results = {
-        'today':     {'ez2': {'2PM': [], '5PM': [], '9PM': []}, 'balls': {}},
-        'yesterday': {'ez2': {'2PM': [], '5PM': [], '9PM': []}, 'balls': {}},
-    }
-
+    MAX_VAL = {'6/58': 58, '6/55': 55, '6/49': 49, '6/45': 45, '6/42': 42}
+    ez2_today = {'2PM': [], '5PM': [], '9PM': []}
+    balls_today, balls_yest = {}, {}
     current_section = None
 
     for tag in soup.find_all(['h2', 'table']):
         if tag.name == 'h2':
             txt = tag.get_text(strip=True)
-            if 'Today' in txt:
-                current_section = 'today'
-            elif 'Yesterday' in txt:
-                current_section = 'yesterday'
-            else:
-                current_section = None
+            if 'Today' in txt:     current_section = 'today'
+            elif 'Yesterday' in txt: current_section = 'yesterday'
+            else:                  current_section = None
 
         elif tag.name == 'table' and current_section in ('today', 'yesterday'):
             for row in tag.find_all('tr'):
                 cells = row.find_all('td')
                 if len(cells) < 3:
                     continue
-                game_cell = cells[1].get_text(strip=True)
-                nums_cell = cells[2].get_text(separator=' ', strip=True)
+                gc = cells[1].get_text(strip=True)
+                nc = cells[2].get_text(separator=' ', strip=True)
 
-                # Skip rows with no digits (all ?)
-                if not re.search(r'\d', nums_cell):
-                    continue
-
-                if '2D' in game_cell:
-                    ez2 = parse_ez2_cell(nums_cell)
-                    for d in ['2PM', '5PM', '9PM']:
-                        if ez2[d]:
-                            results[current_section]['ez2'][d] = ez2[d]
-
+                if '2D' in gc:
+                    if current_section == 'today':
+                        ez2_today = parse_ez2_cell(nc)
                 else:
-                    for game, mx in MAX_VAL.items():
-                        if game in game_cell and game not in results[current_section]['balls']:
-                            nums = parse_ball_cell(nums_cell, mx)
+                    for g, mx in MAX_VAL.items():
+                        if g in gc:
+                            text = re.sub(r'\b(2PM|5PM|9PM)\b', '', nc)
+                            nums = [int(n) for n in re.findall(r'\b(\d{1,2})\b', text)
+                                    if 1 <= int(n) <= mx]
                             if len(nums) == 6:
-                                results[current_section]['balls'][game] = nums
+                                if current_section == 'today' and g not in balls_today:
+                                    balls_today[g] = nums
+                                elif current_section == 'yesterday' and g not in balls_yest:
+                                    balls_yest[g] = nums
 
-    return results
+    return ez2_today, balls_today, balls_yest
 
 
-def merge(results):
-    """Use today's results where available; fall back to yesterday for undrawn games."""
-    ez2 = {'2PM': [], '5PM': [], '9PM': []}
-    balls = {}
+def parse_individual(html, max_val):
+    """Get jackpot + draw_date from individual game page. Today first, yesterday fallback."""
+    soup = BeautifulSoup(html, 'html.parser')
 
-    for d in ['2PM', '5PM', '9PM']:
-        ez2[d] = results['today']['ez2'][d] or results['yesterday']['ez2'][d]
+    for section in ['Today', 'Yesterday']:
+        h2 = None
+        for h in soup.find_all('h2'):
+            if section in h.get_text(strip=True):
+                h2 = h
+                break
+        if not h2:
+            continue
 
-    for g in ['6/58', '6/55', '6/49', '6/45', '6/42']:
-        balls[g] = (results['today']['balls'].get(g)
-                    or results['yesterday']['balls'].get(g)
-                    or [])
+        nums, jackpot, draw_date = [], '', ''
+        for sib in h2.next_siblings:
+            if sib.name == 'h2':
+                break
+            if sib.name == 'p':
+                t = sib.get_text(strip=True)
+                if re.match(r'^\d{1,2}$', t):
+                    n = int(t)
+                    if 1 <= n <= max_val:
+                        nums.append(n)
+                m_jp = re.search(r'JACKPOT[:\s]*([0-9,]+)', t, re.I)
+                if m_jp:
+                    jackpot = format_jackpot(m_jp.group(1))
+                m_dt = re.search(r'(\w+\s+\d+,\s*\d{4})', t)
+                if m_dt:
+                    draw_date = m_dt.group(1)
 
-    return ez2, balls
+        if len(nums) == 6:
+            return {'nums': nums[:6], 'jackpot': jackpot, 'draw_date': draw_date}
+
+    return {'nums': [], 'jackpot': '', 'draw_date': ''}
 
 
 def build_output(ez2_map, balls_map):
@@ -136,12 +164,13 @@ def build_output(ez2_map, balls_map):
         ],
         'balls': [
             {
-                'game': gk,
-                'nums': balls_map.get(gk, []),
-                'done': len(balls_map.get(gk, [])) == 6,
-                'jackpot': '',
-                'winners': 0,
-                'days': SCHED[gk],
+                'game':      gk,
+                'nums':      balls_map[gk]['nums'],
+                'done':      len(balls_map[gk]['nums']) == 6,
+                'jackpot':   balls_map[gk]['jackpot'],
+                'draw_date': balls_map[gk]['draw_date'],
+                'winners':   0,
+                'days':      SCHED[gk],
             }
             for gk in ['6/58', '6/55', '6/49', '6/45', '6/42']
         ],
@@ -150,30 +179,43 @@ def build_output(ez2_map, balls_map):
 
 def main():
     now_ph = datetime.now(PH_TZ)
-    print(f"\nPCSO Scraper v17 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
+    print(f"\nPCSO Scraper v18 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
     print('=' * 50)
-    print(f"Fetching {URL} ...")
 
-    ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
-    balls_map = {}
+    ez2_map = {'2PM': [], '5PM': [], '9PM': []}
+    balls_today, balls_yest = {}, {}
+    balls_map = {g: {'nums': [], 'jackpot': '', 'draw_date': ''} for g in BALL_PAGES}
 
+    # Step 1 — Consolidated page (EZ2 + ball winning numbers)
     try:
-        r = requests.get(URL, headers=HEADERS, timeout=20)
-        r.raise_for_status()
-        print(f"HTTP {r.status_code} | {len(r.text)} chars")
-
-        results = parse_page(r.text)
-        ez2_map, balls_map = merge(results)
-
-        print(f"Today   — EZ2: {results['today']['ez2']} | Balls: {list(results['today']['balls'].keys())}")
-        print(f"Yesterday — EZ2: {results['yesterday']['ez2']} | Balls: {list(results['yesterday']['balls'].keys())}")
-        print(f"Merged  — EZ2: {ez2_map}")
-        for g, nums in balls_map.items():
-            if nums:
-                print(f"  {g}: {nums}")
-
+        print(f"Fetching consolidated page ...")
+        html = fetch(CONSOLIDATED_URL)
+        ez2_map, balls_today, balls_yest = parse_consolidated(html)
+        ez2_found = sum(1 for v in ez2_map.values() if v)
+        print(f"  EZ2 today: {ez2_map}")
+        print(f"  Balls today: {list(balls_today.keys())} | Yesterday: {list(balls_yest.keys())}")
     except Exception as e:
-        print(f"ERROR: {type(e).__name__}: {e}")
+        print(f"  Consolidated ERROR: {type(e).__name__}: {e}")
+
+    # Step 2 — Individual pages (jackpot + draw_date, also confirm nums)
+    for game, (url, max_val) in BALL_PAGES.items():
+        try:
+            html = fetch(url)
+            info = parse_individual(html, max_val)
+            # Prefer individual page nums (more reliable); fallback to consolidated
+            if info['nums']:
+                balls_map[game] = info
+            else:
+                nums = balls_today.get(game) or balls_yest.get(game) or []
+                balls_map[game] = {'nums': nums, 'jackpot': '', 'draw_date': ''}
+            if balls_map[game]['nums']:
+                print(f"  {game}: {balls_map[game]['nums']} | {balls_map[game]['jackpot']} | {balls_map[game]['draw_date']}")
+            else:
+                print(f"  {game}: no draw today or pending")
+        except Exception as e:
+            print(f"  {game} ERROR: {type(e).__name__}: {e}")
+            nums = balls_today.get(game) or balls_yest.get(game) or []
+            balls_map[game] = {'nums': nums, 'jackpot': '', 'draw_date': ''}
 
     output = build_output(ez2_map, balls_map)
 
