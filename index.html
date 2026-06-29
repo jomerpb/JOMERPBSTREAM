@@ -202,12 +202,7 @@
     .empty h3{font-size:15px;color:var(--text);margin-bottom:5px;}
     .empty p{font-size:11px;line-height:1.6;}
     .divider{height:1px;background:var(--border);margin:0 16px 22px;}
-  .personal-inputs{display:flex;gap:6px;margin-bottom:10px;}
-.personal-inputs input{flex:1;height:52px;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;color:#4fc9f5;font-size:20px;font-weight:700;text-align:center;outline:none;width:100%;-moz-appearance:textfield;}
-.personal-inputs input:focus{border-color:#7c5cfc;}
-.personal-inputs input:not(:placeholder-shown){border-color:#4fc9f5;}
-.personal-inputs input::-webkit-outer-spin-button,.personal-inputs input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
-.personal-hint{font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px;}
+
 </style>
 </head>
 <body>
@@ -2349,6 +2344,43 @@ async function initFromHash() {
 #oracle-page .run-btn:hover{opacity:.88}
 #oracle-page .run-btn:active{transform:scale(.98)}
 
+/* ══ PERSONAL NUMBER INPUTS — identical size to game buttons ══ */
+#oracle-page #personal-wrap{padding:20px 0 0}
+#oracle-page .personal-inputs{
+  display:grid;grid-template-columns:repeat(6,1fr);
+  gap:8px;margin-bottom:16px;
+}
+#oracle-page .personal-inputs input{
+  height:56px;width:100%;
+  padding:0 2px;
+  border:1px solid var(--border);
+  background:var(--surface);
+  border-radius:12px;
+  font-family:'Bebas Neue',sans-serif;
+  font-size:20px;letter-spacing:.06em;
+  color:var(--muted2);
+  text-align:center;outline:none;
+  -moz-appearance:textfield;
+  cursor:pointer;transition:all .2s;
+}
+#oracle-page .personal-inputs input::-webkit-outer-spin-button,
+#oracle-page .personal-inputs input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+#oracle-page .personal-inputs input:focus{
+  border-color:var(--accent);background:rgba(124,92,252,.08);color:var(--text);
+}
+#oracle-page .personal-inputs input:not(:placeholder-shown):not(.invalid){
+  border-color:#4fc9f5;color:#4fc9f5;
+}
+#oracle-page .personal-inputs input.invalid{
+  border-color:#ff4444!important;color:#ff4444!important;
+  background:rgba(255,68,68,.1)!important;
+}
+#oracle-page .personal-hint{
+  font-size:10px;font-weight:700;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted);
+  text-align:center;margin-bottom:12px;
+}
+
 /* ══════════════════════════════════
    LOADER
 ══════════════════════════════════ */
@@ -2804,7 +2836,7 @@ async function initFromHash() {
       <input id="pn5" type="number" placeholder="—" min="1" max="58" oninput="limitDigits(this)" />
       <input id="pn6" type="number" placeholder="—" min="1" max="58" oninput="limitDigits(this)" />
     </div>
-    <div class="personal-hint" id="personal-hint">Select a 6-ball game above to enter your numbers</div>
+    <div class="personal-hint" id="personal-hint">SELECT A 6-BALL GAME ABOVE TO ENTER YOUR NUMBERS</div>
     <button class="run-btn" onclick="generatePersonal()">✦ ANALYZE MY NUMBERS</button>
   </div>
 </div>
@@ -3392,6 +3424,22 @@ function limitDigits(el){
   var v=String(el.value).replace(/[^0-9]/g,'');
   if(v.length>2) v=v.slice(0,2);
   el.value=v||'';
+  var num=parseInt(v)||0;
+  var maxVal=currentGame&&currentGame.max?currentGame.max:58;
+  if(v.length>0&&(num<1||num>maxVal)){
+    el.classList.add('invalid');
+  } else {
+    el.classList.remove('invalid');
+  }
+  // Auto-advance to next input when 2 digits entered and valid
+  if(v.length===2&&num>=1&&num<=maxVal){
+    var ids=['pn1','pn2','pn3','pn4','pn5','pn6'];
+    var idx=ids.indexOf(el.id);
+    if(idx>=0 && idx<5){
+      var next=document.getElementById(ids[idx+1]);
+      if(next){ next.focus(); next.select(); }
+    }
+  }
 }
 function setGame(g,btn){
   currentGame=g;
@@ -3405,7 +3453,7 @@ function setGame(g,btn){
     var mx=GAMES[g]?GAMES[g].max:58; var gs=GAMES[g]?GAMES[g].short:g;
     ['pn1','pn2','pn3','pn4','pn5','pn6'].forEach(function(id){ var el=document.getElementById(id); if(el) el.max=mx; });
     var hint=document.getElementById('personal-hint');
-    if(hint) hint.textContent='Enter 6 numbers between 1 and '+mx+' for '+gs;
+    if(hint) hint.textContent='ENTER 6 NUMBERS BETWEEN 1 AND '+mx+' FOR '+gs;
   }
 }
 
@@ -3482,7 +3530,6 @@ function dCls(c){ return c>=8?'s8':c>=7?'s7':c>=6?'s6':c>=5?'s5':'s4'; }
 function lcard(icon,name,nums,steps,extra='',isNew=false){
   return `<div class="lcard"><div class="lhead"><div class="licon">${icon}</div><div><div class="lname">${name}${isNew?'<span class="lnew">★ Expert</span>':''}</div><div class="lpills">${nums.map(n=>`<span class="pill">${n}</span>`).join('')}</div></div></div><div class="lsteps">${steps.map(s=>`• ${s}`).join('<br>')}</div>${extra}</div>`;
 }
-
 function renderResults(layers,conv,energy,gameKey,drawHour){
   var game=GAMES[gameKey];
   var isEZ2=gameKey==='ez2';
@@ -3604,7 +3651,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       <span class="sfval">${c}x</span>
     </div>`).join('');
 
-  // lcard defined globally below
+  // lcard defined globally
 
   document.getElementById('results').innerHTML=`<div class="slabel">${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
     <div class="balls-card">
