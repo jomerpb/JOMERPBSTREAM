@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-PCSO Results Scraper v12
+PCSO Results Scraper v13
 Source: pwedeh.com (dated page → homepage fallback)
-Parser: h2/h3-tag based with full heading dump + extended skip phrases
+Parser: h2/h3-tag based, handles both dash-separated and concatenated number formats
 No 'date' field in balls output entries
 """
 
@@ -45,15 +45,27 @@ def build_urls(dt):
 
 
 def is_pending(text):
-    t = text.lower()
-    return any(p in t for p in SKIP_PHRASES)
+    return any(p in text.lower() for p in SKIP_PHRASES)
 
 
-def parse_nums(text, count, max_val=58):
-    text = re.sub(r'\d+/\d+', '', text)
-    nums = re.findall(r'\b(\d{1,2})\b', text)
-    result = [int(n) for n in nums if 1 <= int(n) <= max_val]
-    return result[:count] if len(result) >= count else []
+def parse_nums_smart(text, count, max_val=58):
+    """Handle both dash-separated (14-23) and concatenated (1423) formats."""
+    text = re.sub(r'\d+/\d+', '', text)  # strip game label fractions
+
+    # Dash-separated — standard parse
+    if '-' in text:
+        nums = re.findall(r'\b(\d{1,2})\b', text)
+        result = [int(n) for n in nums if 1 <= int(n) <= max_val]
+        return result[:count] if len(result) >= count else []
+
+    # No dashes — try splitting into 2-digit pairs
+    digits_only = re.sub(r'\D', '', text)
+    if len(digits_only) == count * 2:
+        pairs = [int(digits_only[i:i+2]) for i in range(0, len(digits_only), 2)]
+        if all(1 <= n <= max_val for n in pairs):
+            return pairs
+
+    return []
 
 
 def parse(html, url_label):
@@ -67,7 +79,6 @@ def parse(html, url_label):
     for h in headings:
         heading = h.get_text(strip=True)
 
-        # Collect sibling content until next heading
         content_parts = []
         for sib in h.next_siblings:
             if sib.name in ['h2', 'h3']:
@@ -85,14 +96,14 @@ def parse(html, url_label):
         if not fc or is_pending(fc):
             continue
 
-        # EZ2 / 2D — match any variant
+        # EZ2 / 2D
         if re.search(r'2D Lotto|EZ2', heading, re.I):
             draw = None
             if re.search(r'2:00|2PM', heading): draw = '2PM'
             elif re.search(r'5:00|5PM', heading): draw = '5PM'
             elif re.search(r'9:00|9PM', heading): draw = '9PM'
             if draw and not ez2_map[draw]:
-                nums = parse_nums(fc, 2, 31)
+                nums = parse_nums_smart(fc, 2, 31)
                 if len(nums) == 2:
                     ez2_map[draw] = nums
                     print(f"      -> EZ2 {draw}: {nums}")
@@ -104,7 +115,7 @@ def parse(html, url_label):
             ('6/42', '6/42', 42),
         ]:
             if label in heading and game not in balls_map:
-                nums = parse_nums(fc, 6, mx)
+                nums = parse_nums_smart(fc, 6, mx)
                 if len(nums) == 6:
                     balls_map[game] = nums
                     print(f"      -> {game}: {nums}")
@@ -155,7 +166,7 @@ def build_output(ez2_map, balls_map):
 
 def main():
     now_ph = datetime.now(PH_TZ)
-    print(f"\nPCSO Scraper v12 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
+    print(f"\nPCSO Scraper v13 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
     print('=' * 50)
 
     ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
