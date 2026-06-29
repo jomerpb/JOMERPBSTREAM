@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-PCSO Results Scraper v13
-Source: pwedeh.com (dated page → homepage fallback)
-Parser: h2/h3-tag based, handles both dash-separated and concatenated number formats
+PCSO Results Scraper v14
+Source: pwedeh.com (dated page only — no homepage fallback)
+Parser: h2/h3-tag based, handles dash-separated and concatenated formats
 No 'date' field in balls output entries
 """
 
@@ -38,10 +38,9 @@ SKIP_PHRASES = [
 ]
 
 
-def build_urls(dt):
+def build_url(dt):
     m = MONTHS[dt.month - 1]
-    dated = f"https://pwedeh.com/lotto-result-{m}-{dt.day}-{dt.year}/"
-    return [dated, "https://pwedeh.com/"]
+    return f"https://pwedeh.com/lotto-result-{m}-{dt.day}-{dt.year}/"
 
 
 def is_pending(text):
@@ -50,15 +49,13 @@ def is_pending(text):
 
 def parse_nums_smart(text, count, max_val=58):
     """Handle both dash-separated (14-23) and concatenated (1423) formats."""
-    text = re.sub(r'\d+/\d+', '', text)  # strip game label fractions
+    text = re.sub(r'\d+/\d+', '', text)
 
-    # Dash-separated — standard parse
     if '-' in text:
         nums = re.findall(r'\b(\d{1,2})\b', text)
         result = [int(n) for n in nums if 1 <= int(n) <= max_val]
         return result[:count] if len(result) >= count else []
 
-    # No dashes — try splitting into 2-digit pairs
     digits_only = re.sub(r'\D', '', text)
     if len(digits_only) == count * 2:
         pairs = [int(digits_only[i:i+2]) for i in range(0, len(digits_only), 2)]
@@ -68,13 +65,13 @@ def parse_nums_smart(text, count, max_val=58):
     return []
 
 
-def parse(html, url_label):
+def parse(html):
     soup = BeautifulSoup(html, 'html.parser')
     ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
     balls_map = {}
 
     headings = soup.find_all(['h2', 'h3'])
-    print(f"  [{url_label}] {len(headings)} headings — FULL DUMP:")
+    print(f"  {len(headings)} headings — FULL DUMP:")
 
     for h in headings:
         heading = h.get_text(strip=True)
@@ -123,24 +120,6 @@ def parse(html, url_label):
     return ez2_map, balls_map
 
 
-def merge(ez2_base, balls_base, ez2_new, balls_new):
-    for d in ['2PM', '5PM', '9PM']:
-        if not ez2_base[d] and ez2_new.get(d):
-            ez2_base[d] = ez2_new[d]
-    for g in ['6/58', '6/55', '6/49', '6/45', '6/42']:
-        if g not in balls_base and g in balls_new:
-            balls_base[g] = balls_new[g]
-    return ez2_base, balls_base
-
-
-def scrape(url):
-    print(f"Fetching {url} ...")
-    r = requests.get(url, headers=HEADERS, timeout=20)
-    r.raise_for_status()
-    print(f"HTTP {r.status_code} | {len(r.text)} chars")
-    return r.text
-
-
 def build_output(ez2_map, balls_map):
     now_ph = datetime.now(PH_TZ)
     return {
@@ -166,26 +145,21 @@ def build_output(ez2_map, balls_map):
 
 def main():
     now_ph = datetime.now(PH_TZ)
-    print(f"\nPCSO Scraper v13 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
+    print(f"\nPCSO Scraper v14 — {now_ph.strftime('%Y-%m-%d %H:%M')} PH")
     print('=' * 50)
 
     ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
     balls_map = {}
-    urls = build_urls(now_ph)
+    url = build_url(now_ph)
 
-    for i, url in enumerate(urls):
-        try:
-            html = scrape(url)
-            ez2_new, balls_new = parse(html, f"URL{i+1}")
-            ez2_map, balls_map = merge(ez2_map, balls_map, ez2_new, balls_new)
-
-            found = sum(1 for e in ez2_map.values() if e) + \
-                    sum(1 for b in balls_map.values() if b)
-            if found > 0:
-                print(f"  Got {found} results from URL{i+1} — stopping")
-                break
-        except Exception as e:
-            print(f"  URL{i+1} ERROR: {type(e).__name__}: {e}")
+    try:
+        print(f"Fetching {url} ...")
+        r = requests.get(url, headers=HEADERS, timeout=20)
+        r.raise_for_status()
+        print(f"HTTP {r.status_code} | {len(r.text)} chars")
+        ez2_map, balls_map = parse(r.text)
+    except Exception as e:
+        print(f"ERROR: {type(e).__name__}: {e}")
 
     output = build_output(ez2_map, balls_map)
 
