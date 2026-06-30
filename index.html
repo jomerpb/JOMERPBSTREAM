@@ -3364,6 +3364,9 @@ function convergence(layers,gameKey){
   var game=GAMES[gameKey];
   var LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
   var digitScores={};
+  var rawStatW={};
+  for(var d=1;d<=9;d++) rawStatW[d]=layers.stats.digitWeight[d]||0;
+  var maxStatW=Math.max(1,...Object.values(rawStatW));
   for(var d=1;d<=9;d++){
     var inL=[];
     if(layers.num.pyNums.includes(d)) inL.push(0);
@@ -3374,11 +3377,12 @@ function convergence(layers,gameKey){
     if(layers.iching.nums.includes(d)) inL.push(5);
     if(layers.astro.pofNums.includes(d)) inL.push(6);
     if(layers.stats.topDigits.slice(0,4).includes(d)) inL.push(7);
-    digitScores[d]={count:inL.length,layers:inL,statWeight:layers.stats.digitWeight[d]||0};
+    var statFrac=rawStatW[d]/maxStatW; // 0–1, game-specific
+    digitScores[d]={count:inL.length,layers:inL,statWeight:rawStatW[d],score:inL.length+statFrac};
   }
   var sorted=Object.entries(digitScores)
     .map(([d,s])=>({digit:parseInt(d),...s}))
-    .sort((a,b)=>b.count-a.count||b.statWeight-a.statWeight);
+    .sort((a,b)=>b.score-a.score);
 
   var digitToNums={};
   for(var d=1;d<=9;d++){
@@ -3430,6 +3434,7 @@ function convergence(layers,gameKey){
 // ══════════════════════════
 var currentGame='ez2';
 var currentDraw='9PM';
+var savedNums={};
 
 function limitDigits(el){
   var v=String(el.value).replace(/[^0-9]/g,'');
@@ -3449,6 +3454,9 @@ function limitDigits(el){
   }
 }
 function setGame(g,btn){
+  var allIds=['pn1','pn2','pn3','pn4','pn5','pn6'];
+  var prevKey=currentGame==='ez2'?'ez2':'balls';
+  savedNums[prevKey]=allIds.map(function(id){ var el=document.getElementById(id); return el?el.value:''; });
   currentGame=g;
   document.querySelectorAll('.gbtn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
@@ -3457,11 +3465,17 @@ function setGame(g,btn){
   if(pw) pw.style.display='block';
   var mx=GAMES[g]?GAMES[g].max:58; var gs=GAMES[g]?GAMES[g].short:g;
   var isEz2=g==='ez2'; var count=isEz2?2:6;
-  var allIds=['pn1','pn2','pn3','pn4','pn5','pn6'];
+  var newKey=isEz2?'ez2':'balls';
+  var restore=savedNums[newKey]||[];
   allIds.forEach(function(id,i){
     var el=document.getElementById(id);
     if(!el) return;
-    el.max=mx; el.value=''; el.classList.remove('invalid');
+    el.max=mx;
+    var v=restore[i]||'';
+    el.value=v;
+    var num=parseInt(v)||0;
+    if(v!==''&&(num<1||num>mx)){ el.classList.add('invalid'); }
+    else { el.classList.remove('invalid'); }
     el.style.display=i<count?'':'none';
   });
   var pi=document.querySelector('.personal-inputs');
@@ -3567,6 +3581,10 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     </div>`;
   }).join('');
   var altHTML=conv.altPicks.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
+  var totalScore=conv.picks.reduce((s,n)=>{ var d=digitOf(n); return s+(conv.digitScores[d]?conv.digitScores[d].score:0); },0);
+  var pct=Math.round(totalScore/(conv.picks.length*9)*100);
+  var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
+  var al=pct>=70?'🟢 Strong Alignment':pct>=45?'🟡 Moderate Alignment':'🔴 Weak Alignment';
 
   // Digit cards
   var digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
@@ -3675,9 +3693,10 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
         Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · St=Stats
       </div>
     </div>
-    <div class="alt-card">
-      <div class="alt-label">Alternate Combination</div>
-      <div class="alt-row">${altHTML}</div>
+    <div class="alt-card" style="margin-bottom:14px;text-align:center;">
+      <div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div>
+      <div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div>
+      <div style="font-size:13px;color:var(--muted2)">${al}</div>
     </div>
 
     <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
@@ -3782,8 +3801,8 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   var elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
   var energyHTML=elOrder.map(e=>`<div class="erow"><span class="elabel">${elEmoji[e]} ${e}</span><div class="ebar-wrap"><div class="ebar ${elCls[e]}" style="width:0%" data-w="${energy[e].pct}%"></div></div><span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span></div>`).join('');
   var ballsHTML=userNums.map((n,i)=>{ var d=digitOf(n); var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="ball ${BTIERS[Math.min(i,5)]}">${pad(n)}<span class="btag">d${d}·${ds.count}/8</span></div>`; }).join('');
-  var totalScore=userNums.reduce((s,n)=>{ var d=digitOf(n); return s+(conv.digitScores&&conv.digitScores[d]?conv.digitScores[d].count:0); },0);
-  var pct=Math.round(totalScore/(userNums.length*8)*100);
+  var totalScore=userNums.reduce((s,n)=>{ var d=digitOf(n); return s+(conv.digitScores&&conv.digitScores[d]?conv.digitScores[d].score:0); },0);
+  var pct=Math.round(totalScore/(userNums.length*9)*100);
   var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
   var al=pct>=70?'🟢 Strong Alignment':pct>=45?'🟡 Moderate Alignment':'🔴 Weak Alignment';
   var seen={}; var digitCardsHTML=userNums.map(n=>{ var d=digitOf(n); if(seen[d]) return ''; seen[d]=true; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0,layers:[]}; return `<div class="dcard ${dCls(ds.count)}"><div class="dnum">${d}</div><div class="dscore">${ds.count}/8 layers</div><div class="ddots">${dotHTML(ds.layers,conv.LABELS||[])}</div></div>`; }).filter(Boolean).join('');
