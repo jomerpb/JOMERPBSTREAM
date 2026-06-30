@@ -2921,7 +2921,62 @@ var GAMES={
 };
 
 // ══════════════════════════
-// HELPERS
+// LIVE PCSO HISTORY LOADER
+// Fetches the real, manually-verified pcso-history.json from GitHub and
+// overrides GAMES[key].recent/hot (and ez2 draws/hot) with it. If the fetch
+// fails for any reason, the hardcoded fallback arrays above remain in use —
+// the Oracle always has *something* to compute from, it just may be stale.
+// ══════════════════════════
+var PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:null};
+var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
+  var RAW_URL='https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pcso-history.json';
+  try{
+    var resp=await fetch(RAW_URL+'?nocache='+Date.now());
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    var data=await resp.json();
+    var slashToKey={'6/58':'658','6/55':'655','6/49':'649','6/45':'645','6/42':'642'};
+    for(var slashKey in slashToKey){
+      var gk=slashToKey[slashKey];
+      var entries=data[slashKey];
+      if(!Array.isArray(entries)||!entries.length||!GAMES[gk]) continue;
+      // entries are already sorted newest-first
+      var allDraws=entries.map(function(e){return e.nums;}).filter(function(n){return Array.isArray(n)&&n.length===6;});
+      if(!allDraws.length) continue;
+      GAMES[gk].recent=allDraws; // full verified history, not just last 16
+      // hot numbers = top-frequency within the most recent 30 draws (recency-weighted, per earlier design)
+      var recentWindow=allDraws.slice(0,30);
+      var freq={};
+      recentWindow.forEach(function(draw){draw.forEach(function(n){freq[n]=(freq[n]||0)+1;});});
+      GAMES[gk].hot=Object.entries(freq).sort(function(a,b){return b[1]-a[1];}).slice(0,6).map(function(e){return parseInt(e[0]);});
+    }
+    if(Array.isArray(data.ez2)&&data.ez2.length&&GAMES.ez2){
+      var byHour={'2PM':[],'5PM':[],'9PM':[]};
+      data.ez2.forEach(function(e){
+        if(!e.draws) return;
+        ['2PM','5PM','9PM'].forEach(function(h){
+          if(Array.isArray(e.draws[h])&&e.draws[h].length===2) byHour[h].push(e.draws[h]);
+        });
+      });
+      var anyHour=byHour['2PM'].length||byHour['5PM'].length||byHour['9PM'].length;
+      if(anyHour){
+        GAMES.ez2.draws=byHour;
+        var hot={};
+        ['2PM','5PM','9PM'].forEach(function(h){
+          var freq={};
+          byHour[h].slice(0,30).forEach(function(draw){draw.forEach(function(n){freq[n]=(freq[n]||0)+1;});});
+          hot[h]=Object.entries(freq).sort(function(a,b){return b[1]-a[1];}).slice(0,6).map(function(e){return parseInt(e[0]);});
+        });
+        GAMES.ez2.hot=hot;
+      }
+    }
+    PCSO_HISTORY_STATUS={loaded:true,source:'live (pcso-history.json, updated '+(data.updated||'unknown')+')',error:null};
+    console.log('PCSO history loaded:', PCSO_HISTORY_STATUS.source);
+  }catch(e){
+    PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:e.message};
+    console.error('PCSO history fetch failed, using hardcoded fallback:', e.message);
+  }
+})();
+
 // ══════════════════════════
 function reduce(n){
   if(n<=0) return 9;
@@ -3378,7 +3433,16 @@ function convergence(layers,gameKey){
     if(layers.astro.pofNums.includes(d)) inL.push(6);
     if(layers.stats.topDigits.slice(0,4).includes(d)) inL.push(7);
     var statFrac=rawStatW[d]/maxStatW; // 0–1, game-specific
-    digitScores[d]={count:inL.length,layers:inL,statWeight:rawStatW[d],score:inL.length+statFrac};
+    // CORRECTION: indices 0-6 (Py,Ch,As,Ba,Fs,IC,PoF) are all derived from the
+    // same date/hour input — they are not independent confirmations of each
+    // other, so their combined contribution is capped/dampened rather than
+    // summed 1-for-1. Index 7 (Stats) is the only layer built from real
+    // historical draw data, so it is weighted on its own scale instead of
+    // being just "1 more vote" among many correlated ones.
+    var metaCount=inL.filter(i=>i<7).length; // 0-7
+    var metaWeight=Math.min(1,metaCount/7)*4; // correlated cluster, capped at 4
+    var statScore=statFrac*5; // real-data layer, weighted up to 5
+    digitScores[d]={count:inL.length,layers:inL,statWeight:rawStatW[d],metaCount:metaCount,score:metaWeight+statScore};
   }
   var sorted=Object.entries(digitScores)
     .map(([d,s])=>({digit:parseInt(d),...s}))
@@ -3490,7 +3554,8 @@ function setDraw(d,btn){
   btn.classList.add('active');
 }
 
-function generate(){
+async function generate(){
+  await PCSO_HISTORY_READY; // ensure live history (or confirmed fallback) is in place before scoring
   var dh=currentGame==='ez2'?currentDraw:'9PM';
   document.getElementById('results').style.display='none';
   document.getElementById('loader').style.display='block';
@@ -3585,6 +3650,26 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
   var pct=Math.round(totalScore/(conv.picks.length*9)*100);
   var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
   var al=pct>=70?'🟢 Strong Alignment':pct>=45?'🟡 Moderate Alignment':'🔴 Weak Alignment';
+
+  // CORRECTION: flag digit collisions — picks that share the same digital
+  // root aren't independent confirmations, they're riding the same score.
+  var pickDigitCounts={};
+  conv.picks.forEach(n=>{ var d=digitOf(n); pickDigitCounts[d]=(pickDigitCounts[d]||0)+1; });
+  var collisions=Object.entries(pickDigitCounts).filter(([d,c])=>c>1);
+  var collisionHTML=collisions.length
+    ? `<div style="font-size:11px;color:#f0c040;margin-top:8px;">⚠ ${collisions.map(([d,c])=>`${c} numbers share digit ${d}`).join(', ')} — not independent confirmations</div>`
+    : `<div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ No digit collisions — all 6 picks draw on distinct digit scores</div>`;
+
+  // CORRECTION: backtest — how often have numbers sharing today's picked
+  // digits actually appeared in real historical draws, vs. just trusting the formula.
+  var pickedDigits=[...new Set(conv.picks.map(n=>digitOf(n)))];
+  var histDraws=layers.stats.draws||[];
+  var hitDraws=histDraws.filter(draw=>draw.some(n=>pickedDigits.includes(digitOf(n))));
+  var backtestPct=histDraws.length?Math.round(hitDraws.length/histDraws.length*100):null;
+  var backtestHTML=backtestPct!==null
+    ? `<div style="font-size:11px;color:var(--muted2);margin-top:4px;">📊 Historical check: ${backtestPct}% of last ${histDraws.length} draws had at least one number matching these digits (real data, not the formula)</div>`
+    : '';
+  var sourceHTML=`<div style="font-size:10px;color:${PCSO_HISTORY_STATUS.loaded?'var(--muted)':'#ff6b6b'};margin-top:4px;">${PCSO_HISTORY_STATUS.loaded?'✓':'⚠'} Data source: ${PCSO_HISTORY_STATUS.source}</div>`;
 
   // Digit cards
   var digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
@@ -3697,6 +3782,9 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       <div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div>
       <div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div>
       <div style="font-size:13px;color:var(--muted2)">${al}</div>
+      ${collisionHTML}
+      ${backtestHTML}
+      ${sourceHTML}
     </div>
 
     <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
@@ -3753,7 +3841,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
 }
 
 
-function generatePersonal(){
+async function generatePersonal(){
   var game=GAMES[currentGame];
   var isEz2=currentGame==='ez2'; var count=isEz2?2:6;
   var ids=['pn1','pn2','pn3','pn4','pn5','pn6'].slice(0,count);
@@ -3764,6 +3852,7 @@ function generatePersonal(){
     if(!isEz2&&nums.indexOf(v)>=0){ alert('Duplicate number: '+v+'. All '+count+' must be unique.'); return; }
     nums.push(v);
   }
+  await PCSO_HISTORY_READY; // ensure live history (or confirmed fallback) is in place before scoring
   document.getElementById('results').style.display='none';
   document.getElementById('loader').style.display='block';
   var gw=document.querySelector('#oracle-page .game-wrap'); if(gw) gw.style.display='none';
@@ -3805,6 +3894,19 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   var pct=Math.round(totalScore/(userNums.length*9)*100);
   var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
   var al=pct>=70?'🟢 Strong Alignment':pct>=45?'🟡 Moderate Alignment':'🔴 Weak Alignment';
+  var pickDigitCounts={}; userNums.forEach(n=>{ var d=digitOf(n); pickDigitCounts[d]=(pickDigitCounts[d]||0)+1; });
+  var collisions=Object.entries(pickDigitCounts).filter(([d,c])=>c>1);
+  var collisionHTML=collisions.length
+    ? `<div style="font-size:11px;color:#f0c040;margin-top:8px;">⚠ ${collisions.map(([d,c])=>`${c} numbers share digit ${d}`).join(', ')} — not independent confirmations</div>`
+    : `<div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ No digit collisions among your numbers</div>`;
+  var pickedDigits=[...new Set(userNums.map(n=>digitOf(n)))];
+  var histDraws=(layers.stats&&layers.stats.draws)||[];
+  var hitDraws=histDraws.filter(draw=>draw.some(n=>pickedDigits.includes(digitOf(n))));
+  var backtestPct=histDraws.length?Math.round(hitDraws.length/histDraws.length*100):null;
+  var backtestHTML=backtestPct!==null
+    ? `<div style="font-size:11px;color:var(--muted2);margin-top:4px;">📊 Historical check: ${backtestPct}% of last ${histDraws.length} draws had at least one number matching these digits (real data, not the formula)</div>`
+    : '';
+  var sourceHTML=`<div style="font-size:10px;color:${PCSO_HISTORY_STATUS.loaded?'var(--muted)':'#ff6b6b'};margin-top:4px;">${PCSO_HISTORY_STATUS.loaded?'✓':'⚠'} Data source: ${PCSO_HISTORY_STATUS.source}</div>`;
   var seen={}; var digitCardsHTML=userNums.map(n=>{ var d=digitOf(n); if(seen[d]) return ''; seen[d]=true; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0,layers:[]}; return `<div class="dcard ${dCls(ds.count)}"><div class="dnum">${d}</div><div class="dscore">${ds.count}/8 layers</div><div class="ddots">${dotHTML(ds.layers,conv.LABELS||[])}</div></div>`; }).filter(Boolean).join('');
   var mapHTML=userNums.map(n=>{ var d=digitOf(n); var cls=hotNums.includes(n)?'hot':(layers.stats.freq&&(layers.stats.freq[n]||0)>=2)?'warm':'cold'; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="maprow"><span class="mapdig">Your # <b>${pad(n)}</b> <span style="color:var(--muted)">(digit ${d} · ${ds.count}/8)</span></span><div class="mapnums"><span class="mn ${cls}">${pad(n)}</span></div></div>`; }).join('');
   var freqBarsHTML=userNums.map(n=>{ var f=layers.stats.freq&&layers.stats.freq[n]?layers.stats.freq[n]:0; var w=Math.min(100,f*12); return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:10px;color:var(--muted2);width:22px">${pad(n)}</span><div style="flex:1;height:6px;background:var(--border);border-radius:3px"><div style="height:6px;background:${hotNums.includes(n)?'var(--gold)':'var(--teal)'};border-radius:3px;width:${w}%"></div></div><span style="font-size:10px;color:var(--muted)">${f}x</span></div>`; }).join('');
@@ -3812,7 +3914,7 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   document.getElementById('results').innerHTML=`
     <div class="slabel">✦ Personal Number Analysis · ${game.name}</div>
     <div class="balls-card"><div class="balls-eyebrow">Your Numbers — Oracle Convergence Check</div><div class="balls-row">${ballsHTML}</div><div class="balls-note">Ball tag = digit (d) + convergence score out of 8 sources<br>Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · St=Stats</div></div>
-    <div class="alt-card" style="margin-bottom:14px;text-align:center;"><div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div><div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div><div style="font-size:13px;color:var(--muted2)">${al}</div></div>
+    <div class="alt-card" style="margin-bottom:14px;text-align:center;"><div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div><div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div><div style="font-size:13px;color:var(--muted2)">${al}</div>${collisionHTML}${backtestHTML}${sourceHTML}</div>
     <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
     <div class="eflow"><div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>${energyHTML}</div>
     <div class="slabel">Step 1 — Digit Convergence · Your Numbers</div>
