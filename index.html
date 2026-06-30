@@ -2722,6 +2722,20 @@ async function initFromHash() {
 #oracle-page .pcso-meta-row{display:flex;gap:12px;margin-top:4px;padding-left:2px}
 #oracle-page .pcso-jackpot{font-size:10px;color:#4cfc9a;font-weight:700}
 #oracle-page .pcso-winners{font-size:10px;color:var(--muted)}
+
+/* ── PCSO HISTORY LOOKUP ── */
+#oracle-page .pcso-history{padding:14px 14px 0;max-width:580px;margin:0 auto}
+#oracle-page .pcso-history-eyebrow{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.2em;color:var(--muted2);margin-bottom:8px}
+#oracle-page .pcso-hist-controls{display:flex;gap:8px;margin-bottom:8px}
+#oracle-page .pcso-hist-select,#oracle-page .pcso-hist-date{
+  background:var(--card);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-family:var(--inter);font-size:12px;padding:8px 10px;flex:1;
+}
+#oracle-page .pcso-hist-select:focus,#oracle-page .pcso-hist-date:focus{outline:none;border-color:var(--accent)}
+#oracle-page .pcso-hist-result{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 13px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90px;text-align:center}
+#oracle-page .pcso-hist-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+#oracle-page .pcso-hist-none{font-size:11px;color:var(--muted);font-style:italic}
+#oracle-page .pcso-hist-jackpot{font-size:11px;color:#4cfc9a;font-weight:700;margin-top:8px;text-align:center}
 </style>
 <!-- HERO -->
 <div class="hero">
@@ -2763,6 +2777,23 @@ async function initFromHash() {
     <div class="pcso-row"><span class="pcso-pending">Loading results…</span></div>
   </div>
   <div class="pcso-src">Auto-updated 3x daily</div>
+</div>
+
+<!-- PCSO HISTORY LOOKUP -->
+<div class="pcso-history">
+  <div class="pcso-history-eyebrow">▸ Look Up Past Result</div>
+  <div class="pcso-hist-controls">
+    <input type="date" class="pcso-hist-date" id="pcso-hist-date" onchange="pcsoHistDateChanged()">
+    <select class="pcso-hist-select" id="pcso-hist-game" onchange="pcsoHistRender()">
+      <option value="ez2">EZ2</option>
+      <option value="642">6/42</option>
+      <option value="645">6/45</option>
+      <option value="649">6/49</option>
+      <option value="655">6/55</option>
+      <option value="658" selected>6/58</option>
+    </select>
+  </div>
+  <div class="pcso-hist-result" id="pcso-hist-result"></div>
 </div>
 
 <!-- GAME SELECTOR -->
@@ -3877,6 +3908,127 @@ function pcsoRender(){
   var g=document.getElementById('pcso-grid');
   if(g){pcsoRender();pcsoAIFetch();}
   else{setTimeout(tryPcso,200);}
+})();
+
+// ══ PCSO HISTORY LOOKUP (mock data — to be wired to real archive later) ══
+var PCSO_HISTORY={
+  ez2:[
+    {date:'2026-06-29',draws:{'2PM':[14,8],'5PM':[33,2],'9PM':[7,21]}},
+    {date:'2026-06-25',draws:{'2PM':[5,19],'5PM':[28,11],'9PM':[16,9]}},
+    {date:'2026-06-18',draws:{'2PM':[3,30],'5PM':[24,3],'9PM':[17,6]}},
+    {date:'2026-05-30',draws:{'2PM':[2,13],'5PM':[9,27],'9PM':[31,4]}}
+  ],
+  '642':[
+    {date:'2026-06-27',nums:[24,31,3,36,35,23],jackpot:'₱49.6M'},
+    {date:'2026-06-23',nums:[33,38,34,28,36,7],jackpot:'₱45.1M'},
+    {date:'2026-06-09',nums:[3,21,2,14,33,1],jackpot:'₱38.7M'},
+    {date:'2026-05-21',nums:[15,8,34,13,25,38],jackpot:'₱22.4M'}
+  ],
+  '645':[
+    {date:'2026-06-29',nums:[33,13,6,21,18,44],jackpot:'₱87.9M'},
+    {date:'2026-06-19',nums:[44,13,22,14,4,33],jackpot:'₱71.3M'},
+    {date:'2026-06-05',nums:[23,45,6,18,4,2],jackpot:'₱60.8M'},
+    {date:'2026-05-15',nums:[27,9,42,37,34,3],jackpot:'₱40.2M'}
+  ],
+  '649':[
+    {date:'2026-06-28',nums:[32,1,35,23,14,29],jackpot:'₱46.2M'},
+    {date:'2026-06-21',nums:[27,3,2,11,16,25],jackpot:'₱38.5M'},
+    {date:'2026-06-04',nums:[18,21,7,43,11,3],jackpot:'₱27.9M'},
+    {date:'2026-05-10',nums:[49,35,44,4,14,5],jackpot:'₱19.6M'}
+  ],
+  '655':[
+    {date:'2026-06-29',nums:[1,17,50,25,26,12],jackpot:'₱53.1M'},
+    {date:'2026-06-17',nums:[36,4,9,44,42,24],jackpot:'₱47.3M'},
+    {date:'2026-06-03',nums:[19,42,53,2,46,3],jackpot:'₱41.0M'},
+    {date:'2026-05-13',nums:[9,6,19,46,39,48],jackpot:'₱30.5M'}
+  ],
+  '658':[
+    {date:'2026-06-28',nums:[46,56,8,1,3,5],jackpot:'₱128.0M'},
+    {date:'2026-06-25',nums:[47,21,43,20,5,37],jackpot:'₱120.2M'},
+    {date:'2026-06-11',nums:[39,37,35,45,16,52],jackpot:'₱100.6M'},
+    {date:'2026-05-24',nums:[6,38,9,26,48,14],jackpot:'₱75.3M'}
+  ]
+};
+
+var PCSO_GAME_SCHED={
+  ez2:[0,1,2,3,4,5,6],
+  '642':[2,4,6],
+  '645':[1,3,5],
+  '649':[0,2,4],
+  '655':[1,3,6],
+  '658':[0,2,5]
+};
+var PCSO_GAME_LABELS={ez2:'EZ2','642':'6/42','645':'6/45','649':'6/49','655':'6/55','658':'6/58'};
+
+function pcsoHistFilterGames(){
+  var dateInp=document.getElementById('pcso-hist-date');
+  var gameSel=document.getElementById('pcso-hist-game');
+  if(!dateInp||!gameSel||!dateInp.value) return;
+  var parts=dateInp.value.split('-');
+  var d=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+  var dow=d.getDay();
+  var prevVal=gameSel.value;
+  var keys=Object.keys(PCSO_GAME_SCHED);
+  var validKeys=keys.filter(function(k){ return PCSO_GAME_SCHED[k].indexOf(dow)>=0; });
+  gameSel.innerHTML=validKeys.map(function(k){
+    return '<option value="'+k+'">'+PCSO_GAME_LABELS[k]+'</option>';
+  }).join('');
+  if(validKeys.indexOf(prevVal)>=0){ gameSel.value=prevVal; }
+  else { gameSel.value=validKeys[0]; }
+}
+
+function pcsoHistDateChanged(){
+  pcsoHistFilterGames();
+  pcsoHistRender();
+}
+
+function pcsoHistRender(){
+  var gameSel=document.getElementById('pcso-hist-game');
+  var dateInp=document.getElementById('pcso-hist-date');
+  var out=document.getElementById('pcso-hist-result');
+  if(!gameSel||!dateInp||!out) return;
+  var game=gameSel.value;
+  var dateVal=dateInp.value;
+  var list=PCSO_HISTORY[game]||[];
+  var entry=null;
+  for(var i=0;i<list.length;i++){ if(list[i].date===dateVal){ entry=list[i]; break; } }
+  if(!entry){
+    out.innerHTML='<span class="pcso-hist-none">No result on file for this date.</span>';
+    return;
+  }
+  if(game==='ez2'){
+    var order=['2PM','5PM','9PM'];
+    var cols=order.map(function(t){
+      var nums=(entry.draws&&entry.draws[t])||[];
+      var inner=nums.length?nums.map(function(x){return '<span class="pnum ez">'+p2(x)+'</span>';}).join(''):'<span class="pcso-hist-none">Pending…</span>';
+      return '<div style="display:flex;flex-direction:column;align-items:center;gap:5px"><span style="font-size:9px;color:var(--muted)">'+t+'</span><div style="display:flex;gap:4px">'+inner+'</div></div>';
+    }).join('');
+    out.innerHTML='<div style="display:flex;justify-content:center;gap:18px;flex-wrap:wrap;width:100%">'+cols+'</div>';
+    return;
+  }
+  var cls='six';
+  var numsHtml=entry.nums.map(function(x){return '<span class="pnum '+cls+'">'+p2(x)+'</span>';}).join('');
+  var jackpotHtml=entry.jackpot?('<div class="pcso-hist-jackpot">'+entry.jackpot+' jackpot</div>'):'';
+  out.innerHTML='<div class="pcso-hist-row">'+numsHtml+'</div>'+jackpotHtml;
+}
+
+(function initPcsoHist(){
+  var dateInp=document.getElementById('pcso-hist-date');
+  if(!dateInp){ setTimeout(initPcsoHist,200); return; }
+  var phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
+  function fmt(d){
+    var mm=String(d.getMonth()+1).padStart(2,'0');
+    var dd=String(d.getDate()).padStart(2,'0');
+    return d.getFullYear()+'-'+mm+'-'+dd;
+  }
+  var maxD=new Date(phNow);
+  var minD=new Date(phNow); minD.setMonth(minD.getMonth()-3);
+  var defaultD=new Date(phNow); defaultD.setDate(defaultD.getDate()-1);
+  dateInp.max=fmt(maxD);
+  dateInp.min=fmt(minD);
+  dateInp.value=fmt(defaultD);
+  pcsoHistFilterGames();
+  pcsoHistRender();
 })();
 
 async function pcsoAIFetch(){
