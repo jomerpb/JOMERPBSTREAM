@@ -2233,6 +2233,14 @@ async function initFromHash() {
   letter-spacing:.28em;color:var(--accent2);
   text-transform:uppercase;margin-bottom:8px;
 }
+#oracle-page .oracle-topbar-logo{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:20px;letter-spacing:3px;
+  color:var(--accent);
+  text-align:left;
+  margin-bottom:14px;
+}
+#oracle-page .oracle-topbar-logo span{color:var(--text);}
 #oracle-page .hero h1{
   font-family:'Bebas Neue',sans-serif;
   font-size:clamp(48px,12vw,80px);
@@ -2738,27 +2746,8 @@ async function initFromHash() {
 #oracle-page .pcso-hist-jackpot{font-size:11px;color:#4cfc9a;font-weight:700;margin-top:8px;text-align:center}
 </style>
 <!-- HERO -->
-<div class="hero">
-  <div class="hero-brand">JOMERPB · PH Lotto Oracle</div>
-  <h1>LOTTO<br>ORACLE</h1>
-  <p class="hero-sub">
-    Current cosmic energy flow · No personal data needed<br>
-    All readings based on what the universe is doing <b style="color:var(--gold)">right now</b>
-  </p>
-  <div class="hero-layers">
-    <span class="hlayer">Pythagorean</span>
-    <span class="hlayer">Chaldean</span>
-    <span class="hlayer">Astrology</span>
-    <span class="hlayer new">★ Horary</span>
-    <span class="hlayer new">★ Part of Fortune</span>
-    <span class="hlayer new">★ Dignities</span>
-    <span class="hlayer">BaZi</span>
-    <span class="hlayer new">★ Clashes</span>
-    <span class="hlayer">Feng Shui</span>
-    <span class="hlayer new">★ Lo Shu</span>
-    <span class="hlayer new">★ I Ching</span>
-    <span class="hlayer">PCSO Data</span>
-  </div>
+<div class="topbar">
+  <div class="topbar-logo">JOMERPB <span>- LOTTO ORACLE</span></div>
 </div>
 
 <!-- PCSO RESULTS WIDGET -->
@@ -4225,6 +4214,12 @@ async function pcsoAIFetch(){
 }
 
 
+
+// Sync personal-number box count to the default active game (EZ2 = 2 boxes) on initial load
+(function initPersonalInputsCount(){
+  var defaultBtn=document.querySelector('#oracle-page .gbtn.active');
+  if(defaultBtn) setGame(currentGame,defaultBtn);
+})();
 
 </script>
 </div>
