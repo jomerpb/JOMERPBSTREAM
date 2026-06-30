@@ -1,0 +1,37 @@
+name: PCSO Results Scraper
+
+on:
+  schedule:
+    - cron: '15 6 * * *'   # 2:15 PM PH
+    - cron: '15 9 * * *'   # 5:15 PM PH
+    - cron: '45 13 * * *'  # 9:45 PM PH
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run PCSO scraper
+        run: python3 .github/scripts/scrape_pcso.py
+
+      - name: Commit results
+        run: |
+          git config user.name "PCSO Bot"
+          git config user.email "pcso-bot@jomerpb.github.io"
+          git add pcso-results.json
+          git diff --staged --quiet || git commit -m "chore: update PCSO results $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
