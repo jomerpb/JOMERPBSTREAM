@@ -1,0 +1,34 @@
+name: PCSO History Append (Daily)
+
+on:
+  schedule:
+    - cron: '15 14 * * *'   # 10:15 PM PH (after the 9PM/EZ2 9PM draws settle)
+  workflow_dispatch:
+
+jobs:
+  append-history:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Append new PCSO results (never overwrites existing data)
+        run: python3 .github/scripts/append_pcso_history.py
+
+      - name: Commit results (only if something changed)
+        run: |
+          git config user.name "PCSO History Bot"
+          git config user.email "pcso-history-bot@jomerpb.github.io"
+          git add pcso-history.json
+          git diff --staged --quiet || git commit -m "chore: append new PCSO history $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
