@@ -2971,6 +2971,36 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
     }
     PCSO_HISTORY_STATUS={loaded:true,source:'live (pcso-history.json, updated '+(data.updated||'unknown')+')',error:null};
     console.log('PCSO history loaded:', PCSO_HISTORY_STATUS.source);
+
+    // Also wire the "Look Up Past Result" date-picker lookup (previously mock
+    // data only, 4 dummy dates) to this same fetched dataset — no second fetch needed.
+    var lookup={};
+    for(var slashKey2 in slashToKey){
+      var gk2=slashToKey[slashKey2];
+      var entries2=data[slashKey2];
+      if(Array.isArray(entries2)){
+        lookup[gk2]=entries2.map(function(e){return{date:e.date,nums:e.nums,jackpot:e.jackpot};});
+      }
+    }
+    if(Array.isArray(data.ez2)){
+      lookup.ez2=data.ez2.map(function(e){return{date:e.date,draws:e.draws||{}};});
+    }
+    if(Object.keys(lookup).length){
+      PCSO_HISTORY=lookup;
+      // expand the date picker's allowed range to match what's actually available
+      var allDates=[];
+      Object.values(lookup).forEach(function(arr){arr.forEach(function(e){if(e.date)allDates.push(e.date);});});
+      if(allDates.length){
+        var dateInpEl=document.getElementById('pcso-hist-date');
+        if(dateInpEl){
+          allDates.sort();
+          dateInpEl.min=allDates[0];
+        }
+      }
+      if(typeof pcsoHistRender==='function'&&document.getElementById('pcso-hist-result')){
+        pcsoHistFilterGames(); pcsoHistRender();
+      }
+    }
   }catch(e){
     PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:e.message};
     console.error('PCSO history fetch failed, using hardcoded fallback:', e.message);
@@ -4129,7 +4159,13 @@ function pcsoHistRender(){
   }
   var cls='six';
   var numsHtml=entry.nums.map(function(x){return '<span class="pnum '+cls+'">'+p2(x)+'</span>';}).join('');
-  var jackpotHtml=entry.jackpot?('<div class="pcso-hist-jackpot">'+entry.jackpot+' jackpot</div>'):'';
+  var jp=entry.jackpot;
+  var jpDisplay=jp;
+  if(typeof jp==='number'||(typeof jp==='string'&&/^[\d.]+$/.test(jp))){
+    var jpNum=parseFloat(jp);
+    jpDisplay='₱'+(jpNum>=1000000?(jpNum/1000000).toFixed(1)+'M':jpNum.toLocaleString());
+  }
+  var jackpotHtml=jp?('<div class="pcso-hist-jackpot">'+jpDisplay+' jackpot</div>'):'';
   out.innerHTML='<div class="pcso-hist-row">'+numsHtml+'</div>'+jackpotHtml;
 }
 
