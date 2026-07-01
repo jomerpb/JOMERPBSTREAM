@@ -4305,10 +4305,18 @@ async function pcsoAIFetch(){
 #trade-page .tp-stat-row:last-child{border-bottom:none;}
 #trade-page .tp-stat-row span:first-child{color:var(--muted);font-weight:600;}
 #trade-page .tp-stat-row span:last-child{color:var(--text);font-weight:700;}
-#trade-page .tp-reasons{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
-#trade-page .tp-reasons-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
-#trade-page .tp-reason{font-size:12px;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border);}
-#trade-page .tp-reason:last-child{border-bottom:none;}
+#trade-page .tp-gainers{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+#trade-page .tp-gainers-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+#trade-page .tp-gainer-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+#trade-page .tp-gainer-row:last-child{border-bottom:none;}
+#trade-page .tp-gainer-row:active{background:var(--surface);}
+#trade-page .tp-gainer-rank{font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--muted);width:14px;flex-shrink:0;}
+#trade-page .tp-gainer-info{flex:1;min-width:0;}
+#trade-page .tp-gainer-sym{font-size:12.5px;font-weight:700;color:var(--text);}
+#trade-page .tp-gainer-name{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#trade-page .tp-gainer-price{font-size:12.5px;font-weight:700;color:var(--text);flex-shrink:0;white-space:nowrap;}
+#trade-page .tp-gainer-chg{font-size:11.5px;font-weight:700;color:var(--green);flex-shrink:0;min-width:54px;text-align:right;white-space:nowrap;}
+#trade-page .tp-gainer-empty{padding:10px 0;font-size:12px;color:var(--muted);text-align:center;}
 #trade-page .tp-disclaimer{font-size:10px;color:var(--muted);margin-top:14px;line-height:1.5;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border);}
 </style>
 <div class="topbar">
@@ -4316,6 +4324,11 @@ async function pcsoAIFetch(){
 </div>
 <div class="tp-inner">
   <div class="tp-sub" id="tp-data-status">PSE technical analysis &middot; loading data source...</div>
+
+  <div class="tp-gainers">
+    <div class="tp-gainers-title">Top Gainers</div>
+    <div id="tp-gainers-list"></div>
+  </div>
 
   <div class="tp-picklists">
     <div class="tp-picklist-group">
@@ -4385,11 +4398,6 @@ async function pcsoAIFetch(){
     <div class="tp-stat-row"><span>Volume</span><span id="tp-stat-vol">—</span></div>
     <div class="tp-stat-row"><span>SMA 20</span><span id="tp-stat-sma20">—</span></div>
     <div class="tp-stat-row"><span>SMA 50</span><span id="tp-stat-sma50">—</span></div>
-  </div>
-
-  <div class="tp-reasons">
-    <div class="tp-reasons-title">Signal breakdown</div>
-    <div id="tp-reasons-list"></div>
   </div>
 
   <div class="tp-disclaimer" id="tp-disclaimer">Demo data only — not live PSE prices. Signals are for structural preview of the analysis engine; real market data integration is a separate phase. Not financial advice.</div>
@@ -4762,6 +4770,7 @@ var PSE_HISTORY_READY = (async function loadPseHistory(){
   if(ddElBlue && ddElBlue.classList.contains('open')){
     tpRenderDropdown(searchElBlue ? searchElBlue.value : '');
   }
+  tpRenderTopGainers();
 })();
 
 // Unified series getter: live data when available and fresh, mock fallback otherwise.
@@ -4815,6 +4824,7 @@ var PSE_FULL_HISTORY_READY = (async function loadPseFullHistory(){
   if(ddEl && ddEl.classList.contains('open')){
     tpRenderDropdown(searchEl ? searchEl.value : '');
   }
+  tpRenderTopGainers();
 })();
 
 // Returns {current, previous, direction} for the picklist price/arrow, or
@@ -4829,6 +4839,86 @@ function tpGetPicklistPrice(sym){
   var direction = previous == null ? null : (current > previous ? 'up' : (current < previous ? 'down' : 'flat'));
   return {current: current, previous: previous, direction: direction};
 }
+
+// ══════════════════════════
+// TOP GAINERS (market-wide)
+// Ranks every PSE_ALL_STOCKS ticker by latest close vs previous close and
+// renders the top 10 into the tp-gainers card. Uses live data (blue-chip
+// series first, then full-market series) same as the picklist, and falls
+// back to the seeded mock series per-ticker when no live data exists yet —
+// so the card always has something to show, same philosophy as tpGetSeries.
+// ══════════════════════════
+// Determines the market's actual most recent two session dates by taking
+// the mode (most common date) rather than the max — this is robust against
+// a handful of stale/illiquid tickers whose last bar is old, and against
+// mock-fallback entries whose date is simply "today" on the local device.
+function tpModeDate(dates){
+  var counts = {};
+  var best = null, bestCount = 0;
+  dates.forEach(function(d){
+    counts[d] = (counts[d]||0) + 1;
+    if (counts[d] > bestCount) { bestCount = counts[d]; best = d; }
+  });
+  return best;
+}
+
+function tpComputeTopGainers(){
+  var candidates = [];
+  PSE_ALL_STOCKS.forEach(function(t){
+    var series = tpLiveSeries[t.sym] || tpLiveSeriesAll[t.sym];
+    var last, prev;
+    if (Array.isArray(series) && series.length >= 2) {
+      last = series[series.length-1];
+      prev = series[series.length-2];
+    } else {
+      var mock = tpGenSeries(t.base, 2, tpSeed(t.sym+'-pse-demo'));
+      last = mock[mock.length-1];
+      prev = mock[mock.length-2];
+    }
+    if (!prev || !prev.close) return;
+    candidates.push({sym: t.sym, name: t.name, price: last.close, lastDate: last.date, prevDate: prev.date,
+      pct: (last.close-prev.close)/prev.close*100});
+  });
+
+  // Session date = the date most tickers actually last traded on. Excludes
+  // stale tickers whose most recent bar is days/weeks old.
+  var sessionDate = tpModeDate(candidates.map(function(r){ return r.lastDate; }));
+  var sameSession = candidates.filter(function(r){ return r.lastDate === sessionDate; });
+
+  // Previous-session date = the date most of THOSE tickers traded on before
+  // that. Excludes tickers that traded today but have a multi-day gap to
+  // their prior bar (e.g. PRC: last=06-30 but prev=06-22 — real move, just
+  // not a one-day move, so it doesn't belong in a "today's gainers" list).
+  var prevSessionDate = tpModeDate(sameSession.map(function(r){ return r.prevDate; }));
+  var todayOnly = sameSession.filter(function(r){ return r.prevDate === prevSessionDate; });
+
+  todayOnly.sort(function(a,b){ return b.pct - a.pct; });
+  return todayOnly.slice(0, 10);
+}
+
+function tpRenderTopGainers(){
+  var el = document.getElementById('tp-gainers-list');
+  if(!el) return;
+  var top = tpComputeTopGainers();
+  if(!top.length){
+    el.innerHTML = '<div class="tp-gainer-empty">No data available</div>';
+    return;
+  }
+  el.innerHTML = top.map(function(g, i){
+    var dir = g.pct >= 0 ? 'up' : 'down';
+    var sign = g.pct >= 0 ? '+' : '';
+    return '<div class="tp-gainer-row" onmousedown="tpSelectTicker(\''+g.sym+'\')">'+
+      '<span class="tp-gainer-rank">'+(i+1)+'</span>'+
+      '<div class="tp-gainer-info">'+
+        '<div class="tp-gainer-sym">'+g.sym+'</div>'+
+        '<div class="tp-gainer-name">'+g.name+'</div>'+
+      '</div>'+
+      '<span class="tp-gainer-price">\u20b1'+g.price.toFixed(2)+'</span>'+
+      '<span class="tp-gainer-chg '+dir+'">'+sign+g.pct.toFixed(2)+'%</span>'+
+    '</div>';
+  }).join('');
+}
+tpRenderTopGainers();
 
 function tpGenSeries(base, days, seed){
   const rnd = tpRand(seed);
@@ -5209,7 +5299,8 @@ async function tpRenderAll(sym){
   tpUpdateRangeAndStats(refSeries, sig);
 
   // Conversational one-paragraph explanations. Full bullet-list detail
-  // stays in the Signal Breakdown card further down.
+  // used to live in a Signal Breakdown card further down; that slot is
+  // now the market-wide Top Gainers card instead.
   const signalTagEl = document.getElementById('tp-summary-signal-tag');
   signalTagEl.textContent = sig.signal;
   signalTagEl.className = 'tp-summary-tag ' + sig.signal;
@@ -5219,9 +5310,8 @@ async function tpRenderAll(sym){
   trendTagEl.className = 'tp-summary-tag ' + sig.trend;
   document.getElementById('tp-summary-trend-text').textContent = tpTrendNarrative(sig);
 
-  document.getElementById('tp-reasons-list').innerHTML = sig.reasons.map(function(r){
-    return '<div class="tp-reason">' + r + '</div>';
-  }).join('');
+  // Full bullet-list detail previously lived in a Signal Breakdown card
+  // here; that slot is now the market-wide Top Gainers card instead.
 
   const searchInput = document.getElementById('tp-stock-search');
   if(searchInput) searchInput.value = t.name + ' (' + t.sym + ')';
