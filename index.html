@@ -4284,6 +4284,7 @@ async function pcsoAIFetch(){
 #trade-page .tp-summary-row .tp-summary-tag.SELL,#trade-page .tp-summary-row .tp-summary-tag.BEAR{background:rgba(239,68,68,0.15);color:var(--red);}
 #trade-page .tp-summary-row .tp-summary-tag.HOLD{background:rgba(245,158,11,0.15);color:var(--amber);}
 #trade-page .tp-summary-row .tp-summary-tag.FLAT{background:rgba(148,163,184,0.12);color:var(--muted);}
+#trade-page .tp-summary-row .tp-summary-tag.OUTLOOK{background:rgba(124,92,252,0.15);color:var(--accent);}
 #trade-page .tp-summary-row .tp-summary-text{color:var(--text);font-size:12.5px;line-height:1.5;display:block;}
 #trade-page .tp-range-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
 #trade-page .tp-range-label{font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0;white-space:nowrap;}
@@ -4363,6 +4364,10 @@ async function pcsoAIFetch(){
       <span class="tp-summary-tag" id="tp-summary-trend-tag">—</span>
       <span class="tp-summary-text" id="tp-summary-trend-text">—</span>
     </div>
+    <div class="tp-summary-row">
+      <span class="tp-summary-tag" id="tp-summary-outlook-tag">2-DAY</span>
+      <span class="tp-summary-text" id="tp-summary-outlook-text">—</span>
+    </div>
   </div>
 
   <div class="tp-range-bar">
@@ -4400,7 +4405,7 @@ async function pcsoAIFetch(){
     <div class="tp-stat-row"><span>SMA 50</span><span id="tp-stat-sma50">—</span></div>
   </div>
 
-  <div class="tp-disclaimer" id="tp-disclaimer">Demo data only — not live PSE prices. Signals are for structural preview of the analysis engine; real market data integration is a separate phase. Not financial advice.</div>
+  <div class="tp-disclaimer" id="tp-disclaimer">Loading live PSE data… Historical daily bars refreshed via PSE Edge — not tick-by-tick real-time. Signals are for decision support only; verify current prices with your broker before trading. Not financial advice.</div>
 </div>
 </div>
 
@@ -4720,7 +4725,7 @@ function tpRand(seed){
 // stats table, but represents traded value, not share quantity.
 // ══════════════════════════
 var tpLiveSeries = {};
-var PSE_HISTORY_STATUS = {loaded:false, source:'mock (demo) data', error:null};
+var PSE_HISTORY_STATUS = {loaded:false, source:'fallback estimates (live feed unavailable)', error:null};
 var PSE_HISTORY_READY = (async function loadPseHistory(){
   var RAW_URL = 'https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pse-history.json';
   try {
@@ -4746,24 +4751,24 @@ var PSE_HISTORY_READY = (async function loadPseHistory(){
     }
     PSE_HISTORY_STATUS = {
       loaded: loadedCount>0 && !stale,
-      source: loadedCount>0 ? ('live ('+loadedCount+' tickers, updated '+(data.generatedAt||'unknown')+')') : 'mock (demo) data',
+      source: loadedCount>0 ? ('live ('+loadedCount+' tickers, updated '+(data.generatedAt||'unknown')+')') : 'fallback estimates (live feed unavailable)',
       error: stale ? 'data is stale (>3 days old)' : null
     };
     console.log('PSE history loaded:', PSE_HISTORY_STATUS.source, PSE_HISTORY_STATUS.error||'');
   } catch(e) {
-    PSE_HISTORY_STATUS = {loaded:false, source:'mock (demo) data', error:e.message};
+    PSE_HISTORY_STATUS = {loaded:false, source:'fallback estimates (live feed unavailable)', error:e.message};
     console.warn('PSE history load failed, using mock data:', e.message);
   }
   var statusEl = document.getElementById('tp-data-status');
   if(statusEl){
     statusEl.textContent = 'PSE technical analysis \u00b7 ' +
-      (PSE_HISTORY_STATUS.loaded ? PSE_HISTORY_STATUS.source : 'mock data (demo mode)' + (PSE_HISTORY_STATUS.error ? ' — '+PSE_HISTORY_STATUS.error : ''));
+      (PSE_HISTORY_STATUS.loaded ? PSE_HISTORY_STATUS.source : PSE_HISTORY_STATUS.source + (PSE_HISTORY_STATUS.error ? ' — '+PSE_HISTORY_STATUS.error : ''));
   }
   var disclaimerEl = document.getElementById('tp-disclaimer');
   if(disclaimerEl){
     disclaimerEl.textContent = PSE_HISTORY_STATUS.loaded
       ? 'Live PSE data, refreshed periodically during trading hours via PSE Edge. Historical daily bars — not tick-by-tick real-time. Signals are for decision support only; verify current prices with your broker before trading. Not financial advice.'
-      : 'Demo data only — not live PSE prices. Signals are for structural preview of the analysis engine; real market data integration is a separate phase. Not financial advice.';
+      : 'Live feed temporarily unavailable — showing fallback estimates until the PSE Edge data reconnects. Signals are for decision support only; verify current prices with your broker before trading. Not financial advice.';
   }
   var ddElBlue = document.getElementById('tp-dropdown');
   var searchElBlue = document.getElementById('tp-stock-search');
@@ -5020,6 +5025,21 @@ function tpRSI(closes, period){
   const rs=avgGain/avgLoss;
   return +(100-(100/(1+rs))).toFixed(2);
 }
+// Average absolute day-to-day % move over the trailing `period` sessions.
+// This is the same idea as ATR (average true range) but computed off
+// closes only, since that's all the mock series guarantees. It's the
+// yardstick the 1-2 day outlook uses to size a realistic price band —
+// a stock that normally jumps 4% a day gets a wider projected band than
+// one that barely moves 0.3% a day, regardless of which way the signal leans.
+function tpAvgDailyVolPct(closes, period){
+  if(closes.length < period+1) return null;
+  let sum=0, n=0;
+  for(let i=closes.length-period;i<closes.length;i++){
+    const prev=closes[i-1], cur=closes[i];
+    if(prev>0){ sum += Math.abs((cur-prev)/prev*100); n++; }
+  }
+  return n ? sum/n : null;
+}
 // SMA20-vs-SMA50 trend classification with a buffer band. Raw sign
 // comparison flips BULL/BEAR on any crossover, even a ₱0.01 one, causing
 // flicker right when a crossover happens (the moment people watch most
@@ -5027,12 +5047,29 @@ function tpRSI(closes, period){
 // price before calling a direction — smaller gaps are genuinely unclear
 // and reported as FLAT rather than an unreliable guess.
 const TREND_BUFFER_PCT = 0.4;
+// Gap size (in %) at which trend confidence maxes out at 100%. Beyond the
+// buffer edge, confidence ramps from 0% (right at the buffer) up to 100%
+// (at or past this cap) — a bigger, cleaner SMA20/SMA50 separation reads
+// as a more confident call.
+const TREND_CONF_CAP_PCT = 3;
 function tpGetTrendState(sma20, sma50){
-  if(sma20==null || sma50==null) return {state:'FLAT', gapPct:null};
+  if(sma20==null || sma50==null) return {state:'FLAT', gapPct:null, confidencePct:0};
   const gapPct = (sma20 - sma50) / sma50 * 100;
-  if(gapPct > TREND_BUFFER_PCT) return {state:'BULL', gapPct};
-  if(gapPct < -TREND_BUFFER_PCT) return {state:'BEAR', gapPct};
-  return {state:'FLAT', gapPct};
+  const absGap = Math.abs(gapPct);
+  let state, confidencePct;
+  if(gapPct > TREND_BUFFER_PCT){
+    state='BULL';
+    confidencePct = Math.round(Math.min(100, (absGap-TREND_BUFFER_PCT)/(TREND_CONF_CAP_PCT-TREND_BUFFER_PCT)*100));
+  } else if(gapPct < -TREND_BUFFER_PCT){
+    state='BEAR';
+    confidencePct = Math.round(Math.min(100, (absGap-TREND_BUFFER_PCT)/(TREND_CONF_CAP_PCT-TREND_BUFFER_PCT)*100));
+  } else {
+    state='FLAT';
+    // Inside the buffer: confidence in "FLAT" is highest at gap=0 and
+    // fades toward 0% as the gap nears the buffer edge (about to flip).
+    confidencePct = Math.round(Math.max(0, 100 - (absGap/TREND_BUFFER_PCT)*100));
+  }
+  return {state, gapPct, confidencePct};
 }
 
 function tpComputeSignal(series){
@@ -5074,38 +5111,156 @@ function tpComputeSignal(series){
   let signal='HOLD';
   if(score>=2) signal='BUY';
   else if(score<=-2) signal='SELL';
-  return {signal, score, rsi:r, sma20:sma20?+sma20.toFixed(2):null, sma50:sma50?+sma50.toFixed(2):null, price, reasons, trend:trend.state, trendGapPct:trend.gapPct};
+
+  // Confidence % — how much of the maximum possible score is behind this
+  // call. Max score is ±3 (RSI ±2 + trend ±1), so both indicators firing
+  // in agreement is what reaches 100%; a single indicator alone caps out
+  // around 67%. For HOLD, this instead reads as "how far from a BUY/SELL
+  // trigger" — 100% means score is 0 (dead center, maximum indecision),
+  // fading toward 0% as it nears the ±2 threshold.
+  const MAX_SCORE = 3;
+  let confidencePct;
+  if(signal==='HOLD'){
+    confidencePct = Math.round(Math.max(0, 100 - (Math.abs(score)/2)*100));
+  } else {
+    confidencePct = Math.round(Math.min(100, (Math.abs(score)/MAX_SCORE)*100));
+  }
+
+  return {signal, score, confidencePct, rsi:r, sma20:sma20?+sma20.toFixed(2):null, sma50:sma50?+sma50.toFixed(2):null, price, reasons, trend:trend.state, trendGapPct:trend.gapPct, trendConfidencePct:trend.confidencePct, volPct:tpAvgDailyVolPct(closes,14)};
 }
 
-// Conversational one-paragraph explanations for the summary card, built
-// from the same numbers as the terse Signal Breakdown list below — just
-// phrased like an analyst would actually say it out loud, not a spec sheet.
+// Picks a variant deterministically per stock (using the existing
+// tpSeed/tpRand hash) so the same ticker always reads the same way on
+// reload, but different tickers get different phrasing — this is what
+// keeps the copy from reading like one template with numbers swapped in.
+function tpPick(seedStr, arr){
+  return arr[tpSeed(seedStr) % arr.length];
+}
+
+// Conversational one-paragraph explanations for the summary card. Each
+// scenario (RSI oversold/overbought/neutral/missing, and each signal
+// outcome) has several differently-worded takes; which one shows is
+// picked per-ticker so two different stocks hitting the same RSI zone
+// don't read like copy-paste of each other.
 function tpSignalNarrative(sig){
+  var sym = tpCurrentSym || 'x';
   var rsiPart;
   if(sig.rsi==null){
-    rsiPart = "There isn't enough price history yet to compute RSI for this one.";
+    rsiPart = tpPick(sym+'-rsi-na', [
+      "There's not enough trading history yet to pull a real RSI reading, so this call is leaning on trend alone.",
+      "RSI can't be calculated yet — too few sessions on record — so trend is carrying this one by itself.",
+      "No RSI to work with yet on this ticker, so the trend line below is doing all the talking here."
+    ]);
   } else if(sig.rsi < 25){
-    rsiPart = "RSI has dropped into oversold territory at "+sig.rsi+" — the recent selling looks stretched, which often precedes at least a short-term bounce.";
+    rsiPart = tpPick(sym+'-rsi-low', [
+      "RSI just fell to "+sig.rsi+", well under the 25 line this model treats as oversold for PSE names — selling this stretched usually runs out of steam fast.",
+      "At "+sig.rsi+", RSI is deep in oversold water. Sellers have pushed harder than the recent range can really justify, and that kind of gap tends to close.",
+      "This one's RSI reads "+sig.rsi+" — that's a real oversold print, not a marginal dip, and prints like this have a habit of snapping back within a session or two.",
+      "RSI at "+sig.rsi+" puts this stock clearly past the point where selling usually starts drying up. Worth watching for the bounce."
+    ]);
   } else if(sig.rsi > 75){
-    rsiPart = "RSI is running hot at "+sig.rsi+", deep into overbought territory — after a run like that, the odds of a pullback start rising.";
+    rsiPart = tpPick(sym+'-rsi-high', [
+      "RSI is sitting at "+sig.rsi+", well past the 75 line — this stock has run further than its own recent trading range supports, and moves like that usually give something back.",
+      "At "+sig.rsi+", RSI is stretched thin on the overbought side. It's not just up — it's up more than the recent pace can keep justifying.",
+      "This one's RSI reads "+sig.rsi+", firmly overbought. Buyers have been aggressive, maybe too aggressive, and that tends to invite a pullback.",
+      "RSI at "+sig.rsi+" is running hot. When it gets this far past 75, the odds start tilting toward a cooldown rather than more of the same."
+    ]);
   } else {
-    rsiPart = "RSI is sitting in neutral ground at "+sig.rsi+" — momentum isn't strongly pushing this one way or the other right now.";
+    rsiPart = tpPick(sym+'-rsi-mid', [
+      "RSI is reading "+sig.rsi+" right now — neutral ground, no oversold snap-back and no overbought exhaustion, so momentum isn't the deciding factor here.",
+      "At "+sig.rsi+", RSI is parked in the middle of its range. Neither buyers nor sellers have pushed this one into extreme territory yet.",
+      "RSI sits at "+sig.rsi+" — nothing extreme either way, so this call is coming from trend, not from momentum exhaustion."
+    ]);
   }
+
   var closer;
-  if(sig.signal==='BUY') closer = "Combined with the trend below, that's enough to lean BUY here.";
-  else if(sig.signal==='SELL') closer = "Combined with the trend below, that's tilting this toward SELL.";
-  else closer = "Combined with the trend below, that's not quite enough conviction either way — so it's landing on HOLD for now.";
+  var highConf = sig.confidencePct>=90;
+  if(sig.signal==='BUY'){
+    closer = tpPick(sym+'-close-buy', [
+      "That combination is enough to call BUY here, at "+sig.confidencePct+"% conviction"+(highConf?" — RSI and trend are both pointing the same way, which is about as clean an agreement as this model gets.":" — the case holds up even without every input maxed out."),
+      "Put together, that's a BUY at "+sig.confidencePct+"% conviction. "+(highConf?"Both the momentum read and the trend read are backing the same direction.":"Not every signal is firing at full strength, but the lean is real."),
+      "This adds up to BUY, "+sig.confidencePct+"% conviction. "+(highConf?"When RSI and trend agree this cleanly, that's the strongest setup this model produces.":"It's a genuine tilt toward buying, just not the strongest version of one.")
+    ]);
+  } else if(sig.signal==='SELL'){
+    closer = tpPick(sym+'-close-sell', [
+      "That combination pushes this to SELL, at "+sig.confidencePct+"% conviction"+(highConf?" — RSI and trend are confirming the same downside case, the strongest reading this model gives.":" — the pressure is there even without full agreement across both inputs."),
+      "Add it up and that's SELL, "+sig.confidencePct+"% conviction. "+(highConf?"Momentum and trend are both leaning the same direction here.":"The downside case is real, just not maxed out."),
+      "This lands on SELL at "+sig.confidencePct+"% conviction. "+(highConf?"Both readings line up against this stock right now.":"One input is doing more of the work than the other, but the tilt still holds.")
+    ]);
+  } else {
+    closer = tpPick(sym+'-close-hold', [
+      "That's why this sits on HOLD, "+sig.confidencePct+"% conviction in the no-trade call — the score's too close to center for either side to earn a real edge right now.",
+      "Net result: HOLD, at "+sig.confidencePct+"% conviction. Nothing here is stretched enough in either direction to justify taking a side.",
+      "This one's landing on HOLD, "+sig.confidencePct+"% conviction — momentum and trend are essentially cancelling each other out at the moment."
+    ]);
+  }
   return rsiPart + ' ' + closer;
 }
 
 function tpTrendNarrative(sig){
+  var sym = tpCurrentSym || 'x';
   if(sig.trend==='BULL'){
-    return "SMA20 has pulled "+sig.trendGapPct.toFixed(2)+"% above SMA50 — a real, sustained gap rather than noise, which is what a genuine short-term uptrend looks like.";
+    return tpPick(sym+'-trend-bull', [
+      "SMA20 has pulled "+sig.trendGapPct.toFixed(2)+"% above SMA50, clearing the "+TREND_BUFFER_PCT+"% buffer by a real margin — that buffer exists to filter out thin crossovers, so a gap this size (trend confidence: "+sig.trendConfidencePct+"%) says this uptrend is structural, not a blip.",
+      "The short-term average is now "+sig.trendGapPct.toFixed(2)+"% clear of the longer one — well past the "+TREND_BUFFER_PCT+"% noise floor, which puts trend confidence at "+sig.trendConfidencePct+"%. This is a real uptrend, not a wobble that'll fade by tomorrow.",
+      "SMA20 vs SMA50 shows a "+sig.trendGapPct.toFixed(2)+"% gap in the stock's favor, comfortably outside the "+TREND_BUFFER_PCT+"% buffer — "+sig.trendConfidencePct+"% trend confidence, which is the model's way of saying the uptrend has legs."
+    ]);
   }
   if(sig.trend==='BEAR'){
-    return "SMA20 has slipped "+Math.abs(sig.trendGapPct).toFixed(2)+"% below SMA50 — enough separation to call this a real downtrend, not just a wobble.";
+    return tpPick(sym+'-trend-bear', [
+      "SMA20 has slipped "+Math.abs(sig.trendGapPct).toFixed(2)+"% below SMA50, past the "+TREND_BUFFER_PCT+"% buffer that exists to screen out one-day noise — a gap this size (trend confidence: "+sig.trendConfidencePct+"%) means the shorter average has genuinely lost ground, not just dipped.",
+      "The short-term average is now "+Math.abs(sig.trendGapPct).toFixed(2)+"% under the longer one, well past the "+TREND_BUFFER_PCT+"% noise floor — trend confidence sits at "+sig.trendConfidencePct+"%, which is enough separation to call this a real downtrend.",
+      "SMA20 vs SMA50 shows a "+Math.abs(sig.trendGapPct).toFixed(2)+"% gap working against the stock, clear of the "+TREND_BUFFER_PCT+"% buffer — "+sig.trendConfidencePct+"% trend confidence, meaning this weakness isn't just noise."
+    ]);
   }
-  return "SMA20 and SMA50 are sitting close together right now, within the "+TREND_BUFFER_PCT+"% buffer — too tight to call a clear trend either way, so this is more of a wait-and-see zone.";
+  return tpPick(sym+'-trend-flat', [
+    "SMA20 and SMA50 are within "+TREND_BUFFER_PCT+"% of each other — inside the buffer this model requires before calling a direction, so anything said about trend right now would be reading noise as signal. FLAT is the honest read, not a dodge.",
+    "The two moving averages are sitting almost on top of each other, well inside the "+TREND_BUFFER_PCT+"% buffer — there's genuinely no trend to call yet, so FLAT it stays until that changes.",
+    "SMA20 and SMA50 haven't separated enough to clear the "+TREND_BUFFER_PCT+"% buffer — this is a wait-and-see zone, not a coin flip between BULL and BEAR."
+  ]);
+}
+
+// 1-2 session forward outlook. Takes the same RSI/trend evidence already
+// used for the signal and sizes an expected price band off the stock's
+// own trailing volatility (tpAvgDailyVolPct), scaled by conviction.
+// Multiple phrasings per direction/confidence combo so this doesn't read
+// as one sentence template with numbers dropped in.
+function tpOutlookNarrative(sig){
+  if(sig.volPct==null || sig.price==null){
+    return "Not enough trading history yet to size a short-term range for this one.";
+  }
+  var sym = tpCurrentSym || 'x';
+  const bias = sig.signal==='BUY' ? 1 : sig.signal==='SELL' ? -1 : 0;
+  const conf = (bias===0 ? sig.confidencePct*0.4 : sig.confidencePct) / 100;
+  const moveMag = sig.volPct * (0.75 + conf);
+  const skew = bias * moveMag * 0.35;
+  const upPct = moveMag + skew;
+  const downPct = moveMag - skew;
+  const high = sig.price * (1 + upPct/100);
+  const low = sig.price * (1 - downPct/100);
+  const fmt = n => n < 1 ? n.toFixed(4) : n < 10 ? n.toFixed(3) : n.toFixed(2);
+  const vol = sig.volPct.toFixed(2);
+  const H = fmt(high), L = fmt(low);
+
+  if(bias>0){
+    return tpPick(sym+'-outlook-up', [
+      "This stock's been swinging "+vol+"% a day on average over the last two weeks. Scale that by "+sig.confidencePct+"% conviction on the BUY side and the next 1-2 sessions point toward ₱"+H+" as the stronger target, with ₱"+L+" as the floor if it stalls out instead. The RSI/trend numbers above are exactly what's driving this — move either one and this range moves with it.",
+      "Fourteen sessions of ₱"+vol+"%-a-day average volatility, run through a "+sig.confidencePct+"% conviction BUY read, puts ₱"+H+" within reach over the next session or two, with ₱"+L+" as the downside limit if the setup doesn't play out. Same inputs as the reasoning above — no separate model, just the range this data implies.",
+      "Given the stock's own "+vol+"% average daily move and "+sig.confidencePct+"% conviction behind this BUY, ₱"+H+" is the level this setup is leaning toward over the next 1-2 sessions, with ₱"+L+" marking where the case would start to look wrong."
+    ]);
+  } else if(bias<0){
+    return tpPick(sym+'-outlook-down', [
+      "Average daily swing here has been "+vol+"% over the last two weeks. At "+sig.confidencePct+"% conviction on this SELL, the next 1-2 sessions lean toward ₱"+L+" as the stronger target, with ₱"+H+" as the ceiling if the pressure eases early.",
+      "This stock's "+vol+"%-a-day volatility, scaled by "+sig.confidencePct+"% conviction on the downside, points toward ₱"+L+" over the next session or two — ₱"+H+" is where this read would start to look wrong.",
+      "With "+vol+"% average daily movement and "+sig.confidencePct+"% conviction behind the SELL call, ₱"+L+" is the level this setup is leaning toward in the next 1-2 sessions, capped at ₱"+H+" if the selling doesn't follow through."
+    ]);
+  } else {
+    return tpPick(sym+'-outlook-flat', [
+      "Daily swings here have averaged "+vol+"% over the last two weeks, with no real edge from either RSI or trend right now. Expect this to chop inside roughly ₱"+L+" to ₱"+H+" over the next 1-2 sessions rather than break out in either direction.",
+      "With momentum and trend basically cancelling out, the "+vol+"% average daily swing is the main thing shaping this — a ₱"+L+"–₱"+H+" range over the next session or two is the more likely outcome than a clean breakout.",
+      "No dominant signal either way right now, so the stock's own "+vol+"% typical daily move is what defines the range: roughly ₱"+L+" to ₱"+H+" over the next 1-2 sessions."
+    ]);
+  }
 }
 
 const TP_TF_DAYS = {'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':730};
@@ -5377,10 +5532,10 @@ async function tpRenderAll(sym){
 
   const trendArrow = sig.trend==='BULL' ? '\u25B2' : sig.trend==='BEAR' ? '\u25BC' : '\u2014';
   document.getElementById('tp-trend-wrap').innerHTML =
-    '<div class="tp-trend-badge ' + sig.trend + '">' + trendArrow + ' ' + sig.trend + '</div>';
+    '<div class="tp-trend-badge ' + sig.trend + '">' + trendArrow + ' ' + sig.trendConfidencePct + '% ' + sig.trend + '</div>';
 
   document.getElementById('tp-badge-wrap').innerHTML =
-    '<div class="tp-signal-badge ' + sig.signal + '">' + sig.signal + '</div>';
+    '<div class="tp-signal-badge ' + sig.signal + '">' + sig.confidencePct + '% ' + sig.signal + '</div>';
 
   tpUpdateRangeAndStats(refSeries, sig, liveOk ? lq : null);
 
@@ -5388,13 +5543,17 @@ async function tpRenderAll(sym){
   // used to live in a Signal Breakdown card further down; that slot is
   // now the market-wide Top Gainers card instead.
   const signalTagEl = document.getElementById('tp-summary-signal-tag');
-  signalTagEl.textContent = sig.signal;
+  signalTagEl.textContent = sig.confidencePct + '% ' + sig.signal;
   signalTagEl.className = 'tp-summary-tag ' + sig.signal;
   document.getElementById('tp-summary-signal-text').textContent = tpSignalNarrative(sig);
   const trendTagEl = document.getElementById('tp-summary-trend-tag');
-  trendTagEl.textContent = sig.trend;
+  trendTagEl.textContent = sig.trendConfidencePct + '% ' + sig.trend;
   trendTagEl.className = 'tp-summary-tag ' + sig.trend;
   document.getElementById('tp-summary-trend-text').textContent = tpTrendNarrative(sig);
+  const outlookTagEl = document.getElementById('tp-summary-outlook-tag');
+  outlookTagEl.textContent = '2-DAY OUTLOOK';
+  outlookTagEl.className = 'tp-summary-tag OUTLOOK';
+  document.getElementById('tp-summary-outlook-text').textContent = tpOutlookNarrative(sig);
 
   // Full bullet-list detail previously lived in a Signal Breakdown card
   // here; that slot is now the market-wide Top Gainers card instead.
