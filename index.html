@@ -4266,6 +4266,20 @@ async function pcsoAIFetch(){
 #trade-page .tp-signal-badge.BUY{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid var(--green);}
 #trade-page .tp-signal-badge.SELL{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid var(--red);}
 #trade-page .tp-signal-badge.HOLD{background:rgba(245,158,11,0.15);color:var(--amber);border:1px solid var(--amber);}
+#trade-page .tp-badges-row{display:flex;align-items:center;gap:6px;}
+#trade-page .tp-trend-badge{display:inline-flex;align-items:center;gap:3px;padding:5px 11px;border-radius:20px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;margin-top:10px;}
+#trade-page .tp-trend-badge.BULL{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid var(--green);}
+#trade-page .tp-trend-badge.BEAR{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid var(--red);}
+#trade-page .tp-trend-badge.FLAT{background:rgba(148,163,184,0.12);color:var(--muted);border:1px solid var(--border);}
+#trade-page .tp-summary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;}
+#trade-page .tp-summary-row{padding:8px 0;border-bottom:1px solid var(--border);}
+#trade-page .tp-summary-row:last-child{border-bottom:none;}
+#trade-page .tp-summary-row .tp-summary-tag{display:inline-block;margin-bottom:6px;font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;padding:2px 8px;border-radius:10px;}
+#trade-page .tp-summary-row .tp-summary-tag.BUY,#trade-page .tp-summary-row .tp-summary-tag.BULL{background:rgba(34,197,94,0.15);color:var(--green);}
+#trade-page .tp-summary-row .tp-summary-tag.SELL,#trade-page .tp-summary-row .tp-summary-tag.BEAR{background:rgba(239,68,68,0.15);color:var(--red);}
+#trade-page .tp-summary-row .tp-summary-tag.HOLD{background:rgba(245,158,11,0.15);color:var(--amber);}
+#trade-page .tp-summary-row .tp-summary-tag.FLAT{background:rgba(148,163,184,0.12);color:var(--muted);}
+#trade-page .tp-summary-row .tp-summary-text{color:var(--text);font-size:12.5px;line-height:1.5;display:block;}
 #trade-page .tp-range-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
 #trade-page .tp-range-label{font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0;white-space:nowrap;}
 #trade-page .tp-range-label b{color:var(--text);font-weight:700;}
@@ -4314,9 +4328,23 @@ async function pcsoAIFetch(){
     <div class="tp-price-name" id="tp-name">—</div>
     <div class="tp-price-row">
       <div class="tp-price-val" id="tp-price">₱0.00</div>
-      <div id="tp-badge-wrap"></div>
+      <div class="tp-badges-row">
+        <div id="tp-trend-wrap"></div>
+        <div id="tp-badge-wrap"></div>
+      </div>
     </div>
     <div class="tp-price-chg" id="tp-chg">+0.00 (0.00%)</div>
+  </div>
+
+  <div class="tp-summary-card" id="tp-summary-card">
+    <div class="tp-summary-row">
+      <span class="tp-summary-tag" id="tp-summary-signal-tag">—</span>
+      <span class="tp-summary-text" id="tp-summary-signal-text">—</span>
+    </div>
+    <div class="tp-summary-row">
+      <span class="tp-summary-tag" id="tp-summary-trend-tag">—</span>
+      <span class="tp-summary-text" id="tp-summary-trend-text">—</span>
+    </div>
   </div>
 
   <div class="tp-range-bar">
@@ -4359,7 +4387,7 @@ async function pcsoAIFetch(){
     <div id="tp-reasons-list"></div>
   </div>
 
-  <div class="tp-disclaimer">Demo data only — not live PSE prices. Signals are for structural preview of the analysis engine; real market data integration is a separate phase. Not financial advice.</div>
+  <div class="tp-disclaimer" id="tp-disclaimer">Demo data only — not live PSE prices. Signals are for structural preview of the analysis engine; real market data integration is a separate phase. Not financial advice.</div>
 </div>
 </div>
 
@@ -4718,6 +4746,12 @@ var PSE_HISTORY_READY = (async function loadPseHistory(){
     statusEl.textContent = 'PSE technical analysis \u00b7 ' +
       (PSE_HISTORY_STATUS.loaded ? PSE_HISTORY_STATUS.source : 'mock data (demo mode)' + (PSE_HISTORY_STATUS.error ? ' — '+PSE_HISTORY_STATUS.error : ''));
   }
+  var disclaimerEl = document.getElementById('tp-disclaimer');
+  if(disclaimerEl){
+    disclaimerEl.textContent = PSE_HISTORY_STATUS.loaded
+      ? 'Live PSE data, refreshed periodically during trading hours via PSE Edge. Historical daily bars — not tick-by-tick real-time. Signals are for decision support only; verify current prices with your broker before trading. Not financial advice.'
+      : 'Demo data only — not live PSE prices. Signals are for structural preview of the analysis engine; real market data integration is a separate phase. Not financial advice.';
+  }
 })();
 
 // Unified series getter: live data when available and fresh, mock fallback otherwise.
@@ -4767,6 +4801,21 @@ function tpRSI(closes, period){
   const rs=avgGain/avgLoss;
   return +(100-(100/(1+rs))).toFixed(2);
 }
+// SMA20-vs-SMA50 trend classification with a buffer band. Raw sign
+// comparison flips BULL/BEAR on any crossover, even a ₱0.01 one, causing
+// flicker right when a crossover happens (the moment people watch most
+// closely). The buffer requires the gap to exceed TREND_BUFFER_PCT of
+// price before calling a direction — smaller gaps are genuinely unclear
+// and reported as FLAT rather than an unreliable guess.
+const TREND_BUFFER_PCT = 0.4;
+function tpGetTrendState(sma20, sma50){
+  if(sma20==null || sma50==null) return {state:'FLAT', gapPct:null};
+  const gapPct = (sma20 - sma50) / sma50 * 100;
+  if(gapPct > TREND_BUFFER_PCT) return {state:'BULL', gapPct};
+  if(gapPct < -TREND_BUFFER_PCT) return {state:'BEAR', gapPct};
+  return {state:'FLAT', gapPct};
+}
+
 function tpComputeSignal(series){
   const closes = series.map(d=>d.close);
   const lastIdx = closes.length-1;
@@ -4776,23 +4825,68 @@ function tpComputeSignal(series){
   const price = closes[lastIdx];
   let score = 0;
   let reasons = [];
+
+  // RSI — 75/25 rather than the textbook 30/70 default, matching PSE's
+  // lower liquidity and higher volatility vs developed markets (this
+  // project's own earlier research on PSE-specific TA thresholds).
   if(r!==null){
-    if(r<30){score+=2;reasons.push('RSI oversold ('+r+') — potential bounce zone');}
-    else if(r>70){score-=2;reasons.push('RSI overbought ('+r+') — potential pullback risk');}
+    if(r<25){score+=2;reasons.push('RSI oversold ('+r+') — potential bounce zone');}
+    else if(r>75){score-=2;reasons.push('RSI overbought ('+r+') — potential pullback risk');}
     else reasons.push('RSI neutral ('+r+')');
   }
-  if(sma20!==null && sma50!==null){
-    if(sma20>sma50){score+=1;reasons.push('SMA20 above SMA50 — short-term uptrend (golden cross zone)');}
-    else {score-=1;reasons.push('SMA20 below SMA50 — short-term downtrend (death cross zone)');}
+
+  // Trend via SMA20-vs-SMA50 with a buffer band (see tpGetTrendState) —
+  // avoids the signal flipping on a razor-thin crossover. Note: the old
+  // "price vs SMA20" check was dropped — it was highly correlated with
+  // this trend check (both usually move together), so it was mostly
+  // double-counting the same signal rather than adding independent
+  // confirmation.
+  const trend = tpGetTrendState(sma20, sma50);
+  if(trend.state==='BULL'){
+    score+=1;
+    reasons.push('SMA20 above SMA50 by '+trend.gapPct.toFixed(2)+'% — confirmed short-term uptrend');
+  } else if(trend.state==='BEAR'){
+    score-=1;
+    reasons.push('SMA20 below SMA50 by '+Math.abs(trend.gapPct).toFixed(2)+'% — confirmed short-term downtrend');
+  } else {
+    reasons.push('SMA20 and SMA50 within '+TREND_BUFFER_PCT+'% of each other — trend unclear (flat zone)');
   }
-  if(sma20!==null){
-    if(price>sma20){score+=1;reasons.push('Price trading above SMA20');}
-    else {score-=1;reasons.push('Price trading below SMA20');}
-  }
+
   let signal='HOLD';
   if(score>=2) signal='BUY';
   else if(score<=-2) signal='SELL';
-  return {signal, score, rsi:r, sma20:sma20?+sma20.toFixed(2):null, sma50:sma50?+sma50.toFixed(2):null, price, reasons};
+  return {signal, score, rsi:r, sma20:sma20?+sma20.toFixed(2):null, sma50:sma50?+sma50.toFixed(2):null, price, reasons, trend:trend.state, trendGapPct:trend.gapPct};
+}
+
+// Conversational one-paragraph explanations for the summary card, built
+// from the same numbers as the terse Signal Breakdown list below — just
+// phrased like an analyst would actually say it out loud, not a spec sheet.
+function tpSignalNarrative(sig){
+  var rsiPart;
+  if(sig.rsi==null){
+    rsiPart = "There isn't enough price history yet to compute RSI for this one.";
+  } else if(sig.rsi < 25){
+    rsiPart = "RSI has dropped into oversold territory at "+sig.rsi+" — the recent selling looks stretched, which often precedes at least a short-term bounce.";
+  } else if(sig.rsi > 75){
+    rsiPart = "RSI is running hot at "+sig.rsi+", deep into overbought territory — after a run like that, the odds of a pullback start rising.";
+  } else {
+    rsiPart = "RSI is sitting in neutral ground at "+sig.rsi+" — momentum isn't strongly pushing this one way or the other right now.";
+  }
+  var closer;
+  if(sig.signal==='BUY') closer = "Combined with the trend below, that's enough to lean BUY here.";
+  else if(sig.signal==='SELL') closer = "Combined with the trend below, that's tilting this toward SELL.";
+  else closer = "Combined with the trend below, that's not quite enough conviction either way — so it's landing on HOLD for now.";
+  return rsiPart + ' ' + closer;
+}
+
+function tpTrendNarrative(sig){
+  if(sig.trend==='BULL'){
+    return "SMA20 has pulled "+sig.trendGapPct.toFixed(2)+"% above SMA50 — a real, sustained gap rather than noise, which is what a genuine short-term uptrend looks like.";
+  }
+  if(sig.trend==='BEAR'){
+    return "SMA20 has slipped "+Math.abs(sig.trendGapPct).toFixed(2)+"% below SMA50 — enough separation to call this a real downtrend, not just a wobble.";
+  }
+  return "SMA20 and SMA50 are sitting close together right now, within the "+TREND_BUFFER_PCT+"% buffer — too tight to call a clear trend either way, so this is more of a wait-and-see zone.";
 }
 
 const TP_TF_DAYS = {'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':730};
@@ -5040,10 +5134,25 @@ async function tpRenderAll(sym){
   chgEl.textContent = (chg>=0?'+':'') + chg.toFixed(2) + ' (' + (chgPct>=0?'+':'') + chgPct.toFixed(2) + '%)';
   chgEl.className = 'tp-price-chg ' + (chg>=0?'up':'down');
 
+  const trendArrow = sig.trend==='BULL' ? '\u25B2' : sig.trend==='BEAR' ? '\u25BC' : '\u2014';
+  document.getElementById('tp-trend-wrap').innerHTML =
+    '<div class="tp-trend-badge ' + sig.trend + '">' + trendArrow + ' ' + sig.trend + '</div>';
+
   document.getElementById('tp-badge-wrap').innerHTML =
     '<div class="tp-signal-badge ' + sig.signal + '">' + sig.signal + '</div>';
 
   tpUpdateRangeAndStats(refSeries, sig);
+
+  // Conversational one-paragraph explanations. Full bullet-list detail
+  // stays in the Signal Breakdown card further down.
+  const signalTagEl = document.getElementById('tp-summary-signal-tag');
+  signalTagEl.textContent = sig.signal;
+  signalTagEl.className = 'tp-summary-tag ' + sig.signal;
+  document.getElementById('tp-summary-signal-text').textContent = tpSignalNarrative(sig);
+  const trendTagEl = document.getElementById('tp-summary-trend-tag');
+  trendTagEl.textContent = sig.trend;
+  trendTagEl.className = 'tp-summary-tag ' + sig.trend;
+  document.getElementById('tp-summary-trend-text').textContent = tpTrendNarrative(sig);
 
   document.getElementById('tp-reasons-list').innerHTML = sig.reasons.map(function(r){
     return '<div class="tp-reason">' + r + '</div>';
