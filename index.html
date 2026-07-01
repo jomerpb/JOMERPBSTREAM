@@ -4254,6 +4254,11 @@ async function pcsoAIFetch(){
 #trade-page .tp-opt{padding:8px 12px;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:5px;line-height:1.3;}
 #trade-page .tp-opt:active,#trade-page .tp-opt:hover{background:var(--surface);}
 #trade-page .tp-opt-star{color:#3b82f6;font-size:11px;flex-shrink:0;}
+#trade-page .tp-opt-price{color:#3b82f6;font-size:11.5px;font-weight:700;margin-left:auto;flex-shrink:0;white-space:nowrap;}
+#trade-page .tp-opt-arrow{font-size:11px;margin-left:3px;flex-shrink:0;}
+#trade-page .tp-opt-arrow.up{color:var(--green);}
+#trade-page .tp-opt-arrow.down{color:var(--red);}
+#trade-page .tp-opt-arrow.flat{color:var(--muted);}
 #trade-page .tp-opt-empty{padding:14px 12px;font-size:12px;color:var(--muted);text-align:center;}
 #trade-page .tp-price-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;}
 #trade-page .tp-price-row{display:flex;align-items:center;justify-content:space-between;margin-top:4px;}
@@ -4752,6 +4757,11 @@ var PSE_HISTORY_READY = (async function loadPseHistory(){
       ? 'Live PSE data, refreshed periodically during trading hours via PSE Edge. Historical daily bars — not tick-by-tick real-time. Signals are for decision support only; verify current prices with your broker before trading. Not financial advice.'
       : 'Demo data only — not live PSE prices. Signals are for structural preview of the analysis engine; real market data integration is a separate phase. Not financial advice.';
   }
+  var ddElBlue = document.getElementById('tp-dropdown');
+  var searchElBlue = document.getElementById('tp-stock-search');
+  if(ddElBlue && ddElBlue.classList.contains('open')){
+    tpRenderDropdown(searchElBlue ? searchElBlue.value : '');
+  }
 })();
 
 // Unified series getter: live data when available and fresh, mock fallback otherwise.
@@ -4763,6 +4773,61 @@ function tpGetSeries(sym, days){
   var t = tpFindStock(sym);
   var base = t ? t.base : 100;
   return tpGenSeries(base, days, tpSeed(sym+'-pse-demo'));
+}
+
+// ══════════════════════════
+// FULL-MARKET LIVE DATA LOADER
+// Same pattern as the blue-chip loader above, but for pse-full-history.json
+// (all ~283 PSE-listed tickers, produced by the once-daily sharded scraper).
+// Blue-chip tickers already have their own 15-min-fresh data via
+// tpLiveSeries above and take priority; this is purely for the picklist
+// price/arrow on the ~275 non-blue-chip stocks that otherwise have none.
+// ══════════════════════════
+var tpLiveSeriesAll = {};
+var PSE_FULL_HISTORY_STATUS = {loaded:false, tickerCount:0, error:null};
+var PSE_FULL_HISTORY_READY = (async function loadPseFullHistory(){
+  var RAW_URL = 'https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pse-full-history.json';
+  try {
+    var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    if (!data.tickers) throw new Error('Malformed pse-full-history.json: missing tickers');
+    var loadedCount = 0;
+    for (var sym in data.tickers) {
+      var entry = data.tickers[sym];
+      if (Array.isArray(entry.series) && entry.series.length) {
+        tpLiveSeriesAll[sym] = entry.series.map(function(d){
+          return {date:d.date, open:d.open, high:d.high, low:d.low, close:d.close, volume:d.value||0};
+        });
+        loadedCount++;
+      }
+    }
+    PSE_FULL_HISTORY_STATUS = {loaded: loadedCount>0, tickerCount: loadedCount, error: null};
+    console.log('PSE full-market history loaded:', loadedCount, 'tickers');
+  } catch(e) {
+    PSE_FULL_HISTORY_STATUS = {loaded:false, tickerCount:0, error:e.message};
+    console.warn('PSE full-market history load failed:', e.message);
+  }
+  // If the picklist is already open when this resolves, refresh it in
+  // place so prices/arrows appear without the user needing to retype.
+  var ddEl = document.getElementById('tp-dropdown');
+  var searchEl = document.getElementById('tp-stock-search');
+  if(ddEl && ddEl.classList.contains('open')){
+    tpRenderDropdown(searchEl ? searchEl.value : '');
+  }
+})();
+
+// Returns {current, previous, direction} for the picklist price/arrow, or
+// null if no live data exists for this symbol yet (blue-chip data takes
+// priority since it's fresher; full-market data is the fallback).
+// direction: 'up' | 'down' | 'flat' | null (null if only one data point exists)
+function tpGetPicklistPrice(sym){
+  var series = tpLiveSeries[sym] || tpLiveSeriesAll[sym];
+  if (!Array.isArray(series) || series.length === 0) return null;
+  var current = series[series.length-1].close;
+  var previous = series.length >= 2 ? series[series.length-2].close : null;
+  var direction = previous == null ? null : (current > previous ? 'up' : (current < previous ? 'down' : 'flat'));
+  return {current: current, previous: previous, direction: direction};
 }
 
 function tpGenSeries(base, days, seed){
@@ -5173,8 +5238,16 @@ const TP_OTHER_LIST = PSE_ALL_STOCKS.filter(function(t){ return BLUE_CHIP_SYMS.i
 
 function tpOptRow(t, isBlue){
   const star = isBlue ? '<span class="tp-opt-star">\u2605</span>' : '';
+  const priceInfo = tpGetPicklistPrice(t.sym);
+  let priceHtml = '';
+  if(priceInfo){
+    const arrowChar = priceInfo.direction==='up' ? '\u25B2' : priceInfo.direction==='down' ? '\u25BC' : '\u2014';
+    const arrowClass = priceInfo.direction || 'flat';
+    priceHtml = '<span class="tp-opt-price">\u20b1'+priceInfo.current.toFixed(2)+'</span>'+
+                '<span class="tp-opt-arrow '+arrowClass+'">'+arrowChar+'</span>';
+  }
   return '<div class="tp-opt" data-sym="'+t.sym+'" onmousedown="tpChooseStock(\''+t.sym+'\')">'+
-         '<span>'+t.name+' ('+t.sym+')</span>'+star+'</div>';
+         '<span>'+t.name+' ('+t.sym+')</span>'+star+priceHtml+'</div>';
 }
 
 function tpRenderDropdown(query){
