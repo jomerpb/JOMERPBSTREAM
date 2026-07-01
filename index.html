@@ -4855,6 +4855,7 @@ var PSE_LIVE_QUOTES_READY = (async function loadPseLiveQuotes(){
     console.warn('PSE live quotes load failed:', e.message);
   }
   tpRenderTopGainers();
+  if (tpCurrentSym) tpRenderAll(tpCurrentSym);
 })();
 
 // Returns {current, previous, direction} for the picklist price/arrow, or
@@ -4862,6 +4863,11 @@ var PSE_LIVE_QUOTES_READY = (async function loadPseLiveQuotes(){
 // priority since it's fresher; full-market data is the fallback).
 // direction: 'up' | 'down' | 'flat' | null (null if only one data point exists)
 function tpGetPicklistPrice(sym){
+  var lq = tpLiveQuotes[sym];
+  if (lq && lq.status === 'Open' && lq.last != null && lq.previousClose) {
+    var dir = lq.last > lq.previousClose ? 'up' : (lq.last < lq.previousClose ? 'down' : 'flat');
+    return {current: lq.last, previous: lq.previousClose, direction: dir};
+  }
   var series = tpLiveSeries[sym] || tpLiveSeriesAll[sym];
   if (!Array.isArray(series) || series.length === 0) return null;
   var current = series[series.length-1].close;
@@ -5304,18 +5310,29 @@ function tpRenderCombinedChart(series){
   }
 }
 
-function tpUpdateRangeAndStats(refSeries, sig){
+function tpUpdateRangeAndStats(refSeries, sig, liveQuote){
+  // liveQuote (from pse-live-quotes.json) is same-day accurate; refSeries's
+  // last bar (from pse-full-history.json) can lag by up to a day. Prefer
+  // liveQuote for the fields it covers, fall back to refSeries otherwise —
+  // SMA20/SMA50 always come from refSeries since they need multi-day history
+  // that liveQuote (a single snapshot) doesn't have.
   const last = refSeries[refSeries.length-1];
-  document.getElementById('tp-range-low').textContent = last.low.toFixed(2);
-  document.getElementById('tp-range-high').textContent = last.high.toFixed(2);
-  const pct = Math.max(0, Math.min(100, ((last.close-last.low)/((last.high-last.low)||1))*100));
+  const open = (liveQuote && liveQuote.open != null) ? liveQuote.open : last.open;
+  const high = (liveQuote && liveQuote.high != null) ? liveQuote.high : last.high;
+  const low = (liveQuote && liveQuote.low != null) ? liveQuote.low : last.low;
+  const close = (liveQuote && liveQuote.last != null) ? liveQuote.last : last.close;
+  const volume = (liveQuote && liveQuote.volume != null) ? liveQuote.volume : last.volume;
+
+  document.getElementById('tp-range-low').textContent = low.toFixed(2);
+  document.getElementById('tp-range-high').textContent = high.toFixed(2);
+  const pct = Math.max(0, Math.min(100, ((close-low)/((high-low)||1))*100));
   document.getElementById('tp-range-marker').style.left = pct+'%';
   document.getElementById('tp-range-fill').style.width = pct+'%';
 
-  document.getElementById('tp-stat-open').textContent = '₱'+last.open.toFixed(2);
-  document.getElementById('tp-stat-high').textContent = '₱'+last.high.toFixed(2);
-  document.getElementById('tp-stat-low').textContent = '₱'+last.low.toFixed(2);
-  document.getElementById('tp-stat-vol').textContent = tpFmtPeso(last.volume*last.close) + '  ·  ' + tpFmtNum(last.volume) + ' shares';
+  document.getElementById('tp-stat-open').textContent = '₱'+open.toFixed(2);
+  document.getElementById('tp-stat-high').textContent = '₱'+high.toFixed(2);
+  document.getElementById('tp-stat-low').textContent = '₱'+low.toFixed(2);
+  document.getElementById('tp-stat-vol').textContent = tpFmtPeso(volume*close) + '  ·  ' + tpFmtNum(volume) + ' shares';
   document.getElementById('tp-stat-sma20').textContent = sig.sma20!==null ? '₱'+sig.sma20 : '—';
   document.getElementById('tp-stat-sma50').textContent = sig.sma50!==null ? '₱'+sig.sma50 : '—';
 }
@@ -5337,12 +5354,23 @@ async function tpRenderAll(sym){
   await PSE_HISTORY_READY;
   const refSeries = tpGetSeries(sym, 90);
   const sig = tpComputeSignal(refSeries);
-  const prev = refSeries[refSeries.length-2].close;
-  const chg = sig.price - prev;
+  const histPrev = refSeries[refSeries.length-2].close;
+
+  // pse-live-quotes.json is same-day accurate (validated against pesobility's
+  // live board — see Top Gainers), unlike refSeries's last bar which can lag
+  // by up to a day. Prefer it for the displayed price/change whenever it's
+  // available for this ticker; sig.trend/sig.signal/SMA still come from
+  // refSeries regardless, since those need multi-day history a snapshot
+  // can't provide.
+  const lq = tpLiveQuotes[sym];
+  const liveOk = lq && lq.status === 'Open' && lq.last != null && lq.previousClose;
+  const price = liveOk ? lq.last : sig.price;
+  const prev = liveOk ? lq.previousClose : histPrev;
+  const chg = price - prev;
   const chgPct = (chg/prev*100);
 
   document.getElementById('tp-name').textContent = t.sym + ' · ' + t.name;
-  document.getElementById('tp-price').textContent = '₱' + sig.price.toFixed(2);
+  document.getElementById('tp-price').textContent = '₱' + price.toFixed(2);
   const chgEl = document.getElementById('tp-chg');
   chgEl.textContent = (chg>=0?'+':'') + chg.toFixed(2) + ' (' + (chgPct>=0?'+':'') + chgPct.toFixed(2) + '%)';
   chgEl.className = 'tp-price-chg ' + (chg>=0?'up':'down');
@@ -5354,7 +5382,7 @@ async function tpRenderAll(sym){
   document.getElementById('tp-badge-wrap').innerHTML =
     '<div class="tp-signal-badge ' + sig.signal + '">' + sig.signal + '</div>';
 
-  tpUpdateRangeAndStats(refSeries, sig);
+  tpUpdateRangeAndStats(refSeries, sig, liveOk ? lq : null);
 
   // Conversational one-paragraph explanations. Full bullet-list detail
   // used to live in a Signal Breakdown card further down; that slot is
