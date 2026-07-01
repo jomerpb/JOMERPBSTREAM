@@ -210,7 +210,7 @@
 <!-- HOME PAGE -->
 <div id="home-page" class="page active">
   <div class="topbar">
-    <div class="topbar-logo" onclick="goHome()">JOMERPB <span>STREAM</span></div>
+    <div class="topbar-logo" onclick="goHome()">JOMERPB <span>- STREAM</span></div>
     <div class="topbar-search" style="position:relative;">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       <input type="text" id="home-search-input" placeholder="Anime, movies, TV series..."
@@ -629,6 +629,10 @@
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
     <span>Oracle</span><div class="nav-dot"></div>
   </div>
+  <div class="nav-item" id="nav-trade" onclick="navTo('trade')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="4" y2="12"/><line x1="10" y1="20" x2="10" y2="7"/><line x1="16" y1="20" x2="16" y2="14"/><line x1="21" y1="20" x2="21" y2="4"/></svg>
+    <span>Trade</span><div class="nav-dot"></div>
+  </div>
 </div>
 
 <script>
@@ -727,6 +731,7 @@ function navTo(tab) {
   if (tab === 'movies' && !document.getElementById('movies-grid').children.length) loadMovieSub('popular', document.querySelector('#movie-tabs .ctab'));
   if (tab === 'search') setTimeout(() => document.getElementById('search-input')?.focus(), 100);
   if (tab === 'home') loadHome();
+  if (tab === 'trade' && !tpCurrentSym) tpSelectTicker(BLUE_CHIP_SYMS[0]);
 }
 
 // Back/forward/gesture handler
@@ -740,7 +745,7 @@ window.addEventListener('popstate', async (e) => {
   const page = state.page;
   if (page !== 'player-page') document.getElementById('player-iframe').src = '';
   showPage(page);
-  const navMap = {'home-page':'home','anime-page':'anime','tv-page':'tv','movies-page':'movies','search-page':'search','oracle-page':'oracle'};
+  const navMap = {'home-page':'home','anime-page':'anime','tv-page':'tv','movies-page':'movies','search-page':'search','oracle-page':'oracle','trade-page':'trade'};
   if (navMap[page]) setNav(navMap[page]);
   if (page === 'detail-page' && state.item) await openDetail(state.item, true);
   if (page === 'player-page' && state.item) {
@@ -2123,12 +2128,13 @@ async function initFromHash() {
   }
 
   // Tab pages
-  const tabMap = {anime:'anime-page',tv:'tv-page',movies:'movies-page',search:'search-page',oracle:'oracle-page'};
+  const tabMap = {anime:'anime-page',tv:'tv-page',movies:'movies-page',search:'search-page',oracle:'oracle-page',trade:'trade-page'};
   if (tabMap[hash]) {
-    showPage(tabMap[hash]); setNav(hash); if(hash!=='oracle') loadHome();
+    showPage(tabMap[hash]); setNav(hash); if(hash!=='oracle' && hash!=='trade') loadHome();
     if(hash==='anime')  loadAnimeSub('trending',document.querySelector('#anime-tabs .ctab'));
     if(hash==='tv')     loadTVSub('popular','',document.querySelector('#tv-tabs .ctab'));
     if(hash==='movies') loadMovieSub('popular',document.querySelector('#movie-tabs .ctab'));
+    if(hash==='trade' && !tpCurrentSym) tpSelectTicker(BLUE_CHIP_SYMS[0]);
     return;
   }
 
@@ -4223,6 +4229,908 @@ async function pcsoAIFetch(){
 
 </script>
 </div>
+<!-- TRADE PAGE -->
+<div id="trade-page" class="page">
+<style>
+#trade-page{
+  --bg:#0a0a0f;--surface:#111119;--card:#18181f;--card2:#1f1f2a;
+  --border:#26262f;--text:#f1f5f9;--muted:#7a7a88;
+  --green:#22c55e;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;
+  background:var(--bg);min-height:100vh;padding-bottom:20px;
+}
+#trade-page .tp-inner{padding:12px 16px 24px;}
+#trade-page .tp-sub{font-size:11px;color:var(--muted);margin-bottom:14px;}
+#trade-page .tp-picklists{display:flex;gap:8px;margin-bottom:14px;position:relative;}
+#trade-page .tp-picklist-group{flex:1;min-width:0;width:100%;position:relative;}
+#trade-page .tp-picklist-label{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;}
+#trade-page .tp-combo-wrap{position:relative;}
+#trade-page .tp-combo-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 32px 10px 12px;border-radius:10px;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;box-sizing:border-box;}
+#trade-page .tp-combo-input::placeholder{color:var(--muted);font-weight:400;}
+#trade-page .tp-combo-input:focus{outline:none;border-color:var(--blue);}
+#trade-page .tp-combo-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;width:14px;height:14px;}
+#trade-page .tp-dropdown{display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--card2);border:1px solid var(--border);border-radius:10px;max-height:320px;overflow-y:auto;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,0.5);}
+#trade-page .tp-dropdown.open{display:block;}
+#trade-page .tp-optgroup-label{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:8px 12px 4px;position:sticky;top:0;background:var(--card2);}
+#trade-page .tp-opt{padding:8px 12px;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:5px;line-height:1.3;}
+#trade-page .tp-opt:active,#trade-page .tp-opt:hover{background:var(--surface);}
+#trade-page .tp-opt-star{color:#3b82f6;font-size:11px;flex-shrink:0;}
+#trade-page .tp-opt-empty{padding:14px 12px;font-size:12px;color:var(--muted);text-align:center;}
+#trade-page .tp-price-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;}
+#trade-page .tp-price-row{display:flex;align-items:center;justify-content:space-between;margin-top:4px;}
+#trade-page .tp-price-name{font-size:13px;color:var(--muted);font-weight:600;}
+#trade-page .tp-price-val{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:1px;color:var(--text);}
+#trade-page .tp-price-chg{font-size:13px;font-weight:700;margin-top:4px;}
+#trade-page .tp-price-chg.up{color:var(--green);}
+#trade-page .tp-price-chg.down{color:var(--red);}
+#trade-page .tp-signal-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1.5px;margin-top:10px;}
+#trade-page .tp-signal-badge.BUY{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid var(--green);}
+#trade-page .tp-signal-badge.SELL{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid var(--red);}
+#trade-page .tp-signal-badge.HOLD{background:rgba(245,158,11,0.15);color:var(--amber);border:1px solid var(--amber);}
+#trade-page .tp-range-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+#trade-page .tp-range-label{font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0;white-space:nowrap;}
+#trade-page .tp-range-label b{color:var(--text);font-weight:700;}
+#trade-page .tp-range-track{position:relative;flex:1;height:4px;background:var(--border);border-radius:4px;}
+#trade-page .tp-range-fill{position:absolute;top:0;left:0;height:100%;background:var(--blue);border-radius:4px;}
+#trade-page .tp-range-marker{position:absolute;top:50%;width:10px;height:10px;background:var(--text);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px var(--bg);}
+#trade-page .tp-timeframes{display:flex;gap:4px;margin-bottom:10px;}
+#trade-page .tp-tf-btn{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:700;padding:7px 0;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif;}
+#trade-page .tp-tf-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+#trade-page .tp-chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;}
+#trade-page .tp-chart-wrap canvas{width:100%;display:block;}
+#trade-page .tp-pane-label{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin:8px 0 2px;}
+#trade-page .tp-chart-dates{display:flex;justify-content:space-between;margin-top:4px;}
+#trade-page .tp-chart-dates span{font-size:9px;color:var(--muted);}
+#trade-page .tp-stats{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;}
+#trade-page .tp-stats-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+#trade-page .tp-stat-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:7px 0;border-bottom:1px solid var(--border);}
+#trade-page .tp-stat-row:last-child{border-bottom:none;}
+#trade-page .tp-stat-row span:first-child{color:var(--muted);font-weight:600;}
+#trade-page .tp-stat-row span:last-child{color:var(--text);font-weight:700;}
+#trade-page .tp-reasons{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+#trade-page .tp-reasons-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+#trade-page .tp-reason{font-size:12px;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border);}
+#trade-page .tp-reason:last-child{border-bottom:none;}
+#trade-page .tp-disclaimer{font-size:10px;color:var(--muted);margin-top:14px;line-height:1.5;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border);}
+</style>
+<div class="topbar">
+  <div class="topbar-logo">JOMERPB <span>- TRADE SIGNALS</span></div>
+</div>
+<div class="tp-inner">
+  <div class="tp-sub" id="tp-data-status">PSE technical analysis &middot; loading data source...</div>
+
+  <div class="tp-picklists">
+    <div class="tp-picklist-group">
+      <div class="tp-picklist-label">Select Stock</div>
+      <div class="tp-combo-wrap">
+        <input type="text" class="tp-combo-input" id="tp-stock-search" placeholder="Search by name or PSE code…" autocomplete="off"
+          oninput="tpFilterDropdown(this.value)" onfocus="tpOpenDropdown()">
+        <svg class="tp-combo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </div>
+      <div class="tp-dropdown" id="tp-dropdown"></div>
+    </div>
+  </div>
+
+  <div class="tp-price-card">
+    <div class="tp-price-name" id="tp-name">—</div>
+    <div class="tp-price-row">
+      <div class="tp-price-val" id="tp-price">₱0.00</div>
+      <div id="tp-badge-wrap"></div>
+    </div>
+    <div class="tp-price-chg" id="tp-chg">+0.00 (0.00%)</div>
+  </div>
+
+  <div class="tp-range-bar">
+    <div class="tp-range-label">Low <b id="tp-range-low">—</b></div>
+    <div class="tp-range-track"><div class="tp-range-fill" id="tp-range-fill"></div><div class="tp-range-marker" id="tp-range-marker"></div></div>
+    <div class="tp-range-label"><b id="tp-range-high">—</b> High</div>
+  </div>
+
+  <div class="tp-timeframes">
+    <button class="tp-tf-btn" data-tf="1D" onclick="tpSetTimeframe('1D')">1D</button>
+    <button class="tp-tf-btn" data-tf="1W" onclick="tpSetTimeframe('1W')">1W</button>
+    <button class="tp-tf-btn" data-tf="1M" onclick="tpSetTimeframe('1M')">1M</button>
+    <button class="tp-tf-btn active" data-tf="3M" onclick="tpSetTimeframe('3M')">3M</button>
+    <button class="tp-tf-btn" data-tf="6M" onclick="tpSetTimeframe('6M')">6M</button>
+    <button class="tp-tf-btn" data-tf="1Y" onclick="tpSetTimeframe('1Y')">1Y</button>
+    <button class="tp-tf-btn" data-tf="2Y" onclick="tpSetTimeframe('2Y')">2Y</button>
+  </div>
+
+  <div class="tp-chart-wrap">
+    <canvas id="tp-canvas-price" height="180"></canvas>
+    <div class="tp-pane-label">Volume</div>
+    <canvas id="tp-canvas-vol" height="54"></canvas>
+    <div class="tp-pane-label">RSI (14)</div>
+    <canvas id="tp-canvas-rsi" height="50"></canvas>
+    <div class="tp-chart-dates" id="tp-chart-dates"></div>
+  </div>
+
+  <div class="tp-stats">
+    <div class="tp-stats-title">Market Stats</div>
+    <div class="tp-stat-row"><span>Open</span><span id="tp-stat-open">—</span></div>
+    <div class="tp-stat-row"><span>High</span><span id="tp-stat-high">—</span></div>
+    <div class="tp-stat-row"><span>Low</span><span id="tp-stat-low">—</span></div>
+    <div class="tp-stat-row"><span>Volume</span><span id="tp-stat-vol">—</span></div>
+    <div class="tp-stat-row"><span>SMA 20</span><span id="tp-stat-sma20">—</span></div>
+    <div class="tp-stat-row"><span>SMA 50</span><span id="tp-stat-sma50">—</span></div>
+  </div>
+
+  <div class="tp-reasons">
+    <div class="tp-reasons-title">Signal breakdown</div>
+    <div id="tp-reasons-list"></div>
+  </div>
+
+  <div class="tp-disclaimer">Demo data only — not live PSE prices. Signals are for structural preview of the analysis engine; real market data integration is a separate phase. Not financial advice.</div>
+</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// TRADE (PSE) — MOCK DATA + SIGNAL ENGINE
+// ═══════════════════════════════════════════
+const PSE_ALL_STOCKS = [
+{sym:'MFC',name:'Manulife Financial Corporation',base:2300.0},
+{sym:'SLF',name:'Sun Life Financial Inc.',base:4500.0},
+{sym:'ICT',name:'International Container Terminal Services, Inc.',base:898.0},
+{sym:'SM',name:'SM Investments Corporation',base:585.0},
+{sym:'MER',name:'Manila Electric Company',base:574.0},
+{sym:'BDO',name:'BDO Unibank, Inc.',base:116.3},
+{sym:'SMPH',name:'SM Prime Holdings, Inc.',base:17.6},
+{sym:'BPI',name:'Bank of the Philippine Islands',base:90.8},
+{sym:'AP',name:'Aboitiz Power Corporation',base:44.0},
+{sym:'FB',name:'San Miguel Food and Beverage, Inc.',base:49.1},
+{sym:'VLC',name:'Villar Land Holdings Corp.',base:448.0},
+{sym:'MBT',name:'Metropolitan Bank & Trust Company',base:63.0},
+{sym:'GLO',name:'Globe Telecom, Inc.',base:1700.0},
+{sym:'EMI',name:'Emperador Inc.',base:15.42},
+{sym:'AC',name:'Ayala Corporation',base:386.0},
+{sym:'DTEL',name:'PLDT Inc.',base:10.26},
+{sym:'TEL',name:'PLDT Inc.',base:1083.0},
+{sym:'JGS',name:'JG Summit Holdings, Inc.',base:24.35},
+{sym:'ALI',name:'Ayala Land, Inc.',base:12.74},
+{sym:'AEV',name:'Aboitiz Equity Ventures, Inc.',base:31.5},
+{sym:'MYNLD',name:'Maynilad Water Services, Inc.',base:22.85},
+{sym:'SMC',name:'San Miguel Corporation',base:67.5},
+{sym:'LTG',name:'LT Group, Inc.',base:14.48},
+{sym:'SGP',name:'Synergy Grid & Development Phils., Inc.',base:29.5},
+{sym:'CBC',name:'China Banking Corporation',base:55.1},
+{sym:'JFC',name:'Jollibee Foods Corporation',base:128.0},
+{sym:'AREIT',name:'AREIT, Inc.',base:37.95},
+{sym:'RCR',name:'RL Commercial REIT, Inc.',base:6.83},
+{sym:'PGOLD',name:'Puregold Price Club, Inc.',base:45.9},
+{sym:'ACEN',name:'Acen Corporation',base:3.23},
+{sym:'MONDE',name:'Monde Nissin Corporation',base:7.0},
+{sym:'URC',name:'Universal Robina Corporation',base:55.9},
+{sym:'MWC',name:'Manila Water Company, Inc.',base:39.6},
+{sym:'DMC',name:'DMCI Holdings, Inc.',base:8.58},
+{sym:'SCC',name:'Semirara Mining and Power Corporation',base:26.3},
+{sym:'GTCAP',name:'GT Capital Holdings, Inc.',base:477.0},
+{sym:'CNPF',name:'Century Pacific Food, Inc.',base:26.8},
+{sym:'PTC',name:'Philippine Trust Company',base:90.0},
+{sym:'PNB',name:'Philippine National Bank',base:56.0},
+{sym:'UBP',name:'Union Bank of the Philippines',base:24.75},
+{sym:'PAL',name:'PAL Holdings, Inc.',base:3.0},
+{sym:'APX',name:'Apex Mining Co., Inc.',base:14.16},
+{sym:'RLC',name:'Robinsons Land Corporation',base:16.3},
+{sym:'GSMI',name:'Ginebra San Miguel Inc.',base:268.8},
+{sym:'CNVRG',name:'Converge Information and Communications Technology Solutions, Inc.',base:10.2},
+{sym:'OGP',name:'OceanaGold (Philippines) Inc.',base:31.3},
+{sym:'AGI',name:'Alliance Global Group, Inc.',base:8.0},
+{sym:'SPNEC',name:'SP New Energy Corporation',base:1.32},
+{sym:'MREIT',name:'MREIT, Inc.',base:13.62},
+{sym:'AUB',name:'Asia United Bank Corporation',base:43.95},
+{sym:'MEG',name:'Megaworld Corporation',base:1.97},
+{sym:'NIKL',name:'Nickel Asia Corporation',base:4.5},
+{sym:'RCB',name:'Rizal Commercial Banking Corporation',base:23.4},
+{sym:'COSCO',name:'Cosco Capital, Inc.',base:7.94},
+{sym:'FGEN',name:'First Gen Corporation',base:15.4},
+{sym:'CREC',name:'Citicore Renewable Energy Corporation',base:4.59},
+{sym:'RRHI',name:'Robinsons Retail Holdings, Inc.',base:46.55},
+{sym:'SEVN',name:'Philippine Seven Corporation',base:32.75},
+{sym:'PLUS',name:'DigiPlus Interactive Corp.',base:10.64},
+{sym:'SECB',name:'Security Bank Corporation',base:62.2},
+{sym:'PX',name:'Philex Mining Corporation',base:7.67},
+{sym:'BCOR',name:'Berjaya Philippines Inc.',base:9.5},
+{sym:'FDC',name:'Filinvest Development Corporation',base:4.35},
+{sym:'FPH',name:'First Philippine Holdings Corporation',base:77.05},
+{sym:'PPC',name:'Pryce Corporation',base:15.0},
+{sym:'DD',name:'DoubleDragon Corporation',base:11.9},
+{sym:'EW',name:'East West Banking Corporation',base:12.28},
+{sym:'KEEPR',name:'The Keepers Holdings, Inc.',base:1.86},
+{sym:'AT',name:'Atlas Consolidated Mining and Development Corporation',base:7.35},
+{sym:'DNL',name:'D&L Industries, Inc.',base:3.64},
+{sym:'PSB',name:'Philippine Savings Bank',base:53.0},
+{sym:'WLCON',name:'Wilcon Depot, Inc.',base:5.45},
+{sym:'CREIT',name:'Citicore Energy REIT Corp.',base:3.41},
+{sym:'VVT',name:'Vivant Corporation',base:20.6},
+{sym:'ANS',name:'A. Soriano Corporation',base:16.6},
+{sym:'FEU',name:'Far Eastern University, Incorporated',base:829.5},
+{sym:'TFHI',name:'Top Frontier Investment Holdings, Inc.',base:52.5},
+{sym:'PCOR',name:'Petron Corporation',base:2.15},
+{sym:'BLOOM',name:'Bloomberry Resorts Corporation',base:1.65},
+{sym:'FILRT',name:'Filinvest REIT Corp.',base:2.9},
+{sym:'DDMPR',name:'DDMP REIT Inc.',base:1.05},
+{sym:'RFM',name:'RFM Corporation',base:5.5},
+{sym:'CEB',name:'Cebu Air, Inc.',base:29.35},
+{sym:'PSE',name:'The Philippine Stock Exchange, Inc.',base:211.0},
+{sym:'DMW',name:'D.M. Wenceslao & Associates, Incorporated',base:4.85},
+{sym:'GMAP',name:'GMA Holdings, Inc.',base:4.86},
+{sym:'GMA7',name:'GMA Network, Inc.',base:4.82},
+{sym:'SPC',name:'SPC Power Corporation',base:10.8},
+{sym:'SLI',name:'Sta. Lucia Land, Inc.',base:1.92},
+{sym:'DITO',name:'DITO CME Holdings Corp.',base:0.71},
+{sym:'FLI',name:'Filinvest Land, Inc.',base:0.68},
+{sym:'WEB',name:'PhilWeb Corporation',base:11.78},
+{sym:'BNCOM',name:'Bank of Commerce',base:10.52},
+{sym:'TOP',name:'Top Line Business Development Corp.',base:1.37},
+{sym:'SHNG',name:'Shang Properties, Inc.',base:3.07},
+{sym:'SHLPH',name:'Shell Pilipinas Corporation',base:9.05},
+{sym:'LPZ',name:'Lopez Holdings Corporation',base:3.8},
+{sym:'ROCK',name:'Rockwell Land Corporation',base:2.19},
+{sym:'DHI',name:'Dominion Holdings, Inc.',base:6.02},
+{sym:'STI',name:'STI Education Systems Holdings, Inc.',base:1.26},
+{sym:'VLL',name:'Vista Land & Lifescapes, Inc.',base:0.96},
+{sym:'BEL',name:'Belle Corporation',base:1.21},
+{sym:'LC',name:'Lepanto Consolidated Mining Company',base:0.19},
+{sym:'LCB',name:'Lepanto Consolidated Mining Company',base:0.179},
+{sym:'FNI',name:'Global Ferronickel Holdings, Inc.',base:2.24},
+{sym:'VMC',name:'Victorias Milling Company, Inc.',base:1.9},
+{sym:'CHP',name:'Concreat Holdings Philippines, Inc.',base:0.81},
+{sym:'PIZZA',name:'Shakey\'s Pizza Asia Ventures, Inc.',base:6.05},
+{sym:'VREIT',name:'VistaREIT, Inc.',base:1.31},
+{sym:'AXLM',name:'Axelum Resources Corp.',base:2.61},
+{sym:'LBC',name:'LBC Express Holdings, Inc.',base:6.06},
+{sym:'STR',name:'Vistamalls, Inc.',base:1.02},
+{sym:'UNH',name:'Uniholdings Inc.',base:117.9},
+{sym:'DELM',name:'Del Monte Pacific Limited',base:4.5},
+{sym:'COL',name:'COL Financial Group, Inc.',base:1.3},
+{sym:'MACAY',name:'Macay Holdings, Inc.',base:5.97},
+{sym:'PBC',name:'Philippine Bank of Communications',base:16.0},
+{sym:'CLI',name:'Cebu Landmasters, Inc.',base:2.19},
+{sym:'CPG',name:'Century Properties Group, Inc.',base:0.64},
+{sym:'CEU',name:'Centro Escolar University',base:16.5},
+{sym:'SSI',name:'SSI Group, Inc.',base:2.24},
+{sym:'IMI',name:'Integrated Micro-Electronics, Inc.',base:3.25},
+{sym:'MAC',name:'MacroAsia Corporation',base:3.81},
+{sym:'ABG',name:'Asiabest Group International Inc.',base:24.0},
+{sym:'RCI',name:'Roxas and Company, Inc.',base:2.53},
+{sym:'IPO',name:'iPeople, inc.',base:6.7},
+{sym:'MWIDE',name:'Megawide Construction Corporation',base:3.39},
+{sym:'ALLHC',name:'AyalaLand Logistics Holdings Corp.',base:1.09},
+{sym:'GERI',name:'Global-Estate Resorts, Inc.',base:0.59},
+{sym:'HI',name:'House of Investments, Inc.',base:4.45},
+{sym:'CPM',name:'Century Peak Holdings Corporation',base:2.16},
+{sym:'PBB',name:'Philippine Business Bank, Inc.',base:7.41},
+{sym:'SBS',name:'SBS Philippines Corporation',base:3.2},
+{sym:'PNX',name:'P-H-O-E-N-I-X Petroleum Philippines, Inc.',base:4.17},
+{sym:'PXP',name:'PXP Energy Corporation',base:2.36},
+{sym:'CIC',name:'Concepcion Industrial Corporation',base:12.36},
+{sym:'REDC',name:'Repower Energy Development Corporation',base:7.45},
+{sym:'ALHI',name:'Anchor Land Holdings, Inc.',base:4.5},
+{sym:'AB',name:'Atok-Big Wedge Co., Inc.',base:1.78},
+{sym:'PHN',name:'PHINMA Corporation',base:13.26},
+{sym:'LFM',name:'Liberty Flour Mills, Inc.',base:29.7},
+{sym:'BC',name:'Benguet Corporation',base:6.2},
+{sym:'BCB',name:'Benguet Corporation',base:6.26},
+{sym:'EURO',name:'Euro-Med Laboratories Phil., Inc.',base:1.07},
+{sym:'ACR',name:'Alsons Consolidated Resources, Inc.',base:0.67},
+{sym:'XG',name:'NexGen Energy Corp.',base:2.75},
+{sym:'PREIT',name:'Premiere Island Power Reit Corporation',base:1.18},
+{sym:'V',name:'Vantage Equities, Inc.',base:0.87},
+{sym:'PMPC',name:'Panasonic Manufacturing Philippines Corporation',base:8.42},
+{sym:'MRSGI',name:'Metro Retail Stores Group, Inc.',base:1.1},
+{sym:'HTI',name:'Haus Talk, Inc.',base:1.4},
+{sym:'MVC',name:'Mabuhay Vinyl Corporation',base:5.2},
+{sym:'MM',name:'MerryMart Consumer Corp.',base:0.435},
+{sym:'ALTER',name:'Alternergy Holdings Corporation',base:0.81},
+{sym:'SUN',name:'Suntrust Resort Holdings, Inc.',base:0.425},
+{sym:'CDC',name:'Cityland Development Corporation',base:0.6},
+{sym:'FCG',name:'Figaro Culinary Group, Inc.',base:0.54},
+{sym:'STN',name:'Steniel Manufacturing Corporation',base:1.87},
+{sym:'ATN',name:'ATN Holdings, Inc.',base:0.415},
+{sym:'ATNB',name:'ATN Holdings, Inc.',base:0.415},
+{sym:'APO',name:'Anglo Philippine Holdings Corporation',base:0.92},
+{sym:'PRC',name:'Philippine Racing Club, Inc.',base:5.0},
+{sym:'OPM',name:'Oriental Petroleum and Minerals Corporation',base:0.014},
+{sym:'OPMB',name:'Oriental Petroleum and Minerals Corporation',base:0.013},
+{sym:'SGI',name:'Solid Group Inc.',base:1.35},
+{sym:'CTS',name:'CTS Global Equity Group, Inc.',base:0.355},
+{sym:'CSB',name:'Citystate Savings Bank, Inc.',base:14.8},
+{sym:'CAT',name:'Central Azucarera de Tarlac, Inc.',base:9.98},
+{sym:'REG',name:'Republic Glass Holdings Corporation',base:3.32},
+{sym:'ALCO',name:'Arthaland Corporation',base:0.425},
+{sym:'ROX',name:'Roxas Holdings, Inc.',base:1.45},
+{sym:'MBC',name:'Manila Broadcasting Company',base:5.53},
+{sym:'MA',name:'Manila Mining Corporation',base:0.0071},
+{sym:'MAB',name:'Manila Mining Corporation',base:0.0072},
+{sym:'UPSON',name:'Upson International Corp.',base:0.7},
+{sym:'PRMX',name:'Primex Corporation',base:0.92},
+{sym:'PERC',name:'PetroEnergy Resources Corporation',base:3.62},
+{sym:'NRCP',name:'National Reinsurance Corporation of the Philippines',base:0.94},
+{sym:'ABS',name:'ABS-CBN Corporation',base:2.16},
+{sym:'INFRA',name:'Philippine Infradev Holdings Inc.',base:0.32},
+{sym:'MARC',name:'Marcventures Holdings, Inc.',base:0.64},
+{sym:'EEI',name:'EEI Corporation',base:1.84},
+{sym:'APL',name:'Apollo Global Capital, Inc.',base:0.0063},
+{sym:'UPM',name:'United Paragon Mining Corporation',base:0.0068},
+{sym:'ECVC',name:'East Coast Vulcan Mining Corporation',base:0.26},
+{sym:'MAXS',name:'Max\'s Group, Inc.',base:2.19},
+{sym:'PAX',name:'Paxys, Inc.',base:2.1},
+{sym:'OV',name:'The Philodrill Corporation',base:0.0087},
+{sym:'BSC',name:'Basic Energy Corporation',base:0.111},
+{sym:'PHC',name:'Philcomsat Holdings Corporation',base:1.6},
+{sym:'TFC',name:'PTFC Redevelopment Corporation',base:45.0},
+{sym:'BRN',name:'A Brown Company, Inc.',base:0.67},
+{sym:'VITA',name:'Vitarich Corporation',base:0.5},
+{sym:'IPM',name:'IPM Holdings, Inc.',base:2.18},
+{sym:'CA',name:'Concrete Aggregates Corporation',base:53.2},
+{sym:'CAB',name:'Concrete Aggregates Corporation',base:54.8},
+{sym:'ELI',name:'Empire East Land Holdings, Inc.',base:0.1},
+{sym:'LOTO',name:'Pacific Online Systems Corporation',base:1.79},
+{sym:'ASLAG',name:'Raslag Corp.',base:0.94},
+{sym:'C',name:'Chelsea Logistics and Infrastructure Holdings Corp.',base:0.61},
+{sym:'ABA',name:'AbaCore Capital Holdings, Inc.',base:0.305},
+{sym:'FRUIT',name:'Fruitas Holdings, Inc.',base:0.65},
+{sym:'PHR',name:'PH Resorts Group Holdings, Inc.',base:0.187},
+{sym:'PHES',name:'Philippine Estates Corporation',base:0.43},
+{sym:'CEI',name:'Crown Equities, Inc.',base:0.082},
+{sym:'WPI',name:'Waterfront Philippines, Incorporated',base:0.49},
+{sym:'ORE',name:'Oriental Peninsula Resources Group, Inc.',base:0.425},
+{sym:'MRC',name:'MRC Allied, Inc.',base:0.76},
+{sym:'JOH',name:'Jolliville Holdings Corporation',base:3.98},
+{sym:'COAL',name:'Tubig Pilipinas Holdings Inc.',base:0.028},
+{sym:'NOW',name:'NOW Corporation',base:0.61},
+{sym:'CROWN',name:'Crown Asia Chemicals Corporation',base:1.75},
+{sym:'APVI',name:'Altus Property Ventures, Inc.',base:10.2},
+{sym:'SRDC',name:'Supercity Realty Development Corporation',base:9.0},
+{sym:'WIN',name:'Wellex Industries, Incorporated',base:0.29},
+{sym:'FJP',name:'F & J Prince Holdings Corporation',base:2.3},
+{sym:'FJPB',name:'F & J Prince Holdings Corporation',base:2.62},
+{sym:'RLT',name:'Philippine Realty and Holdings Corporation',base:0.099},
+{sym:'HOME',name:'AllHome Corp.',base:0.24},
+{sym:'LODE',name:'Lodestar Investment Holdings Corporation',base:0.3},
+{sym:'FERRO',name:'Ferronoux Holdings, Inc.',base:2.6},
+{sym:'ION',name:'Ionics, Inc.',base:1.06},
+{sym:'BKR',name:'Bright Kindle Resources & Investments, Inc.',base:0.57},
+{sym:'FOOD',name:'Alliance Select Foods International, Inc.',base:0.34},
+{sym:'PHA',name:'Premiere Horizon Alliance Corporation',base:0.142},
+{sym:'ALLDY',name:'AllDay Marts, Inc.',base:0.035},
+{sym:'KEP',name:'Keppel Philippines Properties, Inc.',base:2.69},
+{sym:'TUGS',name:'Harbor Star Shipping Services, Inc.',base:0.87},
+{sym:'EGRN',name:'Everwoods Green Resources and Holdings, Inc.',base:0.031},
+{sym:'LAND',name:'City & Land Developers, Incorporated',base:0.485},
+{sym:'ENEX',name:'ENEX Energy Corp.',base:3.06},
+{sym:'LPC',name:'LFM Properties Corporation',base:0.03},
+{sym:'DWC',name:'Discovery World Corporation',base:0.86},
+{sym:'APC',name:'APC Group, Inc.',base:0.096},
+{sym:'PRIM',name:'Prime Media Holdings, Inc.',base:0.74},
+{sym:'GREEN',name:'Greenergy Holdings Incorporated',base:0.16},
+{sym:'MB',name:'Manila Bulletin Publishing Corporation',base:0.19},
+{sym:'FAF',name:'First Abacus Financial Holdings Corporation',base:0.63},
+{sym:'IMP',name:'Imperial Resources, Incorporated',base:0.94},
+{sym:'FYN',name:'Filsyn Corporation',base:2.9},
+{sym:'FYNB',name:'Filsyn Corporation',base:5.0},
+{sym:'LSC',name:'Lorenzo Shipping Corporation',base:0.61},
+{sym:'X',name:'Xurpas Inc.',base:0.23},
+{sym:'IS',name:'Island Information & Technology, Inc.',base:0.114},
+{sym:'MEDIC',name:'Medilines Distributors Incorporated',base:0.2},
+{sym:'MFIN',name:'Makati Finance Corporation',base:1.92},
+{sym:'ACE',name:'Acesite (Phils.) Hotel Corporation',base:1.51},
+{sym:'ARA',name:'Araneta Properties, Inc.',base:0.26},
+{sym:'T',name:'Tiger World Holdings Corporation',base:0.3},
+{sym:'JAS',name:'Jackstones, Inc.',base:2.01},
+{sym:'NI',name:'NiHAO Mineral Resources International, Inc.',base:0.49},
+{sym:'BALAI',name:'Balai Ni Fruitas, Inc.',base:0.33},
+{sym:'ANI',name:'AgriNurture, Inc.',base:0.48},
+{sym:'LMG',name:'LMG Corp.',base:0.25},
+{sym:'TBGI',name:'Transpacific Broadband Group International, Inc.',base:0.117},
+{sym:'IDC',name:'Italpinas Development Corporation',base:0.58},
+{sym:'BHI',name:'Boulevard Holdings, Inc.',base:0.028},
+{sym:'TECH',name:'Cirtek Holdings Philippines Corporation',base:0.57},
+{sym:'ECP',name:'Easycall Communications Philippines, Inc.',base:2.28},
+{sym:'BH',name:'BHI Holdings, Inc.',base:680.0},
+{sym:'GPH',name:'Grand Plaza Hotel Corporation',base:6.01},
+{sym:'FPI',name:'Forum Pacific, Inc.',base:0.275},
+{sym:'SPM',name:'Seafront Resources Corporation',base:2.38},
+{sym:'DFNN',name:'DFNN, Inc.',base:0.76},
+{sym:'MED',name:'Medco Holdings, Inc.',base:0.089},
+{sym:'GEO',name:'GEOGRACE Resources Philippines, Inc.',base:0.079},
+{sym:'KPPI',name:'Kepwealth Property Phils., Inc.',base:1.28},
+{sym:'DIZ',name:'Dizon Copper-Silver Mines, Inc.',base:3.25},
+{sym:'PA',name:'Pacifica Holdings, Inc.',base:0.77},
+{sym:'MAH',name:'Metro Alliance Holdings & Equities Corp.',base:0.405},
+{sym:'MAHB',name:'Metro Alliance Holdings & Equities Corp.',base:1.21},
+{sym:'SOC',name:'SOCResources, Inc.',base:0.209},
+{sym:'ABSP',name:'ABS-CBN Holdings Corporation',base:2.03},
+{sym:'MG',name:'Millennium Global Holdings, Inc.',base:0.066},
+{sym:'ZHI',name:'Zeus Holdings, Inc.',base:0.055},
+{sym:'I',name:'I-Remit, Inc.',base:0.199},
+{sym:'OM',name:'Omico Corporation',base:0.102},
+{sym:'SFI',name:'Swift Foods, Inc.',base:0.053},
+{sym:'MHC',name:'Mabuhay Holdings Corporation',base:0.105}
+];
+const BLUE_CHIP_SYMS = ['JFC','SM','ALI','BDO','TEL','ICT','URC','MER'];
+let tpCurrentSym = null;
+
+function tpSeed(str){
+  let seed=0;
+  for(let i=0;i<str.length;i++) seed=(seed*31+str.charCodeAt(i))>>>0;
+  return seed;
+}
+function tpRand(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+// ══════════════════════════
+// LIVE PSE HISTORY LOADER
+// Fetches pse-history.json (produced by the GitHub Actions scraper hitting
+// PSE Edge's DisclosureCht.ax endpoint every 15min during trading hours)
+// and populates tpLiveSeries per ticker. If the fetch fails, the ticker is
+// missing from the file, or the data is stale (>3 days old), tpGetSeries()
+// below falls back to the seeded mock generator — the Trade tab always has
+// *something* to render, it just may not be live.
+//
+// Note: the scraper's 'value' field is peso turnover (₱), not share volume —
+// PSE Edge's DisclosureCht.ax endpoint doesn't expose share count. It's
+// mapped into the 'volume' key here for compatibility with the existing
+// stats table, but represents traded value, not share quantity.
+// ══════════════════════════
+var tpLiveSeries = {};
+var PSE_HISTORY_STATUS = {loaded:false, source:'mock (demo) data', error:null};
+var PSE_HISTORY_READY = (async function loadPseHistory(){
+  var RAW_URL = 'https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pse-history.json';
+  try {
+    var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    if (!data.tickers) throw new Error('Malformed pse-history.json: missing tickers');
+    var loadedCount = 0;
+    for (var sym in data.tickers) {
+      var entry = data.tickers[sym];
+      if (Array.isArray(entry.series) && entry.series.length) {
+        tpLiveSeries[sym] = entry.series.map(function(d){
+          return {date:d.date, open:d.open, high:d.high, low:d.low, close:d.close, volume:d.value||0};
+        });
+        loadedCount++;
+      }
+    }
+    var stale = false;
+    var ageMs = null;
+    if (data.generatedAt) {
+      ageMs = Date.now() - new Date(data.generatedAt).getTime();
+      stale = ageMs > 1000*60*60*24*3; // >3 days without an update = don't trust it blindly
+    }
+    PSE_HISTORY_STATUS = {
+      loaded: loadedCount>0 && !stale,
+      source: loadedCount>0 ? ('live ('+loadedCount+' tickers, updated '+(data.generatedAt||'unknown')+')') : 'mock (demo) data',
+      error: stale ? 'data is stale (>3 days old)' : null
+    };
+    console.log('PSE history loaded:', PSE_HISTORY_STATUS.source, PSE_HISTORY_STATUS.error||'');
+  } catch(e) {
+    PSE_HISTORY_STATUS = {loaded:false, source:'mock (demo) data', error:e.message};
+    console.warn('PSE history load failed, using mock data:', e.message);
+  }
+  var statusEl = document.getElementById('tp-data-status');
+  if(statusEl){
+    statusEl.textContent = 'PSE technical analysis \u00b7 ' +
+      (PSE_HISTORY_STATUS.loaded ? PSE_HISTORY_STATUS.source : 'mock data (demo mode)' + (PSE_HISTORY_STATUS.error ? ' — '+PSE_HISTORY_STATUS.error : ''));
+  }
+})();
+
+// Unified series getter: live data when available and fresh, mock fallback otherwise.
+function tpGetSeries(sym, days){
+  var live = tpLiveSeries[sym];
+  if (Array.isArray(live) && live.length && !PSE_HISTORY_STATUS.error) {
+    return live.slice(Math.max(0, live.length - (days+1)));
+  }
+  var t = tpFindStock(sym);
+  var base = t ? t.base : 100;
+  return tpGenSeries(base, days, tpSeed(sym+'-pse-demo'));
+}
+
+function tpGenSeries(base, days, seed){
+  const rnd = tpRand(seed);
+  let price = base;
+  const out = [];
+  const today = new Date();
+  for(let i=days;i>=0;i--){
+    const drift = (rnd()-0.5) * base * 0.025;
+    const open = price;
+    const close = Math.max(0.01, open + drift);
+    const high = Math.max(open, close) + rnd()*base*0.008;
+    const low  = Math.min(open, close) - rnd()*base*0.008;
+    const vol  = Math.floor(500000 + rnd()*4500000);
+    const d = new Date(today); d.setDate(d.getDate()-i);
+    out.push({date:d.toISOString().slice(0,10), open:+open.toFixed(2), high:+high.toFixed(2), low:+Math.max(0.01,low).toFixed(2), close:+close.toFixed(2), volume:vol});
+    price = close;
+  }
+  return out;
+}
+function tpSMA(closes, period, endIdx){
+  if(endIdx+1 < period) return null;
+  let sum=0;
+  for(let i=endIdx-period+1;i<=endIdx;i++) sum+=closes[i];
+  return sum/period;
+}
+function tpRSI(closes, period){
+  if(closes.length < period+1) return null;
+  let gains=0, losses=0;
+  for(let i=closes.length-period;i<closes.length;i++){
+    const diff = closes[i]-closes[i-1];
+    if(diff>=0) gains+=diff; else losses-=diff;
+  }
+  const avgGain=gains/period, avgLoss=losses/period;
+  if(avgLoss===0) return 100;
+  const rs=avgGain/avgLoss;
+  return +(100-(100/(1+rs))).toFixed(2);
+}
+function tpComputeSignal(series){
+  const closes = series.map(d=>d.close);
+  const lastIdx = closes.length-1;
+  const r = tpRSI(closes,14);
+  const sma20 = tpSMA(closes,20,lastIdx);
+  const sma50 = tpSMA(closes,50,lastIdx);
+  const price = closes[lastIdx];
+  let score = 0;
+  let reasons = [];
+  if(r!==null){
+    if(r<30){score+=2;reasons.push('RSI oversold ('+r+') — potential bounce zone');}
+    else if(r>70){score-=2;reasons.push('RSI overbought ('+r+') — potential pullback risk');}
+    else reasons.push('RSI neutral ('+r+')');
+  }
+  if(sma20!==null && sma50!==null){
+    if(sma20>sma50){score+=1;reasons.push('SMA20 above SMA50 — short-term uptrend (golden cross zone)');}
+    else {score-=1;reasons.push('SMA20 below SMA50 — short-term downtrend (death cross zone)');}
+  }
+  if(sma20!==null){
+    if(price>sma20){score+=1;reasons.push('Price trading above SMA20');}
+    else {score-=1;reasons.push('Price trading below SMA20');}
+  }
+  let signal='HOLD';
+  if(score>=2) signal='BUY';
+  else if(score<=-2) signal='SELL';
+  return {signal, score, rsi:r, sma20:sma20?+sma20.toFixed(2):null, sma50:sma50?+sma50.toFixed(2):null, price, reasons};
+}
+
+const TP_TF_DAYS = {'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':730};
+let tpCurrentTF = '3M';
+
+function tpGenIntraday(base, seed){
+  const rnd = tpRand(seed);
+  let price = base;
+  const out = [];
+  const startH=9, startM=30, step=15, totalMin=6*60;
+  const count = Math.floor(totalMin/step);
+  for(let i=0;i<=count;i++){
+    const drift = (rnd()-0.5) * base * 0.006;
+    const open = price;
+    const close = Math.max(0.01, open+drift);
+    const high = Math.max(open,close)+rnd()*base*0.003;
+    const low  = Math.min(open,close)-rnd()*base*0.003;
+    const vol  = Math.floor(20000+rnd()*180000);
+    const mins = startM + i*step;
+    const hh = startH + Math.floor(mins/60);
+    const mm = mins%60;
+    const label = ((hh%12)||12)+':'+String(mm).padStart(2,'0')+(hh<12?'AM':'PM');
+    out.push({date:label, open:+open.toFixed(2), high:+high.toFixed(2), low:+Math.max(0.01,low).toFixed(2), close:+close.toFixed(2), volume:vol});
+    price = close;
+  }
+  return out;
+}
+
+function tpAggregate(series, targetCount){
+  if(series.length<=targetCount) return series;
+  const bucketSize = Math.ceil(series.length/targetCount);
+  const out=[];
+  for(let i=0;i<series.length;i+=bucketSize){
+    const chunk = series.slice(i,i+bucketSize);
+    if(!chunk.length) continue;
+    out.push({
+      date: chunk[0].date,
+      open: chunk[0].open,
+      close: chunk[chunk.length-1].close,
+      high: Math.max(...chunk.map(function(d){return d.high;})),
+      low: Math.min(...chunk.map(function(d){return d.low;})),
+      volume: chunk.reduce(function(s,d){return s+d.volume;},0)
+    });
+  }
+  return out;
+}
+
+function tpGetChartSeries(sym, tf){
+  const stock = tpFindStock(sym);
+  if(!stock) return [];
+  if(tf==='1D') return tpGenIntraday(stock.base, tpSeed(sym+'-1d-demo')); // intraday stays mock — PSE Edge's DisclosureCht.ax only returns daily bars
+  const days = TP_TF_DAYS[tf] || 90;
+  const full = tpGetSeries(sym, days);
+  return tpAggregate(full, 80);
+}
+
+function tpRSISeries(closes, period){
+  const out = new Array(closes.length).fill(null);
+  for(let i=period;i<closes.length;i++){
+    out[i] = tpRSI(closes.slice(0,i+1), period);
+  }
+  return out;
+}
+
+function tpTrendSeries(closes){
+  const n = closes.length;
+  const period = Math.max(3, Math.min(20, Math.floor(n/3)));
+  const out = new Array(n).fill(null);
+  for(let i=period-1;i<n;i++){
+    let sum=0;
+    for(let j=i-period+1;j<=i;j++) sum+=closes[j];
+    out[i] = sum/period;
+  }
+  return out;
+}
+
+function tpFmtDate(s){
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
+    const p = s.split('-');
+    return (+p[1])+'/'+(+p[2])+'/'+p[0].slice(2);
+  }
+  return s;
+}
+
+function tpFmtPeso(n){
+  if(n>=1e9) return '₱'+(n/1e9).toFixed(2)+'B';
+  if(n>=1e6) return '₱'+(n/1e6).toFixed(2)+'M';
+  if(n>=1e3) return '₱'+(n/1e3).toFixed(2)+'K';
+  return '₱'+n.toFixed(0);
+}
+
+function tpFmtNum(n){
+  if(n>=1e9) return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6) return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3) return (n/1e3).toFixed(2)+'K';
+  return String(n);
+}
+
+function tpRenderCombinedChart(series){
+  const priceCanvas = document.getElementById('tp-canvas-price');
+  const volCanvas = document.getElementById('tp-canvas-vol');
+  const rsiCanvas = document.getElementById('tp-canvas-rsi');
+  if(!priceCanvas || !volCanvas || !rsiCanvas || !series.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = priceCanvas.clientWidth || priceCanvas.parentElement.clientWidth;
+
+  function setup(canvas, cssH){
+    canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+    canvas.style.height = cssH+'px';
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,cssW,cssH);
+    return ctx;
+  }
+
+  const priceH=180, volH=54, rsiH=50;
+  const pctx = setup(priceCanvas, priceH);
+  const vctx = setup(volCanvas, volH);
+  const rctx = setup(rsiCanvas, rsiH);
+
+  const n = series.length;
+  const slotW = cssW/n;
+  const bodyW = Math.max(1.5, slotW*0.55);
+
+  const highs=series.map(function(d){return d.high;}), lows=series.map(function(d){return d.low;});
+  const max=Math.max.apply(null,highs), min=Math.min.apply(null,lows);
+  const range=(max-min)||1;
+  const padTop=8, padBottom=8;
+  const usableH=priceH-padTop-padBottom;
+
+  series.forEach(function(d,i){
+    const x=i*slotW+slotW/2;
+    const yHigh=padTop+(1-(d.high-min)/range)*usableH;
+    const yLow=padTop+(1-(d.low-min)/range)*usableH;
+    const yOpen=padTop+(1-(d.open-min)/range)*usableH;
+    const yClose=padTop+(1-(d.close-min)/range)*usableH;
+    const up=d.close>=d.open;
+    pctx.strokeStyle = up?'#22c55e':'#ef4444';
+    pctx.fillStyle = up?'#22c55e':'#ef4444';
+    pctx.lineWidth=1;
+    pctx.beginPath(); pctx.moveTo(x,yHigh); pctx.lineTo(x,yLow); pctx.stroke();
+    const bodyTop=Math.min(yOpen,yClose);
+    const bodyH=Math.max(1,Math.abs(yClose-yOpen));
+    pctx.fillRect(x-bodyW/2, bodyTop, bodyW, bodyH);
+  });
+  const trendVals = tpTrendSeries(series.map(function(d){return d.close;}));
+  pctx.strokeStyle = '#f59e0b';
+  pctx.lineWidth = 1.5;
+  pctx.beginPath();
+  let tStarted = false;
+  trendVals.forEach(function(v,i){
+    if(v===null) return;
+    const x = i*slotW + slotW/2;
+    const y = padTop + (1-(v-min)/range)*usableH;
+    if(!tStarted){ pctx.moveTo(x,y); tStarted=true; } else pctx.lineTo(x,y);
+  });
+  pctx.stroke();
+
+  pctx.fillStyle='#7a7a88'; pctx.font='9px Inter,sans-serif'; pctx.textAlign='right';
+  [max, min+range/2, min].forEach(function(v){
+    const y = padTop + (1-(v-min)/range)*usableH;
+    pctx.fillText(v.toFixed(2), cssW-2, Math.max(9,Math.min(priceH-2,y+3)));
+  });
+
+  const vols = series.map(function(d){return d.volume;});
+  const vmax = Math.max.apply(null,vols)||1;
+  series.forEach(function(d,i){
+    const x=i*slotW+slotW/2;
+    const h=(d.volume/vmax)*(volH-6);
+    const up=d.close>=d.open;
+    vctx.fillStyle = up?'rgba(34,197,94,0.7)':'rgba(239,68,68,0.7)';
+    vctx.fillRect(x-bodyW/2, volH-h-2, bodyW, h);
+  });
+
+  const closes = series.map(function(d){return d.close;});
+  const rsiVals = tpRSISeries(closes,14);
+  rctx.strokeStyle='rgba(122,122,136,0.35)'; rctx.lineWidth=1; rctx.setLineDash([2,2]);
+  [30,70].forEach(function(v){
+    const y=rsiH-(v/100)*rsiH;
+    rctx.beginPath(); rctx.moveTo(0,y); rctx.lineTo(cssW,y); rctx.stroke();
+  });
+  rctx.setLineDash([]);
+  rctx.strokeStyle='#8b5cf6'; rctx.lineWidth=1.5; rctx.beginPath();
+  let started=false;
+  rsiVals.forEach(function(v,i){
+    if(v===null) return;
+    const x=i*slotW+slotW/2;
+    const y = rsiH-(v/100)*rsiH;
+    if(!started){ rctx.moveTo(x,y); started=true; } else rctx.lineTo(x,y);
+  });
+  rctx.stroke();
+
+  const datesEl = document.getElementById('tp-chart-dates');
+  if(datesEl){
+    const labelCount = Math.min(5, n);
+    let html='';
+    for(let k=0;k<labelCount;k++){
+      const idx = Math.floor(k*(n-1)/((labelCount-1)||1));
+      html += '<span>'+tpFmtDate(series[idx].date)+'</span>';
+    }
+    datesEl.innerHTML = html;
+  }
+}
+
+function tpUpdateRangeAndStats(refSeries, sig){
+  const last = refSeries[refSeries.length-1];
+  document.getElementById('tp-range-low').textContent = last.low.toFixed(2);
+  document.getElementById('tp-range-high').textContent = last.high.toFixed(2);
+  const pct = Math.max(0, Math.min(100, ((last.close-last.low)/((last.high-last.low)||1))*100));
+  document.getElementById('tp-range-marker').style.left = pct+'%';
+  document.getElementById('tp-range-fill').style.width = pct+'%';
+
+  document.getElementById('tp-stat-open').textContent = '₱'+last.open.toFixed(2);
+  document.getElementById('tp-stat-high').textContent = '₱'+last.high.toFixed(2);
+  document.getElementById('tp-stat-low').textContent = '₱'+last.low.toFixed(2);
+  document.getElementById('tp-stat-vol').textContent = tpFmtPeso(last.volume*last.close) + '  ·  ' + tpFmtNum(last.volume) + ' shares';
+  document.getElementById('tp-stat-sma20').textContent = sig.sma20!==null ? '₱'+sig.sma20 : '—';
+  document.getElementById('tp-stat-sma50').textContent = sig.sma50!==null ? '₱'+sig.sma50 : '—';
+}
+
+function tpSetTimeframe(tf){
+  tpCurrentTF = tf;
+  document.querySelectorAll('#trade-page .tp-tf-btn').forEach(function(b){
+    b.classList.toggle('active', b.dataset.tf===tf);
+  });
+  if(tpCurrentSym) tpRenderCombinedChart(tpGetChartSeries(tpCurrentSym, tf));
+}
+
+function tpFindStock(sym){ return PSE_ALL_STOCKS.find(x=>x.sym===sym); }
+
+async function tpRenderAll(sym){
+  const t = tpFindStock(sym);
+  if(!t) return;
+  tpCurrentSym = sym;
+  await PSE_HISTORY_READY;
+  const refSeries = tpGetSeries(sym, 90);
+  const sig = tpComputeSignal(refSeries);
+  const prev = refSeries[refSeries.length-2].close;
+  const chg = sig.price - prev;
+  const chgPct = (chg/prev*100);
+
+  document.getElementById('tp-name').textContent = t.sym + ' · ' + t.name;
+  document.getElementById('tp-price').textContent = '₱' + sig.price.toFixed(2);
+  const chgEl = document.getElementById('tp-chg');
+  chgEl.textContent = (chg>=0?'+':'') + chg.toFixed(2) + ' (' + (chgPct>=0?'+':'') + chgPct.toFixed(2) + '%)';
+  chgEl.className = 'tp-price-chg ' + (chg>=0?'up':'down');
+
+  document.getElementById('tp-badge-wrap').innerHTML =
+    '<div class="tp-signal-badge ' + sig.signal + '">' + sig.signal + '</div>';
+
+  tpUpdateRangeAndStats(refSeries, sig);
+
+  document.getElementById('tp-reasons-list').innerHTML = sig.reasons.map(function(r){
+    return '<div class="tp-reason">' + r + '</div>';
+  }).join('');
+
+  const searchInput = document.getElementById('tp-stock-search');
+  if(searchInput) searchInput.value = t.name + ' (' + t.sym + ')';
+
+  tpRenderCombinedChart(tpGetChartSeries(sym, tpCurrentTF));
+}
+
+async function tpSelectTicker(sym){ if(sym) await tpRenderAll(sym); }
+
+const TP_BLUE_LIST = PSE_ALL_STOCKS.filter(function(t){ return BLUE_CHIP_SYMS.indexOf(t.sym)>=0; })
+  .sort(function(a,b){ return a.name.localeCompare(b.name); });
+const TP_OTHER_LIST = PSE_ALL_STOCKS.filter(function(t){ return BLUE_CHIP_SYMS.indexOf(t.sym)<0; })
+  .sort(function(a,b){ return a.name.localeCompare(b.name); });
+
+function tpOptRow(t, isBlue){
+  const star = isBlue ? '<span class="tp-opt-star">\u2605</span>' : '';
+  return '<div class="tp-opt" data-sym="'+t.sym+'" onmousedown="tpChooseStock(\''+t.sym+'\')">'+
+         '<span>'+t.name+' ('+t.sym+')</span>'+star+'</div>';
+}
+
+function tpRenderDropdown(query){
+  const dd = document.getElementById('tp-dropdown');
+  if(!dd) return;
+  const q = (query||'').trim().toLowerCase();
+  const matches = function(t){
+    return !q || t.name.toLowerCase().indexOf(q)>=0 || t.sym.toLowerCase().indexOf(q)>=0;
+  };
+  const blueMatches = TP_BLUE_LIST.filter(matches);
+  const otherMatches = TP_OTHER_LIST.filter(matches);
+
+  if(blueMatches.length===0 && otherMatches.length===0){
+    dd.innerHTML = '<div class="tp-opt-empty">No matching PSE stocks</div>';
+    return;
+  }
+  let html = '';
+  if(blueMatches.length){
+    html += '<div class="tp-optgroup-label">Blue Chips</div>' + blueMatches.map(function(t){ return tpOptRow(t,true); }).join('');
+  }
+  if(otherMatches.length){
+    html += '<div class="tp-optgroup-label">All PH Stocks (A-Z)</div>' + otherMatches.map(function(t){ return tpOptRow(t,false); }).join('');
+  }
+  dd.innerHTML = html;
+}
+
+function tpOpenDropdown(){
+  const dd = document.getElementById('tp-dropdown');
+  if(!dd) return;
+  const input = document.getElementById('tp-stock-search');
+  if(input) input.select();
+  tpRenderDropdown('');
+  dd.classList.add('open');
+}
+
+function tpCloseDropdown(){
+  const dd = document.getElementById('tp-dropdown');
+  if(dd) dd.classList.remove('open');
+}
+
+function tpFilterDropdown(query){
+  const dd = document.getElementById('tp-dropdown');
+  if(dd) dd.classList.add('open');
+  tpRenderDropdown(query);
+}
+
+function tpChooseStock(sym){
+  tpSelectTicker(sym);
+  tpCloseDropdown();
+}
+
+document.addEventListener('click', function(e){
+  const combo = document.querySelector('#trade-page .tp-picklist-group');
+  if(combo && !combo.contains(e.target)) tpCloseDropdown();
+});
+
+(function initTradePicklist(){
+  tpRenderDropdown('');
+})();
+
+window.addEventListener('resize', function(){
+  if(tpCurrentSym) tpRenderCombinedChart(tpGetChartSeries(tpCurrentSym, tpCurrentTF));
+});
+</script>
+
 <script>initFromHash();</script>
 </body>
 </html>
