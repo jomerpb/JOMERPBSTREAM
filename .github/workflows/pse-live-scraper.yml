@@ -1,0 +1,80 @@
+name: PSE Live Quote Scraper
+
+on:
+  schedule:
+    # Once daily, 30 min after PSE market close (3:30 PM Manila).
+    # Runs at 08:00 UTC = 4:00 PM Manila. Captures the day's final
+    # Trading-At-Last price — that's all "today's Top Gainers" needs,
+    # no intraday polling required. Scheduled 30 min ahead of the
+    # existing full-market scraper (08:30 UTC) so the two don't overlap.
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch: {} # manual trigger from the Actions tab, any time
+
+permissions:
+  contents: write
+
+env:
+  SHARD_COUNT: 4
+
+jobs:
+  scrape-live-shard:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # one shard failing shouldn't cancel the others
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run live shard ${{ matrix.shard }}
+        working-directory: pse-scraper-full
+        run: node scrape_pse_live.js
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_COUNT: ${{ env.SHARD_COUNT }}
+          PSE_OUTPUT_PATH: ${{ github.workspace }}/pse-scraper-full/pse-live-shard-${{ matrix.shard }}.json
+
+      - name: Upload shard output
+        uses: actions/upload-artifact@v4
+        with:
+          name: pse-live-shard-${{ matrix.shard }}
+          path: pse-scraper-full/pse-live-shard-${{ matrix.shard }}.json
+          retention-days: 1
+
+  merge-and-commit:
+    needs: scrape-live-shard
+    runs-on: ubuntu-latest
+    if: always() # still attempt merge even if one shard failed — partial data is still useful
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download all shard artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pse-live-shard-*
+          path: shard-downloads
+          merge-multiple: true
+
+      - name: Merge live shards
+        working-directory: pse-scraper-full
+        run: node merge_live_shards.js ${{ github.workspace }}/shard-downloads ${{ github.workspace }}/pse-live-quotes.json ${{ env.SHARD_COUNT }}
+
+      - name: Commit merged data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pse-live-quotes.json
+          git diff --staged --quiet && echo "No changes to commit" || git commit -m "Update live PSE quotes [automated]"
+          git push
