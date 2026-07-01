@@ -4827,6 +4827,36 @@ var PSE_FULL_HISTORY_READY = (async function loadPseFullHistory(){
   tpRenderTopGainers();
 })();
 
+// Live same-session quotes (stockData.do, once daily ~4PM Manila — see
+// pse-live-scraper.yml). Unlike tpLiveSeriesAll (settled EOD chart bars,
+// which run ~1 day behind), this reflects the actual current/most-recent
+// trading session, validated directly against pesobility's live board:
+// 7/10 top movers matched, 3 to the exact hundredth of a percent. This is
+// now the primary source for Top Gainers; tpLiveSeriesAll stays the source
+// for the chart, RSI, and SMA, which need a full history, not one snapshot.
+var tpLiveQuotes = {};
+var PSE_LIVE_QUOTES_STATUS = {loaded:false, tickerCount:0, error:null};
+var PSE_LIVE_QUOTES_READY = (async function loadPseLiveQuotes(){
+  var RAW_URL = 'https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pse-live-quotes.json';
+  try {
+    var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    if (!data.quotes) throw new Error('Malformed pse-live-quotes.json: missing quotes');
+    var loadedCount = 0;
+    for (var sym in data.quotes) {
+      tpLiveQuotes[sym] = data.quotes[sym];
+      loadedCount++;
+    }
+    PSE_LIVE_QUOTES_STATUS = {loaded: loadedCount>0, tickerCount: loadedCount, error: null};
+    console.log('PSE live quotes loaded:', loadedCount, 'tickers, generatedAt:', data.generatedAt);
+  } catch(e) {
+    PSE_LIVE_QUOTES_STATUS = {loaded:false, tickerCount:0, error:e.message};
+    console.warn('PSE live quotes load failed:', e.message);
+  }
+  tpRenderTopGainers();
+})();
+
 // Returns {current, previous, direction} for the picklist price/arrow, or
 // null if no live data exists for this symbol yet (blue-chip data takes
 // priority since it's fresher; full-market data is the fallback).
@@ -4862,7 +4892,30 @@ function tpModeDate(dates){
   return best;
 }
 
-function tpComputeTopGainers(){
+// PRIMARY: uses pse-live-quotes.json (stockData.do snapshot, once daily
+// ~4PM Manila). Validated directly against pesobility's live board — 7/10
+// top movers matched, 3 to the exact hundredth of a percent — so unlike
+// the history-based fallback below, this doesn't need session-date
+// filtering: every entry in the file is already the same snapshot moment
+// (one uniform "asOf" timestamp), and "Suspended" tickers are filtered out
+// by status rather than inferred from stale dates.
+function tpComputeTopGainersFromLive(){
+  var candidates = [];
+  PSE_ALL_STOCKS.forEach(function(t){
+    var q = tpLiveQuotes[t.sym];
+    if (!q || q.status !== 'Open' || q.last == null || !q.previousClose) return;
+    candidates.push({sym: t.sym, name: t.name, price: q.last, pct: q.changePct});
+  });
+  candidates.sort(function(a,b){ return b.pct - a.pct; });
+  return candidates.slice(0, 10);
+}
+
+// FALLBACK: used only if pse-live-quotes.json hasn't loaded yet (or failed
+// to load) — reconstructs a same-session ranking from the daily OHLC
+// history instead, via the mode-date filtering described below. Kept as a
+// fallback rather than deleted because tpLiveSeries/tpLiveSeriesAll load
+// independently and may resolve before or without the live-quotes file.
+function tpComputeTopGainersFromHistory(){
   var candidates = [];
   PSE_ALL_STOCKS.forEach(function(t){
     var series = tpLiveSeries[t.sym] || tpLiveSeriesAll[t.sym];
@@ -4894,6 +4947,11 @@ function tpComputeTopGainers(){
 
   todayOnly.sort(function(a,b){ return b.pct - a.pct; });
   return todayOnly.slice(0, 10);
+}
+
+function tpComputeTopGainers(){
+  var live = tpComputeTopGainersFromLive();
+  return live.length ? live : tpComputeTopGainersFromHistory();
 }
 
 function tpRenderTopGainers(){
