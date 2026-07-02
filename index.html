@@ -4284,7 +4284,9 @@ async function pcsoAIFetch(){
 #trade-page .tp-summary-row .tp-summary-tag.SELL,#trade-page .tp-summary-row .tp-summary-tag.BEAR{background:rgba(239,68,68,0.15);color:var(--red);}
 #trade-page .tp-summary-row .tp-summary-tag.HOLD{background:rgba(245,158,11,0.15);color:var(--amber);}
 #trade-page .tp-summary-row .tp-summary-tag.FLAT{background:rgba(148,163,184,0.12);color:var(--muted);}
-#trade-page .tp-summary-row .tp-summary-tag.OUTLOOK{background:rgba(124,92,252,0.15);color:var(--accent);}
+#trade-page .tp-summary-row .tp-summary-tag.OUTLOOK{background:rgba(59,130,246,0.15);color:var(--accent2);}
+#trade-page .tp-summary-row-bottomline{border-bottom:none;}
+#trade-page .tp-summary-row-bottomline .tp-summary-text{font-weight:500;}
 #trade-page .tp-summary-row .tp-summary-text{color:var(--text);font-size:12.5px;line-height:1.5;display:block;}
 #trade-page .tp-range-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
 #trade-page .tp-range-label{font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0;white-space:nowrap;}
@@ -4307,7 +4309,15 @@ async function pcsoAIFetch(){
 #trade-page .tp-stat-row span:first-child{color:var(--muted);font-weight:600;}
 #trade-page .tp-stat-row span:last-child{color:var(--text);font-weight:700;}
 #trade-page .tp-gainers{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
-#trade-page .tp-gainers-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+#trade-page .tp-gainers-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;}
+#trade-page .tp-gainers-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:0;}
+#trade-page .tp-gainers-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:2px;flex-shrink:0;}
+#trade-page .tp-gainers-tab{background:transparent;border:none;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:0.3px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;}
+#trade-page .tp-gainers-tab.active{background:var(--amber);color:#1a1206;}
+#trade-page .tp-gainers-note{font-size:9.5px;color:var(--muted);line-height:1.4;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+#trade-page .tp-gainer-tag{font-size:8.5px;font-weight:700;letter-spacing:0.4px;padding:1px 5px;border-radius:8px;margin-left:6px;display:inline-block;vertical-align:middle;}
+#trade-page .tp-gainer-tag.BUY{background:rgba(34,197,94,0.15);color:var(--green);}
+#trade-page .tp-gainer-tag.HOLD{background:rgba(245,158,11,0.15);color:var(--amber);}
 #trade-page .tp-gainer-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;}
 #trade-page .tp-gainer-row:last-child{border-bottom:none;}
 #trade-page .tp-gainer-row:active{background:var(--surface);}
@@ -4327,8 +4337,15 @@ async function pcsoAIFetch(){
   <div class="tp-sub" id="tp-data-status">PSE technical analysis &middot; loading data source...</div>
 
   <div class="tp-gainers">
-    <div class="tp-gainers-title">Top Gainers</div>
+    <div class="tp-gainers-header">
+      <div class="tp-gainers-title">Top Gainers</div>
+      <div class="tp-gainers-toggle">
+        <button class="tp-gainers-tab active" data-mode="current" onclick="tpSetGainersMode('current')">Current</button>
+        <button class="tp-gainers-tab" data-mode="future" onclick="tpSetGainersMode('future')">Predicted</button>
+      </div>
+    </div>
     <div id="tp-gainers-list"></div>
+    <div class="tp-gainers-note" id="tp-gainers-note"></div>
   </div>
 
   <div class="tp-picklists">
@@ -4368,6 +4385,10 @@ async function pcsoAIFetch(){
       <span class="tp-summary-tag" id="tp-summary-outlook-tag">2-DAY</span>
       <span class="tp-summary-text" id="tp-summary-outlook-text">—</span>
     </div>
+    <div class="tp-summary-row tp-summary-row-bottomline">
+      <span class="tp-summary-tag" id="tp-summary-rec-tag">RECOMMENDATION</span>
+      <span class="tp-summary-text" id="tp-summary-rec-text">—</span>
+    </div>
   </div>
 
   <div class="tp-range-bar">
@@ -4397,6 +4418,7 @@ async function pcsoAIFetch(){
 
   <div class="tp-stats">
     <div class="tp-stats-title">Market Stats</div>
+    <div class="tp-stat-row"><span>Last Traded</span><span id="tp-stat-lasttrade">—</span></div>
     <div class="tp-stat-row"><span>Open</span><span id="tp-stat-open">—</span></div>
     <div class="tp-stat-row"><span>High</span><span id="tp-stat-high">—</span></div>
     <div class="tp-stat-row"><span>Low</span><span id="tp-stat-low">—</span></div>
@@ -4779,10 +4801,29 @@ var PSE_HISTORY_READY = (async function loadPseHistory(){
 })();
 
 // Unified series getter: live data when available and fresh, mock fallback otherwise.
+// Unified series getter: live blue-chip data (freshest, 15-min cadence)
+// first, then live full-market data (all ~283 tickers, ~1 day behind but
+// still real), mock fallback only if neither has this ticker yet.
+//
+// BUG FIX: this used to check ONLY tpLiveSeries (the 8 blue-chip
+// tickers) and fall straight to the mock generator for every other
+// symbol -- silently, since tpLiveSeriesAll was being loaded in the
+// background but never consulted here. That meant RSI/SMA/trend/signal/
+// chart for ~275 of 283 tickers were entirely synthetic, and because the
+// mock generator always stamps its last bar as the current device date,
+// "Last Traded" read "today" for any non-blue-chip stock regardless of
+// whether the market had even opened yet. Real per-ticker OHLC data
+// (tpLiveSeriesAll) takes priority over mock now, same as everywhere
+// else in this file that already reads live data with this fallback
+// chain (tpGetPicklistPrice, tpComputeTopGainersFromHistory).
 function tpGetSeries(sym, days){
   var live = tpLiveSeries[sym];
   if (Array.isArray(live) && live.length && !PSE_HISTORY_STATUS.error) {
     return live.slice(Math.max(0, live.length - (days+1)));
+  }
+  var liveAll = tpLiveSeriesAll[sym];
+  if (Array.isArray(liveAll) && liveAll.length) {
+    return liveAll.slice(Math.max(0, liveAll.length - (days+1)));
   }
   var t = tpFindStock(sym);
   var base = t ? t.base : 100;
@@ -4965,12 +5006,64 @@ function tpComputeTopGainers(){
   return live.length ? live : tpComputeTopGainersFromHistory();
 }
 
+// PREDICTED TOP GAINERS
+// Reuses the exact same reasoning-card engine that powers each ticker's
+// individual signal card (tpComputeSignal for RSI/trend/confidence) --
+// so "Predicted" is literally "rank every ticker by what its own
+// reasoning card already computes," not a second model.
+//
+// Only sig.signal === 'BUY' qualifies (score >= 2, real conviction).
+// An earlier version of this let any net-positive-score HOLD through
+// (e.g. neutral RSI + BULL trend = score +1) on the reasoning that it
+// was directionally bullish -- but this list's actual purpose is "next
+// stocks to buy," and HOLD, even a net-positive-leaning one, is the
+// model's own way of saying "wait, don't enter yet" (its reasoning card
+// says so explicitly). Showing a stock here while its own card argues
+// against entering it was a direct contradiction. Requiring the full
+// BUY threshold keeps this list honest: every entry is a stock the
+// model has already committed to a buy call on, not just "leaning up."
+function tpComputeFutureTopGainers(){
+  var candidates = [];
+  var MAX_SCORE = 3;
+  PSE_ALL_STOCKS.forEach(function(t){
+    try{
+      var series = tpGetSeries(t.sym, 90);
+      if(!Array.isArray(series) || series.length < 2) return;
+      var sig = tpComputeSignal(series);
+      if(sig.price == null || sig.volPct == null) return;
+      if(sig.signal !== 'BUY') return;
+      var bias = sig.score / MAX_SCORE;
+      var moveMag = sig.volPct * (0.75 + bias);
+      var skew = bias * moveMag * 0.35;
+      var pct = moveMag + skew;
+      if(!isFinite(pct) || pct <= 0) return;
+      candidates.push({sym:t.sym, name:t.name, price:sig.price, pct:pct, signal:sig.signal, trend:sig.trend, score:sig.score, confidencePct:sig.confidencePct});
+    }catch(e){ /* skip any ticker whose data can't support a signal yet */ }
+  });
+  candidates.sort(function(a,b){ return b.pct - a.pct; });
+  return candidates.slice(0, 10);
+}
+
+var tpGainersMode = 'current';
+function tpSetGainersMode(mode){
+  if(tpGainersMode === mode) return;
+  tpGainersMode = mode;
+  document.querySelectorAll('.tp-gainers-tab').forEach(function(b){
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  tpRenderTopGainers();
+}
+
 function tpRenderTopGainers(){
   var el = document.getElementById('tp-gainers-list');
+  var noteEl = document.getElementById('tp-gainers-note');
   if(!el) return;
-  var top = tpComputeTopGainers();
+  var top = tpGainersMode === 'future' ? tpComputeFutureTopGainers() : tpComputeTopGainers();
   if(!top.length){
-    el.innerHTML = '<div class="tp-gainer-empty">No data available</div>';
+    el.innerHTML = '<div class="tp-gainer-empty">' +
+      (tpGainersMode === 'future' ? 'No BUY-signal stocks right now \u2014 the model isn\u2019t backing any ticker with real conviction at the moment.' : 'No data available') +
+      '</div>';
+    if(noteEl) noteEl.textContent = '';
     return;
   }
   el.innerHTML = top.map(function(g, i){
@@ -4979,13 +5072,18 @@ function tpRenderTopGainers(){
     return '<div class="tp-gainer-row" onmousedown="tpSelectTicker(\''+g.sym+'\')">'+
       '<span class="tp-gainer-rank">'+(i+1)+'</span>'+
       '<div class="tp-gainer-info">'+
-        '<div class="tp-gainer-sym">'+g.sym+'</div>'+
+        '<div class="tp-gainer-sym">'+g.sym+(g.signal?(' <span class="tp-gainer-tag '+g.signal+'">'+g.signal+'</span>'):'')+'</div>'+
         '<div class="tp-gainer-name">'+g.name+'</div>'+
       '</div>'+
       '<span class="tp-gainer-price">\u20b1'+g.price.toFixed(2)+'</span>'+
       '<span class="tp-gainer-chg '+dir+'">'+sign+g.pct.toFixed(2)+'%</span>'+
     '</div>';
   }).join('');
+  if(noteEl){
+    noteEl.textContent = tpGainersMode === 'future'
+      ? 'Only stocks the model has already called BUY qualify (HOLD and SELL excluded) \u2014 computed from real PSE price history. If fewer than 10 show, that\u2019s honest: today\u2019s data doesn\u2019t support more BUY calls. Model-generated, not a live feed of tomorrow\u2019s actual movers. Decision support only, not financial advice.'
+      : '';
+  }
 }
 tpRenderTopGainers();
 
@@ -5072,6 +5170,64 @@ function tpGetTrendState(sma20, sma50){
   return {state, gapPct, confidencePct};
 }
 
+// Determines when the stock actually last traded and whether the most
+// recent print reflects a fresh trade or a stale quote being carried
+// forward on thin volume. A flat print — open===high===low===close,
+// repeated across several sessions — is the signature of a session
+// where no real two-sided trading happened, not of price stability.
+// This is what lets the reasoning explain *why* the price hasn't moved,
+// instead of just reporting a number.
+function tpLastTradeInfo(series){
+  if(!series || !series.length) return null;
+  const last = series[series.length-1];
+  const lastDateObj = new Date(last.date+'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const daysSince = Math.max(0, Math.round((today - lastDateObj) / 86400000));
+
+  let flatBars = 0;
+  for(let i=series.length-1; i>=0; i--){
+    const d = series[i];
+    const isFlatPrint = d.open===d.high && d.high===d.low && d.low===d.close && d.close===last.close;
+    if(isFlatPrint) flatBars++; else break;
+  }
+  return { date: last.date, daysSince, flatBars, isStale: flatBars>=2, price: last.close };
+}
+
+// Parses pse-live-quotes.json's "asOf" field (e.g. "Jul 01, 2026 02:50 PM")
+// into a plain YYYY-MM-DD string. Used to keep the "Last Traded" date
+// label in sync with the live-quote numbers it's displayed next to --
+// without this, the date came from refSeries's OHLC history bar (which
+// the code already documents as running up to a day behind) while the
+// Open/High/Low/Volume next to it came from this fresher live quote, so
+// the two could describe different sessions even though shown together.
+const TP_MONTH_MAP = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function tpParseAsOfDate(asOfStr){
+  if(!asOfStr) return null;
+  const m = /^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})/.exec(asOfStr);
+  if(!m || !(m[1] in TP_MONTH_MAP)) return null;
+  const mon = TP_MONTH_MAP[m[1]] + 1;
+  const day = parseInt(m[2],10), year = parseInt(m[3],10);
+  return year + '-' + (mon<10?'0':'')+mon + '-' + (day<10?'0':'')+day;
+}
+
+// Rebuilds the lastTrade object off the live quote's own asOf date instead
+// of refSeries's (possibly lagging) bar date, when a usable live quote is
+// available -- keeps "Last Traded" consistent with the numbers shown
+// alongside it. Also guards against a bar dated later than today's actual
+// calendar date (which can't be real trading data) by clamping it back to
+// the live quote's date, or to today's date, as a defensive fallback.
+function tpResolveLastTrade(sig, liveQuote){
+  const fallback = sig.lastTrade;
+  if(!liveQuote || !liveQuote.asOf) return fallback;
+  const lqDate = tpParseAsOfDate(liveQuote.asOf);
+  if(!lqDate) return fallback;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const lqDateObj = new Date(lqDate+'T00:00:00');
+  const daysSince = Math.max(0, Math.round((today - lqDateObj) / 86400000));
+  return { date: lqDate, daysSince, flatBars: fallback ? fallback.flatBars : 0, isStale: false, price: liveQuote.last };
+}
+
 function tpComputeSignal(series){
   const closes = series.map(d=>d.close);
   const lastIdx = closes.length-1;
@@ -5126,7 +5282,7 @@ function tpComputeSignal(series){
     confidencePct = Math.round(Math.min(100, (Math.abs(score)/MAX_SCORE)*100));
   }
 
-  return {signal, score, confidencePct, rsi:r, sma20:sma20?+sma20.toFixed(2):null, sma50:sma50?+sma50.toFixed(2):null, price, reasons, trend:trend.state, trendGapPct:trend.gapPct, trendConfidencePct:trend.confidencePct, volPct:tpAvgDailyVolPct(closes,14)};
+  return {signal, score, confidencePct, rsi:r, sma20:sma20?+sma20.toFixed(2):null, sma50:sma50?+sma50.toFixed(2):null, price, reasons, trend:trend.state, trendGapPct:trend.gapPct, trendConfidencePct:trend.confidencePct, volPct:tpAvgDailyVolPct(closes,14), lastTrade:tpLastTradeInfo(series)};
 }
 
 // Picks a variant deterministically per stock (using the existing
@@ -5220,27 +5376,33 @@ function tpTrendNarrative(sig){
   ]);
 }
 
+// Shared band math — both the outlook narrative and the overall
+// recommendation below cite the same ₱ range, so it's computed once here
+// instead of duplicated in two places with room to drift apart.
+function tpProjectedBand(sig){
+  if(sig.volPct==null || sig.price==null) return null;
+  const bias = sig.signal==='BUY' ? 1 : sig.signal==='SELL' ? -1 : 0;
+  const conf = (bias===0 ? sig.confidencePct*0.4 : sig.confidencePct) / 100;
+  const moveMag = sig.volPct * (0.75 + conf);
+  const skew = bias * moveMag * 0.35;
+  const high = sig.price * (1 + (moveMag + skew)/100);
+  const low = sig.price * (1 - (moveMag - skew)/100);
+  const fmt = n => n < 1 ? n.toFixed(4) : n < 10 ? n.toFixed(3) : n.toFixed(2);
+  return { bias, low, high, L: fmt(low), H: fmt(high), vol: sig.volPct.toFixed(2) };
+}
+
 // 1-2 session forward outlook. Takes the same RSI/trend evidence already
 // used for the signal and sizes an expected price band off the stock's
 // own trailing volatility (tpAvgDailyVolPct), scaled by conviction.
 // Multiple phrasings per direction/confidence combo so this doesn't read
 // as one sentence template with numbers dropped in.
 function tpOutlookNarrative(sig){
-  if(sig.volPct==null || sig.price==null){
+  const band = tpProjectedBand(sig);
+  if(!band){
     return "Not enough trading history yet to size a short-term range for this one.";
   }
   var sym = tpCurrentSym || 'x';
-  const bias = sig.signal==='BUY' ? 1 : sig.signal==='SELL' ? -1 : 0;
-  const conf = (bias===0 ? sig.confidencePct*0.4 : sig.confidencePct) / 100;
-  const moveMag = sig.volPct * (0.75 + conf);
-  const skew = bias * moveMag * 0.35;
-  const upPct = moveMag + skew;
-  const downPct = moveMag - skew;
-  const high = sig.price * (1 + upPct/100);
-  const low = sig.price * (1 - downPct/100);
-  const fmt = n => n < 1 ? n.toFixed(4) : n < 10 ? n.toFixed(3) : n.toFixed(2);
-  const vol = sig.volPct.toFixed(2);
-  const H = fmt(high), L = fmt(low);
+  const { bias, L, H, vol } = band;
 
   if(bias>0){
     return tpPick(sym+'-outlook-up', [
@@ -5261,6 +5423,206 @@ function tpOutlookNarrative(sig){
       "No dominant signal either way right now, so the stock's own "+vol+"% typical daily move is what defines the range: roughly ₱"+L+" to ₱"+H+" over the next 1-2 sessions."
     ]);
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ACTION PLAN — the practical layer under the recommendation verdict:
+// what to actually do next, the real gain/loss math behind the target
+// and floor levels (not just peso numbers with no context), how an
+// experienced trader would typically handle this exact setup (entry
+// sizing, stop placement, scaling in/out), and an explicit call on
+// whether current price is actually a good entry/exit point right now
+// — rather than leaving the reader to infer timing from a bare signal.
+// ══════════════════════════════════════════════════════════════
+function tpActionPlan(sig, band, aligned, opposed){
+  var sym = tpCurrentSym || 'x';
+
+  if(!band){
+    return tpPick(sym+'-action-noband', [
+      "Practically: there's no reliable price band to trade against yet, so the right move is to watch, not act. An experienced trader would let a few more sessions build before sizing a real position off this ticker.",
+      "In practice, this isn't a tradeable setup yet — treat it as one to bookmark and revisit once there's enough price history to size a real target and stop, rather than guessing at levels.",
+      "Practically speaking, there's not enough of a track record here to plan an entry or exit around. The move most traders make in this spot is nothing — wait for more bars, then reassess."
+    ]);
+  }
+
+  const price = sig.price;
+
+  if(sig.signal==='BUY'){
+    const target = +band.high, floor = +band.low;
+    const gainPct = ((target-price)/price*100);
+    const riskPct = ((price-floor)/price*100);
+    const rrTxt = riskPct>0 ? (gainPct/riskPct).toFixed(1)+':1' : 'undefined';
+
+    if(aligned && sig.confidencePct>=80){
+      return tpPick(sym+'-action-buy-strong',[
+        "Practically: this is a spot where an experienced trader would actually enter, not just watch from the sidelines. Upside to the ₱"+band.H+" target runs about "+gainPct.toFixed(1)+"%, against roughly "+riskPct.toFixed(1)+"% downside to the ₱"+band.L+" floor — a "+rrTxt+" reward-to-risk setup, which is the kind of ratio that justifies a real position rather than a token one. The standard playbook here: enter at or near current price, place a stop a little under ₱"+band.L+", and take at least partial profit as it nears ₱"+band.H+" rather than waiting for a perfect top. Yes, this reads as a legitimate buy point right now, not a 'wait for a better price' situation.",
+        "Practically: this is a legitimate entry point, not just a label. The math backs it — about "+gainPct.toFixed(1)+"% of room to the ₱"+band.H+" target versus "+riskPct.toFixed(1)+"% risk down to ₱"+band.L+", a "+rrTxt+" ratio. A disciplined trader treats this as buy-and-defend: get in now, set the stop at ₱"+band.L+", and scale out into strength instead of holding for one perfect exit. What you'd gain by acting here versus waiting: a cleaner entry than you're likely to get after confirmation shows up and the crowd piles in."
+      ]);
+    }
+    if(opposed){
+      return tpPick(sym+'-action-buy-caution',[
+        "Practically: this is not a spot to go in with full size, and it's not really a clean buy point yet either — it's a bet that the trend is about to turn, not confirmation that it has. The reward-to-risk math — about "+gainPct.toFixed(1)+"% up to ₱"+band.H+" against "+riskPct.toFixed(1)+"% down to ₱"+band.L+" ("+rrTxt+") — only pays off if the reversal actually happens. An experienced trader would either wait for the trend to actually flip (SMA20 crossing back above SMA50) before committing, or take a small starter position with a tight stop right under ₱"+band.L+" and add only if price confirms. What you'd lose by jumping in now: getting caught buying into a downtrend that just continues.",
+        "Practically: treat this as a scouting position at most, not a full entry — the timing isn't confirmed yet even though the RSI case is real. You're betting against the prevailing trend for about "+gainPct.toFixed(1)+"% of upside versus "+riskPct.toFixed(1)+"% downside — a trader who takes this at all usually keeps it small and uses ₱"+band.L+" as a hard stop, not a soft one."
+      ]);
+    }
+    return tpPick(sym+'-action-buy-moderate',[
+      "Practically: this is a watch-and-confirm entry, not an all-in one — reasonable to nibble on, not to load up on. The setup offers roughly "+gainPct.toFixed(1)+"% upside to ₱"+band.H+" against "+riskPct.toFixed(1)+"% risk to ₱"+band.L+" ("+rrTxt+"). A measured approach: start with a partial position now and add if price and RSI both confirm over the next session, keeping the stop at ₱"+band.L+".",
+      "Practically: there's a case here, but it's not fully backed yet, so this is a partial-position moment rather than a full commitment — about "+gainPct.toFixed(1)+"% of reward against "+riskPct.toFixed(1)+"% of risk. Most disciplined traders would wait for one more confirming session before committing full size, using ₱"+band.L+" as the level that invalidates the idea entirely."
+    ]);
+  }
+
+  if(sig.signal==='SELL'){
+    const target = +band.low, ceiling = +band.high;
+    const gainPct = ((price-target)/price*100);
+    const riskPct = ((ceiling-price)/price*100);
+    const rrTxt = riskPct>0 ? (gainPct/riskPct).toFixed(1)+':1' : 'undefined';
+
+    if(aligned && sig.confidencePct>=80){
+      return tpPick(sym+'-action-sell-strong',[
+        "Practically: if you're holding this, this is a legitimate exit or trim point right now, not a false alarm to ignore. Downside to ₱"+band.L+" runs about "+gainPct.toFixed(1)+"%, against roughly "+riskPct.toFixed(1)+"% upside risk to ₱"+band.H+" if the selling stalls — a "+rrTxt+" ratio in favor of reducing exposure now rather than hoping for a bounce. An experienced trader would lighten the position here, or if shorting, enter with a stop just above ₱"+band.H+". What you'd lose by holding through this: giving back the gains this exact setup is warning about.",
+        "Practically: this is the kind of setup a seasoned trader actually acts on rather than just notes and waits. Roughly "+gainPct.toFixed(1)+"% of downside to ₱"+band.L+" versus "+riskPct.toFixed(1)+"% risk that it fails and bounces to ₱"+band.H+" ("+rrTxt+") — the math favors taking money off the table now, since confirmation this clean doesn't show up often."
+      ]);
+    }
+    if(opposed){
+      return tpPick(sym+'-action-sell-caution',[
+        "Practically: this is a trim, not a full exit, and not yet the right point to sell everything — you'd be selling into a live uptrend for about "+gainPct.toFixed(1)+"% of potential downside against "+riskPct.toFixed(1)+"% risk the uptrend just continues to ₱"+band.H+" ("+rrTxt+"). A disciplined trader takes partial profits here and lets the rest ride with a stop, rather than closing the whole position on an overbought reading alone. What you'd lose by exiting fully now: missing further upside if the trend simply keeps going.",
+        "Practically: worth reducing size, not liquidating — this isn't a confirmed exit point yet. The overbought signal is real but it's fighting an active uptrend — about "+gainPct.toFixed(1)+"% downside case versus "+riskPct.toFixed(1)+"% risk of missing further upside to ₱"+band.H+". Most experienced traders scale out partially here rather than sell everything against the trend."
+      ]);
+    }
+    return tpPick(sym+'-action-sell-moderate',[
+      "Practically: this is worth trimming rather than holding at full size or exiting entirely — a partial move, not a hard exit signal. About "+gainPct.toFixed(1)+"% of downside case to ₱"+band.L+" versus "+riskPct.toFixed(1)+"% risk of a bounce to ₱"+band.H+" ("+rrTxt+"). A measured approach is reducing exposure now and reassessing if price confirms the move over the next session.",
+      "Practically: the case to lighten up is real at "+gainPct.toFixed(1)+"% versus "+riskPct.toFixed(1)+"% risk, just not overwhelming enough to call this a hard sell point. Most traders would treat this as a signal to trim, not to panic-sell."
+    ]);
+  }
+
+  // HOLD
+  return tpPick(sym+'-action-hold',[
+    "Practically: the right move is no move, and right now is not a good entry or exit point in either direction. An experienced trader wouldn't force a position here — instead, set alerts at ₱"+band.L+" (would tilt this bearish) and ₱"+band.H+" (would tilt this bullish), and let the stock declare a direction before committing capital. Entering now, buy or sell, means paying for a guess rather than a signal — you'd be risking capital with no edge behind it.",
+    "Practically: sit this one out. There's no edge to trade, so the useful action is watching for RSI or the SMA gap to break out of the current range — a move through ₱"+band.H+" or down through ₱"+band.L+" is what would actually change the call and make this a real entry or exit point. Committing capital before that happens is trading noise, not signal.",
+    "Practically: this is a wait, not a trade, and neither the current price nor this moment is the right one to act on. A disciplined trader treats a flat setup like this as a cue to stay in cash on this name and revisit once price clears ₱"+band.H+" or breaks ₱"+band.L+" — either would give a real reason to act."
+  ]);
+}
+
+// ══════════════════════════════════════════════════════════════
+// OVERALL RECOMMENDATION — the verdict that synthesizes signal + trend
+// + outlook into one call, rather than leaving the reader to combine
+// three separate readings themselves. Written to sound like an actual
+// analyst's closing take: it names what's agreeing, what isn't, and
+// what it would take to change the call — then tpActionPlan (below)
+// adds the practical layer: next steps, gain/loss math, what an
+// experienced trader would typically do, and whether now is actually
+// the right entry/exit point — not just a restatement of the badges
+// already on screen.
+// ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// MARKET CONTEXT — grounds the recommendation in when the stock actually
+// last traded and whether the tape has been genuinely active or just
+// carrying forward a stale print. This is what lets the reasoning answer
+// "if the price is the same, why?" and "what is the market saying right
+// now?" instead of jumping straight to a verdict as if every stock trades
+// as actively as a blue chip.
+// ══════════════════════════════════════════════════════════════
+function tpMarketContextNarrative(sig){
+  var sym = tpCurrentSym || 'x';
+  const lt = sig.lastTrade;
+  if(!lt) return '';
+  const dateTxt = tpFmtDate(lt.date);
+  const agoTxt = lt.daysSince<=0 ? 'today' : lt.daysSince===1 ? 'yesterday' : lt.daysSince+' days ago';
+  const priceTxt = lt.price.toFixed(lt.price<1 ? 4 : 2);
+
+  if(lt.isStale){
+    return tpPick(sym+'-market-stale', [
+      "Market check first: the last actual trade printed on "+dateTxt+" ("+agoTxt+"), and it's held at exactly ₱"+priceTxt+" for "+lt.flatBars+" straight sessions with zero intraday range each time. That's not the market agreeing the price is right — it's the market barely showing up. A flat print like that usually means too few buyers and sellers are actually crossing to move it, not that supply and demand have found genuine balance.",
+      "Worth noting before anything else: there hasn't been a real trade with any intraday movement since "+dateTxt+" ("+agoTxt+"), just the same ₱"+priceTxt+" print repeating for "+lt.flatBars+" sessions running. Thin liquidity like this is exactly why the price looks unchanged — there isn't enough volume changing hands to move it, which also means any order placed here could shift the price more than usual.",
+      "The last genuine trade was "+dateTxt+" ("+agoTxt+"), and the tape has simply been carrying that same ₱"+priceTxt+" print forward for "+lt.flatBars+" sessions with no range at all. That's a liquidity gap, not a stability signal — worth treating expected fill price and position size with extra caution on a name trading this thin."
+    ]);
+  }
+  return tpPick(sym+'-market-active', [
+    "Market check: this last traded "+dateTxt+" ("+agoTxt+"), with a real intraday range on the tape — the kind of active two-sided trading that gives the read below more weight than it would carry on a thinly-traded name.",
+    "This is trading normally right now — last session was "+dateTxt+" ("+agoTxt+"), with genuine intraday movement rather than a single carried-over print, so there's real volume actually behind the price action driving the call below."
+  ]);
+}
+
+function tpOverallRecommendationVerdict(sig){
+  var sym = tpCurrentSym || 'x';
+  const band = tpProjectedBand(sig);
+  const aligned = (sig.signal==='BUY' && sig.trend==='BULL') || (sig.signal==='SELL' && sig.trend==='BEAR');
+  const opposed = (sig.signal==='BUY' && sig.trend==='BEAR') || (sig.signal==='SELL' && sig.trend==='BULL');
+  const target = band ? (sig.signal==='BUY' ? band.H : sig.signal==='SELL' ? band.L : null) : null;
+  const floor = band ? (sig.signal==='BUY' ? band.L : sig.signal==='SELL' ? band.H : null) : null;
+
+  // Not enough price history to size a band yet — give the directional
+  // read without inventing peso levels that don't exist.
+  if(!band && sig.signal!=='HOLD'){
+    return tpPick(sym+'-rec-noband', [
+      "There's a "+sig.signal+" signal here at "+sig.confidencePct+"% conviction, but not enough trading history yet to size a realistic price target — that'll fill in once more sessions are on record. Treat the direction as the takeaway for now, not a specific level.",
+      sig.signal+" at "+sig.confidencePct+"% conviction is the read, though this ticker doesn't have enough bars yet to project a reliable ₱ range. Worth revisiting once more history builds up."
+    ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+  }
+
+  if(sig.signal==='BUY'){
+    if(aligned && sig.confidencePct>=80){
+      return tpPick(sym+'-rec-buy-strong', [
+        "This is the setup worth actually acting on. RSI oversold and the SMA trend are both confirming the same story, "+sig.confidencePct+"% conviction is about as clean as this model gets, and the projected path toward ₱"+target+" gives a real level to work with — not just a vague \"it looks good.\" The risk isn't zero, it never is, but this is exactly the kind of alignment a technical setup is supposed to produce before you take it seriously.",
+        "Everything here is pointing one way. Oversold momentum, a confirmed uptrend, "+sig.confidencePct+"% conviction — that's three independent checks agreeing, not one indicator doing all the work. ₱"+target+" is the level this points to over the next session or two, with ₱"+floor+" as the line where the thesis would need rethinking.",
+        "When RSI and trend agree this cleanly, that's the strongest version of a BUY this model can produce. "+sig.confidencePct+"% conviction, a target near ₱"+target+", and a defined floor at ₱"+floor+" if it's wrong — this is a setup with an actual plan attached, not a hunch."
+      ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+    }
+    if(opposed){
+      return tpPick(sym+'-rec-buy-caution', [
+        "There's a real BUY signal here, "+sig.confidencePct+"% conviction from RSI oversold — but it's fighting the trend, not riding it. SMA20 is still below SMA50, which means this is a bet on a reversal, not a continuation. If it works, ₱"+target+" is the level; if the downtrend reasserts itself, ₱"+floor+" goes first. That's a higher-risk shape than a normal BUY, worth sizing accordingly.",
+        "Momentum wants a bounce, but the trend hasn't turned yet — that's the honest read here. "+sig.confidencePct+"% conviction on the RSI side isn't nothing, but buying into a downtrend on an oversold reading is a counter-trend trade, not a confirmed one. ₱"+target+" is achievable; ₱"+floor+" is the risk if the trend wins this round."
+      ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+    }
+    return tpPick(sym+'-rec-buy-moderate', [
+      "This leans BUY, "+sig.confidencePct+"% conviction — real, but not the strongest version of this call. Part of the case is there, part isn't fully confirmed yet. ₱"+target+" is where it's leaning over the next session or two, ₱"+floor+" is the downside if it stalls.",
+      "The case for BUY is genuine at "+sig.confidencePct+"% conviction, just not backed by every input firing at once. Worth watching for confirmation — a move toward ₱"+target+" would validate it, a slip back toward ₱"+floor+" would call it into question."
+    ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+  }
+
+  if(sig.signal==='SELL'){
+    if(aligned && sig.confidencePct>=80){
+      return tpPick(sym+'-rec-sell-strong', [
+        "This is a clean SELL setup, not a marginal one. RSI overbought and a confirmed downtrend are both saying the same thing, "+sig.confidencePct+"% conviction is close to the model's ceiling, and ₱"+target+" is where the pressure points over the next session or two. If you're holding this one, this is the kind of alignment that's worth respecting.",
+        "Overbought momentum plus a confirmed downtrend, agreeing at "+sig.confidencePct+"% conviction — that's not one weak signal, that's two independent reads lining up. ₱"+target+" is the level this is leaning toward, with ₱"+floor+" as the ceiling if the selling eases early.",
+        "Both checks that matter here — momentum and trend — are pointing down together, at "+sig.confidencePct+"% conviction. ₱"+target+" is the level to watch over the next 1-2 sessions, ₱"+floor+" is where this read would start to look premature."
+      ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+    }
+    if(opposed){
+      return tpPick(sym+'-rec-sell-caution', [
+        "There's a SELL signal here at "+sig.confidencePct+"% conviction from an overbought RSI, but the trend is still up — SMA20 hasn't lost ground to SMA50 yet. This is a bet that momentum fades before the uptrend does, which doesn't always play out. ₱"+target+" is the level if it does; ₱"+floor+" is the risk if the uptrend just keeps going.",
+        "Momentum is stretched, but the trend hasn't confirmed a turn — worth being clear-eyed about that. "+sig.confidencePct+"% conviction on the overbought read is real, but selling into a live uptrend is fighting the tape, not following it."
+      ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+    }
+    return tpPick(sym+'-rec-sell-moderate', [
+      "This leans SELL at "+sig.confidencePct+"% conviction — a genuine tilt, but not every input is confirming it yet. ₱"+target+" is the level it's pointing toward, ₱"+floor+" is where the case would weaken.",
+      "The downside case holds up at "+sig.confidencePct+"% conviction, just without full agreement across both checks. Worth watching rather than acting on immediately — a break toward ₱"+target+" would strengthen it."
+    ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+  }
+
+  // HOLD
+  if(sig.confidencePct>=70){
+    return tpPick(sym+'-rec-hold-strong', [
+      "The honest call here is to do nothing. Neither RSI nor trend is stretched enough to earn a real edge — "+sig.confidencePct+"% conviction in that no-trade read means this genuinely isn't a coin flip dressed up as caution, it's a stock sitting in the middle of its own range. Forcing a BUY or SELL here would be trading a hunch instead of the setup.",
+      "Nothing about this setup is stretched right now, and that's the finding, not a non-answer — "+sig.confidencePct+"% conviction in HOLD. The stock's own ₱"+(band?band.L:'—')+"–₱"+(band?band.H:'—')+" chop zone over the next 1-2 sessions is the more useful thing to know than a forced direction.",
+      "This is a wait, and a fairly confident one at "+sig.confidencePct+"%. RSI is neutral, trend is flat — there's no edge here to trade, just noise until one of those two numbers actually moves."
+    ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+  }
+  return tpPick(sym+'-rec-hold-watch', [
+    "This is closer to the edge of turning into a real signal than a typical HOLD — "+sig.confidencePct+"% conviction in no-trade, which means it's worth checking back on rather than ignoring. A small move in RSI or the SMA gap could flip this to BUY or SELL.",
+    "HOLD, but not a settled one — "+sig.confidencePct+"% conviction here means the score is closer to a trigger than to dead center. Worth watching this one over the next session or two rather than writing it off.",
+    "This sits on HOLD at "+sig.confidencePct+"% conviction, which is on the lower end for a no-trade call — one of the inputs is closer to flipping than it looks at first glance."
+  ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+}
+
+// Public entry point used by tpRenderAll: leads with the market-activity
+// context (last trade date, stale-print detection) so the reader knows
+// how much to trust the signal before reading the verdict itself, then
+// the verdict + action plan from the core function above.
+function tpOverallRecommendation(sig){
+  const context = tpMarketContextNarrative(sig);
+  const verdict = tpOverallRecommendationVerdict(sig);
+  return (context ? context + ' ' : '') + verdict;
 }
 
 const TP_TF_DAYS = {'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':730};
@@ -5490,6 +5852,17 @@ function tpUpdateRangeAndStats(refSeries, sig, liveQuote){
   document.getElementById('tp-stat-vol').textContent = tpFmtPeso(volume*close) + '  ·  ' + tpFmtNum(volume) + ' shares';
   document.getElementById('tp-stat-sma20').textContent = sig.sma20!==null ? '₱'+sig.sma20 : '—';
   document.getElementById('tp-stat-sma50').textContent = sig.sma50!==null ? '₱'+sig.sma50 : '—';
+
+  const lt = sig.lastTrade;
+  const ltEl = document.getElementById('tp-stat-lasttrade');
+  if(ltEl){
+    if(lt){
+      const agoTxt = lt.daysSince<=0 ? 'today' : lt.daysSince===1 ? '1 day ago' : lt.daysSince+' days ago';
+      ltEl.textContent = tpFmtDate(lt.date) + ' (' + agoTxt + ')' + (lt.isStale ? ' · thin trading' : '');
+    } else {
+      ltEl.textContent = '—';
+    }
+  }
 }
 
 function tpSetTimeframe(tf){
@@ -5519,6 +5892,7 @@ async function tpRenderAll(sym){
   // can't provide.
   const lq = tpLiveQuotes[sym];
   const liveOk = lq && lq.status === 'Open' && lq.last != null && lq.previousClose;
+  sig.lastTrade = tpResolveLastTrade(sig, liveOk ? lq : null);
   const price = liveOk ? lq.last : sig.price;
   const prev = liveOk ? lq.previousClose : histPrev;
   const chg = price - prev;
@@ -5554,6 +5928,11 @@ async function tpRenderAll(sym){
   outlookTagEl.textContent = '2-DAY OUTLOOK';
   outlookTagEl.className = 'tp-summary-tag OUTLOOK';
   document.getElementById('tp-summary-outlook-text').textContent = tpOutlookNarrative(sig);
+
+  const recTagEl = document.getElementById('tp-summary-rec-tag');
+  recTagEl.textContent = 'RECOMMENDATION';
+  recTagEl.className = 'tp-summary-tag ' + sig.signal;
+  document.getElementById('tp-summary-rec-text').textContent = tpOverallRecommendation(sig);
 
   // Full bullet-list detail previously lived in a Signal Breakdown card
   // here; that slot is now the market-wide Top Gainers card instead.
