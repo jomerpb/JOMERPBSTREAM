@@ -4921,7 +4921,7 @@ async function tpPollRunStatus(runId, ghHeaders, deadline){
     var run = await resp.json();
     if (run.status === 'completed') {
       if (run.conclusion === 'success') {
-        await loadPseHistory();
+        await loadPseLiveQuotes();
         tpFinishRefresh(null);
       } else {
         tpFinishRefresh('Run finished with issues ❌ (' + run.conclusion + ') — check Actions tab.');
@@ -5049,12 +5049,6 @@ async function loadPseHistory(){
     PSE_HISTORY_STATUS = {loaded:false, source:'fallback estimates (live feed unavailable)', error:e.message};
     console.warn('PSE history load failed, using mock data:', e.message);
   }
-  var statusEl = document.getElementById('tp-refresh-status');
-  if(statusEl){
-    statusEl.textContent = PSE_HISTORY_STATUS.loaded
-      ? 'Data Updated ' + tpFormatPH(data.generatedAt)
-      : 'Data unavailable — ' + (PSE_HISTORY_STATUS.error || 'showing fallback estimates');
-  }
   var disclaimerEl = document.getElementById('tp-disclaimer');
   if(disclaimerEl){
     disclaimerEl.textContent = PSE_HISTORY_STATUS.loaded
@@ -5151,8 +5145,8 @@ var PSE_FULL_HISTORY_READY = (async function loadPseFullHistory(){
 // now the primary source for Top Gainers; tpLiveSeriesAll stays the source
 // for the chart, RSI, and SMA, which need a full history, not one snapshot.
 var tpLiveQuotes = {};
-var PSE_LIVE_QUOTES_STATUS = {loaded:false, tickerCount:0, error:null};
-var PSE_LIVE_QUOTES_READY = (async function loadPseLiveQuotes(){
+var PSE_LIVE_QUOTES_STATUS = {loaded:false, tickerCount:0, error:null, generatedAt:null};
+async function loadPseLiveQuotes(){
   var RAW_URL = 'https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pse-live-quotes.json';
   try {
     var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
@@ -5164,15 +5158,22 @@ var PSE_LIVE_QUOTES_READY = (async function loadPseLiveQuotes(){
       tpLiveQuotes[sym] = data.quotes[sym];
       loadedCount++;
     }
-    PSE_LIVE_QUOTES_STATUS = {loaded: loadedCount>0, tickerCount: loadedCount, error: null};
+    PSE_LIVE_QUOTES_STATUS = {loaded: loadedCount>0, tickerCount: loadedCount, error: null, generatedAt: data.generatedAt || null};
     console.log('PSE live quotes loaded:', loadedCount, 'tickers, generatedAt:', data.generatedAt);
   } catch(e) {
-    PSE_LIVE_QUOTES_STATUS = {loaded:false, tickerCount:0, error:e.message};
+    PSE_LIVE_QUOTES_STATUS = {loaded:false, tickerCount:0, error:e.message, generatedAt:null};
     console.warn('PSE live quotes load failed:', e.message);
+  }
+  var statusEl = document.getElementById('tp-refresh-status');
+  if (statusEl) {
+    statusEl.textContent = PSE_LIVE_QUOTES_STATUS.generatedAt
+      ? 'Data Updated ' + tpFormatPH(PSE_LIVE_QUOTES_STATUS.generatedAt)
+      : 'Data unavailable — ' + (PSE_LIVE_QUOTES_STATUS.error || 'no timestamp in file');
   }
   tpRenderTopGainers();
   if (tpCurrentSym) tpRenderAll(tpCurrentSym);
-})();
+}
+var PSE_LIVE_QUOTES_READY = loadPseLiveQuotes();
 
 // Returns {current, previous, direction} for the picklist price/arrow, or
 // null if no live data exists for this symbol yet (blue-chip data takes
