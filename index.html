@@ -4053,7 +4053,7 @@ function pcsoRender(){
 
 (function tryPcso(){
   var g=document.getElementById('pcso-grid');
-  if(g){pcsoRender();pcsoAIFetch();}
+  if(g){pcsoRender();pcsoRefreshFromRaw();}
   else{setTimeout(tryPcso,200);}
 })();
 
@@ -4259,14 +4259,20 @@ async function pcsoRefreshFromRaw(){
     }
     if(data.date) PCSO_DATA.date=data.date;
     pcsoRender();
+    var fetchStatusEl=document.getElementById('pcso-fetch-status');
     if(data.updated){
       var upd=new Date(data.updated);
       var lbl=document.getElementById('pcso-date-lbl');
       if(lbl) lbl.textContent='Updated '+upd.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'});
+      if(fetchStatusEl) fetchStatusEl.textContent='Data Updated '+upd.toLocaleString('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' PH';
+    } else if(fetchStatusEl){
+      fetchStatusEl.textContent='Data timestamp unavailable';
     }
   } catch(err){
     console.error('PCSO raw refresh:',err);
     pcsoRender();
+    var fetchStatusElErr=document.getElementById('pcso-fetch-status');
+    if(fetchStatusElErr) fetchStatusElErr.textContent='Data unavailable ❌ — ' + err.message;
     throw err;
   }
 }
@@ -4305,11 +4311,11 @@ async function pcsoAIFetch(){
     await pcsoRefreshFromRaw();
 
     if(btn){btn.style.color = allOk ? 'var(--green)' : 'var(--accent)'; setTimeout(function(){if(btn)btn.style.color='';},3000);}
-    if (statusEl) statusEl.textContent = allOk ? 'Data refreshed ✅' : 'Refreshed, but a workflow reported issues ❌ — check Actions tab.';
+    if (!allOk && statusEl) statusEl.textContent = 'Refreshed, but a workflow reported issues ❌ — check Actions tab.';
   } catch (e) {
     console.error('pcsoAIFetch failed:', e);
-    if (statusEl) statusEl.textContent = 'Error ❌ — ' + (e && e.message ? e.message : 'see console');
     try { await pcsoRefreshFromRaw(); } catch(e2) { /* already logged */ }
+    if (statusEl) statusEl.textContent = 'Error ❌ — ' + (e && e.message ? e.message : 'see console');
   } finally {
     if(btn){btn.disabled=false;btn.innerHTML='&#9889; Fetch Live';}
   }
@@ -4434,7 +4440,7 @@ async function pcsoAIFetch(){
 #trade-page .tp-refresh-btn svg{width:13px;height:13px;flex-shrink:0;color:var(--accent2);}
 #trade-page .tp-refresh-btn.tp-refresh-spinning svg{animation:tp-spin 0.9s linear infinite;}
 @keyframes tp-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-#trade-page .tp-refresh-status{font-size:10.5px;color:var(--muted);line-height:1.4;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#trade-page .tp-refresh-status{font-size:10.5px;color:var(--muted);line-height:1.4;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;margin-left:auto;}
 </style>
 <div class="topbar">
   <div class="topbar-logo">JOMERPB <span>- TRADE SIGNALS</span></div>
@@ -4897,7 +4903,7 @@ function tpFinishRefresh(message){
   var status = document.getElementById('tp-refresh-status');
   btn.disabled = false;
   btn.classList.remove('tp-refresh-spinning');
-  status.textContent = message;
+  if (message != null) status.textContent = message;
 }
 
 async function tpPollRunStatus(runId, ghHeaders, deadline){
@@ -4915,7 +4921,8 @@ async function tpPollRunStatus(runId, ghHeaders, deadline){
     var run = await resp.json();
     if (run.status === 'completed') {
       if (run.conclusion === 'success') {
-        tpFinishRefresh('Data Updated ' + new Date().toISOString());
+        await loadPseHistory();
+        tpFinishRefresh(null);
       } else {
         tpFinishRefresh('Run finished with issues ❌ (' + run.conclusion + ') — check Actions tab.');
       }
@@ -5001,7 +5008,15 @@ async function tpTriggerRefresh(){
 
 var tpLiveSeries = {};
 var PSE_HISTORY_STATUS = {loaded:false, source:'fallback estimates (live feed unavailable)', error:null};
-var PSE_HISTORY_READY = (async function loadPseHistory(){
+function tpFormatPH(iso){
+  try {
+    return new Date(iso).toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila', month:'short', day:'numeric',
+      hour:'2-digit', minute:'2-digit'
+    }) + ' PH';
+  } catch(e) { return iso; }
+}
+async function loadPseHistory(){
   var RAW_URL = 'https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pse-history.json';
   try {
     var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
@@ -5034,11 +5049,11 @@ var PSE_HISTORY_READY = (async function loadPseHistory(){
     PSE_HISTORY_STATUS = {loaded:false, source:'fallback estimates (live feed unavailable)', error:e.message};
     console.warn('PSE history load failed, using mock data:', e.message);
   }
-  var statusEl = document.getElementById('tp-data-status');
+  var statusEl = document.getElementById('tp-refresh-status');
   if(statusEl){
     statusEl.textContent = PSE_HISTORY_STATUS.loaded
-      ? 'PSE Analysis (Updated ' + data.generatedAt + ')'
-      : 'PSE Analysis (fallback estimates' + (PSE_HISTORY_STATUS.error ? ' — ' + PSE_HISTORY_STATUS.error : ' — feed unavailable') + ')';
+      ? 'Data Updated ' + tpFormatPH(data.generatedAt)
+      : 'Data unavailable — ' + (PSE_HISTORY_STATUS.error || 'showing fallback estimates');
   }
   var disclaimerEl = document.getElementById('tp-disclaimer');
   if(disclaimerEl){
@@ -5052,7 +5067,8 @@ var PSE_HISTORY_READY = (async function loadPseHistory(){
     tpRenderDropdown(searchElBlue ? searchElBlue.value : '');
   }
   tpRenderTopGainers();
-})();
+}
+var PSE_HISTORY_READY = loadPseHistory();
 
 // Unified series getter: live data when available and fresh, mock fallback otherwise.
 // Unified series getter: live blue-chip data (freshest, 15-min cadence)
