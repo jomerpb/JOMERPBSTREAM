@@ -7,13 +7,29 @@ It only ADDS new (date, game) entries that don't already exist in the file.
 Your manually-verified historical data is never touched.
 
 Source: businesslist.ph "Result Today" pages (one result per game per run).
+
+--- GAP-DETECTION ADDITION (this version) ---
+After each game is processed, we compute the *expected* most-recent draw
+date for that game (based on its known draw-day schedule, same convention
+as PCSO_GAME_SCHED in index.html) and compare it against what's actually
+on file. If the source page hasn't caught up yet, we print a [GAP] line
+to the Action log so it's visible instead of silently passing.
+
+KNOWN LIMITATION: this does NOT know about PCSO-declared holidays or
+draw suspensions. A real skipped draw will currently print a false-positive
+[GAP] warning. Treat [GAP] lines as "worth a manual look," not as proof
+something is broken, until a holiday calendar is added.
+
+This version does NOT change insert/backfill behavior in any way — it is
+purely additive logging for you to validate over a week or two before we
+consider adding a second catch-up cron run or auto-backfill logic.
 """
 
 import json
 import re
 import sys
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 
 import requests
 from bs4 import BeautifulSoup
@@ -37,6 +53,17 @@ MONTHS = {
     "July": 7, "August": 8, "September": 9, "October": 10, "November": 11, "December": 12,
 }
 
+# Draw-day schedules, JS Date.getDay() convention: Sunday=0 ... Saturday=6.
+# Must stay in sync with PCSO_GAME_SCHED in index.html.
+GAME_SCHED = {
+    "6/58": [0, 2, 5],   # Sun, Tue, Fri
+    "6/55": [1, 3, 6],   # Mon, Wed, Sat
+    "6/49": [0, 2, 4],   # Sun, Tue, Thu
+    "6/45": [1, 3, 5],   # Mon, Wed, Fri
+    "6/42": [2, 4, 6],   # Tue, Thu, Sat
+    "ez2":  [0, 1, 2, 3, 4, 5, 6],  # daily
+}
+
 
 def parse_date_text(text):
     """Parse a date like 'Sunday June 28 2026' or 'June 30, 2026' -> '2026-06-28'."""
@@ -48,6 +75,22 @@ def parse_date_text(text):
     if not month:
         return None
     return f"{int(year):04d}-{month:02d}-{int(day):02d}"
+
+
+def js_weekday(d):
+    """Convert a Python date to JS Date.getDay() convention (Sun=0..Sat=6)."""
+    return (d.weekday() + 1) % 7
+
+
+def most_recent_scheduled_date(sched_days, ref_date):
+    """Walk backwards from ref_date to the most recent date whose weekday
+    is in sched_days (inclusive of ref_date itself)."""
+    d = ref_date
+    for _ in range(14):  # safety bound, schedules never go >7 days between draws
+        if js_weekday(d) in sched_days:
+            return d
+        d = d - timedelta(days=1)
+    return ref_date  # fallback, should never hit
 
 
 def fetch_latest_6ball(url):
@@ -121,6 +164,25 @@ def save_history(data):
         json.dump(data, f, indent=2)
 
 
+def check_gap(game_label, sched_key, history):
+    """Compare the most recent date on file against the expected most recent
+    scheduled draw date. Prints a [GAP] line if they don't match. Never raises."""
+    ph_today = datetime.now(timezone(timedelta(hours=8))).date()
+    expected = most_recent_scheduled_date(GAME_SCHED[sched_key], ph_today)
+    entries = history.get(sched_key, [])
+    on_file = entries[0]["date"] if entries else None
+    on_file_date = date.fromisoformat(on_file) if on_file else None
+
+    if on_file_date is None or on_file_date < expected:
+        print(f"[GAP] {game_label}: expected most recent draw {expected.isoformat()}, "
+              f"most recent on file is {on_file or 'NONE'}. "
+              f"(Could be a real source lag, or a legitimate PCSO holiday/suspension "
+              f"— no holiday calendar yet, verify manually.)")
+    else:
+        print(f"[ok] {game_label}: most recent on file ({on_file}) meets or exceeds "
+              f"expected ({expected.isoformat()})")
+
+
 def main():
     history = load_history()
     added = 0
@@ -130,18 +192,19 @@ def main():
             entry = fetch_latest_6ball(url)
         except Exception as e:
             print(f"[warn] failed to fetch {game_key}: {e}", file=sys.stderr)
-            continue
-        if not entry:
-            print(f"[warn] could not parse {game_key} page", file=sys.stderr)
-            continue
+            entry = None
 
-        existing_dates = {e["date"] for e in history.get(game_key, [])}
-        if entry["date"] not in existing_dates:
-            history.setdefault(game_key, []).insert(0, entry)
-            added += 1
-            print(f"[add] {game_key} {entry['date']}: {entry['nums']}")
+        if entry:
+            existing_dates = {e["date"] for e in history.get(game_key, [])}
+            if entry["date"] not in existing_dates:
+                history.setdefault(game_key, []).insert(0, entry)
+                added += 1
+                print(f"[add] {game_key} {entry['date']}: {entry['nums']}")
+            else:
+                print(f"[skip] {game_key} {entry['date']} already present")
         else:
-            print(f"[skip] {game_key} {entry['date']} already present")
+            print(f"[warn] could not parse {game_key} page")
+
         time.sleep(1)  # be polite between requests
 
     try:
@@ -158,6 +221,13 @@ def main():
             print(f"[add] ez2 {ez2_entry['date']}: {ez2_entry['draws']}")
         else:
             print(f"[skip] ez2 {ez2_entry['date']} already present")
+
+    # --- Gap-detection summary (additive, non-blocking) ---
+    print("\n--- GAP CHECK ---")
+    for sched_key in GAME_PAGES.keys():
+        check_gap(sched_key, sched_key, history)
+    check_gap("ez2", "ez2", history)
+    print("--- END GAP CHECK ---\n")
 
     if added > 0:
         save_history(history)
