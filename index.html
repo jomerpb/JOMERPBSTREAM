@@ -5282,7 +5282,11 @@ function tpWatchLastPrice(sym){
 // (no history yet, band unavailable) just falls back to empty inputs.
 function tpRecommendedBand(sym){
   try {
-    var series = tpGetSeries(sym, 90);
+    // Live bar merged in so a freshly-added watch seeds its High/Low off
+    // the CURRENT session's band -- the old series-only version once
+    // produced a recommended High of ₱3.941 while the stock was already
+    // trading at ₱4.09 (MWIDE, Jul 2026).
+    var series = tpMergeLiveBar(tpGetSeries(sym, 90), sym);
     if(!series || series.length < 2) return null;
     var band = tpProjectedBand(tpComputeSignal(series));
     if(!band) return null;
@@ -5733,6 +5737,43 @@ function tpParseAsOfDate(asOfStr){
   return year + '-' + (mon<10?'0':'')+mon + '-' + (day<10?'0':'')+day;
 }
 
+// BUG FIX (Jul 2026, MWIDE case): the signal engine, projected band, and
+// chart all ran purely on the EOD history file, which lags the live quote
+// by 1+ sessions (3 sessions when the history workflow hadn't been
+// dispatched). Result: the price card showed the live ₱4.09 while
+// RSI/SMA/band were computed off a ₱3.87 close from Jun 30 -- the
+// "projected high" (₱3.941) sat BELOW the actual live price, and RSI read
+// 73.86 (neutral) when the real reading was ~83 (overbought). This helper
+// merges the live quote into any OHLC series as its newest bar, so every
+// consumer analyzes the same session the price card displays. Runs on
+// every render, so pressing Fetch Live Data -> loadPseLiveQuotes() ->
+// tpRenderAll() automatically re-analyzes with the fresh quote merged in.
+// - lq date newer than last bar  -> append a synthetic bar from the quote
+// - lq date same as last bar     -> replace it (live snapshot > stale EOD)
+// - lq missing/older/unparseable -> series returned untouched
+// volume uses lq.value (peso value) to match the history loaders, which
+// map volume:d.value -- keeps tpVolumeConfirmation apples-to-apples.
+function tpMergeLiveBar(series, sym){
+  var lq = tpLiveQuotes[sym];
+  if(!Array.isArray(series) || !series.length || !lq || lq.last == null) return series;
+  var lqDate = tpParseAsOfDate(lq.asOf);
+  if(!lqDate) return series;
+  var lastBar = series[series.length-1];
+  if(!lastBar || !lastBar.date || lqDate < lastBar.date) return series;
+  var bar = {
+    date: lqDate,
+    open:  lq.open  != null ? lq.open  : (lq.previousClose != null ? lq.previousClose : lq.last),
+    high:  lq.high  != null ? Math.max(lq.high, lq.last) : lq.last,
+    low:   lq.low   != null ? Math.min(lq.low,  lq.last) : lq.last,
+    close: lq.last,
+    volume: lq.value != null ? lq.value : (lq.volume || 0)
+  };
+  var out = series.slice();
+  if(lqDate === lastBar.date) out[out.length-1] = bar;
+  else out.push(bar);
+  return out;
+}
+
 // Rebuilds the lastTrade object off the live quote's own asOf date instead
 // of refSeries's (possibly lagging) bar date, when a usable live quote is
 // available -- keeps "Last Traded" consistent with the numbers shown
@@ -5850,6 +5891,23 @@ function tpSignalNarrative(sig){
       "One of the things this model checks is a momentum gauge — a 0-to-100 scale that tracks how hard people have been buying or selling lately, like a speedometer for crowd behavior. It just hit "+sig.rsi+", well past the 75 mark this model treats as 'bought up too fast, too hard.' The stock has run further, faster, than its own recent pace really supports, and moves like that tend to give a little back.",
       "That momentum gauge is reading "+sig.rsi+" here — buyers have been piling in aggressively, maybe too aggressively. When this reading gets this hot, the odds start tilting toward a pause or a small pullback rather than more straight-up gains.",
       "The momentum reading on this one just hit "+sig.rsi+", clearly in overbought territory. It's not just that the price is up — it's up more than the recent buying pace can really keep justifying, which is usually when a cooldown shows up."
+    ]);
+  } else if(sig.rsi >= 65){
+    // Near-threshold tier (65–75): previously this fell into the "mid"
+    // copy below, which claimed the gauge was "right in the middle of its
+    // range" even at 73.86 — 0.14 away from the overbought trigger. Still
+    // scores 0 (the 75 line is the scoring boundary), but the wording now
+    // says what's actually happening: hot, not yet extreme.
+    rsiPart = tpPick(sym+'-rsi-warm', [
+      "One of the things this model checks is a momentum gauge — a 0-to-100 scale that tracks how hard people have been buying or selling lately. It's reading "+sig.rsi+" here: warm, and closing in on the 75 line this model treats as 'bought up too fast.' It hasn't crossed it, so momentum isn't scoring against this stock yet — but buyers have clearly been doing most of the pushing lately, and there isn't much runway left before this flips to a pullback warning.",
+      "That momentum gauge sits at "+sig.rsi+" — not extreme yet, but noticeably closer to the overbought line at 75 than to neutral ground. This model only changes the score once that line is actually crossed, so the read below still comes from the trend — just know the buying pace is already running hot underneath it.",
+      "The momentum reading here is "+sig.rsi+", approaching the 75 overbought threshold without crossing it. Momentum isn't deciding this call — but it's leaning, and a strong session or two from here would tip it into 'stretched' territory."
+    ]);
+  } else if(sig.rsi <= 35){
+    rsiPart = tpPick(sym+'-rsi-cool', [
+      "One of the things this model checks is a momentum gauge — a 0-to-100 scale that tracks how hard people have been buying or selling lately. It's reading "+sig.rsi+" here: soft, and drifting toward the 25 line this model treats as 'sold off too hard.' It hasn't crossed it, so momentum isn't scoring in this stock's favor yet — but sellers have clearly had the upper hand lately, and it wouldn't take much more to tip this into bounce-candidate territory.",
+      "That momentum gauge sits at "+sig.rsi+" — not extreme yet, but noticeably closer to the oversold line at 25 than to neutral ground. The score only changes once that line is actually crossed, so the read below still comes from the trend — just know the selling pressure is already running heavy underneath it.",
+      "The momentum reading here is "+sig.rsi+", approaching the 25 oversold threshold without crossing it. Momentum isn't deciding this call — but another rough session or two would push it into the 'overdone selling' zone this model watches for a snapback."
     ]);
   } else {
     rsiPart = tpPick(sym+'-rsi-mid', [
@@ -6308,7 +6366,10 @@ function tpGetChartSeries(sym, tf){
   if(!stock) return [];
   if(tf==='1D') return tpGenIntraday(stock.base, tpSeed(sym+'-1d-demo')); // intraday stays mock — PSE Edge's DisclosureCht.ax only returns daily bars
   const days = TP_TF_DAYS[tf] || 90;
-  const full = tpGetSeries(sym, days);
+  // Same live-bar merge as the signal engine -- without this the reasoning
+  // cards would reflect today's session while the chart's last candle
+  // stopped at the previous EOD bar.
+  const full = tpMergeLiveBar(tpGetSeries(sym, days), sym);
   return tpAggregate(full, 80);
 }
 
@@ -6533,7 +6594,11 @@ async function tpRenderAll(sym){
   if(!t) return;
   tpCurrentSym = sym;
   await PSE_HISTORY_READY;
-  const refSeries = tpGetSeries(sym, 90);
+  // Live quote merged in as the newest bar (see tpMergeLiveBar) so RSI,
+  // SMAs, volume confirmation, and the projected band all describe the
+  // SAME session as the big price number below -- previously they ran on
+  // the EOD file only, which can lag the live quote by 1+ sessions.
+  const refSeries = tpMergeLiveBar(tpGetSeries(sym, 90), sym);
   const sig = tpComputeSignal(refSeries);
   const histPrev = refSeries[refSeries.length-2].close;
 
