@@ -1,13 +1,6 @@
 name: PSE Live Quote Scraper
 
 on:
-  schedule:
-    # Once daily, 30 min after PSE market close (3:30 PM Manila).
-    # Runs at 08:00 UTC = 4:00 PM Manila. Captures the day's final
-    # Trading-At-Last price — that's all "today's Top Gainers" needs,
-    # no intraday polling required. Scheduled 30 min ahead of the
-    # existing full-market scraper (08:30 UTC) so the two don't overlap.
-    - cron: '0 8 * * 1-5'
   workflow_dispatch: {} # manual trigger from the Actions tab, any time
 
 permissions:

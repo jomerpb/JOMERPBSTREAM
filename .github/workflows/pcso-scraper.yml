@@ -1,10 +1,6 @@
 name: PCSO Results Scraper
 
 on:
-  schedule:
-    - cron: '15 6 * * *'   # 2:15 PM PH
-    - cron: '15 9 * * *'   # 5:15 PM PH
-    - cron: '45 13 * * *'  # 9:45 PM PH
   workflow_dispatch:
 
 jobs:

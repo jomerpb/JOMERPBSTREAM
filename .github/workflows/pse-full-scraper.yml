@@ -1,11 +1,6 @@
 name: PSE Full Market Scraper
 
 on:
-  schedule:
-    # Once daily, shortly after PSE market close (4:00 PM Manila = 08:00 UTC).
-    # Runs at 08:30 UTC (4:30 PM Manila) to give the last blue-chip run
-    # a clean head start and avoid overlapping with it.
-    - cron: '30 8 * * 1-5'
   workflow_dispatch: {} # manual trigger from the Actions tab, any time
 
 permissions:

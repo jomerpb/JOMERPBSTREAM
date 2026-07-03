@@ -1,8 +1,6 @@
 name: PCSO History Append (Daily)
 
 on:
-  schedule:
-    - cron: '15 14 * * *'   # 10:15 PM PH (after the 9PM/EZ2 9PM draws settle)
   workflow_dispatch:
 
 jobs:
