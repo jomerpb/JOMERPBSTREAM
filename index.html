@@ -4459,20 +4459,21 @@ async function pcsoAIFetch(){
 #trade-page .tp-card-chev.collapsed{transform:rotate(-90deg);}
 #trade-page .tp-card-body{margin-top:8px;}
 #trade-page .tp-card-body.collapsed{display:none;}
-#trade-page .tp-watch-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+#trade-page .tp-watch-row{display:flex;align-items:flex-end;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;}
 #trade-page .tp-watch-row:last-child{border-bottom:none;}
 #trade-page .tp-watch-name{flex:1 1 100%;min-width:0;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;}
 #trade-page .tp-watch-name:hover{color:var(--accent2);}
 #trade-page .tp-watch-name small{font-weight:400;color:var(--muted);font-size:10.5px;}
-#trade-page .tp-watch-last{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;min-width:64px;}
-#trade-page .tp-watch-input{width:100%;min-width:0;background:var(--bg,#0b0d12);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px;outline:none;transition:border-color 0.15s, background 0.15s, color 0.15s;}
+#trade-page .tp-watch-last{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;height:30px;display:flex;align-items:center;justify-content:center;}
+#trade-page .tp-watch-lastbox{flex:0 0 auto;min-width:64px;}
+#trade-page .tp-watch-input{width:100%;min-width:0;height:30px;box-sizing:border-box;background:var(--bg,#0b0d12);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px;outline:none;transition:border-color 0.15s, background 0.15s, color 0.15s;}
 #trade-page .tp-watch-input:focus{border-color:var(--accent2);}
 #trade-page .tp-watch-input.hit-high{border-color:var(--green);background:rgba(34,197,94,0.18);color:var(--green);font-weight:700;animation:tp-watch-pulse 1.2s ease-in-out infinite;}
 #trade-page .tp-watch-input.hit-low{border-color:var(--red);background:rgba(239,68,68,0.18);color:var(--red);font-weight:700;animation:tp-watch-pulse 1.2s ease-in-out infinite;}
 #trade-page .tp-watch-inbox{display:flex;flex-direction:column;gap:2px;align-items:center;flex:1 1 0;min-width:0;}
 #trade-page .tp-watch-inlabel{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
 @keyframes tp-watch-pulse{0%,100%{opacity:1;}50%{opacity:0.55;}}
-#trade-page .tp-watch-remove{width:22px;height:22px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;padding:0;}
+#trade-page .tp-watch-remove{width:22px;height:22px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;padding:0;margin-bottom:4px;}
 #trade-page .tp-watch-remove:hover{border-color:var(--red);color:var(--red);}
 #trade-page .tp-watch-empty{font-size:11.5px;color:var(--muted);line-height:1.5;padding:6px 0;}
 </style>
@@ -4512,7 +4513,7 @@ async function pcsoAIFetch(){
     </div>
     <div class="tp-card-body" id="tp-body-watch">
       <div id="tp-watch-list"></div>
-      <div class="tp-watch-empty" id="tp-watch-empty">No stocks on your watchlist yet. Select a stock below, then tap the ＋ button beside its name.</div>
+      <div class="tp-watch-empty" id="tp-watch-empty">No stocks on your watchlist yet. Select a stock below, then tap the ＋ button beside its name. High/Low alerts start pre-filled at the model's recommended levels — tap a box to adjust.</div>
     </div>
   </div>
 
@@ -5274,12 +5275,35 @@ function tpWatchLastPrice(sym){
   } catch(e){}
   return null;
 }
+// Recommended alert levels for a symbol — the SAME projected 1-2 session
+// band the reasoning card cites (tpProjectedBand over the same 90-day
+// series and signal), so a freshly-added watch starts at the model's
+// recommended High/Low instead of blank boxes. Best-effort: any failure
+// (no history yet, band unavailable) just falls back to empty inputs.
+function tpRecommendedBand(sym){
+  try {
+    var series = tpGetSeries(sym, 90);
+    if(!series || series.length < 2) return null;
+    var band = tpProjectedBand(tpComputeSignal(series));
+    if(!band) return null;
+    var hi = parseFloat(band.H), lo = parseFloat(band.L);
+    if(!isFinite(hi) || !isFinite(lo) || hi <= 0 || lo <= 0) return null;
+    return { high: hi, low: lo };
+  } catch(e){ return null; }
+}
 function tpToggleWatch(){
   if(!tpCurrentSym) return;
   var list = tpGetWatch();
   var i = list.findIndex(function(w){ return w.sym===tpCurrentSym; });
   if(i >= 0) list.splice(i,1);
-  else list.push({sym: tpCurrentSym, highPrice: null, lowPrice: null});
+  else {
+    var band = tpRecommendedBand(tpCurrentSym);
+    list.push({
+      sym: tpCurrentSym,
+      highPrice: band ? band.high : null,
+      lowPrice:  band ? band.low  : null
+    });
+  }
   tpSaveWatch(list);
   tpUpdateWatchBtn();
   tpRenderWatchlist();
@@ -5356,7 +5380,8 @@ function tpRenderWatchlist(){
     var lVal = w.lowPrice == null ? '' : w.lowPrice;
     return '<div class="tp-watch-row">'+
       '<div class="tp-watch-name" onclick="tpSelectTicker(\''+w.sym+'\')">'+w.sym+' \u00b7 <small>'+name+'</small></div>'+
-      '<div class="tp-watch-last">'+lastTxt+'</div>'+
+      '<div class="tp-watch-inbox tp-watch-lastbox"><span class="tp-watch-inlabel">Last</span>'+
+        '<div class="tp-watch-last">'+lastTxt+'</div></div>'+
       '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+
         '<input type="number" step="0.01" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="\u20b1 high" value="'+hVal+'" onchange="tpSetWatchPrice(\''+w.sym+'\', \'highPrice\', this.value)"></div>'+
       '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Low</span>'+
