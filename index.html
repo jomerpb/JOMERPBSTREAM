@@ -4416,7 +4416,11 @@ async function pcsoAIFetch(){
 #trade-page .tp-stat-row span:last-child{color:var(--text);font-weight:700;}
 #trade-page .tp-gainers{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
 #trade-page .tp-gainers-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;}
-#trade-page .tp-gainers-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:0;}
+#trade-page .tp-gainers-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1.5px;color:var(--text);margin-bottom:0;}
+#trade-page .tp-summary-row-toprec .tp-summary-text{font-weight:500;}
+#trade-page #tp-view-seg{margin:0 0 12px;}
+#trade-page .tp-backtest-status{font-size:10.5px;color:var(--muted);line-height:1.4;margin-bottom:8px;min-height:0;}
+#trade-page .tp-backtest-status:empty{display:none;}
 #trade-page .tp-gainers-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:2px;flex-shrink:0;}
 #trade-page .tp-gainers-tab{background:transparent;border:none;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:0.3px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;}
 #trade-page .tp-gainers-tab.active{background:var(--amber);color:#1a1206;}
@@ -4488,10 +4492,6 @@ async function pcsoAIFetch(){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
       Fetch Live Data
     </button>
-    <button class="tp-refresh-btn" id="tp-backtest-btn" onclick="tpTriggerBacktest()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      Report Card
-    </button>
     <div class="tp-refresh-status" id="tp-refresh-status"></div>
   </div>
 
@@ -4550,7 +4550,17 @@ async function pcsoAIFetch(){
     <div class="tp-price-chg" id="tp-chg">+0.00 (0.00%)</div>
   </div>
 
+  <!-- Justification / Report view toggle -->
+  <div class="seg-toggle" id="tp-view-seg">
+    <div class="seg-btn active" onclick="tpSetView('justification',this)">Justification</div>
+    <div class="seg-btn" onclick="tpSetView('report',this)">Report</div>
+  </div>
+
   <div class="tp-summary-card" id="tp-summary-card">
+    <div class="tp-summary-row tp-summary-row-toprec">
+      <span class="tp-summary-tag" id="tp-summary-rec-tag">RECOMMENDATION</span>
+      <span class="tp-summary-text" id="tp-summary-rec-text">—</span>
+    </div>
     <div class="tp-summary-row">
       <span class="tp-summary-tag" id="tp-summary-signal-tag">—</span>
       <span class="tp-summary-text" id="tp-summary-signal-text">—</span>
@@ -4567,14 +4577,15 @@ async function pcsoAIFetch(){
       <span class="tp-summary-tag" id="tp-summary-levels-tag">KEY LEVELS</span>
       <span class="tp-summary-text" id="tp-summary-levels-text">—</span>
     </div>
-    <div class="tp-summary-row tp-summary-row-bottomline">
-      <span class="tp-summary-tag" id="tp-summary-rec-tag">RECOMMENDATION</span>
-      <span class="tp-summary-text" id="tp-summary-rec-text">—</span>
-    </div>
   </div>
 
-  <div class="tp-summary-card" id="tp-backtest-card">
+  <div class="tp-summary-card" id="tp-backtest-card" style="display:none;">
     <div class="tp-summary-row tp-summary-row-bottomline">
+      <button class="tp-refresh-btn" id="tp-backtest-btn" onclick="tpTriggerBacktest()" style="margin-bottom:10px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Report Card
+      </button>
+      <div class="tp-backtest-status" id="tp-backtest-status"></div>
       <span class="tp-summary-tag REPORT" id="tp-backtest-tag" onclick="tpToggleBacktestBody()" style="cursor:pointer;">ENGINE REPORT CARD ▾</span>
       <span class="tp-summary-text" id="tp-backtest-text">Loading report card…</span>
     </div>
@@ -5091,7 +5102,7 @@ var tpBacktestReloadTimer = null;
 
 async function tpTriggerBacktest(){
   var btn = document.getElementById('tp-backtest-btn');
-  var status = document.getElementById('tp-refresh-status');
+  var status = document.getElementById('tp-backtest-status') || document.getElementById('tp-refresh-status');
   var token = tpGetGithubToken();
   if (!token) { status.textContent = 'Cancelled — no token entered.'; return; }
 
@@ -5137,6 +5148,20 @@ async function tpTriggerBacktest(){
     status.textContent = 'Network error ❌ — ' + e.message;
     btn.disabled = false;
   }
+}
+
+// JUSTIFICATION / REPORT view toggle — mirrors the Stream tab's
+// segmented category control. "Justification" shows the reasoning
+// card; "Report" shows the engine report card (with its Report Card
+// run button inside).
+function tpSetView(view, el){
+  var btns = document.querySelectorAll('#tp-view-seg .seg-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  if (el) el.classList.add('active');
+  var just = document.getElementById('tp-summary-card');
+  var rep = document.getElementById('tp-backtest-card');
+  if (just) just.style.display = (view === 'justification') ? '' : 'none';
+  if (rep) rep.style.display = (view === 'report') ? '' : 'none';
 }
 
 var tpBacktestCollapsed = false;
