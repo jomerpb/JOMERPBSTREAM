@@ -4420,7 +4420,7 @@ async function pcsoAIFetch(){
 #trade-page .tp-gainers-tab.active{background:var(--amber);color:#1a1206;}
 #trade-page .tp-gainers-note{font-size:9.5px;color:var(--muted);line-height:1.4;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
 #trade-page .tp-gainer-tag{font-size:8.5px;font-weight:700;letter-spacing:0.4px;padding:1px 5px;border-radius:8px;margin-left:6px;display:inline-block;vertical-align:middle;}
-#trade-page .tp-gainer-tag.BUY{background:rgba(34,197,94,0.15);color:var(--green);}
+#trade-page .tp-gainer-tag.BUY,#trade-page .tp-gainer-tag.BULL{background:rgba(34,197,94,0.15);color:var(--green);}
 #trade-page .tp-gainer-tag.HOLD{background:rgba(245,158,11,0.15);color:var(--amber);}
 #trade-page .tp-gainer-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;}
 #trade-page .tp-gainer-row:last-child{border-bottom:none;}
@@ -4431,6 +4431,7 @@ async function pcsoAIFetch(){
 #trade-page .tp-gainer-name{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #trade-page .tp-gainer-price{font-size:12.5px;font-weight:700;color:var(--text);flex-shrink:0;white-space:nowrap;}
 #trade-page .tp-gainer-chg{font-size:11.5px;font-weight:700;color:var(--green);flex-shrink:0;min-width:54px;text-align:right;white-space:nowrap;}
+#trade-page .tp-gainer-chg.down{color:var(--red);}
 #trade-page .tp-gainer-empty{padding:10px 0;font-size:12px;color:var(--muted);text-align:center;}
 #trade-page .tp-disclaimer{font-size:10px;color:var(--muted);margin-top:14px;line-height:1.5;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border);}
 #trade-page .tp-refresh-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:nowrap;}
@@ -4441,6 +4442,39 @@ async function pcsoAIFetch(){
 #trade-page .tp-refresh-btn.tp-refresh-spinning svg{animation:tp-spin 0.9s linear infinite;}
 @keyframes tp-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 #trade-page .tp-refresh-status{font-size:10.5px;color:var(--muted);line-height:1.4;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;margin-left:auto;}
+/* Bulleted reasoning */
+#trade-page .tp-summary-bullets{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:7px;list-style:disc;}
+#trade-page .tp-summary-bullets li{color:var(--text);font-size:12.5px;line-height:1.55;}
+#trade-page .tp-summary-bullets li::marker{color:var(--accent2);}
+/* Watchlist add button (left of stock name) */
+#trade-page .tp-price-name-row{display:flex;align-items:center;gap:8px;}
+#trade-page .tp-watch-add{width:24px;height:24px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--accent2);background:rgba(59,130,246,0.12);color:var(--accent2);font-size:16px;line-height:1;cursor:pointer;padding:0;transition:all 0.15s;}
+#trade-page .tp-watch-add:hover{background:rgba(59,130,246,0.25);}
+#trade-page .tp-watch-add.active{border-color:var(--green);background:rgba(34,197,94,0.15);color:var(--green);}
+/* Watchlist card */
+#trade-page .tp-watchlist{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+#trade-page .tp-watch-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1.5px;color:var(--text);}
+#trade-page .tp-card-headbtn{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
+#trade-page .tp-card-chev{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--muted);font-size:13px;transition:transform 0.2s;flex-shrink:0;}
+#trade-page .tp-card-chev.collapsed{transform:rotate(-90deg);}
+#trade-page .tp-card-body{margin-top:8px;}
+#trade-page .tp-card-body.collapsed{display:none;}
+#trade-page .tp-watch-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+#trade-page .tp-watch-row:last-child{border-bottom:none;}
+#trade-page .tp-watch-name{flex:1 1 100%;min-width:0;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;}
+#trade-page .tp-watch-name:hover{color:var(--accent2);}
+#trade-page .tp-watch-name small{font-weight:400;color:var(--muted);font-size:10.5px;}
+#trade-page .tp-watch-last{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;min-width:64px;}
+#trade-page .tp-watch-input{width:100%;min-width:0;background:var(--bg,#0b0d12);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px;outline:none;transition:border-color 0.15s, background 0.15s, color 0.15s;}
+#trade-page .tp-watch-input:focus{border-color:var(--accent2);}
+#trade-page .tp-watch-input.hit-high{border-color:var(--green);background:rgba(34,197,94,0.18);color:var(--green);font-weight:700;animation:tp-watch-pulse 1.2s ease-in-out infinite;}
+#trade-page .tp-watch-input.hit-low{border-color:var(--red);background:rgba(239,68,68,0.18);color:var(--red);font-weight:700;animation:tp-watch-pulse 1.2s ease-in-out infinite;}
+#trade-page .tp-watch-inbox{display:flex;flex-direction:column;gap:2px;align-items:center;flex:1 1 0;min-width:0;}
+#trade-page .tp-watch-inlabel{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+@keyframes tp-watch-pulse{0%,100%{opacity:1;}50%{opacity:0.55;}}
+#trade-page .tp-watch-remove{width:22px;height:22px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;padding:0;}
+#trade-page .tp-watch-remove:hover{border-color:var(--red);color:var(--red);}
+#trade-page .tp-watch-empty{font-size:11.5px;color:var(--muted);line-height:1.5;padding:6px 0;}
 </style>
 <div class="topbar">
   <div class="topbar-logo">JOMERPB <span>- TRADE SIGNALS</span></div>
@@ -4456,14 +4490,30 @@ async function pcsoAIFetch(){
 
   <div class="tp-gainers">
     <div class="tp-gainers-header">
-      <div class="tp-gainers-title">Top Gainers</div>
+      <div class="tp-card-headbtn" onclick="tpToggleCard('gainers')">
+        <span class="tp-card-chev" id="tp-chev-gainers">▾</span>
+        <div class="tp-gainers-title">Top Stocks Today</div>
+      </div>
       <div class="tp-gainers-toggle">
-        <button class="tp-gainers-tab active" data-mode="current" onclick="tpSetGainersMode('current')">Current</button>
-        <button class="tp-gainers-tab" data-mode="future" onclick="tpSetGainersMode('future')">Predicted</button>
+        <button class="tp-gainers-tab active" data-mode="current" onclick="tpSetGainersMode('current')">Gainers</button>
+        <button class="tp-gainers-tab" data-mode="bullish" onclick="tpSetGainersMode('bullish')">Bullish</button>
       </div>
     </div>
-    <div id="tp-gainers-list"></div>
-    <div class="tp-gainers-note" id="tp-gainers-note"></div>
+    <div class="tp-card-body" id="tp-body-gainers">
+      <div id="tp-gainers-list"></div>
+      <div class="tp-gainers-note" id="tp-gainers-note"></div>
+    </div>
+  </div>
+
+  <div class="tp-watchlist" id="tp-watchlist-card">
+    <div class="tp-card-headbtn" onclick="tpToggleCard('watch')">
+      <span class="tp-card-chev" id="tp-chev-watch">▾</span>
+      <div class="tp-watch-title">Watchlist</div>
+    </div>
+    <div class="tp-card-body" id="tp-body-watch">
+      <div id="tp-watch-list"></div>
+      <div class="tp-watch-empty" id="tp-watch-empty">No stocks on your watchlist yet. Select a stock below, then tap the ＋ button beside its name.</div>
+    </div>
   </div>
 
   <div class="tp-picklists">
@@ -4479,7 +4529,10 @@ async function pcsoAIFetch(){
   </div>
 
   <div class="tp-price-card">
-    <div class="tp-price-name" id="tp-name">—</div>
+    <div class="tp-price-name-row">
+      <button class="tp-watch-add" id="tp-watch-add" onclick="tpToggleWatch()" title="Add to watchlist">＋</button>
+      <div class="tp-price-name" id="tp-name">—</div>
+    </div>
     <div class="tp-price-row">
       <div class="tp-price-val" id="tp-price">₱0.00</div>
       <div class="tp-badges-row">
@@ -5061,6 +5114,7 @@ async function loadPseHistory(){
     tpRenderDropdown(searchElBlue ? searchElBlue.value : '');
   }
   tpRenderTopGainers();
+  tpRenderWatchlist();
 }
 var PSE_HISTORY_READY = loadPseHistory();
 
@@ -5135,6 +5189,7 @@ var PSE_FULL_HISTORY_READY = (async function loadPseFullHistory(){
     tpRenderDropdown(searchEl ? searchEl.value : '');
   }
   tpRenderTopGainers();
+  tpRenderWatchlist();
 })();
 
 // Live same-session quotes (stockData.do, once daily ~4PM Manila — see
@@ -5171,6 +5226,7 @@ async function loadPseLiveQuotes(){
       : 'Data unavailable — ' + (PSE_LIVE_QUOTES_STATUS.error || 'no timestamp in file');
   }
   tpRenderTopGainers();
+  tpRenderWatchlist();
   if (tpCurrentSym) tpRenderAll(tpCurrentSym);
 }
 var PSE_LIVE_QUOTES_READY = loadPseLiveQuotes();
@@ -5191,6 +5247,123 @@ function tpGetPicklistPrice(sym){
   var previous = series.length >= 2 ? series[series.length-2].close : null;
   var direction = previous == null ? null : (current > previous ? 'up' : (current < previous ? 'down' : 'flat'));
   return {current: current, previous: previous, direction: direction};
+}
+
+// ══════════════════════════
+// WATCHLIST — localStorage-backed. Each entry: {sym, watchPrice, dir}.
+// dir is captured at the moment the watch price is typed in, by comparing
+// it against the price at that time: a target ABOVE the then-current price
+// means "alert me when it rises to this," a target below means "alert me
+// when it falls to this." The HIT check then only needs the latest price.
+// ══════════════════════════
+var TP_WATCH_KEY = 'tpWatchlist';
+function tpGetWatch(){
+  try { return JSON.parse(localStorage.getItem(TP_WATCH_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function tpSaveWatch(list){
+  try { localStorage.setItem(TP_WATCH_KEY, JSON.stringify(list)); } catch(e){}
+}
+function tpIsWatched(sym){ return tpGetWatch().some(function(w){ return w.sym===sym; }); }
+function tpWatchLastPrice(sym){
+  var info = tpGetPicklistPrice(sym);
+  if(info && info.current != null) return info.current;
+  try {
+    var series = tpGetSeries(sym, 5);
+    if(series && series.length) return series[series.length-1].close;
+  } catch(e){}
+  return null;
+}
+function tpToggleWatch(){
+  if(!tpCurrentSym) return;
+  var list = tpGetWatch();
+  var i = list.findIndex(function(w){ return w.sym===tpCurrentSym; });
+  if(i >= 0) list.splice(i,1);
+  else list.push({sym: tpCurrentSym, highPrice: null, lowPrice: null});
+  tpSaveWatch(list);
+  tpUpdateWatchBtn();
+  tpRenderWatchlist();
+}
+function tpRemoveWatch(sym){
+  tpSaveWatch(tpGetWatch().filter(function(w){ return w.sym!==sym; }));
+  tpUpdateWatchBtn();
+  tpRenderWatchlist();
+}
+function tpSetWatchPrice(sym, field, val){
+  var list = tpGetWatch();
+  var w = list.find(function(x){ return x.sym===sym; });
+  if(!w) return;
+  var p = parseFloat(val);
+  w[field] = (!isFinite(p) || p <= 0) ? null : p;
+  tpSaveWatch(list);
+  tpRenderWatchlist();
+}
+// Collapsible cards (Top Gainers, Watchlist) — state persists per card.
+function tpToggleCard(key){
+  var body = document.getElementById('tp-body-'+key);
+  var chev = document.getElementById('tp-chev-'+key);
+  if(!body) return;
+  var collapsed = body.classList.toggle('collapsed');
+  if(chev) chev.classList.toggle('collapsed', collapsed);
+  try { localStorage.setItem('tpCardCollapsed-'+key, collapsed ? '1' : '0'); } catch(e){}
+}
+function tpInitCardCollapse(){
+  ['gainers','watch'].forEach(function(key){
+    var saved = null;
+    try { saved = localStorage.getItem('tpCardCollapsed-'+key); } catch(e){}
+    if(saved === '1'){
+      var body = document.getElementById('tp-body-'+key);
+      var chev = document.getElementById('tp-chev-'+key);
+      if(body) body.classList.add('collapsed');
+      if(chev) chev.classList.add('collapsed');
+    }
+  });
+}
+function tpUpdateWatchBtn(){
+  var b = document.getElementById('tp-watch-add');
+  if(!b || !tpCurrentSym) return;
+  var on = tpIsWatched(tpCurrentSym);
+  b.textContent = on ? '\u2713' : '\uFF0B';
+  b.classList.toggle('active', on);
+  b.title = on ? 'Remove from watchlist' : 'Add to watchlist';
+}
+function tpRenderWatchlist(){
+  var listEl = document.getElementById('tp-watch-list');
+  var emptyEl = document.getElementById('tp-watch-empty');
+  if(!listEl) return;
+  var list = tpGetWatch();
+  // One-time migration from the old single-target format: a target that
+  // was above the price becomes the High box, below becomes the Low box.
+  var migrated = false;
+  list.forEach(function(w){
+    if(w.watchPrice != null && w.highPrice === undefined && w.lowPrice === undefined){
+      if(w.dir === 'below') w.lowPrice = w.watchPrice; else w.highPrice = w.watchPrice;
+      delete w.watchPrice; delete w.dir; migrated = true;
+    }
+    if(w.highPrice === undefined) w.highPrice = null;
+    if(w.lowPrice === undefined) w.lowPrice = null;
+  });
+  if(migrated) tpSaveWatch(list);
+  if(emptyEl) emptyEl.style.display = list.length ? 'none' : 'block';
+  listEl.innerHTML = list.map(function(w){
+    var t = tpFindStock(w.sym);
+    var name = t ? t.name : w.sym;
+    var last = tpWatchLastPrice(w.sym);
+    var lastTxt = last == null ? '\u2014' : '\u20b1' + last.toFixed(2);
+    var hitHigh = last != null && w.highPrice != null && last >= w.highPrice;
+    var hitLow  = last != null && w.lowPrice  != null && last <= w.lowPrice;
+    var hVal = w.highPrice == null ? '' : w.highPrice;
+    var lVal = w.lowPrice == null ? '' : w.lowPrice;
+    return '<div class="tp-watch-row">'+
+      '<div class="tp-watch-name" onclick="tpSelectTicker(\''+w.sym+'\')">'+w.sym+' \u00b7 <small>'+name+'</small></div>'+
+      '<div class="tp-watch-last">'+lastTxt+'</div>'+
+      '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+
+        '<input type="number" step="0.01" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="\u20b1 high" value="'+hVal+'" onchange="tpSetWatchPrice(\''+w.sym+'\', \'highPrice\', this.value)"></div>'+
+      '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Low</span>'+
+        '<input type="number" step="0.01" min="0" inputmode="decimal" class="tp-watch-input'+(hitLow?' hit-low':'')+'" placeholder="\u20b1 low" value="'+lVal+'" onchange="tpSetWatchPrice(\''+w.sym+'\', \'lowPrice\', this.value)"></div>'+
+      '<button class="tp-watch-remove" onclick="tpRemoveWatch(\''+w.sym+'\')" title="Remove">\u2715</button>'+
+    '</div>';
+  }).join('');
 }
 
 // ══════════════════════════
@@ -5222,14 +5395,25 @@ function tpModeDate(dates){
 // filtering: every entry in the file is already the same snapshot moment
 // (one uniform "asOf" timestamp), and "Suspended" tickers are filtered out
 // by status rather than inferred from stale dates.
-function tpComputeTopGainersFromLive(){
+// The bearish=true path is currently dormant (the Bearish tab was replaced
+// by the trend-engine Bullish tab) but kept intact in case a decliners
+// view returns. Pass bearish=true to rank the OTHER end of the snapshot: only
+// tickers that actually declined (pct < 0), worst drop first. Same data,
+// same filters — just the opposite sort, so Gainers and Bearish can never
+// disagree about what "today's session" means.
+function tpComputeTopGainersFromLive(bearish){
   var candidates = [];
   PSE_ALL_STOCKS.forEach(function(t){
     var q = tpLiveQuotes[t.sym];
     if (!q || q.status !== 'Open' || q.last == null || !q.previousClose) return;
     candidates.push({sym: t.sym, name: t.name, price: q.last, pct: q.changePct});
   });
-  candidates.sort(function(a,b){ return b.pct - a.pct; });
+  if (bearish) {
+    candidates = candidates.filter(function(c){ return c.pct < 0; });
+    candidates.sort(function(a,b){ return a.pct - b.pct; });
+  } else {
+    candidates.sort(function(a,b){ return b.pct - a.pct; });
+  }
   return candidates.slice(0, 10);
 }
 
@@ -5238,7 +5422,7 @@ function tpComputeTopGainersFromLive(){
 // history instead, via the mode-date filtering described below. Kept as a
 // fallback rather than deleted because tpLiveSeries/tpLiveSeriesAll load
 // independently and may resolve before or without the live-quotes file.
-function tpComputeTopGainersFromHistory(){
+function tpComputeTopGainersFromHistory(bearish){
   var candidates = [];
   PSE_ALL_STOCKS.forEach(function(t){
     var series = tpLiveSeries[t.sym] || tpLiveSeriesAll[t.sym];
@@ -5268,70 +5452,63 @@ function tpComputeTopGainersFromHistory(){
   var prevSessionDate = tpModeDate(sameSession.map(function(r){ return r.prevDate; }));
   var todayOnly = sameSession.filter(function(r){ return r.prevDate === prevSessionDate; });
 
-  todayOnly.sort(function(a,b){ return b.pct - a.pct; });
+  if (bearish) {
+    todayOnly = todayOnly.filter(function(r){ return r.pct < 0; });
+    todayOnly.sort(function(a,b){ return a.pct - b.pct; });
+  } else {
+    todayOnly.sort(function(a,b){ return b.pct - a.pct; });
+  }
   return todayOnly.slice(0, 10);
 }
 
 function tpComputeTopGainers(){
-  var live = tpComputeTopGainersFromLive();
-  return live.length ? live : tpComputeTopGainersFromHistory();
+  var live = tpComputeTopGainersFromLive(false);
+  return live.length ? live : tpComputeTopGainersFromHistory(false);
 }
 
-// PREDICTED TOP GAINERS
-// Reuses the exact same reasoning-card engine that powers each ticker's
-// individual signal card (tpComputeSignal for RSI/trend/confidence) --
-// so "Predicted" is literally "rank every ticker by what its own
-// reasoning card already computes," not a second model.
-//
-// Only sig.signal === 'BUY' qualifies (score >= 2, real conviction).
-// An earlier version of this let any net-positive-score HOLD through
-// (e.g. neutral RSI + BULL trend = score +1) on the reasoning that it
-// was directionally bullish -- but this list's actual purpose is "next
-// stocks to buy," and HOLD, even a net-positive-leaning one, is the
-// model's own way of saying "wait, don't enter yet" (its reasoning card
-// says so explicitly). Showing a stock here while its own card argues
-// against entering it was a direct contradiction. Requiring the full
-// BUY threshold keeps this list honest: every entry is a stock the
-// model has already committed to a buy call on, not just "leaning up."
-function tpComputeFutureTopGainers(){
+// TOP BULLISH — the 10 strongest confirmed uptrends on the board, ranked
+// by the same SMA20-vs-SMA50 trend engine the detail view uses (see
+// tpGetTrendState). This is deliberately NOT the same thing as Gainers:
+// Gainers ranks one day's price pop; Bullish ranks sustained trend
+// strength, so a stock can lead this list while being flat (or even red)
+// today. Only real downloaded history qualifies — no tpGenSeries mock
+// fallback here, because a fabricated series would fabricate a trend call.
+// Stale tickers (repeated flat prints / no trade in over a week) are
+// excluded: an old spike can leave a big SMA gap behind on a stock that
+// isn't actually trading, and that's noise, not a trend.
+function tpComputeTopBullish(){
   var candidates = [];
-  var MAX_SCORE = 3;
-
   PSE_ALL_STOCKS.forEach(function(t){
-    try{
-      var series = tpGetSeries(t.sym, 90);
-      if(!Array.isArray(series) || series.length < 2) return;
-      var sig = tpComputeSignal(series);
-      if(sig.price == null || sig.volPct == null) return;
-      // Skip anything that isn't actually trading right now. Two checks:
-      // (1) isStale (from sig.lastTrade / tpLastTradeInfo) catches a flat
-      // print carried forward — open===high===low===close repeated 2+
-      // sessions. (2) daysSince catches the OTHER shape of the same
-      // problem: a ticker whose last bar had a perfectly normal intraday
-      // range (so isStale is false) but simply has no newer bar at all —
-      // e.g. LOTO's real last trade was 2 full days back with nothing
-      // since. The full-market (non-blue-chip) feed normally lags by up
-      // to 1 day even for actively-traded names, so daysSince<=1 is the
-      // legitimate ceiling; anything older means it didn't trade in the
-      // window that actually matters for "should this show up as an
-      // active BUY right now."
-      var lt = sig.lastTrade;
-      if(!lt || lt.isStale || lt.daysSince > 1) return;
-      // Belt-and-suspenders: if the live-quotes feed has an entry for this
-      // ticker and explicitly flags it as not Open (e.g. Suspended), skip
-      // it even if its history still looks active.
-      var lq = tpLiveQuotes[t.sym];
-      if(lq && lq.status && lq.status !== 'Open') return;
-      if(sig.signal !== 'BUY') return;
-      var bias = sig.score / MAX_SCORE;
-      var moveMag = sig.volPct * (0.75 + bias);
-      var skew = bias * moveMag * 0.35;
-      var pct = moveMag + skew;
-      if(!isFinite(pct) || pct <= 0) return;
-      candidates.push({sym:t.sym, name:t.name, price:sig.price, pct:pct, signal:sig.signal, trend:sig.trend, score:sig.score, confidencePct:sig.confidencePct});
-    }catch(e){ /* skip any ticker whose data can't support a signal yet */ }
+    var series = tpLiveSeries[t.sym] || tpLiveSeriesAll[t.sym];
+    if (!Array.isArray(series) || series.length < 50) return; // SMA50 needs 50 bars
+    var lt = tpLastTradeInfo(series);
+    if (lt && (lt.isStale || lt.daysSince > 7)) return;
+    var closes = series.map(function(d){ return d.close; });
+    var lastIdx = closes.length - 1;
+    var sma20 = tpSMA(closes, 20, lastIdx);
+    var sma50 = tpSMA(closes, 50, lastIdx);
+    var trend = tpGetTrendState(sma20, sma50);
+    if (trend.state !== 'BULL') return;
+    // Price + today's % change come from the live-quotes snapshot when
+    // available (fresher than the EOD history bars), else the last two
+    // history closes — same preference order as the picklist.
+    var price, pct;
+    var q = tpLiveQuotes[t.sym];
+    if (q && q.status === 'Open' && q.last != null && q.previousClose) {
+      price = q.last;
+      pct = q.changePct;
+    } else {
+      var prev = series[series.length - 2];
+      price = closes[lastIdx];
+      pct = (prev && prev.close) ? (price - prev.close) / prev.close * 100 : 0;
+    }
+    candidates.push({sym: t.sym, name: t.name, price: price, pct: pct,
+      gapPct: trend.gapPct, trendConfidencePct: trend.confidencePct, signal: 'BULL'});
   });
-  candidates.sort(function(a,b){ return b.pct - a.pct; });
+  // Strongest SMA20/SMA50 separation first — the widest, cleanest gap is
+  // the most established uptrend (this is also what drives the trend
+  // confidence % on the detail card).
+  candidates.sort(function(a,b){ return b.gapPct - a.gapPct; });
   return candidates.slice(0, 10);
 }
 
@@ -5343,16 +5520,21 @@ function tpSetGainersMode(mode){
     b.classList.toggle('active', b.dataset.mode === mode);
   });
   tpRenderTopGainers();
+  tpRenderWatchlist();
 }
 
 function tpRenderTopGainers(){
   var el = document.getElementById('tp-gainers-list');
   var noteEl = document.getElementById('tp-gainers-note');
   if(!el) return;
-  var top = tpGainersMode === 'future' ? tpComputeFutureTopGainers() : tpComputeTopGainers();
+  var top = tpGainersMode === 'bullish' ? tpComputeTopBullish() : tpComputeTopGainers();
   if(!top.length){
     el.innerHTML = '<div class="tp-gainer-empty">' +
-      (tpGainersMode === 'future' ? 'No BUY-signal stocks right now \u2014 the model isn\u2019t backing any ticker with real conviction at the moment.' : 'No data available') +
+      (tpGainersMode === 'bullish'
+        ? (PSE_FULL_HISTORY_STATUS.loaded
+            ? 'No stocks currently in a confirmed uptrend \u2014 no ticker has SMA20 above SMA50 by more than the '+TREND_BUFFER_PCT+'% buffer.'
+            : 'Waiting for market history data\u2026 trend ranking needs the full OHLC history, which is still loading.')
+        : 'No data available') +
       '</div>';
     if(noteEl) noteEl.textContent = '';
     return;
@@ -5371,12 +5553,14 @@ function tpRenderTopGainers(){
     '</div>';
   }).join('');
   if(noteEl){
-    noteEl.textContent = tpGainersMode === 'future'
-      ? 'Only stocks the model has already called BUY qualify (HOLD and SELL excluded), and only names that actually traded in today\u2019s session \u2014 computed from real PSE price history. If fewer than 10 show, that\u2019s honest: today\u2019s data doesn\u2019t support more BUY calls. Model-generated, not a live feed of tomorrow\u2019s actual movers. Decision support only, not financial advice.'
+    noteEl.textContent = tpGainersMode === 'bullish'
+      ? 'The 10 strongest confirmed uptrends by SMA20-vs-SMA50 gap \u2014 the same trend engine as the detail card, not a one-day ranking. A stock can top this list while flat or red today: the % shown is today\u2019s change, but the ORDER is trend strength. Stale or non-trading tickers are excluded.'
       : '';
   }
 }
 tpRenderTopGainers();
+tpRenderWatchlist();
+tpInitCardCollapse();
 
 function tpGenSeries(base, days, seed){
   const rnd = tpRand(seed);
@@ -5671,7 +5855,10 @@ function tpSignalNarrative(sig){
       "Put together, this lands on HOLD, "+sig.confidencePct+"% confidence. Momentum and trend are basically cancelling each other out at the moment, so there's no clear direction to lean on."
     ]);
   }
-  return rsiPart + ' ' + closer;
+  // Returned as an array — each element renders as its own bullet in the
+  // summary card, so the momentum read and the verdict don't blur into
+  // one wall of text.
+  return [rsiPart, closer];
 }
 
 function tpTrendNarrative(sig){
@@ -5687,24 +5874,24 @@ function tpTrendNarrative(sig){
       : ' One caveat: volume is only '+sig.volRatio+'x the 20-day average right now, lighter than normal — this is exactly the situation where SMA crossovers throw false signals, so this trend is only counted at half weight in the score until real volume shows up behind it.';
   }
   if(sig.trend==='BULL'){
-    return tpPick(sym+'-trend-bull', [
+    return [tpPick(sym+'-trend-bull', [
       "The other thing this model checks is the trend — it compares the stock's average price over the last 20 trading days against its average over the last 50. Think of it as a short-term average racing a longer-term average: right now the 20-day average is "+sig.trendGapPct.toFixed(2)+"% above the 50-day one, and that gap is big enough to clear the small "+TREND_BUFFER_PCT+"% buffer this model builds in on purpose, so a random one-day wiggle doesn't get mistaken for a real trend. A gap this size means the recent climb is a genuine uptrend, not a blip — trend confidence sits at "+sig.trendConfidencePct+"%.",
       "This also looks at trend: the average price over the last 20 days versus the average over the last 50. Right now the recent average is running "+sig.trendGapPct.toFixed(2)+"% higher than the older one — well clear of the "+TREND_BUFFER_PCT+"% cushion this model requires before it'll call something a real trend rather than noise. That puts trend confidence at "+sig.trendConfidencePct+"%. In plain terms: this stock has genuinely been climbing lately, not just having one good day.",
       "The trend check compares two averages — one over the last 20 days, one over the last 50 — the same way you'd compare 'how's this stock done lately' against 'how's it done over a longer stretch.' The recent average is "+sig.trendGapPct.toFixed(2)+"% ahead of the longer one here, comfortably past the "+TREND_BUFFER_PCT+"% buffer this model uses to filter out noise. Trend confidence: "+sig.trendConfidencePct+"% — this uptrend has some real legs behind it."
-    ]) + volNote;
+    ]), volNote.trim()].filter(Boolean);
   }
   if(sig.trend==='BEAR'){
-    return tpPick(sym+'-trend-bear', [
+    return [tpPick(sym+'-trend-bear', [
       "The other thing this model checks is the trend — it compares the stock's average price over the last 20 trading days against its average over the last 50, like a short-term average racing a longer-term one. Right now the 20-day average has slipped "+Math.abs(sig.trendGapPct).toFixed(2)+"% below the 50-day one, clearing the small "+TREND_BUFFER_PCT+"% buffer this model builds in so a random one-day dip doesn't get read as a trend. A gap this size means the stock has genuinely lost ground lately, not just had a rough afternoon — trend confidence sits at "+sig.trendConfidencePct+"%.",
       "This also looks at trend: the average price over the last 20 days versus the average over the last 50. The recent average is now running "+Math.abs(sig.trendGapPct).toFixed(2)+"% below the older one — well past the "+TREND_BUFFER_PCT+"% cushion this model needs before it calls something a real downtrend instead of noise. Trend confidence: "+sig.trendConfidencePct+"%. In plain terms, this stock has genuinely been sliding, not just wobbling.",
       "The trend check compares the last-20-days average against the last-50-days average, the same way you'd compare recent performance to the bigger picture. Here, the recent average is "+Math.abs(sig.trendGapPct).toFixed(2)+"% behind the longer one, clearing the "+TREND_BUFFER_PCT+"% buffer this model needs before flagging real weakness. Trend confidence: "+sig.trendConfidencePct+"% — this softness looks real, not random."
-    ]) + volNote;
+    ]), volNote.trim()].filter(Boolean);
   }
-  return tpPick(sym+'-trend-flat', [
+  return [tpPick(sym+'-trend-flat', [
     "The other thing this model checks is the trend — the stock's average price over the last 20 days versus its average over the last 50. Right now those two averages are sitting within "+TREND_BUFFER_PCT+"% of each other, inside the small buffer this model requires before it'll call a direction one way or the other. Reading a trend into a gap that small would basically be reading tea leaves — so 'flat, no clear trend' is the honest answer here, not a shrug.",
     "This also checks trend by comparing the last-20-days average price against the last-50-days average. They're sitting almost right on top of each other — well inside the "+TREND_BUFFER_PCT+"% cushion this model needs before calling a real trend. There's genuinely nothing to lean on here yet, so the trend stays flat until that gap widens.",
     "The trend check — recent 20-day average versus the longer 50-day average — hasn't separated enough to clear the "+TREND_BUFFER_PCT+"% buffer this model uses to avoid chasing noise. This is a wait-and-see situation, not a coin flip between the stock heading up or down."
-  ]);
+  ])];
 }
 
 // Shared band math — both the outlook narrative and the overall
@@ -5888,7 +6075,7 @@ function tpOverallRecommendationVerdict(sig){
     return tpPick(sym+'-rec-noband', [
       "There's a "+sig.signal+" signal here, "+sig.confidencePct+"% confidence — but this stock doesn't have enough trading history yet to put a realistic price on it, so no target range for now. That'll fill in once more sessions are on record. For today, treat the direction (buy or sell) as the useful part, not a specific peso level.",
       sig.signal+" is the read here, "+sig.confidencePct+"% confidence, though this ticker doesn't have enough days of trading yet to project a reliable price range. Worth revisiting once more history builds up."
-    ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+    ]);
   }
 
   if(sig.signal==='BUY'){
@@ -5897,18 +6084,18 @@ function tpOverallRecommendationVerdict(sig){
         "This is the kind of setup actually worth acting on, not just noting. Both things this model checks — a momentum gauge that had gotten stretched too far on the selling side, and the trend, which is genuinely pointed up — are telling the same story at the same time. "+sig.confidencePct+"% confidence is about as high as this model ever gets, and there's a real price to work with too: ₱"+target+" is where this could realistically head over the next session or two. Nothing is ever guaranteed in the market, but when two separate checks agree this cleanly, that's exactly the kind of setup a trader would take seriously rather than shrug off.",
         "Everything here is pointing the same direction. The stock had been sold off more than it should've been, it's also been climbing on average lately, and both of those agree — that's two separate checks confirming each other, not one lone signal doing all the talking. "+sig.confidencePct+"% confidence, with ₱"+target+" as the level this could reach over the next session or two, and ₱"+floor+" as the point where you'd have to admit the idea was wrong.",
         "When the momentum side and the trend side agree this cleanly, that's the strongest version of a buy signal this model can put out. "+sig.confidencePct+"% confidence, a realistic target near ₱"+target+", and a clear line at ₱"+floor+" where you'd know to step back — this is a setup that comes with an actual plan attached, not just a gut feeling."
-      ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+      ]);
     }
     if(opposed){
       return tpPick(sym+'-rec-buy-caution', [
         "There's a real buy signal here — "+sig.confidencePct+"% confidence, coming from the stock looking oversold, like it's been sold off more than makes sense. But here's the catch: the trend itself hasn't turned yet, it's still pointed down. So this isn't 'get on board with a stock that's already climbing' — it's a bet that the selling is about to reverse before it continues. If that bet pays off, ₱"+target+" is a realistic level; if the downtrend just keeps going instead, ₱"+floor+" is usually where it shows up first. That's a riskier shape of trade than a normal buy signal, worth keeping any position smaller because of it.",
         "The honest read here: momentum is suggesting a bounce is due, but the bigger trend hasn't actually confirmed that turn yet. "+sig.confidencePct+"% confidence on the momentum side is real, but buying an oversold stock while its trend is still pointed down means you're betting against the current direction, not riding it. ₱"+target+" is achievable if the bounce happens; ₱"+floor+" is the risk if the downtrend simply wins this round."
-      ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+      ]);
     }
     return tpPick(sym+'-rec-buy-moderate', [
       "This leans toward BUY, "+sig.confidencePct+"% confidence — a genuine lean, just not the strongest version of one. Part of the case is there, part hasn't fully confirmed yet. Over the next session or two this could head toward ₱"+target+", with ₱"+floor+" as roughly where things would look shaky if it stalls out instead.",
       "The case for buying is real here, "+sig.confidencePct+"% confidence, just without every check firing at full strength at once. Worth keeping an eye on for confirmation — a move toward ₱"+target+" would strengthen the idea, while a slide back toward ₱"+floor+" would be a sign to reconsider."
-    ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+    ]);
   }
 
   if(sig.signal==='SELL'){
@@ -5917,18 +6104,18 @@ function tpOverallRecommendationVerdict(sig){
         "This is a clean sell signal, not a marginal one. The stock looks like it's been bought up more aggressively than it should've been, and on top of that the trend is genuinely pointed down — both checks are agreeing with each other, which is close to the strongest reading this model can produce ("+sig.confidencePct+"% confidence). ₱"+target+" is roughly where the pressure points over the next session or two. If you're holding this stock, this is the kind of double-confirmation that's worth taking seriously rather than hoping it blows over.",
         "Two separate things are pointing the same way here: the stock's been bought up faster than its recent pace can justify, and the trend has genuinely turned down. That agreement gives "+sig.confidencePct+"% confidence — not one weak signal, but two checks lining up. ₱"+target+" is the level this is leaning toward, with ₱"+floor+" as roughly where things would look better if the selling eases up early.",
         "Both things this model checks — momentum and trend — are pointing down together right now, at "+sig.confidencePct+"% confidence. ₱"+target+" is the level worth watching over the next 1-2 sessions, and ₱"+floor+" is roughly where this read would start to look premature."
-      ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+      ]);
     }
     if(opposed){
       return tpPick(sym+'-rec-sell-caution', [
         "There's a sell signal here, "+sig.confidencePct+"% confidence, coming from the stock looking like it's been bought up too aggressively lately. But the trend is still pointed up — it hasn't actually lost ground yet. This is essentially a bet that the buying runs out of steam before the uptrend does, and that bet doesn't always pay off. ₱"+target+" is the level if it does; ₱"+floor+" is the risk if the uptrend simply keeps going instead.",
         "The honest read: momentum looks stretched on the buying side, but the trend hasn't confirmed a turn yet — it's worth being clear-eyed about that before acting. "+sig.confidencePct+"% confidence on the overbought side is real, but selling into a stock that's still climbing means fighting the current direction, not following it."
-      ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+      ]);
     }
     return tpPick(sym+'-rec-sell-moderate', [
       "This leans toward SELL, "+sig.confidencePct+"% confidence — a genuine tilt, but not every check is confirming it yet. ₱"+target+" is roughly the level it's pointing toward, ₱"+floor+" is where the case would start to weaken.",
       "The case for selling holds up, "+sig.confidencePct+"% confidence, just without full agreement between the momentum and trend checks. Worth watching rather than acting on immediately — a move toward ₱"+target+" would strengthen it."
-    ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+    ]);
   }
 
   // HOLD
@@ -5937,23 +6124,107 @@ function tpOverallRecommendationVerdict(sig){
       "The honest call here is to do nothing. Neither the momentum gauge nor the trend is stretched enough to give either side a real edge right now — "+sig.confidencePct+"% confidence in that 'don't trade this' read means this isn't caution dressed up as an answer, it's a genuine finding: this stock is sitting quietly in the middle of its own range. Forcing a buy or sell decision here would mean trading a hunch instead of an actual setup.",
       "Nothing about this stock is stretched right now, in either direction, and that's the actual finding — "+sig.confidencePct+"% confidence in HOLD. Knowing that this stock has been trading somewhere between roughly ₱"+(band?band.L:'—')+" and ₱"+(band?band.H:'—')+" lately is more useful right now than forcing a direction that isn't really there.",
       "This is a genuine 'wait and see,' and a fairly confident one at that ("+sig.confidencePct+"%). The momentum gauge is calm, the trend is flat — there's nothing to trade here yet, just normal back-and-forth until one of those two things actually moves."
-    ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+    ]);
   }
   return tpPick(sym+'-rec-hold-watch', [
     "This is closer to turning into a real buy or sell signal than a typical HOLD is — "+sig.confidencePct+"% confidence in the no-trade call means it's worth checking back on soon rather than ignoring completely. A small shift in momentum or in the trend could flip this into an actual signal.",
     "HOLD, but not a settled one — "+sig.confidencePct+"% confidence here means things are closer to tipping one way or another than to sitting dead center. Worth watching this one over the next session or two rather than writing it off.",
     "This sits on HOLD at "+sig.confidencePct+"% confidence, which is on the lower end for a no-trade call — one of the two things this model checks is closer to flipping than it might look at first glance."
-  ]) + ' ' + tpActionPlan(sig, band, aligned, opposed);
+  ]);
 }
 
 // Public entry point used by tpRenderAll: leads with the market-activity
 // context (last trade date, stale-print detection) so the reader knows
 // how much to trust the signal before reading the verdict itself, then
 // the verdict + action plan from the core function above.
+// ══════════════════════════════════════════════════════════════
+// POSITION SIZING — answers "okay, but how MUCH?" in actual pesos.
+// Uses a fixed ₱100,000 reference so the numbers are concrete: for a
+// BUY it sizes how much of that capital to deploy (scaled by how strong
+// the setup is — full-agreement setups earn a bigger allocation, counter-
+// trend bets a much smaller one); for a SELL it sizes how much of a
+// ₱100,000 position to unload for the same reasons. Scale the numbers
+// proportionally for a different capital base (₱50k = halve everything).
+// ══════════════════════════════════════════════════════════════
+const TP_REF_CAPITAL = 100000;
+function tpPesoFmt(n){ return Math.round(n).toLocaleString('en-PH'); }
+function tpPositionPlan(sig, band, aligned, opposed){
+  const price = sig.price;
+
+  if(sig.signal==='BUY'){
+    const pct = (aligned && sig.confidencePct>=80) ? 60 : opposed ? 20 : 40;
+    const alloc = TP_REF_CAPITAL * pct/100;
+    const cash = TP_REF_CAPITAL - alloc;
+    let txt = "How much to buy (on a \u20b1"+tpPesoFmt(TP_REF_CAPITAL)+" reference): deploy about "+pct+"% \u2014 roughly \u20b1"+tpPesoFmt(alloc);
+    if(price){
+      const shares = Math.floor(alloc/price);
+      if(shares>0) txt += ", which buys around "+shares.toLocaleString()+" shares at \u20b1"+price.toFixed(2);
+    }
+    txt += " \u2014 and keep the other "+(100-pct)+"% (\u20b1"+tpPesoFmt(cash)+") in cash. ";
+    txt += (aligned && sig.confidencePct>=80)
+      ? "The larger allocation is justified because momentum and trend both agree here; this is the strongest setup shape this model produces, but even then it never puts the full amount at risk on one idea."
+      : opposed
+        ? "The small allocation is deliberate: this buy is fighting the current downtrend, so only a starter position makes sense until the trend actually turns."
+        : "A middle-sized allocation fits a genuine-but-unconfirmed setup \u2014 enough to matter if it works, small enough to add more later once the price confirms.";
+    if(band && price){
+      const shares = Math.floor(alloc/price);
+      const riskPeso = Math.max(0,(price - band.low)) * shares;
+      const gainPeso = Math.max(0,(band.high - price)) * shares;
+      txt += " In peso terms on that position: roughly \u20b1"+tpPesoFmt(gainPeso)+" of potential gain if it reaches \u20b1"+band.H+", against about \u20b1"+tpPesoFmt(riskPeso)+" of loss if the stop under \u20b1"+band.L+" gets hit.";
+    }
+    return txt;
+  }
+
+  if(sig.signal==='SELL'){
+    const pct = (aligned && sig.confidencePct>=80) ? 100 : opposed ? 30 : 50;
+    const sellAmt = TP_REF_CAPITAL * pct/100;
+    const keepAmt = TP_REF_CAPITAL - sellAmt;
+    let txt = "How much to sell (if you hold \u20b1"+tpPesoFmt(TP_REF_CAPITAL)+" of this stock): unload about "+pct+"% \u2014 roughly \u20b1"+tpPesoFmt(sellAmt)+" worth";
+    if(price){
+      const shares = Math.floor(sellAmt/price);
+      if(shares>0) txt += " (around "+shares.toLocaleString()+" shares at \u20b1"+price.toFixed(2)+")";
+    }
+    txt += pct===100 ? ". " : ", keeping \u20b1"+tpPesoFmt(keepAmt)+" riding with a stop-loss in place. ";
+    txt += (aligned && sig.confidencePct>=80)
+      ? "A full exit is warranted when momentum and trend both point down together \u2014 that double-confirmation is rare, and hoping it blows over usually costs more than re-buying later if you turn out wrong."
+      : opposed
+        ? "Only a partial trim makes sense because the overall trend is still pointed up \u2014 you're taking some money off the table on a warning sign, not abandoning a stock that's still climbing."
+        : "A half-position sale matches a real-but-unconfirmed sell case: it locks in meaningful protection without fully exiting before the trend has actually broken.";
+    if(band && price){
+      const downPct = Math.max(0,(price - band.low)/price);
+      const protectedPeso = sellAmt * downPct;
+      txt += " In peso terms: selling that portion now protects roughly \u20b1"+tpPesoFmt(protectedPeso)+" of value if the price slides to \u20b1"+band.L+" as this read expects.";
+    }
+    return txt;
+  }
+
+  // HOLD
+  return "How much to trade (on a \u20b1"+tpPesoFmt(TP_REF_CAPITAL)+" reference): \u20b10 \u2014 keep the full amount in cash for this name. A HOLD means neither buying nor selling has an edge right now, so any peso deployed here would be paying for a guess. If you already own it, this isn't a signal to sell either \u2014 just hold what you have and wait for the levels above to break.";
+}
+
+// Public entry point used by tpRenderAll. Returns an ARRAY of bullet
+// strings — market context, the verdict itself, the practical action
+// plan, and the ₱100,000-reference position sizing — which the summary
+// card renders as a bulleted list instead of one dense paragraph.
 function tpOverallRecommendation(sig){
+  const band = tpProjectedBand(sig);
+  const aligned = (sig.signal==='BUY' && sig.trend==='BULL') || (sig.signal==='SELL' && sig.trend==='BEAR');
+  const opposed = (sig.signal==='BUY' && sig.trend==='BEAR') || (sig.signal==='SELL' && sig.trend==='BULL');
   const context = tpMarketContextNarrative(sig);
   const verdict = tpOverallRecommendationVerdict(sig);
-  return (context ? context + ' ' : '') + verdict;
+  const action = tpActionPlan(sig, band, aligned, opposed);
+  const sizing = tpPositionPlan(sig, band, aligned, opposed);
+  return [context, verdict, action, sizing].filter(Boolean);
+}
+
+// Renders an array of narrative chunks (or a single string) as a
+// bulleted list for the summary card — one <li> per logical point.
+function tpBulletsHTML(parts){
+  const items = (Array.isArray(parts) ? parts : [parts])
+    .filter(function(p){ return p && String(p).trim(); });
+  return '<ul class="tp-summary-bullets">' +
+    items.map(function(p){ return '<li>'+p+'</li>'; }).join('') +
+    '</ul>';
 }
 
 const TP_TF_DAYS = {'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':730};
@@ -6257,6 +6528,8 @@ async function tpRenderAll(sym){
   const chgPct = (chg/prev*100);
 
   document.getElementById('tp-name').textContent = t.sym + ' · ' + t.name;
+  tpUpdateWatchBtn();
+  tpRenderWatchlist();
   document.getElementById('tp-price').textContent = '₱' + price.toFixed(2);
   const chgEl = document.getElementById('tp-chg');
   chgEl.textContent = (chg>=0?'+':'') + chg.toFixed(2) + ' (' + (chgPct>=0?'+':'') + chgPct.toFixed(2) + '%)';
@@ -6277,20 +6550,20 @@ async function tpRenderAll(sym){
   const signalTagEl = document.getElementById('tp-summary-signal-tag');
   signalTagEl.textContent = sig.confidencePct + '% ' + sig.signal;
   signalTagEl.className = 'tp-summary-tag ' + sig.signal;
-  document.getElementById('tp-summary-signal-text').textContent = tpSignalNarrative(sig);
+  document.getElementById('tp-summary-signal-text').innerHTML = tpBulletsHTML(tpSignalNarrative(sig));
   const trendTagEl = document.getElementById('tp-summary-trend-tag');
   trendTagEl.textContent = sig.trendConfidencePct + '% ' + sig.trend;
   trendTagEl.className = 'tp-summary-tag ' + sig.trend;
-  document.getElementById('tp-summary-trend-text').textContent = tpTrendNarrative(sig);
+  document.getElementById('tp-summary-trend-text').innerHTML = tpBulletsHTML(tpTrendNarrative(sig));
   const outlookTagEl = document.getElementById('tp-summary-outlook-tag');
   outlookTagEl.textContent = '2-DAY OUTLOOK';
   outlookTagEl.className = 'tp-summary-tag OUTLOOK';
-  document.getElementById('tp-summary-outlook-text').textContent = tpOutlookNarrative(sig);
+  document.getElementById('tp-summary-outlook-text').innerHTML = tpBulletsHTML(tpOutlookNarrative(sig));
 
   const recTagEl = document.getElementById('tp-summary-rec-tag');
   recTagEl.textContent = 'RECOMMENDATION';
   recTagEl.className = 'tp-summary-tag ' + sig.signal;
-  document.getElementById('tp-summary-rec-text').textContent = tpOverallRecommendation(sig);
+  document.getElementById('tp-summary-rec-text').innerHTML = tpBulletsHTML(tpOverallRecommendation(sig));
 
   // Full bullet-list detail previously lived in a Signal Breakdown card
   // here; that slot is now the market-wide Top Gainers card instead.
