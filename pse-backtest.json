@@ -1,0 +1,130 @@
+{
+  "generatedAt": "2026-07-03T14:30:27Z",
+  "engineVersion": "wilder-rsi + sma-buffer + vol-confirm + true-atr + swing-sr",
+  "tickersTested": 251,
+  "barsGraded": 38423,
+  "dateRange": {
+    "from": "2024-09-26",
+    "to": "2026-06-24"
+  },
+  "horizonsSessions": [
+    1,
+    2,
+    5
+  ],
+  "signals": {
+    "BUY": {
+      "1": {
+        "n": 15,
+        "hitRatePct": 73.3,
+        "avgReturnPct": 2.468,
+        "avgWinPct": 4.371,
+        "avgLossPct": -3.688
+      },
+      "2": {
+        "n": 15,
+        "hitRatePct": 66.7,
+        "avgReturnPct": 2.218,
+        "avgWinPct": 5.695,
+        "avgLossPct": -5.921
+      },
+      "5": {
+        "n": 15,
+        "hitRatePct": 60.0,
+        "avgReturnPct": 2.684,
+        "avgWinPct": 7.354,
+        "avgLossPct": -5.184
+      }
+    },
+    "SELL": {
+      "1": {
+        "n": 73,
+        "hitRatePct": 42.5,
+        "avgReturnPct": -0.414,
+        "avgWinPct": 3.551,
+        "avgLossPct": -4.837
+      },
+      "2": {
+        "n": 73,
+        "hitRatePct": 50.7,
+        "avgReturnPct": 0.156,
+        "avgWinPct": 4.333,
+        "avgLossPct": -5.516
+      },
+      "5": {
+        "n": 73,
+        "hitRatePct": 50.7,
+        "avgReturnPct": 0.516,
+        "avgWinPct": 6.564,
+        "avgLossPct": -6.218
+      }
+    },
+    "HOLD": {
+      "1": {
+        "n": 38335,
+        "hitRatePct": 37.4,
+        "avgReturnPct": 0.011,
+        "avgWinPct": 2.517,
+        "avgLossPct": -2.21
+      },
+      "2": {
+        "n": 38335,
+        "hitRatePct": 40.2,
+        "avgReturnPct": 0.008,
+        "avgWinPct": 3.198,
+        "avgLossPct": -2.767
+      },
+      "5": {
+        "n": 38335,
+        "hitRatePct": 41.9,
+        "avgReturnPct": -0.007,
+        "avgWinPct": 4.546,
+        "avgLossPct": -3.866
+      }
+    }
+  },
+  "confidenceBuckets2d": {
+    "BUY": {
+      "confidence80plus": {
+        "n": 11,
+        "hitRatePct": 72.7,
+        "avgReturnPct": 3.677,
+        "avgWinPct": 6.806,
+        "avgLossPct": -4.669
+      },
+      "confidenceBelow80": {
+        "n": 4,
+        "hitRatePct": 50.0,
+        "avgReturnPct": -1.795,
+        "avgWinPct": 1.249,
+        "avgLossPct": -9.677
+      }
+    },
+    "SELL": {
+      "confidence80plus": {
+        "n": 38,
+        "hitRatePct": 50.0,
+        "avgReturnPct": -0.391,
+        "avgWinPct": 4.793,
+        "avgLossPct": -7.062
+      },
+      "confidenceBelow80": {
+        "n": 35,
+        "hitRatePct": 51.4,
+        "avgReturnPct": 0.75,
+        "avgWinPct": 3.848,
+        "avgLossPct": -3.584
+      }
+    }
+  },
+  "supportResistance": {
+    "support": {
+      "touches": 7709,
+      "heldPct": 74.0
+    },
+    "resistance": {
+      "touches": 7444,
+      "heldPct": 77.8
+    }
+  }
+}
