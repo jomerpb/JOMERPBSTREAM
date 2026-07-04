@@ -1727,53 +1727,101 @@ function tpProjectedBand(sig){
            clippedHigh, clippedLow, sr };
 }
 
-// 1-2 session forward outlook. Takes the same RSI/trend evidence already
-// used for the signal and sizes an expected price band off the stock's
-// own trailing volatility (tpAvgDailyVolPct), scaled by conviction.
-// Multiple phrasings per direction/confidence combo so this doesn't read
-// as one sentence template with numbers dropped in.
-function tpOutlookNarrative(sig){
+// ══════════════════════════════════════════════════════════════
+// 5-DAY OUTLOOK — day-by-day projected price ranges, rendered inside
+// the RECOMMENDATION bullet list (the old standalone 2-DAY OUTLOOK row
+// was retired). Same inputs as everything else on the card: the stock's
+// own trailing volatility, the signal's confidence, and its proven
+// support/resistance levels. Each day's range widens by √day because
+// uncertainty compounds with time; the midpoint drifts in the signal's
+// direction; and every day's high/low stays clipped at the proven
+// ceiling/floor — the same honesty rule tpProjectedBand uses.
+// ══════════════════════════════════════════════════════════════
+function tpNextTradingDays(n){
+  const out = []; const d = new Date();
+  while(out.length < n){
+    d.setDate(d.getDate()+1);
+    const dow = d.getDay();
+    if(dow===0 || dow===6) continue; // PSE: skip Sat/Sun
+    out.push(new Date(d.getTime()));
+  }
+  return out;
+}
+function tpFmtShortDate(d){
+  const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return M[d.getMonth()]+' '+d.getDate();
+}
+function tpFiveDayOutlook(sig){
   const band = tpProjectedBand(sig);
-  if(!band){
-    return "Not enough trading history yet to size a short-term range for this one.";
+  if(!band || !sig.price) return null;
+  const price = sig.price;
+  const bias = band.bias;
+  const conf = (bias===0 ? sig.confidencePct*0.4 : sig.confidencePct) / 100;
+  const halfW1 = sig.volPct * (0.75 + conf); // day-1 half-width %, matches tpProjectedBand
+  const drift = bias * halfW1 * 0.35;        // per-day directional drift %, same skew factor
+  const sr = sig.sr;
+  const days = tpNextTradingDays(5);
+  const rows = [];
+  let clippedHi=false, clippedLo=false;
+  for(let d=1; d<=5; d++){
+    const spread = halfW1 * Math.sqrt(d);
+    const mid0 = price * (1 + (drift*d)/100);
+    let hi = mid0 * (1 + spread/100);
+    let lo = mid0 * (1 - spread/100);
+    if(sr && sr.resistance && sr.resistance.level > price && hi > sr.resistance.level){ hi = sr.resistance.level; clippedHi = true; }
+    if(sr && sr.support && sr.support.level < price && lo < sr.support.level){ lo = sr.support.level; clippedLo = true; }
+    if(lo >= hi){ lo = Math.min(lo, price*0.999); hi = Math.max(hi, price*1.001); }
+    const mid = Math.min(Math.max(mid0, lo), hi);
+    rows.push('<b>Day '+d+'</b> ('+tpFmtShortDate(days[d-1])+'): \u20b1'+tpFmtLvl(lo)+' \u2013 \u20b1'+tpFmtLvl(hi)+' \u00b7 most likely near \u20b1'+tpFmtLvl(mid));
   }
-  var sym = tpCurrentSym || 'x';
-  const { bias, L, H, vol } = band;
+  const dirTxt = bias>0
+    ? 'with the midpoint drifting higher each day while the BUY case holds'
+    : bias<0
+      ? 'with the midpoint drifting lower each day while the SELL case holds'
+      : 'with no daily drift, since neither side has an edge right now';
+  let out = '5-DAY OUTLOOK \u2014 built from this stock\'s own '+band.vol+'% average daily swing, the '+sig.confidencePct+'% signal confidence, and its proven floor/ceiling levels. Each day\'s range is a little wider than the last because uncertainty grows with time, '+dirTxt+':<br>'+rows.join('<br>');
+  const notes = [];
+  if(clippedHi && sr && sr.resistance) notes.push('the upper ends are capped at the \u20b1'+tpFmtLvl(sr.resistance.level)+' ceiling \u2014 price has to break through the sellers waiting there before any day can realistically print higher');
+  if(clippedLo && sr && sr.support) notes.push('the lower ends are held up at the \u20b1'+tpFmtLvl(sr.support.level)+' floor \u2014 buyers have defended that level before');
+  out += '<br>' + (notes.length
+    ? 'Honest note: '+notes.join('; ')+'. These are ranges implied by recent behavior, not promises \u2014 one news item can override all five rows.'
+    : 'These are ranges implied by recent behavior, not promises \u2014 one news item can override all five rows.');
+  return out;
+}
 
-  // When the raw volatility band got trimmed at a support/resistance
-  // level (see tpProjectedBand), say so in plain language — otherwise
-  // the range looks narrower than the volatility number implies and a
-  // careful reader would rightly wonder why.
-  const extras = [];
-  if(band.clippedHigh && band.sr && band.sr.resistance){
-    const R = band.sr.resistance;
-    extras.push("One honest adjustment baked into that range: pure volatility math pointed even higher, but \u20b1"+H+" is a resistance level \u2014 a price where this stock has "+(R.fallback?"topped out over the past month":"already been turned back "+R.touches+(R.touches===1?" time":" times")+" recently")+(R.isRound?", and it's a round number, which is exactly where sellers tend to park their orders":"")+". Price has to fight through the sellers waiting there before it can go further, so the ceiling was trimmed to that proven level rather than pretending it doesn't exist.");
-  }
-  if(band.clippedLow && band.sr && band.sr.support){
-    const S = band.sr.support;
-    extras.push("One honest adjustment baked into that range: pure volatility math pointed even lower, but \u20b1"+L+" is a support level \u2014 a price where buyers have "+(S.fallback?"stepped in over the past month":"already stepped in and stopped the fall "+S.touches+(S.touches===1?" time":" times")+" recently")+(S.isRound?", helped by it being a round number where buy orders tend to cluster":"")+". Falls tend to slow or stall there, so the floor was raised to that proven level instead of a raw statistical guess.");
-  }
-  const withExtras = function(main){ return extras.length ? [main].concat(extras) : main; };
+// ══════════════════════════════════════════════════════════════
+// ENTRY / EXIT PLAN — the explicit "at what price do I get in, take
+// profit, and bail out" bullet inside the RECOMMENDATION. Uses proven
+// S/R where it exists, the volatility band as fallback.
+// ══════════════════════════════════════════════════════════════
+function tpEntryExitPlan(sig, band){
+  if(!band || !sig.price) return null;
+  const price = sig.price;
+  const sr = sig.sr;
+  const P = tpFmtLvl;
+  const sup = (sr && sr.support && sr.support.level < price) ? sr.support.level : band.low;
+  const res = (sr && sr.resistance && sr.resistance.level > price) ? sr.resistance.level : band.high;
 
-  if(bias>0){
-    return withExtras(tpPick(sym+'-outlook-up', [
-      "This stock's been swinging "+vol+"% a day on average over the last two weeks. Scale that by "+sig.confidencePct+"% conviction on the BUY side and the next 1-2 sessions point toward ₱"+H+" as the stronger target, with ₱"+L+" as the floor if it stalls out instead. The RSI/trend numbers above are exactly what's driving this — move either one and this range moves with it.",
-      "Fourteen sessions of "+vol+"%-a-day average volatility, run through a "+sig.confidencePct+"% conviction BUY read, puts ₱"+H+" within reach over the next session or two, with ₱"+L+" as the downside limit if the setup doesn't play out. Same inputs as the reasoning above — no separate model, just the range this data implies.",
-      "Given the stock's own "+vol+"% average daily move and "+sig.confidencePct+"% conviction behind this BUY, ₱"+H+" is the level this setup is leaning toward over the next 1-2 sessions, with ₱"+L+" marking where the case would start to look wrong."
-    ]));
-  } else if(bias<0){
-    return withExtras(tpPick(sym+'-outlook-down', [
-      "Average daily swing here has been "+vol+"% over the last two weeks. At "+sig.confidencePct+"% conviction on this SELL, the next 1-2 sessions lean toward ₱"+L+" as the stronger target, with ₱"+H+" as the ceiling if the pressure eases early.",
-      "This stock's "+vol+"%-a-day volatility, scaled by "+sig.confidencePct+"% conviction on the downside, points toward ₱"+L+" over the next session or two — ₱"+H+" is where this read would start to look wrong.",
-      "With "+vol+"% average daily movement and "+sig.confidencePct+"% conviction behind the SELL call, ₱"+L+" is the level this setup is leaning toward in the next 1-2 sessions, capped at ₱"+H+" if the selling doesn't follow through."
-    ]));
-  } else {
-    return withExtras(tpPick(sym+'-outlook-flat', [
-      "Daily swings here have averaged "+vol+"% over the last two weeks, with no real edge from either RSI or trend right now. Expect this to chop inside roughly ₱"+L+" to ₱"+H+" over the next 1-2 sessions rather than break out in either direction.",
-      "With momentum and trend basically cancelling out, the "+vol+"% average daily swing is the main thing shaping this — a ₱"+L+"–₱"+H+" range over the next session or two is the more likely outcome than a clean breakout.",
-      "No dominant signal either way right now, so the stock's own "+vol+"% typical daily move is what defines the range: roughly ₱"+L+" to ₱"+H+" over the next 1-2 sessions."
-    ]));
+  if(sig.signal==='BUY'){
+    const entryLo = Math.max(sup, price*(1 - sig.volPct/200)); // up to half a normal day's dip
+    const stop = sup*0.99;
+    const t1 = price + (res - price)*0.5;
+    return 'WHERE TO ENTER AND EXIT:<br>' +
+      '<b>Entry:</b> anywhere from \u20b1'+P(entryLo)+' up to the current \u20b1'+P(price)+' \u2014 a small dip toward the floor gets a better price, but waiting for a deep discount risks missing the move entirely.<br>' +
+      '<b>Take-profit / target:</b> first sell-point around \u20b1'+P(t1)+' (halfway to the ceiling \u2014 a sensible spot to bank part of the gain), final target at the \u20b1'+P(res)+' ceiling, where sellers have stepped in before.<br>' +
+      '<b>Stop-loss (exit if wrong):</b> \u20b1'+P(stop)+', just under the \u20b1'+P(sup)+' floor \u2014 a close below that means the floor failed and the reason for owning this is gone.';
   }
+  if(sig.signal==='SELL'){
+    return 'WHERE TO EXIT AND RE-ENTER:<br>' +
+      '<b>Exit (sell):</b> at or near the current \u20b1'+P(price)+' \u2014 with a SELL read, waiting for a bounce that may never come usually costs more than acting; any lift toward the \u20b1'+P(res)+' ceiling is a gift exit.<br>' +
+      '<b>Re-entry (buy back):</b> the \u20b1'+P(sup)+' floor is where the slide would most likely stall first \u2014 the natural place to reconsider buying back in if it holds.<br>' +
+      '<b>Invalidation:</b> a close above the \u20b1'+P(res)+' ceiling means this sell read was wrong \u2014 stop waiting for lower prices at that point.';
+  }
+  // HOLD
+  return 'WHERE THE ENTRY/EXIT TRIGGERS SIT:<br>' +
+    '<b>Buy trigger:</b> a close above the \u20b1'+P(res)+' ceiling \u2014 that\'s the price proving buyers have won; buying anything below that trigger is guessing.<br>' +
+    '<b>Sell trigger:</b> a close below the \u20b1'+P(sup)+' floor \u2014 that\'s the floor failing, and the time to be out.<br>' +
+    '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside that box is noise, not signal.';
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1786,88 +1834,57 @@ function tpOutlookNarrative(sig){
 // the volatility band as the fallback where they don't.
 // ══════════════════════════════════════════════════════════════
 function tpFmtLvl(n){ return n<1 ? n.toFixed(4) : n<10 ? n.toFixed(3) : n.toFixed(2); }
-function tpLevelDesc(L, kind){
-  if(!L) return null;
-  const base = "\u20b1"+tpFmtLvl(L.level);
-  if(L.fallback){
-    return base + (kind==='support'
-      ? " (the lowest point of the past month \u2014 a weaker, backup floor since no repeated bounce level was found below the current price)"
-      : " (the highest point of the past month \u2014 a weaker, backup ceiling since no repeated rejection level was found above the current price)");
-  }
-  let d = base + " \u2014 the stock has " + (kind==='support'
-    ? "bounced off this floor "
-    : "been pushed back down from this ceiling ") + L.touches + (L.touches===1?" time":" times") + " recently";
-  if(L.isRound) d += ", and it's a round number, where buy and sell orders naturally pile up, making the level stickier";
-  return d;
-}
 function tpLevelsNarrative(sig){
-  var sym = tpCurrentSym || 'x';
   const sr = sig.sr;
-  const band = tpProjectedBand(sig);
   const price = sig.price;
+  const band = tpProjectedBand(sig);
+  const P = tpFmtLvl;
   if(!sr || (!sr.support && !sr.resistance)){
-    return "Not enough clean price history yet to map this stock's support (floor) and resistance (ceiling) levels \u2014 they'll appear here once more trading sessions build a track record of where buyers and sellers have actually turned the price around.";
+    return "No reliable support/resistance mapped yet \u2014 needs more trading history before floor and ceiling levels can be trusted.";
   }
-
-  const parts = [];
-
-  // ── Bullet 1: what the levels ARE and where they sit ──
-  let intro = tpPick(sym+'-levels-intro', [
-    "Every stock trades between invisible lines drawn by its own past: a FLOOR (support) \u2014 a price where buyers have stepped in before and stopped a fall \u2014 and a CEILING (resistance) \u2014 a price where sellers have taken over before and stopped a rise. They matter because real pending orders cluster at prices people remember, so when the stock comes back, that waiting money pushes back. For this stock right now: ",
-    "Two prices matter more than any others for this stock right now: its FLOOR (support) \u2014 where falls have stopped before, because buyers were waiting there \u2014 and its CEILING (resistance) \u2014 where rises have stalled before, because sellers were waiting there. These aren't predictions, they're the stock's own scar tissue: places it has actually turned around. Currently: "
-  ]);
-  const lvlBits = [];
-  if(sr.support)    lvlBits.push("support at "+tpLevelDesc(sr.support,'support'));
-  if(sr.resistance) lvlBits.push("resistance at "+tpLevelDesc(sr.resistance,'resistance'));
-  intro += lvlBits.join("; ") + ".";
-  if(sr.support && sr.resistance){
-    const roomUp = ((sr.resistance.level-price)/price*100);
-    const roomDn = ((price-sr.support.level)/price*100);
-    intro += " The current price of \u20b1"+tpFmtLvl(price)+" sits "+roomDn.toFixed(1)+"% above the floor and "+roomUp.toFixed(1)+"% below the ceiling \u2014 that's the room this stock has to move before it hits a level it has historically respected.";
+  const lines = [];
+  if(sr.support){
+    lines.push('<b>Support (floor):</b> \u20b1'+P(sr.support.level)
+      + (sr.support.fallback ? ' \u2014 month low (backup level, no repeated bounce found)' : ' \u2014 held '+sr.support.touches+'\u00d7 recently')
+      + (sr.support.isRound ? ' \u00b7 round number (stickier)' : ''));
   }
-  parts.push(intro);
-
-  // ── Bullet 2: risk-to-reward for the current signal ──
+  if(sr.resistance){
+    lines.push('<b>Resistance (ceiling):</b> \u20b1'+P(sr.resistance.level)
+      + (sr.resistance.fallback ? ' \u2014 month high (backup level, no repeated rejection found)' : ' \u2014 rejected '+sr.resistance.touches+'\u00d7 recently')
+      + (sr.resistance.isRound ? ' \u00b7 round number (stickier)' : ''));
+  }
+  if(sr.support && sr.resistance && price){
+    const up = ((sr.resistance.level - price)/price*100).toFixed(1);
+    const dn = ((price - sr.support.level)/price*100).toFixed(1);
+    lines.push('<b>Price now:</b> \u20b1'+P(price)+' \u2014 '+dn+'% above the floor, '+up+'% below the ceiling');
+  }
   if(sig.signal==='BUY' && price){
-    const target = (sr.resistance && sr.resistance.level>price) ? sr.resistance.level : (band ? band.high : null);
-    const stop   = (sr.support && sr.support.level<price)       ? sr.support.level    : (band ? band.low  : null);
-    if(target && stop && stop<price){
-      const reward = (target-price)/price*100;
-      const risk   = (price-stop)/price*100;
-      const rr = risk>0 ? reward/risk : null;
-      let verdict;
-      if(rr==null) verdict = "";
-      else if(rr>=2) verdict = "That's the kind of math experienced traders look for \u2014 the potential prize is at least double the potential loss, so you can be wrong half the time and still come out ahead.";
-      else if(rr>=1) verdict = "That's workable but thin \u2014 the potential gain only somewhat outweighs the potential loss, so this needs a higher hit rate to pay off over time. Nothing wrong with passing on trades like this.";
-      else verdict = "Honest warning: that ratio is upside-down \u2014 you'd be risking MORE than you stand to gain because the ceiling is closer than the floor. Even with a genuine BUY signal, experienced traders usually skip setups shaped like this and wait for a better entry price.";
-      parts.push("Risk vs reward on this BUY, using those levels as the realistic map: if it climbs to the ceiling at \u20b1"+tpFmtLvl(target)+", that's about "+reward.toFixed(1)+"% gained; if it falls to the floor at \u20b1"+tpFmtLvl(stop)+" instead, that's about "+risk.toFixed(1)+"% lost. In plain terms: for every \u20b11 you put at risk, you're reaching for roughly \u20b1"+(rr!=null?rr.toFixed(1):"\u2014")+" of potential gain ("+(rr!=null?rr.toFixed(1):"\u2014")+":1). "+verdict);
+    const target = (sr.resistance && sr.resistance.level > price) ? sr.resistance.level : (band ? band.high : null);
+    const stop   = (sr.support && sr.support.level < price)       ? sr.support.level    : (band ? band.low  : null);
+    if(target && stop && stop < price){
+      const reward = (target - price)/price, risk = (price - stop)/price;
+      const rr = risk > 0 ? reward/risk : null;
+      if(rr != null){
+        lines.push('<b>Risk:Reward on this BUY:</b> '+rr.toFixed(1)+':1 \u2014 '+(
+          rr >= 2 ? 'good \u2014 the potential prize is at least double the risk'
+          : rr >= 1 ? 'workable but thin \u2014 needs a high hit rate to pay off'
+          : 'upside-down \u2014 risking more than the potential gain; a better entry price would fix this'));
+      }
     }
   } else if(sig.signal==='SELL' && price){
-    const target = (sr.support && sr.support.level<price)       ? sr.support.level    : (band ? band.low  : null);
-    const stop   = (sr.resistance && sr.resistance.level>price) ? sr.resistance.level : (band ? band.high : null);
-    if(target && stop && stop>price){
-      const drop = (price-target)/price*100;
-      const bounce = (stop-price)/price*100;
-      parts.push("How the levels frame this SELL: the floor at \u20b1"+tpFmtLvl(target)+" is the natural magnet if the selling continues \u2014 about "+drop.toFixed(1)+"% below here, and roughly how much of your money selling now would protect if the slide plays out. If the read is wrong, the ceiling at \u20b1"+tpFmtLvl(stop)+" (about "+bounce.toFixed(1)+"% up) is where a recovery would likely stall first \u2014 so that's also roughly the most you'd \u2018miss out on\u2019 short-term by selling and being wrong. Weigh those two numbers against each other and the decision gets a lot less emotional.");
+    const target = (sr.support && sr.support.level < price)       ? sr.support.level    : (band ? band.low  : null);
+    const stop   = (sr.resistance && sr.resistance.level > price) ? sr.resistance.level : (band ? band.high : null);
+    if(target && stop && stop > price){
+      const dp = ((price - target)/price*100).toFixed(1);
+      const bp = ((stop - price)/price*100).toFixed(1);
+      lines.push('<b>SELL math:</b> \u2248'+dp+'% of downside avoided by selling now vs \u2248'+bp+'% of upside given up if wrong');
     }
-  } else if(sr.support && sr.resistance && price){
-    const roomUp = ((sr.resistance.level-price)/price*100);
-    const roomDn = ((price-sr.support.level)/price*100);
-    parts.push("With the signal on HOLD, the practical use of these levels is as tripwires: this stock is boxed between its \u20b1"+tpFmtLvl(sr.support.level)+" floor and \u20b1"+tpFmtLvl(sr.resistance.level)+" ceiling ("+roomDn.toFixed(1)+"% below / "+roomUp.toFixed(1)+"% above). A clean break OUT of that box \u2014 closing beyond either level \u2014 is the event worth reacting to; everything inside the box is just noise. Set your alerts at those two prices and you can stop watching this one all day.");
+  } else if(sr.support && sr.resistance){
+    lines.push('<b>On HOLD:</b> set alerts at both levels \u2014 a close outside the box is the only event worth reacting to');
   }
-
-  return parts;
+  return lines.join('<br>');
 }
 
-// ══════════════════════════════════════════════════════════════
-// ACTION PLAN — the practical layer under the recommendation verdict:
-// what to actually do next, the real gain/loss math behind the target
-// and floor levels (not just peso numbers with no context), how an
-// experienced trader would typically handle this exact setup (entry
-// sizing, stop placement, scaling in/out), and an explicit call on
-// whether current price is actually a good entry/exit point right now
-// — rather than leaving the reader to infer timing from a bare signal.
-// ══════════════════════════════════════════════════════════════
 function tpActionPlan(sig, band, aligned, opposed){
   var sym = tpCurrentSym || 'x';
 
@@ -2129,8 +2146,10 @@ function tpOverallRecommendation(sig){
   const context = tpMarketContextNarrative(sig);
   const verdict = tpOverallRecommendationVerdict(sig);
   const action = tpActionPlan(sig, band, aligned, opposed);
+  const entryExit = tpEntryExitPlan(sig, band);
+  const fiveDay = tpFiveDayOutlook(sig);
   const sizing = tpPositionPlan(sig, band, aligned, opposed);
-  return [context, verdict, action, sizing].filter(Boolean);
+  return [context, verdict, action, entryExit, fiveDay, sizing].filter(Boolean);
 }
 
 // Renders an array of narrative chunks (or a single string) as a
@@ -2478,11 +2497,6 @@ async function tpRenderAll(sym){
   trendTagEl.textContent = sig.trendConfidencePct + '% ' + sig.trend;
   trendTagEl.className = 'tp-summary-tag ' + sig.trend;
   document.getElementById('tp-summary-trend-text').innerHTML = tpBulletsHTML(tpTrendNarrative(sig));
-  const outlookTagEl = document.getElementById('tp-summary-outlook-tag');
-  outlookTagEl.textContent = '2-DAY OUTLOOK';
-  outlookTagEl.className = 'tp-summary-tag OUTLOOK';
-  document.getElementById('tp-summary-outlook-text').innerHTML = tpBulletsHTML(tpOutlookNarrative(sig));
-
   const levelsTagEl = document.getElementById('tp-summary-levels-tag');
   levelsTagEl.textContent = 'KEY LEVELS';
   levelsTagEl.className = 'tp-summary-tag LEVELS';
@@ -2942,6 +2956,42 @@ function tcDemoRefresh(){
   }, 900);
 }
 
+// ── 5-day outlook (demo) — same math shape as the Stocks tab: √day-
+// widening ranges, signal-direction drift, clipped at the demo pivots.
+// Crypto trades 24/7, so days are calendar days, not trading days. ──
+function tcFiveDayOutlook(sig, c, sup, res){
+  var s = sig.series;
+  if(!s || s.length < 15 || !c || !c.price) return null;
+  var volSum = 0, n = 0;
+  for(var i = s.length - 14; i < s.length; i++){
+    if(s[i] && s[i].close > 0){ volSum += (s[i].high - s[i].low)/s[i].close*100; n++; }
+  }
+  var vol = n ? volSum/n : 3;
+  var bias = sig.signal==='BUY' ? 1 : sig.signal==='SELL' ? -1 : 0;
+  var conf = (bias===0 ? sig.confidencePct*0.4 : sig.confidencePct)/100;
+  var halfW1 = vol * (0.75 + conf);
+  var drift = bias * halfW1 * 0.35;
+  var M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var rows = [];
+  var base = new Date();
+  for(var d = 1; d <= 5; d++){
+    var dt = new Date(base.getTime() + d*86400000); // 24/7 market: calendar days
+    var spread = halfW1 * Math.sqrt(d);
+    var mid0 = c.price * (1 + (drift*d)/100);
+    var hi = mid0 * (1 + spread/100);
+    var lo = mid0 * (1 - spread/100);
+    if(hi > res) hi = res;
+    if(lo < sup) lo = sup;
+    if(lo >= hi){ lo = Math.min(lo, c.price*0.999); hi = Math.max(hi, c.price*1.001); }
+    var mid = Math.min(Math.max(mid0, lo), hi);
+    rows.push('<b>Day '+d+'</b> ('+M[dt.getMonth()]+' '+dt.getDate()+'): '+tcFmtUSD(lo)+' \u2013 '+tcFmtUSD(hi)+' \u00b7 most likely near '+tcFmtUSD(mid));
+  }
+  var dirTxt = bias>0 ? 'with the midpoint drifting higher each day while the BUY case holds'
+    : bias<0 ? 'with the midpoint drifting lower each day while the SELL case holds'
+    : 'with no daily drift, since neither side has an edge right now';
+  return '5-DAY OUTLOOK (demo) \u2014 built from this coin\'s simulated '+vol.toFixed(2)+'% average daily swing, the '+sig.confidencePct+'% signal confidence, and the demo floor/ceiling pivots. Ranges widen each day because uncertainty grows with time, '+dirTxt+' \u2014 crypto trades 24/7, so these are calendar days:<br>'+rows.join('<br>')+'<br>Ranges are clipped at the '+tcFmtUSD(sup)+' floor and '+tcFmtUSD(res)+' ceiling. Demo projection on simulated candles \u2014 not promises.';
+}
+
 // ── Main render ──
 function tcSelectCoin(sym){ tcRenderAll(sym); }
 function tcRenderAll(sym){
@@ -2967,12 +3017,35 @@ function tcRenderAll(sym){
   document.getElementById('tc-badge-wrap').innerHTML =
     '<div class="tp-signal-badge ' + sig.signal + '">' + sig.confidencePct + '% ' + sig.signal + '</div>';
 
-  // Justification (demo narrative)
+  // Justification (demo narrative) — verdict + entry/exit + 5-day outlook,
+  // mirroring the Stocks recommendation structure. Support/resistance use
+  // the demo pivots (±6% of spot) until real crypto S/R is wired.
   var recEl = document.getElementById('tc-summary-rec-text');
   var actionTxt = sig.signal==='BUY' ? 'accumulating on dips looks reasonable in this demo setup'
     : sig.signal==='SELL' ? 'trimming exposure or waiting for a reset looks reasonable in this demo setup'
     : 'staying on the sidelines and letting the trend resolve looks reasonable in this demo setup';
-  recEl.textContent = sig.signal + ' \u2014 ' + actionTxt + '. Demo engine: same RSI-14 + SMA20/50 recipe as the Stocks tab, running on simulated candles anchored to a real price snapshot.';
+  var verdictTxt = sig.signal + ' \u2014 ' + actionTxt + '. Demo engine: same RSI-14 + SMA20/50 recipe as the Stocks tab, running on simulated candles anchored to a real price snapshot.';
+  var cSup = c.price * 0.94, cRes = c.price * 1.06;
+  var entryExitTxt;
+  if(sig.signal==='BUY'){
+    var cT1 = c.price + (cRes - c.price)*0.5;
+    entryExitTxt = 'WHERE TO ENTER AND EXIT:<br>' +
+      '<b>Entry:</b> from ' + tcFmtUSD(c.price*0.985) + ' up to the current ' + tcFmtUSD(c.price) + ' \u2014 a small dip gets a better price, but crypto moves 24/7 and deep-discount waiting often misses the move.<br>' +
+      '<b>Take-profit / target:</b> first sell-point near ' + tcFmtUSD(cT1) + ' (halfway to the ceiling), final target at the ' + tcFmtUSD(cRes) + ' ceiling.<br>' +
+      '<b>Stop-loss (exit if wrong):</b> just under the ' + tcFmtUSD(cSup) + ' floor \u2014 a close below it means the setup failed.';
+  } else if(sig.signal==='SELL'){
+    entryExitTxt = 'WHERE TO EXIT AND RE-ENTER:<br>' +
+      '<b>Exit (sell):</b> at or near the current ' + tcFmtUSD(c.price) + ' \u2014 any lift toward the ' + tcFmtUSD(cRes) + ' ceiling is a gift exit.<br>' +
+      '<b>Re-entry (buy back):</b> the ' + tcFmtUSD(cSup) + ' floor is where a slide would most likely stall first.<br>' +
+      '<b>Invalidation:</b> a close above ' + tcFmtUSD(cRes) + ' means this sell read was wrong.';
+  } else {
+    entryExitTxt = 'WHERE THE ENTRY/EXIT TRIGGERS SIT:<br>' +
+      '<b>Buy trigger:</b> a close above the ' + tcFmtUSD(cRes) + ' ceiling.<br>' +
+      '<b>Sell trigger:</b> a close below the ' + tcFmtUSD(cSup) + ' floor.<br>' +
+      '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside the box is noise.';
+  }
+  var fiveDayTxt = tcFiveDayOutlook(sig, c, cSup, cRes);
+  recEl.innerHTML = tpBulletsHTML([verdictTxt, entryExitTxt, fiveDayTxt]);
   var recTag = document.getElementById('tc-summary-rec-tag');
   recTag.textContent = 'RECOMMENDATION';
   recTag.className = 'tp-summary-tag ' + sig.signal;
@@ -2995,16 +3068,13 @@ function tcRenderAll(sym){
      sig.trend==='BEAR' ? 'a confirmed downtrend on this simulated series.' :
      'inside the buffer band, so no confirmed trend either way.');
 
-  document.getElementById('tc-summary-outlook-text').textContent =
-    (sig.trend==='BULL' ? 'Bias leans higher over the next two sessions if the trend holds; crypto moves 24/7 so gaps can appear any hour.' :
-     sig.trend==='BEAR' ? 'Bias leans lower over the next two sessions unless buyers reclaim the short-term average; crypto trades 24/7.' :
-     'No directional edge for the next two sessions; expect range-bound chop until a trend confirms.') + ' (Demo projection.)';
-
   var lo52 = Math.min.apply(null, s.slice(-365).map(function(b){return b.low;}));
   var hi52 = Math.max.apply(null, s.slice(-365).map(function(b){return b.high;}));
-  document.getElementById('tc-summary-levels-text').textContent =
-    'Support near ' + tcFmtUSD(c.price*0.94) + ', resistance near ' + tcFmtUSD(c.price*1.06) +
-    '. 52-week demo range: ' + tcFmtUSD(lo52) + ' \u2013 ' + tcFmtUSD(hi52) + '.';
+  document.getElementById('tc-summary-levels-text').innerHTML =
+    '<b>Support (floor):</b> ' + tcFmtUSD(cSup) + ' \u2014 demo pivot, 6% under spot<br>' +
+    '<b>Resistance (ceiling):</b> ' + tcFmtUSD(cRes) + ' \u2014 demo pivot, 6% over spot<br>' +
+    '<b>Price now:</b> ' + tcFmtUSD(c.price) + ' \u2014 midway between the two<br>' +
+    '<b>52-week demo range:</b> ' + tcFmtUSD(lo52) + ' \u2013 ' + tcFmtUSD(hi52);
 
   // Range bar
   document.getElementById('tc-range-low').textContent = tcFmtUSD(lo52);
