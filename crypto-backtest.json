@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-04T16:32:06Z",
+  "generatedAt": "2026-07-04T17:05:42Z",
   "engineVersion": "wilder-rsi(30/70) + sma-buffer(1.0%/6%) + vol-confirm + true-atr(real-tier) + swing-sr(real-tier)",
   "coinsTested": 8,
   "barsGraded": 2408,
