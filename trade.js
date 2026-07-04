@@ -2689,14 +2689,26 @@ window.addEventListener('resize', function(){
 // tpBulletsHTML, tpOutlookTableHTML, tpPick, tpGetGithubToken.
 // ═══════════════════════════════════════════════════════════════
 const TC_COINS = [
-  {sym:'BTC',  id:'bitcoin',     name:'Bitcoin'},
-  {sym:'ETH',  id:'ethereum',    name:'Ethereum'},
-  {sym:'XRP',  id:'ripple',      name:'XRP'},
-  {sym:'BNB',  id:'binancecoin', name:'BNB'},
-  {sym:'SOL',  id:'solana',      name:'Solana'},
-  {sym:'DOGE', id:'dogecoin',    name:'Dogecoin'},
-  {sym:'TRX',  id:'tron',        name:'TRON'},
-  {sym:'HYPE', id:'hyperliquid', name:'Hyperliquid'}
+  {sym:'BTC',  id:'bitcoin',                 name:'Bitcoin'},
+  {sym:'ETH',  id:'ethereum',                name:'Ethereum'},
+  {sym:'XRP',  id:'ripple',                  name:'XRP'},
+  {sym:'BNB',  id:'binancecoin',             name:'BNB'},
+  {sym:'SOL',  id:'solana',                  name:'Solana'},
+  {sym:'DOGE', id:'dogecoin',                name:'Dogecoin'},
+  {sym:'TRX',  id:'tron',                    name:'TRON'},
+  {sym:'HYPE', id:'hyperliquid',             name:'Hyperliquid'},
+  {sym:'ADA',  id:'cardano',                 name:'Cardano'},
+  {sym:'AVAX', id:'avalanche-2',             name:'Avalanche'},
+  {sym:'LINK', id:'chainlink',               name:'Chainlink'},
+  {sym:'DOT',  id:'polkadot',                name:'Polkadot'},
+  {sym:'LTC',  id:'litecoin',                name:'Litecoin'},
+  {sym:'SHIB', id:'shiba-inu',               name:'Shiba Inu'},
+  {sym:'SUI',  id:'sui',                     name:'Sui'},
+  {sym:'TON',  id:'the-open-network',        name:'Toncoin'},
+  {sym:'NEAR', id:'near',                    name:'NEAR Protocol'},
+  {sym:'POL',  id:'polygon-ecosystem-token', name:'Polygon'},
+  {sym:'UNI',  id:'uniswap',                 name:'Uniswap'},
+  {sym:'ATOM', id:'cosmos',                  name:'Cosmos'}
 ];
 
 var tcLiveQuotes = {};        // sym -> {price, change24hPct, high24h, low24h, volume24h, marketCap, asOf}
@@ -2710,19 +2722,21 @@ var tcCurrentTF = '3M';
 var tcGainersModeVal = 'current';
 var tcInited = false;
 
-function tcFmtUSD(n){
+function tcFmtPHP(n){
   if(n == null || !isFinite(n)) return '—';
-  if(n >= 1000) return '$' + n.toLocaleString('en-US', {maximumFractionDigits:2, minimumFractionDigits:2});
-  if(n >= 1)    return '$' + n.toFixed(2);
-  return '$' + n.toFixed(4);
+  if(n >= 1000) return '\u20b1' + n.toLocaleString('en-US', {maximumFractionDigits:2, minimumFractionDigits:2});
+  if(n >= 1)    return '\u20b1' + n.toFixed(2);
+  return '\u20b1' + n.toFixed(4);
 }
-function tcFmtUSDBig(n){
+function tcFmtUSD(n){ return tcFmtPHP(n); } // legacy alias, kept in case any external code still calls this name
+function tcFmtPHPBig(n){
   if(n == null || !isFinite(n)) return '—';
-  if(n>=1e9) return '$'+(n/1e9).toFixed(2)+'B';
-  if(n>=1e6) return '$'+(n/1e6).toFixed(2)+'M';
-  if(n>=1e3) return '$'+(n/1e3).toFixed(2)+'K';
-  return '$'+n.toFixed(0);
+  if(n>=1e9) return '\u20b1'+(n/1e9).toFixed(2)+'B';
+  if(n>=1e6) return '\u20b1'+(n/1e6).toFixed(2)+'M';
+  if(n>=1e3) return '\u20b1'+(n/1e3).toFixed(2)+'K';
+  return '\u20b1'+n.toFixed(0);
 }
+function tcFmtUSDBig(n){ return tcFmtPHPBig(n); } // legacy alias, kept in case any external code still calls this name
 function tcFindCoin(sym){ return TC_COINS.find(function(c){return c.sym===sym;}); }
 
 // ══════════════════════════════════════════════════════════════
@@ -2730,6 +2744,21 @@ function tcFindCoin(sym){ return TC_COINS.find(function(c){return c.sym===sym;})
 // the Stocks module. Run eagerly at file load (not lazily on tab open)
 // so data is ready the moment the person switches to Crypto.
 // ══════════════════════════════════════════════════════════════
+// Mirrors loadPseLiveQuotes()'s "Data Updated ..." status line — called after
+// each loader resolves so tc-refresh-status never sits stuck on its initial
+// placeholder text once real data (or a real error) comes back.
+function tcUpdateRefreshStatusDisplay(){
+  var statusEl = document.getElementById('tc-refresh-status');
+  if (!statusEl) return;
+  if (CRYPTO_QUOTES_STATUS.loaded && CRYPTO_HISTORY_STATUS.loaded) {
+    var ts = CRYPTO_QUOTES_STATUS.source.match(/updated ([^)]+)\)/);
+    statusEl.textContent = ts ? 'Data Updated ' + tpFormatPH(ts[1]) : 'Data Updated';
+  } else if (CRYPTO_QUOTES_STATUS.error || CRYPTO_HISTORY_STATUS.error) {
+    statusEl.textContent = 'Data unavailable — ' + (CRYPTO_QUOTES_STATUS.error || CRYPTO_HISTORY_STATUS.error);
+  } else {
+    statusEl.textContent = 'No live data yet — tap Fetch Live Data above';
+  }
+}
 async function loadCryptoLiveQuotes(){
   var RAW_URL = 'https://raw.githubusercontent.com/' + TP_GH_OWNER + '/' + TP_GH_REPO + '/' + TP_GH_REF + '/crypto-live-quotes.json';
   try {
@@ -2750,6 +2779,7 @@ async function loadCryptoLiveQuotes(){
     console.warn('Crypto live quotes load failed:', e.message);
   }
   tcSeriesCache = {};
+  tcUpdateRefreshStatusDisplay();
   if(tcInited){ tcRenderTop(); tcRenderWatchlist(); if(tcCurrentSym) tcRenderAll(tcCurrentSym); }
 }
 async function loadCryptoHistory(){
@@ -2790,6 +2820,7 @@ async function loadCryptoHistory(){
       ? 'Live data from the CoinGecko API. Daily bars — the trailing ~30 days carry real intraday highs/lows; older bars are derived from daily closes only (see Report Card for how the signals have performed). Signals are for decision support only; verify current prices before trading. Not financial advice.'
       : 'No live crypto data yet — tap Fetch Live Data above to pull real prices and history from the CoinGecko API (first run takes a few minutes). Not financial advice.';
   }
+  tcUpdateRefreshStatusDisplay();
   if(tcInited){ tcRenderTop(); tcRenderWatchlist(); if(tcCurrentSym) tcRenderAll(tcCurrentSym); }
 }
 var CRYPTO_QUOTES_READY = loadCryptoLiveQuotes();
@@ -3242,9 +3273,9 @@ function tcRenderWatchlist(){
       '<div class="tp-watch-inbox tp-watch-lastbox"><span class="tp-watch-inlabel">Last</span>'+
         '<div class="tp-watch-last">'+lastTxt+'</div></div>'+
       '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+
-        '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="$ high" value="'+hVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'highPrice\', this.value)"></div>'+
+        '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="\u20b1 high" value="'+hVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'highPrice\', this.value)"></div>'+
       '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Low</span>'+
-        '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitLow?' hit-low':'')+'" placeholder="$ low" value="'+lVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'lowPrice\', this.value)"></div>'+
+        '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitLow?' hit-low':'')+'" placeholder="\u20b1 low" value="'+lVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'lowPrice\', this.value)"></div>'+
       '<button class="tp-watch-remove" onclick="tcRemoveWatch(\''+w.sym+'\')" title="Remove">\u2715</button>'+
     '</div>';
   }).join('');
