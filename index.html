@@ -4340,7 +4340,8 @@ async function pcsoAIFetch(){
   --green:#22c55e;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;
   background:var(--bg);min-height:100vh;padding-bottom:20px;
 }
-#trade-page .tp-inner{padding:12px 16px 24px;}
+#trade-page .tp-inner{padding:8px 0 24px;}
+#trade-page .seg-toggle{margin:0 0 16px;}
 #trade-page .tp-sub{font-size:11px;color:var(--muted);margin-bottom:14px;}
 #trade-page .tp-picklists{display:flex;gap:8px;margin-bottom:14px;position:relative;}
 #trade-page .tp-picklist-group{flex:1;min-width:0;width:100%;position:relative;}
@@ -4422,12 +4423,26 @@ async function pcsoAIFetch(){
 #trade-page .tp-backtest-status{font-size:10.5px;color:var(--muted);line-height:1.4;margin-bottom:8px;min-height:0;}
 #trade-page .tp-backtest-status:empty{display:none;}
 #trade-page .tp-gainers-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:2px;flex-shrink:0;}
+/* Market toggle — lives in the topbar like the Stream search box */
+#trade-page .topbar .topbar-logo{font-size:17px;letter-spacing:2px;}
+#trade-page .tp-market-row{flex:1;min-width:0;display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:2px;height:34px;box-sizing:border-box;}
+#trade-page .tp-market-row .tp-gainers-tab{flex:1;text-align:center;padding:0 6px;font-size:10.5px;letter-spacing:0.6px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;}
+/* Crypto view — orange identity to distinguish from Stocks */
+#tp-crypto-view .tp-gainers,#tp-crypto-view .tp-watchlist,#tp-crypto-view .tp-price-card,#tp-crypto-view .tp-summary-card,#tp-crypto-view .tp-stats{border-color:rgba(247,147,26,0.35);}
+#tp-crypto-view .tp-gainers-title,#tp-crypto-view .tp-watch-title,#tp-crypto-view .tp-stats-title{color:#f7931a;}
+#tp-crypto-view .tp-gainers-tab.active{background:#f7931a;color:#1a1206;}
+#tp-crypto-view .seg-btn.active{background:#f7931a;color:#1a1206;}
+#tp-crypto-view .tp-price-val{color:#f7931a;}
+#tp-crypto-view .tp-refresh-btn svg{color:#f7931a;}
+#tp-crypto-view .tp-tf-btn.active{background:#f7931a;border-color:#f7931a;color:#1a1206;}
+#tp-crypto-view .tp-combo-input:focus{border-color:#f7931a;outline:none;}
 #trade-page .tp-gainers-tab{background:transparent;border:none;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:0.3px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;}
 #trade-page .tp-gainers-tab.active{background:var(--amber);color:#1a1206;}
 #trade-page .tp-gainers-note{font-size:9.5px;color:var(--muted);line-height:1.4;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
 #trade-page .tp-gainer-tag{font-size:8.5px;font-weight:700;letter-spacing:0.4px;padding:1px 5px;border-radius:8px;margin-left:6px;display:inline-block;vertical-align:middle;}
 #trade-page .tp-gainer-tag.BUY,#trade-page .tp-gainer-tag.BULL{background:rgba(34,197,94,0.15);color:var(--green);}
 #trade-page .tp-gainer-tag.HOLD{background:rgba(245,158,11,0.15);color:var(--amber);}
+#trade-page .tp-gainer-tag.SELL,#trade-page .tp-gainer-tag.BEAR{background:rgba(239,68,68,0.15);color:var(--red);}
 #trade-page .tp-gainer-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;}
 #trade-page .tp-gainer-row:last-child{border-bottom:none;}
 #trade-page .tp-gainer-row:active{background:var(--surface);}
@@ -4485,8 +4500,13 @@ async function pcsoAIFetch(){
 </style>
 <div class="topbar">
   <div class="topbar-logo">JOMERPB <span>- TRADE SIGNALS</span></div>
+  <div class="tp-market-row" id="tp-market-seg">
+    <button class="tp-gainers-tab active" data-market="stocks" onclick="tpSetMarket('stocks')">Stocks</button>
+    <button class="tp-gainers-tab" data-market="crypto" onclick="tpSetMarket('crypto')">Crypto</button>
+  </div>
 </div>
 <div class="tp-inner">
+  <div id="tp-stocks-view">
   <div class="tp-refresh-row">
     <button class="tp-refresh-btn" id="tp-refresh-btn" onclick="tpTriggerRefresh()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
@@ -4630,7 +4650,149 @@ async function pcsoAIFetch(){
   </div>
 
   <div class="tp-disclaimer" id="tp-disclaimer">Loading live PSE data… Historical daily bars refreshed via PSE Edge — not tick-by-tick real-time. Signals are for decision support only; verify current prices with your broker before trading. Not financial advice.</div>
-</div>
+  </div><!-- /tp-stocks-view -->
+
+  <div id="tp-crypto-view" style="display:none;">
+  <div class="tp-refresh-row">
+    <button class="tp-refresh-btn" id="tc-refresh-btn" onclick="tcDemoRefresh()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+      Fetch Live Data
+    </button>
+    <div class="tp-refresh-status" id="tc-refresh-status">Demo data</div>
+  </div>
+
+  <div class="tp-gainers">
+    <div class="tp-gainers-header">
+      <div class="tp-card-headbtn" onclick="tpToggleCard('cgainers')">
+        <span class="tp-card-chev" id="tp-chev-cgainers">▾</span>
+        <div class="tp-gainers-title">Top Crypto Today</div>
+      </div>
+      <div class="tp-gainers-toggle">
+        <button class="tp-gainers-tab active" data-mode="current" onclick="tcSetGainersMode('current')">Gainers</button>
+        <button class="tp-gainers-tab" data-mode="bullish" onclick="tcSetGainersMode('bullish')">Bullish</button>
+      </div>
+    </div>
+    <div class="tp-card-body" id="tp-body-cgainers">
+      <div id="tc-gainers-list"></div>
+      <div class="tp-gainers-note" id="tc-gainers-note"></div>
+    </div>
+  </div>
+
+  <div class="tp-watchlist" id="tc-watchlist-card">
+    <div class="tp-card-headbtn" onclick="tpToggleCard('cwatch')">
+      <span class="tp-card-chev" id="tp-chev-cwatch">▾</span>
+      <div class="tp-watch-title">Watchlist</div>
+    </div>
+    <div class="tp-card-body" id="tp-body-cwatch">
+      <div id="tc-watch-list"></div>
+      <div class="tp-watch-empty" id="tc-watch-empty">No coins on your watchlist yet. Select a coin below, then tap the ＋ button beside its name. High/Low alerts start pre-filled at the model's recommended levels — tap a box to adjust.</div>
+    </div>
+  </div>
+
+  <div class="tp-picklists">
+    <div class="tp-picklist-group" id="tc-picklist-group">
+      <div class="tp-picklist-label">Select Coin</div>
+      <div class="tp-combo-wrap">
+        <input type="text" class="tp-combo-input" id="tc-coin-search" placeholder="Search by name or symbol…" autocomplete="off"
+          oninput="tcFilterDropdown(this.value)" onfocus="tcOpenDropdown()">
+        <svg class="tp-combo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </div>
+      <div class="tp-dropdown" id="tc-dropdown"></div>
+    </div>
+  </div>
+
+  <div class="tp-price-card">
+    <div class="tp-price-name-row">
+      <button class="tp-watch-add" id="tc-watch-add" onclick="tcToggleWatch()" title="Add to watchlist">＋</button>
+      <div class="tp-price-name" id="tc-name">—</div>
+    </div>
+    <div class="tp-price-row">
+      <div class="tp-price-val" id="tc-price">$0.00</div>
+      <div class="tp-badges-row">
+        <div id="tc-trend-wrap"></div>
+        <div id="tc-badge-wrap"></div>
+      </div>
+    </div>
+    <div class="tp-price-chg" id="tc-chg">+0.00 (0.00%)</div>
+  </div>
+
+  <!-- Justification / Report view toggle -->
+  <div class="seg-toggle" id="tc-view-seg">
+    <div class="seg-btn active" onclick="tcSetView('justification',this)">Justification</div>
+    <div class="seg-btn" onclick="tcSetView('report',this)">Report</div>
+  </div>
+
+  <div class="tp-summary-card" id="tc-summary-card">
+    <div class="tp-summary-row tp-summary-row-toprec">
+      <span class="tp-summary-tag" id="tc-summary-rec-tag">RECOMMENDATION</span>
+      <span class="tp-summary-text" id="tc-summary-rec-text">—</span>
+    </div>
+    <div class="tp-summary-row">
+      <span class="tp-summary-tag" id="tc-summary-signal-tag">—</span>
+      <span class="tp-summary-text" id="tc-summary-signal-text">—</span>
+    </div>
+    <div class="tp-summary-row">
+      <span class="tp-summary-tag" id="tc-summary-trend-tag">—</span>
+      <span class="tp-summary-text" id="tc-summary-trend-text">—</span>
+    </div>
+    <div class="tp-summary-row">
+      <span class="tp-summary-tag OUTLOOK" id="tc-summary-outlook-tag">2-DAY</span>
+      <span class="tp-summary-text" id="tc-summary-outlook-text">—</span>
+    </div>
+    <div class="tp-summary-row">
+      <span class="tp-summary-tag LEVELS" id="tc-summary-levels-tag">KEY LEVELS</span>
+      <span class="tp-summary-text" id="tc-summary-levels-text">—</span>
+    </div>
+  </div>
+
+  <div class="tp-summary-card" id="tc-report-card" style="display:none;">
+    <div class="tp-summary-row tp-summary-row-bottomline">
+      <span class="tp-summary-tag REPORT" id="tc-report-tag">ENGINE REPORT CARD</span>
+      <span class="tp-summary-text" id="tc-report-text">Demo mode — the crypto backtest engine isn't wired yet. This card mirrors the Stocks Report layout and will show win-rate and signal-accuracy stats once live crypto data is connected.</span>
+    </div>
+  </div>
+
+  <div class="tp-range-bar">
+    <div class="tp-range-label">Low <b id="tc-range-low">—</b></div>
+    <div class="tp-range-track"><div class="tp-range-fill" id="tc-range-fill"></div><div class="tp-range-marker" id="tc-range-marker"></div></div>
+    <div class="tp-range-label"><b id="tc-range-high">—</b> High</div>
+  </div>
+
+  <div class="tp-timeframes">
+    <button class="tp-tf-btn" data-tf="1D" onclick="tcSetTimeframe('1D')">1D</button>
+    <button class="tp-tf-btn" data-tf="1W" onclick="tcSetTimeframe('1W')">1W</button>
+    <button class="tp-tf-btn" data-tf="1M" onclick="tcSetTimeframe('1M')">1M</button>
+    <button class="tp-tf-btn active" data-tf="3M" onclick="tcSetTimeframe('3M')">3M</button>
+    <button class="tp-tf-btn" data-tf="6M" onclick="tcSetTimeframe('6M')">6M</button>
+    <button class="tp-tf-btn" data-tf="1Y" onclick="tcSetTimeframe('1Y')">1Y</button>
+    <button class="tp-tf-btn" data-tf="2Y" onclick="tcSetTimeframe('2Y')">2Y</button>
+  </div>
+
+  <div class="tp-chart-tf-date" id="tc-chart-tf-date" style="display:none;"></div>
+
+  <div class="tp-chart-wrap">
+    <canvas id="tc-canvas-price" height="180"></canvas>
+    <div class="tp-pane-label">Volume</div>
+    <canvas id="tc-canvas-vol" height="54"></canvas>
+    <div class="tp-pane-label">RSI (14)</div>
+    <canvas id="tc-canvas-rsi" height="50"></canvas>
+    <div class="tp-chart-dates" id="tc-chart-dates"></div>
+  </div>
+
+  <div class="tp-stats">
+    <div class="tp-stats-title">Market Stats</div>
+    <div class="tp-stat-row"><span>Last Traded</span><span id="tc-stat-lasttrade">—</span></div>
+    <div class="tp-stat-row"><span>Open</span><span id="tc-stat-open">—</span></div>
+    <div class="tp-stat-row"><span>High</span><span id="tc-stat-high">—</span></div>
+    <div class="tp-stat-row"><span>Low</span><span id="tc-stat-low">—</span></div>
+    <div class="tp-stat-row"><span>Volume</span><span id="tc-stat-vol">—</span></div>
+    <div class="tp-stat-row"><span>SMA 20</span><span id="tc-stat-sma20">—</span></div>
+    <div class="tp-stat-row"><span>SMA 50</span><span id="tc-stat-sma50">—</span></div>
+  </div>
+
+  <div class="tp-disclaimer" id="tc-disclaimer">DEMO DATA — prices seeded from a real market snapshot (Jul 2026) but candles are simulated, not live crypto feeds. Layout preview only; live data pipeline to follow. Not financial advice.</div>
+  </div><!-- /tp-crypto-view -->
+</div><!-- /tp-inner -->
 </div>
 
 <script>
@@ -5724,6 +5886,22 @@ function tpComputeTopBullish(){
   // confidence % on the detail card).
   candidates.sort(function(a,b){ return b.gapPct - a.gapPct; });
   return candidates.slice(0, 10);
+}
+
+// ── Market selector (Stocks / Crypto) ──────
+// Toggles between the full PSE stocks view and the crypto view.
+// Crypto is a placeholder for now; content to be defined later.
+var tpMarketMode = 'stocks';
+function tpSetMarket(mode){
+  if(tpMarketMode === mode) return;
+  tpMarketMode = mode;
+  document.querySelectorAll('#tp-market-seg .tp-gainers-tab').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-market') === mode);
+  });
+  var sv = document.getElementById('tp-stocks-view');
+  var cv = document.getElementById('tp-crypto-view');
+  if(sv) sv.style.display = (mode === 'stocks') ? '' : 'none';
+  if(cv) cv.style.display = (mode === 'crypto') ? '' : 'none';
 }
 
 var tpGainersMode = 'current';
@@ -7030,7 +7208,7 @@ function tpUpdateChartTfDate(sym, tf){
 
 function tpSetTimeframe(tf){
   tpCurrentTF = tf;
-  document.querySelectorAll('#trade-page .tp-tf-btn').forEach(function(b){
+  document.querySelectorAll('#tp-stocks-view .tp-tf-btn').forEach(function(b){
     b.classList.toggle('active', b.dataset.tf===tf);
   });
   if(tpCurrentSym){
@@ -7204,6 +7382,580 @@ document.addEventListener('click', function(e){
 window.addEventListener('resize', function(){
   if(tpCurrentSym) tpRenderCombinedChart(tpGetChartSeries(tpCurrentSym, tpCurrentTF));
 });
+</script>
+
+<script>
+// ═══════════════════════════════════════════
+// TRADE — CRYPTO (DEMO DATA)
+// Mirrors the Stocks view design. Prices seeded from a real market
+// snapshot (CoinDesk/Coinbase/Blockchain.com, early Jul 2026); candle
+// history is simulated. Live crypto pipeline to be wired later.
+// Reuses pure helpers from the stocks module: tpRand, tpSMA,
+// tpRSISeries, tpFmtNum, tpFmtDate, tpToggleCard.
+// ═══════════════════════════════════════════
+const TC_COINS = [
+  {sym:'BTC',  name:'Bitcoin',     price:62612.93, chg:1.83, vol:4.26e10},
+  {sym:'ETH',  name:'Ethereum',    price:1757.62,  chg:3.53, vol:1.45e10},
+  {sym:'XRP',  name:'XRP',         price:1.13,     chg:4.35, vol:1.87e9},
+  {sym:'BNB',  name:'BNB',         price:574.78,   chg:2.76, vol:8.54e8},
+  {sym:'SOL',  name:'Solana',      price:82.16,    chg:1.94, vol:4.14e9},
+  {sym:'DOGE', name:'Dogecoin',    price:0.07756,  chg:4.58, vol:6.1e8},
+  {sym:'TRX',  name:'TRON',        price:0.32,     chg:0.14, vol:4.19e8},
+  {sym:'HYPE', name:'Hyperliquid', price:70.91,    chg:5.66, vol:3.6e8}
+];
+
+var tcSeriesCache = {};
+var tcCurrentSym = null;
+var tcCurrentTF = '3M';
+var tcGainersModeVal = 'current';
+var tcInited = false;
+
+function tcFmtUSD(n){
+  if(n >= 1000) return '$' + n.toLocaleString('en-US', {maximumFractionDigits:2, minimumFractionDigits:2});
+  if(n >= 1)    return '$' + n.toFixed(2);
+  return '$' + n.toFixed(4);
+}
+function tcFmtUSDBig(n){
+  if(n>=1e9) return '$'+(n/1e9).toFixed(2)+'B';
+  if(n>=1e6) return '$'+(n/1e6).toFixed(2)+'M';
+  if(n>=1e3) return '$'+(n/1e3).toFixed(2)+'K';
+  return '$'+n.toFixed(0);
+}
+function tcFindCoin(sym){ return TC_COINS.find(function(c){return c.sym===sym;}); }
+
+// Deterministic demo series: 500 daily bars (crypto trades 7 days a week),
+// random-walk generated then rescaled so the final close lands exactly on
+// the snapshot price and the previous close matches the snapshot % change.
+function tcGenSeries(coin){
+  var seed = 0;
+  for(var k=0;k<coin.sym.length;k++) seed = seed*31 + coin.sym.charCodeAt(k);
+  var rnd = tpRand(seed);
+  var days = 500;
+  var price = coin.price * (0.65 + rnd()*0.5);
+  var out = [];
+  var today = new Date();
+  for(var i=days;i>=0;i--){
+    var drift = (rnd()-0.487) * price * 0.045;   // slight upward bias, crypto-grade volatility
+    var open = price;
+    var close = Math.max(coin.price*0.02, open + drift);
+    var high = Math.max(open, close) * (1 + rnd()*0.018);
+    var low  = Math.min(open, close) * (1 - rnd()*0.018);
+    var vol  = coin.vol * (0.55 + rnd()*0.9);
+    var d = new Date(today); d.setDate(d.getDate()-i);
+    out.push({date:d.toISOString().slice(0,10), open:open, high:high, low:low, close:close, volume:Math.floor(vol)});
+    price = close;
+  }
+  // Rescale so last close === snapshot price
+  var f = coin.price / out[out.length-1].close;
+  out.forEach(function(b){ b.open*=f; b.high*=f; b.low*=f; b.close*=f; });
+  // Force yesterday's close to match today's snapshot % change
+  var prev = coin.price / (1 + coin.chg/100);
+  var y = out[out.length-2];
+  y.close = prev;
+  y.high = Math.max(y.high, prev); y.low = Math.min(y.low, prev);
+  var t = out[out.length-1];
+  t.open = prev;
+  t.high = Math.max(t.high, t.open, t.close); t.low = Math.min(t.low, t.open, t.close);
+  return out;
+}
+function tcGetSeries(sym){
+  if(!tcSeriesCache[sym]) tcSeriesCache[sym] = tcGenSeries(tcFindCoin(sym));
+  return tcSeriesCache[sym];
+}
+var TC_TF_BARS = {'1D':2,'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':500};
+// 1D — synthesized 24-hour intraday pattern (crypto trades 24/7), same idea as
+// the Stocks tab's tpGenIntraday. 30-minute bars, rescaled so the final close
+// matches the snapshot price shown on the price card.
+function tcGenIntraday(coin){
+  var rnd = tpRand(tpSeed(coin.sym + '-1d-demo'));
+  var base = coin.price;
+  var out = [];
+  var step = 30, count = Math.floor((24*60)/step);
+  var price = base;
+  for(var i=0;i<count;i++){
+    var drift = (rnd()-0.5) * base * 0.008;
+    var open = price;
+    var close = Math.max(base*0.0001, open + drift);
+    var high = Math.max(open,close) + rnd()*base*0.004;
+    var low  = Math.max(base*0.0001, Math.min(open,close) - rnd()*base*0.004);
+    var vol  = Math.floor(200000 + rnd()*1800000);
+    var mins = i*step, hh = Math.floor(mins/60), mm = mins%60;
+    var label = ((hh%12)||12) + ':' + String(mm).padStart(2,'0') + (hh<12?'AM':'PM');
+    out.push({date:label, open:open, high:high, low:low, close:close, volume:vol});
+    price = close;
+  }
+  var f = coin.price / out[out.length-1].close;
+  out.forEach(function(b){ b.open*=f; b.high*=f; b.low*=f; b.close*=f; });
+  return out;
+}
+function tcGetChartSeries(sym, tf){
+  if(tf === '1D'){
+    var c = tcFindCoin(sym);
+    if(c) return tcGenIntraday(c);
+  }
+  var s = tcGetSeries(sym);
+  var n = TC_TF_BARS[tf] || 90;
+  return s.slice(Math.max(0, s.length - n));
+}
+// Mirrors tpUpdateChartTfDate on the Stocks tab — ties the mock intraday
+// pattern back to the last demo session date so 1D always shows its date.
+function tcUpdateChartTfDate(tf){
+  var el = document.getElementById('tc-chart-tf-date');
+  if(!el) return;
+  if(tf !== '1D'){ el.style.display = 'none'; el.textContent = ''; return; }
+  var d = null;
+  try { var s = tcGetSeries(tcCurrentSym); d = s[s.length-1].date; } catch(e){}
+  el.style.display = 'block';
+  el.innerHTML = d
+    ? 'Simulated intraday pattern \u2014 demo session: <b>' + tpFmtDate(d) + '</b>'
+    : 'Simulated intraday pattern \u2014 session date unavailable';
+}
+
+// Simple demo signal engine — same ingredients as the stocks engine
+// (RSI 14 + SMA20 vs SMA50 with a 0.4% buffer), simplified thresholds.
+function tcSignal(sym){
+  var s = tcGetSeries(sym);
+  var closes = s.map(function(b){return b.close;});
+  var end = closes.length - 1;
+  var sma20 = tpSMA(closes, 20, end);
+  var sma50 = tpSMA(closes, 50, end);
+  var rsiArr = tpRSISeries(closes, 14);
+  var rsi = rsiArr[rsiArr.length-1];
+  var gapPct = (sma20 && sma50) ? ((sma20 - sma50)/sma50)*100 : 0;
+  var trend = gapPct > 0.4 ? 'BULL' : gapPct < -0.4 ? 'BEAR' : 'FLAT';
+  var trendConf = Math.min(95, Math.round(55 + Math.abs(gapPct)*6));
+  var signal, conf;
+  if(rsi != null && rsi >= 70){ signal='SELL'; conf=Math.min(92, Math.round(55 + (rsi-70)*1.6)); }
+  else if(rsi != null && rsi <= 30){ signal='BUY'; conf=Math.min(92, Math.round(55 + (30-rsi)*1.6)); }
+  else if(trend==='BULL'){ signal = rsi < 62 ? 'BUY' : 'HOLD'; conf = Math.min(85, Math.round(52 + Math.abs(gapPct)*5)); }
+  else if(trend==='BEAR'){ signal = rsi > 38 ? 'SELL' : 'HOLD'; conf = Math.min(85, Math.round(52 + Math.abs(gapPct)*5)); }
+  else { signal='HOLD'; conf=55; }
+  return {signal:signal, confidencePct:conf, trend:trend, trendConfidencePct:trendConf,
+          rsi:rsi, sma20:sma20, sma50:sma50, gapPct:gapPct, series:s};
+}
+
+// ── Top Crypto Today ──
+function tcSetGainersMode(mode){
+  if(tcGainersModeVal === mode) return;
+  tcGainersModeVal = mode;
+  document.querySelectorAll('#tp-crypto-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+  });
+  tcRenderTop();
+}
+function tcRenderTop(){
+  var el = document.getElementById('tc-gainers-list');
+  var noteEl = document.getElementById('tc-gainers-note');
+  if(!el) return;
+  var rows;
+  if(tcGainersModeVal === 'bullish'){
+    rows = TC_COINS.map(function(c){
+      var sig = tcSignal(c.sym);
+      return {sym:c.sym, name:c.name, price:c.price, pct:c.chg, gap:sig.gapPct, trend:sig.trend, signal:sig.signal};
+    }).filter(function(r){ return r.trend === 'BULL'; })
+      .sort(function(a,b){ return b.gap - a.gap; }).slice(0,10);
+  } else {
+    rows = TC_COINS.map(function(c){
+      var sig = tcSignal(c.sym);
+      return {sym:c.sym, name:c.name, price:c.price, pct:c.chg, signal:sig.signal};
+    }).sort(function(a,b){ return b.pct - a.pct; }).slice(0,10);
+  }
+  if(!rows.length){
+    el.innerHTML = '<div class="tp-gainer-empty">No coins currently in a confirmed uptrend \u2014 no symbol has SMA20 above SMA50 by more than the 0.4% buffer.</div>';
+    if(noteEl) noteEl.textContent = '';
+    return;
+  }
+  el.innerHTML = rows.map(function(g, i){
+    var dir = g.pct >= 0 ? 'up' : 'down';
+    var sign = g.pct >= 0 ? '+' : '';
+    return '<div class="tp-gainer-row" onmousedown="tcSelectCoin(\''+g.sym+'\')">'+
+      '<span class="tp-gainer-rank">'+(i+1)+'</span>'+
+      '<div class="tp-gainer-info">'+
+        '<div class="tp-gainer-sym">'+g.sym+(g.signal?(' <span class="tp-gainer-tag '+g.signal+'">'+g.signal+'</span>'):'')+'</div>'+
+        '<div class="tp-gainer-name">'+g.name+'</div>'+
+      '</div>'+
+      '<span class="tp-gainer-price">'+tcFmtUSD(g.price)+'</span>'+
+      '<span class="tp-gainer-chg '+dir+'">'+sign+g.pct.toFixed(2)+'%</span>'+
+    '</div>';
+  }).join('');
+  if(noteEl){
+    noteEl.textContent = tcGainersModeVal === 'bullish'
+      ? 'Coins in a confirmed uptrend ranked by SMA20-vs-SMA50 gap \u2014 same trend engine as the detail card. The % shown is today\u2019s change; the ORDER is trend strength. Demo data.'
+      : 'Demo snapshot \u2014 24-hour change from a real market snapshot; rankings are illustrative until the live crypto feed is wired.';
+  }
+}
+
+// ── Watchlist (localStorage, separate key from stocks) ──
+function tcGetWatch(){
+  try { return JSON.parse(localStorage.getItem('tcWatchlist')||'[]'); } catch(e){ return []; }
+}
+function tcSaveWatch(list){
+  try { localStorage.setItem('tcWatchlist', JSON.stringify(list)); } catch(e){}
+}
+function tcIsWatched(sym){ return tcGetWatch().some(function(w){return w.sym===sym;}); }
+function tcToggleWatch(){
+  if(!tcCurrentSym) return;
+  var list = tcGetWatch();
+  var i = list.findIndex(function(w){return w.sym===tcCurrentSym;});
+  if(i >= 0){ list.splice(i,1); }
+  else {
+    var c = tcFindCoin(tcCurrentSym);
+    var hp = c.price*1.05, lp = c.price*0.95;
+    list.push({sym:tcCurrentSym,
+      highPrice:+(c.price>=1 ? hp.toFixed(2) : hp.toFixed(4)),
+      lowPrice:+(c.price>=1 ? lp.toFixed(2) : lp.toFixed(4))});
+  }
+  tcSaveWatch(list);
+  tcRenderWatchlist();
+  tcUpdateWatchBtn();
+}
+function tcRemoveWatch(sym){
+  tcSaveWatch(tcGetWatch().filter(function(w){return w.sym!==sym;}));
+  tcRenderWatchlist();
+  tcUpdateWatchBtn();
+}
+function tcSetWatchPrice(sym, field, val){
+  var list = tcGetWatch();
+  var w = list.find(function(x){return x.sym===sym;});
+  if(!w) return;
+  var num = parseFloat(val);
+  w[field] = isNaN(num) ? null : num;
+  tcSaveWatch(list);
+  tcRenderWatchlist();
+}
+function tcUpdateWatchBtn(){
+  var b = document.getElementById('tc-watch-add');
+  if(!b || !tcCurrentSym) return;
+  var on = tcIsWatched(tcCurrentSym);
+  b.textContent = on ? '\u2713' : '\uFF0B';
+  b.classList.toggle('on', on);
+  b.title = on ? 'Remove from watchlist' : 'Add to watchlist';
+}
+function tcRenderWatchlist(){
+  var listEl = document.getElementById('tc-watch-list');
+  var emptyEl = document.getElementById('tc-watch-empty');
+  if(!listEl) return;
+  var list = tcGetWatch();
+  if(emptyEl) emptyEl.style.display = list.length ? 'none' : 'block';
+  listEl.innerHTML = list.map(function(w){
+    var c = tcFindCoin(w.sym);
+    var name = c ? c.name : w.sym;
+    var last = c ? c.price : null;
+    var lastTxt = last == null ? '\u2014' : tcFmtUSD(last);
+    var hitHigh = last != null && w.highPrice != null && last >= w.highPrice;
+    var hitLow  = last != null && w.lowPrice  != null && last <= w.lowPrice;
+    var hVal = w.highPrice == null ? '' : w.highPrice;
+    var lVal = w.lowPrice == null ? '' : w.lowPrice;
+    return '<div class="tp-watch-row">'+
+      '<div class="tp-watch-name" onclick="tcSelectCoin(\''+w.sym+'\')">'+w.sym+' \u00b7 <small>'+name+'</small></div>'+
+      '<div class="tp-watch-inbox tp-watch-lastbox"><span class="tp-watch-inlabel">Last</span>'+
+        '<div class="tp-watch-last">'+lastTxt+'</div></div>'+
+      '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+
+        '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="$ high" value="'+hVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'highPrice\', this.value)"></div>'+
+      '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Low</span>'+
+        '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitLow?' hit-low':'')+'" placeholder="$ low" value="'+lVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'lowPrice\', this.value)"></div>'+
+      '<button class="tp-watch-remove" onclick="tcRemoveWatch(\''+w.sym+'\')" title="Remove">\u2715</button>'+
+    '</div>';
+  }).join('');
+}
+
+// ── Coin picker (combo dropdown, same design as stocks) ──
+function tcOptRow(c){
+  var dir = c.chg > 0 ? 'up' : c.chg < 0 ? 'down' : 'flat';
+  var arrowChar = dir==='up' ? '\u25B2' : dir==='down' ? '\u25BC' : '\u2014';
+  return '<div class="tp-opt" data-sym="'+c.sym+'" onmousedown="tcChooseCoin(\''+c.sym+'\')">'+
+         '<span>'+c.name+' ('+c.sym+')</span>'+
+         '<span class="tp-opt-price">'+tcFmtUSD(c.price)+'</span>'+
+         '<span class="tp-opt-arrow '+dir+'">'+arrowChar+'</span></div>';
+}
+function tcRenderDropdown(query){
+  var dd = document.getElementById('tc-dropdown');
+  if(!dd) return;
+  var q = (query||'').trim().toLowerCase();
+  var matches = TC_COINS.filter(function(c){
+    return !q || c.name.toLowerCase().indexOf(q)>=0 || c.sym.toLowerCase().indexOf(q)>=0;
+  });
+  if(!matches.length){
+    dd.innerHTML = '<div class="tp-opt-empty">No matching coins</div>';
+    return;
+  }
+  dd.innerHTML = '<div class="tp-optgroup-label">Major Coins</div>' + matches.map(tcOptRow).join('');
+}
+function tcOpenDropdown(){
+  var dd = document.getElementById('tc-dropdown');
+  if(!dd) return;
+  var input = document.getElementById('tc-coin-search');
+  if(input) input.select();
+  tcRenderDropdown('');
+  dd.classList.add('open');
+}
+function tcCloseDropdown(){
+  var dd = document.getElementById('tc-dropdown');
+  if(dd) dd.classList.remove('open');
+}
+function tcFilterDropdown(query){
+  var dd = document.getElementById('tc-dropdown');
+  if(dd) dd.classList.add('open');
+  tcRenderDropdown(query);
+}
+function tcChooseCoin(sym){
+  tcSelectCoin(sym);
+  tcCloseDropdown();
+}
+document.addEventListener('click', function(e){
+  var combo = document.getElementById('tc-picklist-group');
+  if(combo && !combo.contains(e.target)) tcCloseDropdown();
+});
+
+// ── Timeframes ──
+function tcSetTimeframe(tf){
+  tcCurrentTF = tf;
+  document.querySelectorAll('#tp-crypto-view .tp-tf-btn').forEach(function(b){
+    b.classList.toggle('active', b.dataset.tf===tf);
+  });
+  if(tcCurrentSym){
+    tcRenderChart(tcGetChartSeries(tcCurrentSym, tf));
+    tcUpdateChartTfDate(tf);
+  }
+}
+
+// ── Justification / Report toggle ──
+function tcSetView(view, el){
+  var btns = document.querySelectorAll('#tc-view-seg .seg-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  if (el) el.classList.add('active');
+  var just = document.getElementById('tc-summary-card');
+  var rep = document.getElementById('tc-report-card');
+  if (just) just.style.display = (view === 'justification') ? '' : 'none';
+  if (rep) rep.style.display = (view === 'report') ? '' : 'none';
+}
+
+// ── Demo refresh button ──
+function tcDemoRefresh(){
+  var btn = document.getElementById('tc-refresh-btn');
+  var status = document.getElementById('tc-refresh-status');
+  if(btn){ btn.disabled = true; btn.classList.add('tp-refresh-spinning'); }
+  setTimeout(function(){
+    if(btn){ btn.disabled = false; btn.classList.remove('tp-refresh-spinning'); }
+    if(status) status.textContent = 'Demo data \u2014 live crypto feed not wired yet';
+  }, 900);
+}
+
+// ── Main render ──
+function tcSelectCoin(sym){ tcRenderAll(sym); }
+function tcRenderAll(sym){
+  var c = tcFindCoin(sym);
+  if(!c) return;
+  tcCurrentSym = sym;
+  var input = document.getElementById('tc-coin-search');
+  if(input) input.value = c.name + ' (' + c.sym + ')';
+  var sig = tcSignal(sym);
+  var s = sig.series;
+
+  document.getElementById('tc-name').textContent = c.name + ' (' + c.sym + ')';
+  document.getElementById('tc-price').textContent = tcFmtUSD(c.price);
+  var prev = c.price / (1 + c.chg/100);
+  var chgAbs = c.price - prev;
+  var chgEl = document.getElementById('tc-chg');
+  chgEl.textContent = (c.chg>=0?'+':'') + (c.price>=1 ? chgAbs.toFixed(2) : chgAbs.toFixed(4)) + ' (' + (c.chg>=0?'+':'') + c.chg.toFixed(2) + '%)';
+  chgEl.className = 'tp-price-chg ' + (c.chg>=0?'up':'down');
+
+  var trendArrow = sig.trend==='BULL' ? '\u25B2' : sig.trend==='BEAR' ? '\u25BC' : '\u2014';
+  document.getElementById('tc-trend-wrap').innerHTML =
+    '<div class="tp-trend-badge ' + sig.trend + '">' + trendArrow + ' ' + sig.trendConfidencePct + '% ' + sig.trend + '</div>';
+  document.getElementById('tc-badge-wrap').innerHTML =
+    '<div class="tp-signal-badge ' + sig.signal + '">' + sig.confidencePct + '% ' + sig.signal + '</div>';
+
+  // Justification (demo narrative)
+  var recEl = document.getElementById('tc-summary-rec-text');
+  var actionTxt = sig.signal==='BUY' ? 'accumulating on dips looks reasonable in this demo setup'
+    : sig.signal==='SELL' ? 'trimming exposure or waiting for a reset looks reasonable in this demo setup'
+    : 'staying on the sidelines and letting the trend resolve looks reasonable in this demo setup';
+  recEl.textContent = sig.signal + ' \u2014 ' + actionTxt + '. Demo engine: same RSI-14 + SMA20/50 recipe as the Stocks tab, running on simulated candles anchored to a real price snapshot.';
+  var recTag = document.getElementById('tc-summary-rec-tag');
+  recTag.textContent = 'RECOMMENDATION';
+  recTag.className = 'tp-summary-tag ' + sig.signal;
+
+  var sigTag = document.getElementById('tc-summary-signal-tag');
+  sigTag.textContent = sig.confidencePct + '% ' + sig.signal;
+  sigTag.className = 'tp-summary-tag ' + sig.signal;
+  document.getElementById('tc-summary-signal-text').textContent =
+    'RSI(14) is at ' + (sig.rsi!=null ? sig.rsi.toFixed(1) : '\u2014') +
+    (sig.rsi>=70 ? ' \u2014 overbought territory; momentum is stretched.' :
+     sig.rsi<=30 ? ' \u2014 oversold territory; selling pressure looks exhausted.' :
+     ' \u2014 neutral zone; neither side has a decisive edge.');
+
+  var trTag = document.getElementById('tc-summary-trend-tag');
+  trTag.textContent = sig.trendConfidencePct + '% ' + sig.trend;
+  trTag.className = 'tp-summary-tag ' + (sig.trend==='BULL'?'BUY':sig.trend==='BEAR'?'SELL':'HOLD');
+  document.getElementById('tc-summary-trend-text').textContent =
+    'SMA20 sits ' + (sig.gapPct>=0?'+':'') + sig.gapPct.toFixed(2) + '% vs SMA50 \u2014 ' +
+    (sig.trend==='BULL' ? 'a confirmed uptrend on this simulated series.' :
+     sig.trend==='BEAR' ? 'a confirmed downtrend on this simulated series.' :
+     'inside the buffer band, so no confirmed trend either way.');
+
+  document.getElementById('tc-summary-outlook-text').textContent =
+    (sig.trend==='BULL' ? 'Bias leans higher over the next two sessions if the trend holds; crypto moves 24/7 so gaps can appear any hour.' :
+     sig.trend==='BEAR' ? 'Bias leans lower over the next two sessions unless buyers reclaim the short-term average; crypto trades 24/7.' :
+     'No directional edge for the next two sessions; expect range-bound chop until a trend confirms.') + ' (Demo projection.)';
+
+  var lo52 = Math.min.apply(null, s.slice(-365).map(function(b){return b.low;}));
+  var hi52 = Math.max.apply(null, s.slice(-365).map(function(b){return b.high;}));
+  document.getElementById('tc-summary-levels-text').textContent =
+    'Support near ' + tcFmtUSD(c.price*0.94) + ', resistance near ' + tcFmtUSD(c.price*1.06) +
+    '. 52-week demo range: ' + tcFmtUSD(lo52) + ' \u2013 ' + tcFmtUSD(hi52) + '.';
+
+  // Range bar
+  document.getElementById('tc-range-low').textContent = tcFmtUSD(lo52);
+  document.getElementById('tc-range-high').textContent = tcFmtUSD(hi52);
+  var posPct = Math.max(0, Math.min(100, ((c.price - lo52)/(hi52 - lo52))*100));
+  var fill = document.getElementById('tc-range-fill');
+  var marker = document.getElementById('tc-range-marker');
+  if(fill) fill.style.width = posPct + '%';
+  if(marker) marker.style.left = posPct + '%';
+
+  // Stats
+  var last = s[s.length-1];
+  document.getElementById('tc-stat-lasttrade').textContent = tpFmtDate(last.date) + ' \u00b7 24/7 market';
+  document.getElementById('tc-stat-open').textContent = tcFmtUSD(last.open);
+  document.getElementById('tc-stat-high').textContent = tcFmtUSD(last.high);
+  document.getElementById('tc-stat-low').textContent = tcFmtUSD(last.low);
+  document.getElementById('tc-stat-vol').textContent = tcFmtUSDBig(last.volume);
+  document.getElementById('tc-stat-sma20').textContent = sig.sma20!=null ? tcFmtUSD(sig.sma20) : '\u2014';
+  document.getElementById('tc-stat-sma50').textContent = sig.sma50!=null ? tcFmtUSD(sig.sma50) : '\u2014';
+
+  tcUpdateWatchBtn();
+  try { tcRenderChart(tcGetChartSeries(sym, tcCurrentTF)); } catch(e) {}
+  tcUpdateChartTfDate(tcCurrentTF);
+}
+
+// ── Init (lazy, first time the Crypto tab is opened) ──
+function tcInit(){
+  if(tcInited) return;
+  tcInited = true;
+  tcRenderDropdown('');
+  tcRenderTop();
+  tcRenderWatchlist();
+  tcRenderAll('BTC');
+}
+(function(){
+  var orig = tpSetMarket;
+  tpSetMarket = function(mode){
+    orig(mode);
+    if(mode === 'crypto') tcInit();
+  };
+})();
+window.addEventListener('resize', function(){
+  if(tcInited && tcCurrentSym && tpMarketMode === 'crypto')
+    tcRenderChart(tcGetChartSeries(tcCurrentSym, tcCurrentTF));
+});
+
+function tcRenderChart(series){
+  const priceCanvas = document.getElementById('tc-canvas-price');
+  const volCanvas = document.getElementById('tc-canvas-vol');
+  const rsiCanvas = document.getElementById('tc-canvas-rsi');
+  if(!priceCanvas || !volCanvas || !rsiCanvas || !series.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = priceCanvas.clientWidth || priceCanvas.parentElement.clientWidth;
+
+  function setup(canvas, cssH){
+    canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+    canvas.style.height = cssH+'px';
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,cssW,cssH);
+    return ctx;
+  }
+
+  const priceH=180, volH=54, rsiH=50;
+  const pctx = setup(priceCanvas, priceH);
+  const vctx = setup(volCanvas, volH);
+  const rctx = setup(rsiCanvas, rsiH);
+
+  const n = series.length;
+  const slotW = cssW/n;
+  const bodyW = Math.max(1.5, slotW*0.55);
+
+  const highs=series.map(function(d){return d.high;}), lows=series.map(function(d){return d.low;});
+  const max=Math.max.apply(null,highs), min=Math.min.apply(null,lows);
+  const range=(max-min)||1;
+  const padTop=8, padBottom=8;
+  const usableH=priceH-padTop-padBottom;
+
+  series.forEach(function(d,i){
+    const x=i*slotW+slotW/2;
+    const yHigh=padTop+(1-(d.high-min)/range)*usableH;
+    const yLow=padTop+(1-(d.low-min)/range)*usableH;
+    const yOpen=padTop+(1-(d.open-min)/range)*usableH;
+    const yClose=padTop+(1-(d.close-min)/range)*usableH;
+    const up=d.close>=d.open;
+    pctx.strokeStyle = up?'#22c55e':'#ef4444';
+    pctx.fillStyle = up?'#22c55e':'#ef4444';
+    pctx.lineWidth=1;
+    pctx.beginPath(); pctx.moveTo(x,yHigh); pctx.lineTo(x,yLow); pctx.stroke();
+    const bodyTop=Math.min(yOpen,yClose);
+    const bodyH=Math.max(1,Math.abs(yClose-yOpen));
+    pctx.fillRect(x-bodyW/2, bodyTop, bodyW, bodyH);
+  });
+  const trendVals = tpTrendSeries(series.map(function(d){return d.close;}));
+  pctx.strokeStyle = '#f59e0b';
+  pctx.lineWidth = 1.5;
+  pctx.beginPath();
+  let tStarted = false;
+  trendVals.forEach(function(v,i){
+    if(v===null) return;
+    const x = i*slotW + slotW/2;
+    const y = padTop + (1-(v-min)/range)*usableH;
+    if(!tStarted){ pctx.moveTo(x,y); tStarted=true; } else pctx.lineTo(x,y);
+  });
+  pctx.stroke();
+
+  pctx.fillStyle='#7a7a88'; pctx.font='9px Inter,sans-serif'; pctx.textAlign='right';
+  [max, min+range/2, min].forEach(function(v){
+    const y = padTop + (1-(v-min)/range)*usableH;
+    pctx.fillText(v.toFixed(2), cssW-2, Math.max(9,Math.min(priceH-2,y+3)));
+  });
+
+  const vols = series.map(function(d){return d.volume;});
+  const vmax = Math.max.apply(null,vols)||1;
+  series.forEach(function(d,i){
+    const x=i*slotW+slotW/2;
+    const h=(d.volume/vmax)*(volH-6);
+    const up=d.close>=d.open;
+    vctx.fillStyle = up?'rgba(34,197,94,0.7)':'rgba(239,68,68,0.7)';
+    vctx.fillRect(x-bodyW/2, volH-h-2, bodyW, h);
+  });
+
+  const closes = series.map(function(d){return d.close;});
+  const rsiVals = tpRSISeries(closes,14);
+  rctx.strokeStyle='rgba(122,122,136,0.35)'; rctx.lineWidth=1; rctx.setLineDash([2,2]);
+  [30,70].forEach(function(v){
+    const y=rsiH-(v/100)*rsiH;
+    rctx.beginPath(); rctx.moveTo(0,y); rctx.lineTo(cssW,y); rctx.stroke();
+  });
+  rctx.setLineDash([]);
+  rctx.strokeStyle='#f7931a'; rctx.lineWidth=1.5; rctx.beginPath();
+  let started=false;
+  rsiVals.forEach(function(v,i){
+    if(v===null) return;
+    const x=i*slotW+slotW/2;
+    const y = rsiH-(v/100)*rsiH;
+    if(!started){ rctx.moveTo(x,y); started=true; } else rctx.lineTo(x,y);
+  });
+  rctx.stroke();
+
+  const datesEl = document.getElementById('tc-chart-dates');
+  if(datesEl){
+    const labelCount = Math.min(5, n);
+    let html='';
+    for(let k=0;k<labelCount;k++){
+      const idx = Math.floor(k*(n-1)/((labelCount-1)||1));
+      html += '<span>'+tpFmtDate(series[idx].date)+'</span>';
+    }
+    datesEl.innerHTML = html;
+  }
+}
+
 </script>
 
 <script>initFromHash();</script>
