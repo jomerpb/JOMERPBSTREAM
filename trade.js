@@ -824,22 +824,21 @@ function tpWatchLastPrice(sym){
   } catch(e){}
   return null;
 }
-// Recommended alert levels for a symbol — the SAME projected 1-2 session
-// band the reasoning card cites (tpProjectedBand over the same 90-day
-// series and signal), so a freshly-added watch starts at the model's
-// recommended High/Low instead of blank boxes. Best-effort: any failure
-// (no history yet, band unavailable) just falls back to empty inputs.
+// Recommended alert levels for a symbol \u2014 seeded from the SAME two
+// trigger prices the reasoning card's entry/exit section uses
+// (tpTriggerLevels): High alert = the ceiling (buy trigger \u2014 a close
+// above it is the event worth acting on), Low alert = the floor (sell
+// trigger). Live bar merged in so a freshly-added watch reflects the
+// CURRENT session. Best-effort: any failure falls back to empty inputs.
 function tpRecommendedBand(sym){
   try {
-    // Live bar merged in so a freshly-added watch seeds its High/Low off
-    // the CURRENT session's band -- the old series-only version once
-    // produced a recommended High of ₱3.941 while the stock was already
-    // trading at ₱4.09 (MWIDE, Jul 2026).
     var series = tpMergeLiveBar(tpGetSeries(sym, 90), sym);
     if(!series || series.length < 2) return null;
-    var band = tpProjectedBand(tpComputeSignal(series));
-    if(!band) return null;
-    var hi = parseFloat(band.H), lo = parseFloat(band.L);
+    var sig = tpComputeSignal(series);
+    var band = tpProjectedBand(sig);
+    var trig = tpTriggerLevels(sig, band);
+    if(!trig) return null;
+    var hi = parseFloat(tpFmtLvl(trig.res)), lo = parseFloat(tpFmtLvl(trig.sup));
     if(!isFinite(hi) || !isFinite(lo) || hi <= 0 || lo <= 0) return null;
     return { high: hi, low: lo };
   } catch(e){ return null; }
@@ -1737,12 +1736,27 @@ function tpProjectedBand(sig){
 // direction; and every day's high/low stays clipped at the proven
 // ceiling/floor — the same honesty rule tpProjectedBand uses.
 // ══════════════════════════════════════════════════════════════
+// PSE non-trading days (holidays). 2026 list: Feb 17 confirmed via PSE
+// circular CN-2026-0008; remaining dates per published 2026 PH holiday
+// calendar (proclamation-based; Eid dates provisional). MAINTENANCE:
+// extend this set each new year, and adjust if Malacañang moves a date.
+const TP_PSE_HOLIDAYS = new Set([
+  '2026-01-01','2026-02-17','2026-04-02','2026-04-03','2026-04-09',
+  '2026-05-01','2026-05-20','2026-05-27','2026-06-12','2026-08-21',
+  '2026-08-31','2026-11-02','2026-11-30','2026-12-08','2026-12-24',
+  '2026-12-25','2026-12-30','2026-12-31'
+]);
+function tpIsoDate(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function tpNextTradingDays(n){
   const out = []; const d = new Date();
-  while(out.length < n){
+  let guard = 0;
+  while(out.length < n && guard++ < 60){
     d.setDate(d.getDate()+1);
     const dow = d.getDay();
-    if(dow===0 || dow===6) continue; // PSE: skip Sat/Sun
+    if(dow===0 || dow===6) continue;               // PSE: closed Sat/Sun
+    if(TP_PSE_HOLIDAYS.has(tpIsoDate(d))) continue; // PSE: closed on holidays
     out.push(new Date(d.getTime()));
   }
   return out;
@@ -1750,6 +1764,21 @@ function tpNextTradingDays(n){
 function tpFmtShortDate(d){
   const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return M[d.getMonth()]+' '+d.getDate();
+}
+// Shared small-table renderer for the 5-day outlook (Stocks + Crypto).
+// rows: [{d, date, lo, hi, mid}], fmt: price formatter for the market.
+function tpOutlookTableHTML(rows, fmt){
+  var th = 'text-align:right;padding:3px 6px;border-bottom:1px solid rgba(255,255,255,0.18);font-weight:600;white-space:nowrap;';
+  var td = 'text-align:right;padding:3px 6px;border-bottom:1px solid rgba(255,255,255,0.07);white-space:nowrap;';
+  var html = '<table style="width:100%;border-collapse:collapse;margin:6px 0 4px;font-size:0.93em;">'
+    + '<tr><th style="'+th+'text-align:left;">Day</th><th style="'+th+'">Low</th><th style="'+th+'">High</th><th style="'+th+'">Most likely</th></tr>';
+  rows.forEach(function(r){
+    html += '<tr><td style="'+td+'text-align:left;"><b>Day '+r.d+'</b> \u00b7 '+r.date+'</td>'
+         + '<td style="'+td+'">'+fmt(r.lo)+'</td>'
+         + '<td style="'+td+'">'+fmt(r.hi)+'</td>'
+         + '<td style="'+td+'">'+fmt(r.mid)+'</td></tr>';
+  });
+  return html + '</table>';
 }
 function tpFiveDayOutlook(sig){
   const band = tpProjectedBand(sig);
@@ -1762,30 +1791,34 @@ function tpFiveDayOutlook(sig){
   const sr = sig.sr;
   const days = tpNextTradingDays(5);
   const rows = [];
-  let clippedHi=false, clippedLo=false;
+  let clippedHi=false, clippedLo=false, pinnedFrom=0;
   for(let d=1; d<=5; d++){
     const spread = halfW1 * Math.sqrt(d);
     const mid0 = price * (1 + (drift*d)/100);
     let hi = mid0 * (1 + spread/100);
     let lo = mid0 * (1 - spread/100);
-    if(sr && sr.resistance && sr.resistance.level > price && hi > sr.resistance.level){ hi = sr.resistance.level; clippedHi = true; }
-    if(sr && sr.support && sr.support.level < price && lo < sr.support.level){ lo = sr.support.level; clippedLo = true; }
+    let hiClip=false, loClip=false;
+    if(sr && sr.resistance && sr.resistance.level > price && hi > sr.resistance.level){ hi = sr.resistance.level; hiClip = true; clippedHi = true; }
+    if(sr && sr.support && sr.support.level < price && lo < sr.support.level){ lo = sr.support.level; loClip = true; clippedLo = true; }
     if(lo >= hi){ lo = Math.min(lo, price*0.999); hi = Math.max(hi, price*1.001); }
-    const mid = Math.min(Math.max(mid0, lo), hi);
-    rows.push('<b>Day '+d+'</b> ('+tpFmtShortDate(days[d-1])+'): \u20b1'+tpFmtLvl(lo)+' \u2013 \u20b1'+tpFmtLvl(hi)+' \u00b7 most likely near \u20b1'+tpFmtLvl(mid));
+    if(hiClip && loClip && !pinnedFrom) pinnedFrom = d;
+    const mid = (lo + hi) / 2; // center of the realistic (clipped) range
+    rows.push({ d:d, date:tpFmtShortDate(days[d-1]), lo:lo, hi:hi, mid:mid });
   }
+  const fmtP = function(n){ return '\u20b1'+tpFmtLvl(n); };
+  const allSameMid = rows.every(function(r){ return tpFmtLvl(r.mid)===tpFmtLvl(rows[0].mid); });
+  const tbl = tpOutlookTableHTML(rows, fmtP);
   const dirTxt = bias>0
-    ? 'with the midpoint drifting higher each day while the BUY case holds'
+    ? 'with the range drifting higher each day while the BUY case holds'
     : bias<0
-      ? 'with the midpoint drifting lower each day while the SELL case holds'
+      ? 'with the range drifting lower each day while the SELL case holds'
       : 'with no daily drift, since neither side has an edge right now';
-  let out = '5-DAY OUTLOOK \u2014 built from this stock\'s own '+band.vol+'% average daily swing, the '+sig.confidencePct+'% signal confidence, and its proven floor/ceiling levels. Each day\'s range is a little wider than the last because uncertainty grows with time, '+dirTxt+':<br>'+rows.join('<br>');
+  let out = '5-DAY OUTLOOK \u2014 the next 5 actual PSE trading days (weekends and market holidays skipped), built from this stock\'s own '+band.vol+'% average daily swing, the '+sig.confidencePct+'% signal confidence, and its proven floor/ceiling levels. Each day\'s range is a little wider than the last because uncertainty grows with time, '+dirTxt+':'+tbl;
   const notes = [];
-  if(clippedHi && sr && sr.resistance) notes.push('the upper ends are capped at the \u20b1'+tpFmtLvl(sr.resistance.level)+' ceiling \u2014 price has to break through the sellers waiting there before any day can realistically print higher');
-  if(clippedLo && sr && sr.support) notes.push('the lower ends are held up at the \u20b1'+tpFmtLvl(sr.support.level)+' floor \u2014 buyers have defended that level before');
-  out += '<br>' + (notes.length
-    ? 'Honest note: '+notes.join('; ')+'. These are ranges implied by recent behavior, not promises \u2014 one news item can override all five rows.'
-    : 'These are ranges implied by recent behavior, not promises \u2014 one news item can override all five rows.');
+  if(clippedHi && sr && sr.resistance) notes.push('highs are capped at the \u20b1'+tpFmtLvl(sr.resistance.level)+' ceiling \u2014 sellers have defended that level before');
+  if(clippedLo && sr && sr.support) notes.push('lows are held up at the \u20b1'+tpFmtLvl(sr.support.level)+' floor \u2014 buyers have defended that level before');
+  if(allSameMid) notes.push('the \u2018most likely\u2019 value repeats because '+(pinnedFrom ? 'the range is pinned between the floor and ceiling \u2014 it can\'t drift until one of them breaks' : 'there\'s no directional drift in this read \u2014 the center of the range simply stays put'));
+  out += (notes.length ? 'Honest note: '+notes.join('; ')+'. ' : '') + 'These are ranges implied by recent behavior, not promises \u2014 one news item can override all five rows.';
   return out;
 }
 
@@ -1794,13 +1827,24 @@ function tpFiveDayOutlook(sig){
 // profit, and bail out" bullet inside the RECOMMENDATION. Uses proven
 // S/R where it exists, the volatility band as fallback.
 // ══════════════════════════════════════════════════════════════
-function tpEntryExitPlan(sig, band){
+// Shared: the two trigger prices used by both the entry/exit plan and
+// the watchlist auto-prefill \u2014 ceiling = buy trigger (High alert),
+// floor = sell trigger (Low alert). Proven S/R first, band fallback.
+function tpTriggerLevels(sig, band){
   if(!band || !sig.price) return null;
+  var sr = sig.sr, price = sig.price;
+  var sup = (sr && sr.support && sr.support.level < price) ? sr.support.level : band.low;
+  var res = (sr && sr.resistance && sr.resistance.level > price) ? sr.resistance.level : band.high;
+  if(!isFinite(sup) || !isFinite(res) || sup <= 0 || res <= 0) return null;
+  return { sup: sup, res: res };
+}
+function tpEntryExitPlan(sig, band){
+  const trig = tpTriggerLevels(sig, band);
+  if(!trig) return null;
   const price = sig.price;
-  const sr = sig.sr;
   const P = tpFmtLvl;
-  const sup = (sr && sr.support && sr.support.level < price) ? sr.support.level : band.low;
-  const res = (sr && sr.resistance && sr.resistance.level > price) ? sr.resistance.level : band.high;
+  const sup = trig.sup;
+  const res = trig.res;
 
   if(sig.signal==='BUY'){
     const entryLo = Math.max(sup, price*(1 - sig.volPct/200)); // up to half a normal day's dip
@@ -2147,9 +2191,24 @@ function tpOverallRecommendation(sig){
   const verdict = tpOverallRecommendationVerdict(sig);
   const action = tpActionPlan(sig, band, aligned, opposed);
   const entryExit = tpEntryExitPlan(sig, band);
+  // "What this means in practice" and the entry/exit prices are one
+  // combined practical bullet — the reasoning, then the exact levels.
+  const practical = [action, entryExit].filter(Boolean).join('<br><br>');
   const fiveDay = tpFiveDayOutlook(sig);
   const sizing = tpPositionPlan(sig, band, aligned, opposed);
-  return [context, verdict, action, entryExit, fiveDay, sizing].filter(Boolean);
+  return [context, verdict, practical, fiveDay, sizing].filter(Boolean);
+}
+
+// ── MORE DETAILS toggle — collapses/expands the signal (HOLD/BUY/SELL),
+// trend (BULL/BEAR/FLAT) and KEY LEVELS rows on the reasoning card.
+// Collapsed by default; prefix is 'tp' (stocks) or 'tc' (crypto). ──
+function tpToggleMoreDetails(prefix){
+  var box = document.getElementById(prefix+'-more-details');
+  var tag = document.getElementById(prefix+'-more-toggle');
+  if(!box) return;
+  var isOpen = box.style.display !== 'none';
+  box.style.display = isOpen ? 'none' : '';
+  if(tag) tag.textContent = isOpen ? 'MORE DETAILS \u25b8' : 'MORE DETAILS \u25be';
 }
 
 // Renders an array of narrative chunks (or a single string) as a
@@ -2815,7 +2874,11 @@ function tcToggleWatch(){
   if(i >= 0){ list.splice(i,1); }
   else {
     var c = tcFindCoin(tcCurrentSym);
-    var hp = c.price*1.05, lp = c.price*0.95;
+    // Seeded from the SAME demo pivots the reasoning card's entry/exit
+    // section uses: High alert = the +6% ceiling (exit/target \u2014 buy
+    // trigger on HOLD), Low alert = the -6% floor (entry zone / sell
+    // trigger). Keeps the watchlist and the recommendation in sync.
+    var hp = c.price*1.06, lp = c.price*0.94;
     list.push({sym:tcCurrentSym,
       highPrice:+(c.price>=1 ? hp.toFixed(2) : hp.toFixed(4)),
       lowPrice:+(c.price>=1 ? lp.toFixed(2) : lp.toFixed(4))});
@@ -2974,22 +3037,31 @@ function tcFiveDayOutlook(sig, c, sup, res){
   var M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var rows = [];
   var base = new Date();
+  var pinnedFrom = 0;
   for(var d = 1; d <= 5; d++){
-    var dt = new Date(base.getTime() + d*86400000); // 24/7 market: calendar days
+    var dt = new Date(base.getTime() + d*86400000); // 24/7 market: calendar days, no closures
     var spread = halfW1 * Math.sqrt(d);
     var mid0 = c.price * (1 + (drift*d)/100);
     var hi = mid0 * (1 + spread/100);
     var lo = mid0 * (1 - spread/100);
-    if(hi > res) hi = res;
-    if(lo < sup) lo = sup;
+    var hiClip = false, loClip = false;
+    if(hi > res){ hi = res; hiClip = true; }
+    if(lo < sup){ lo = sup; loClip = true; }
     if(lo >= hi){ lo = Math.min(lo, c.price*0.999); hi = Math.max(hi, c.price*1.001); }
-    var mid = Math.min(Math.max(mid0, lo), hi);
-    rows.push('<b>Day '+d+'</b> ('+M[dt.getMonth()]+' '+dt.getDate()+'): '+tcFmtUSD(lo)+' \u2013 '+tcFmtUSD(hi)+' \u00b7 most likely near '+tcFmtUSD(mid));
+    if(hiClip && loClip && !pinnedFrom) pinnedFrom = d;
+    var mid = (lo + hi) / 2; // center of the realistic (clipped) range
+    rows.push({ d:d, date:M[dt.getMonth()]+' '+dt.getDate(), lo:lo, hi:hi, mid:mid });
   }
-  var dirTxt = bias>0 ? 'with the midpoint drifting higher each day while the BUY case holds'
-    : bias<0 ? 'with the midpoint drifting lower each day while the SELL case holds'
+  var allSameMid = rows.every(function(r){ return tcFmtUSD(r.mid)===tcFmtUSD(rows[0].mid); });
+  var tbl = tpOutlookTableHTML(rows, tcFmtUSD);
+  var dirTxt = bias>0 ? 'with the range drifting higher each day while the BUY case holds'
+    : bias<0 ? 'with the range drifting lower each day while the SELL case holds'
     : 'with no daily drift, since neither side has an edge right now';
-  return '5-DAY OUTLOOK (demo) \u2014 built from this coin\'s simulated '+vol.toFixed(2)+'% average daily swing, the '+sig.confidencePct+'% signal confidence, and the demo floor/ceiling pivots. Ranges widen each day because uncertainty grows with time, '+dirTxt+' \u2014 crypto trades 24/7, so these are calendar days:<br>'+rows.join('<br>')+'<br>Ranges are clipped at the '+tcFmtUSD(sup)+' floor and '+tcFmtUSD(res)+' ceiling. Demo projection on simulated candles \u2014 not promises.';
+  var out = '5-DAY OUTLOOK (demo) \u2014 the next 5 calendar days, since crypto trades 24/7 with no weekend or holiday closures. Built from this coin\'s simulated '+vol.toFixed(2)+'% average daily swing, the '+sig.confidencePct+'% signal confidence, and the demo floor/ceiling pivots. Ranges widen each day because uncertainty grows with time, '+dirTxt+':'+tbl;
+  var notes = ['ranges are clipped at the '+tcFmtUSD(sup)+' floor and '+tcFmtUSD(res)+' ceiling'];
+  if(allSameMid) notes.push('the \u2018most likely\u2019 value repeats because '+(pinnedFrom ? 'the range is pinned between the floor and ceiling \u2014 it can\'t drift until one of them breaks' : 'there\'s no directional drift in this read \u2014 the center of the range simply stays put'));
+  out += 'Honest note: '+notes.join('; ')+'. Demo projection on simulated candles \u2014 not promises.';
+  return out;
 }
 
 // ── Main render ──
@@ -3045,7 +3117,9 @@ function tcRenderAll(sym){
       '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside the box is noise.';
   }
   var fiveDayTxt = tcFiveDayOutlook(sig, c, cSup, cRes);
-  recEl.innerHTML = tpBulletsHTML([verdictTxt, entryExitTxt, fiveDayTxt]);
+  // Verdict + entry/exit prices form one combined practical bullet,
+  // mirroring the Stocks tab structure.
+  recEl.innerHTML = tpBulletsHTML([verdictTxt + '<br><br>' + entryExitTxt, fiveDayTxt]);
   var recTag = document.getElementById('tc-summary-rec-tag');
   recTag.textContent = 'RECOMMENDATION';
   recTag.className = 'tp-summary-tag ' + sig.signal;
