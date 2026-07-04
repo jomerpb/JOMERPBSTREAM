@@ -2660,36 +2660,64 @@ window.addEventListener('resize', function(){
 });
 
 // ═══════════════════════════════════════════
-// TRADE — CRYPTO (DEMO DATA)
-// Mirrors the Stocks view design. Prices seeded from a real market
-// snapshot (CoinDesk/Coinbase/Blockchain.com, early Jul 2026); candle
-// history is simulated. Live crypto pipeline to be wired later.
-// Reuses pure helpers from the stocks module: tpRand, tpSMA,
-// tpRSISeries, tpFmtNum, tpFmtDate, tpToggleCard.
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// TRADE — CRYPTO (LIVE DATA via CoinGecko API)
+// Data pipeline: crypto-scraper/scrape_crypto_live.py (run by the
+// "Fetch Live Data" button below via workflow_dispatch, same PAT flow
+// as the Stocks tab) writes crypto-live-quotes.json (current price/24h
+// change/volume snapshot) and crypto-history.json (daily OHLCV series,
+// ~365 days per coin). Both are loaded here the same way the Stocks tab
+// loads pse-live-quotes.json / pse-history.json — eagerly, at file
+// load, from the repo's raw.githubusercontent.com URL, independent of
+// whether the Crypto sub-tab has ever been opened.
+//
+// DATA FIDELITY (see crypto-scraper/scrape_crypto_live.py's docstring
+// for the full reasoning): each daily bar carries a "real" flag. The
+// trailing ~30 days have genuine high/low wicks (resampled from real
+// 4-hour candles); everything older is close-derived (real close price,
+// but a zero-wick open/high/low approximation) because CoinGecko's free
+// tier doesn't expose real wicks that far back. RSI/SMA/volume-trend
+// only consume closes, so they're accurate for the FULL history; ATR
+// and support/resistance (which need real wicks) are restricted to the
+// real-flagged tail via tcRealTail() — which fully covers ATR's 14-day
+// window. This project's own crypto-backtest.json is the empirical
+// check on how well the resulting signals actually perform — see the
+// Report Card tab.
+//
+// Reuses pure helpers from the stocks module: tpRand, tpSeed, tpSMA,
+// tpRSI, tpRSISeries, tpTrendSeries, tpFmtNum, tpFmtDate, tpToggleCard,
+// tpBulletsHTML, tpOutlookTableHTML, tpPick, tpGetGithubToken.
+// ═══════════════════════════════════════════════════════════════
 const TC_COINS = [
-  {sym:'BTC',  name:'Bitcoin',     price:62612.93, chg:1.83, vol:4.26e10},
-  {sym:'ETH',  name:'Ethereum',    price:1757.62,  chg:3.53, vol:1.45e10},
-  {sym:'XRP',  name:'XRP',         price:1.13,     chg:4.35, vol:1.87e9},
-  {sym:'BNB',  name:'BNB',         price:574.78,   chg:2.76, vol:8.54e8},
-  {sym:'SOL',  name:'Solana',      price:82.16,    chg:1.94, vol:4.14e9},
-  {sym:'DOGE', name:'Dogecoin',    price:0.07756,  chg:4.58, vol:6.1e8},
-  {sym:'TRX',  name:'TRON',        price:0.32,     chg:0.14, vol:4.19e8},
-  {sym:'HYPE', name:'Hyperliquid', price:70.91,    chg:5.66, vol:3.6e8}
+  {sym:'BTC',  id:'bitcoin',     name:'Bitcoin'},
+  {sym:'ETH',  id:'ethereum',    name:'Ethereum'},
+  {sym:'XRP',  id:'ripple',      name:'XRP'},
+  {sym:'BNB',  id:'binancecoin', name:'BNB'},
+  {sym:'SOL',  id:'solana',      name:'Solana'},
+  {sym:'DOGE', id:'dogecoin',    name:'Dogecoin'},
+  {sym:'TRX',  id:'tron',        name:'TRON'},
+  {sym:'HYPE', id:'hyperliquid', name:'Hyperliquid'}
 ];
 
-var tcSeriesCache = {};
+var tcLiveQuotes = {};        // sym -> {price, change24hPct, high24h, low24h, volume24h, marketCap, asOf}
+var tcLiveSeries = {};        // sym -> [{date,open,high,low,close,volume,real}, ...] ascending
+var CRYPTO_QUOTES_STATUS = {loaded:false, source:'no live data yet — tap Fetch Live Data', error:null};
+var CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetch Live Data', error:null};
+
+var tcSeriesCache = {};       // memoized merged-with-live series per symbol (invalidated on reload)
 var tcCurrentSym = null;
 var tcCurrentTF = '3M';
 var tcGainersModeVal = 'current';
 var tcInited = false;
 
 function tcFmtUSD(n){
+  if(n == null || !isFinite(n)) return '—';
   if(n >= 1000) return '$' + n.toLocaleString('en-US', {maximumFractionDigits:2, minimumFractionDigits:2});
   if(n >= 1)    return '$' + n.toFixed(2);
   return '$' + n.toFixed(4);
 }
 function tcFmtUSDBig(n){
+  if(n == null || !isFinite(n)) return '—';
   if(n>=1e9) return '$'+(n/1e9).toFixed(2)+'B';
   if(n>=1e6) return '$'+(n/1e6).toFixed(2)+'M';
   if(n>=1e3) return '$'+(n/1e3).toFixed(2)+'K';
@@ -2697,52 +2725,138 @@ function tcFmtUSDBig(n){
 }
 function tcFindCoin(sym){ return TC_COINS.find(function(c){return c.sym===sym;}); }
 
-// Deterministic demo series: 500 daily bars (crypto trades 7 days a week),
-// random-walk generated then rescaled so the final close lands exactly on
-// the snapshot price and the previous close matches the snapshot % change.
-function tcGenSeries(coin){
-  var seed = 0;
-  for(var k=0;k<coin.sym.length;k++) seed = seed*31 + coin.sym.charCodeAt(k);
-  var rnd = tpRand(seed);
-  var days = 500;
-  var price = coin.price * (0.65 + rnd()*0.5);
-  var out = [];
-  var today = new Date();
-  for(var i=days;i>=0;i--){
-    var drift = (rnd()-0.487) * price * 0.045;   // slight upward bias, crypto-grade volatility
-    var open = price;
-    var close = Math.max(coin.price*0.02, open + drift);
-    var high = Math.max(open, close) * (1 + rnd()*0.018);
-    var low  = Math.min(open, close) * (1 - rnd()*0.018);
-    var vol  = coin.vol * (0.55 + rnd()*0.9);
-    var d = new Date(today); d.setDate(d.getDate()-i);
-    out.push({date:d.toISOString().slice(0,10), open:open, high:high, low:low, close:close, volume:Math.floor(vol)});
-    price = close;
+// ══════════════════════════════════════════════════════════════
+// LIVE DATA LOADERS — mirror loadPseHistory()/loadPseLiveQuotes() in
+// the Stocks module. Run eagerly at file load (not lazily on tab open)
+// so data is ready the moment the person switches to Crypto.
+// ══════════════════════════════════════════════════════════════
+async function loadCryptoLiveQuotes(){
+  var RAW_URL = 'https://raw.githubusercontent.com/' + TP_GH_OWNER + '/' + TP_GH_REPO + '/' + TP_GH_REF + '/crypto-live-quotes.json';
+  try {
+    var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var quotes = data.quotes || {};
+    var count = Object.keys(quotes).length;
+    tcLiveQuotes = quotes;
+    CRYPTO_QUOTES_STATUS = {
+      loaded: count > 0,
+      source: count > 0 ? ('live ('+count+' coins, updated '+(data.generatedAt||'unknown')+')') : 'no coins in feed yet',
+      error: (data.errors && data.errors.length) ? data.errors.join('; ') : null
+    };
+    console.log('Crypto live quotes loaded:', CRYPTO_QUOTES_STATUS.source, CRYPTO_QUOTES_STATUS.error||'');
+  } catch(e) {
+    CRYPTO_QUOTES_STATUS = {loaded:false, source:'no live data yet — tap Fetch Live Data', error:e.message};
+    console.warn('Crypto live quotes load failed:', e.message);
   }
-  // Rescale so last close === snapshot price
-  var f = coin.price / out[out.length-1].close;
-  out.forEach(function(b){ b.open*=f; b.high*=f; b.low*=f; b.close*=f; });
-  // Force yesterday's close to match today's snapshot % change
-  var prev = coin.price / (1 + coin.chg/100);
-  var y = out[out.length-2];
-  y.close = prev;
-  y.high = Math.max(y.high, prev); y.low = Math.min(y.low, prev);
-  var t = out[out.length-1];
-  t.open = prev;
-  t.high = Math.max(t.high, t.open, t.close); t.low = Math.min(t.low, t.open, t.close);
+  tcSeriesCache = {};
+  if(tcInited){ tcRenderTop(); tcRenderWatchlist(); if(tcCurrentSym) tcRenderAll(tcCurrentSym); }
+}
+async function loadCryptoHistory(){
+  var RAW_URL = 'https://raw.githubusercontent.com/' + TP_GH_OWNER + '/' + TP_GH_REPO + '/' + TP_GH_REF + '/crypto-history.json';
+  try {
+    var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var coins = data.coins || {};
+    var loadedCount = 0;
+    tcLiveSeries = {};
+    for (var sym in coins) {
+      var entry = coins[sym];
+      if (Array.isArray(entry.series) && entry.series.length) {
+        tcLiveSeries[sym] = entry.series;
+        loadedCount++;
+      }
+    }
+    var stale = false;
+    if (data.generatedAt) {
+      var ageMs = Date.now() - new Date(data.generatedAt).getTime();
+      stale = ageMs > 1000*60*60*24*3; // >3 days without an update = don't trust it blindly
+    }
+    CRYPTO_HISTORY_STATUS = {
+      loaded: loadedCount>0 && !stale,
+      source: loadedCount>0 ? ('live ('+loadedCount+' coins, updated '+(data.generatedAt||'unknown')+')') : 'no coins in feed yet',
+      error: stale ? 'data is stale (>3 days old)' : ((data.errors && data.errors.length) ? data.errors.join('; ') : null)
+    };
+    console.log('Crypto history loaded:', CRYPTO_HISTORY_STATUS.source, CRYPTO_HISTORY_STATUS.error||'');
+  } catch(e) {
+    CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetch Live Data', error:e.message};
+    console.warn('Crypto history load failed:', e.message);
+  }
+  tcSeriesCache = {};
+  var disclaimerEl = document.getElementById('tc-disclaimer');
+  if(disclaimerEl){
+    disclaimerEl.textContent = CRYPTO_HISTORY_STATUS.loaded
+      ? 'Live data from the CoinGecko API. Daily bars — the trailing ~30 days carry real intraday highs/lows; older bars are derived from daily closes only (see Report Card for how the signals have performed). Signals are for decision support only; verify current prices before trading. Not financial advice.'
+      : 'No live crypto data yet — tap Fetch Live Data above to pull real prices and history from the CoinGecko API (first run takes a few minutes). Not financial advice.';
+  }
+  if(tcInited){ tcRenderTop(); tcRenderWatchlist(); if(tcCurrentSym) tcRenderAll(tcCurrentSym); }
+}
+var CRYPTO_QUOTES_READY = loadCryptoLiveQuotes();
+var CRYPTO_HISTORY_READY = loadCryptoHistory();
+
+// Live quote as its own newest bar, same idea as tpMergeLiveBar in the
+// Stocks module — keeps price card, chart, and signal engine reading
+// the same moment in time after "Fetch Live Data" completes. high24h/
+// low24h are a rolling 24h window (not a UTC-midnight-aligned session
+// like the rest of the series), a minor approximation disclosed here.
+function tcMergeLiveBar(series, sym){
+  var q = tcLiveQuotes[sym];
+  if(!Array.isArray(series) || !series.length || !q || q.price == null) return series;
+  var lqDateObj = q.asOf ? new Date(q.asOf) : new Date();
+  if(isNaN(lqDateObj.getTime())) return series;
+  var lqDate = lqDateObj.toISOString().slice(0,10);
+  var lastBar = series[series.length-1];
+  if(!lastBar || !lastBar.date || lqDate < lastBar.date) return series;
+  var sameDay = lqDate === lastBar.date;
+  var bar = {
+    date: lqDate,
+    open: sameDay ? lastBar.open : lastBar.close,
+    high: Math.max(sameDay ? lastBar.high : -Infinity, q.high24h!=null?q.high24h:q.price, q.price),
+    low:  Math.min(sameDay ? lastBar.low  :  Infinity, q.low24h!=null?q.low24h:q.price,  q.price),
+    close: q.price,
+    volume: q.volume24h != null ? q.volume24h : (sameDay ? lastBar.volume : 0),
+    real: true
+  };
+  var out = series.slice();
+  if(sameDay) out[out.length-1] = bar; else out.push(bar);
   return out;
 }
+// Unified series getter: real live history + live quote merged in.
+// Returns null (not a fabricated series) if there isn't enough real
+// data yet — callers must handle that "no data" state explicitly.
 function tcGetSeries(sym){
-  if(!tcSeriesCache[sym]) tcSeriesCache[sym] = tcGenSeries(tcFindCoin(sym));
-  return tcSeriesCache[sym];
+  if(tcSeriesCache[sym]) return tcSeriesCache[sym];
+  var s = tcLiveSeries[sym];
+  if(!Array.isArray(s) || s.length < 20) return null;
+  var merged = tcMergeLiveBar(s, sym);
+  tcSeriesCache[sym] = merged;
+  return merged;
 }
-var TC_TF_BARS = {'1D':2,'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':500};
-// 1D — synthesized 24-hour intraday pattern (crypto trades 24/7), same idea as
-// the Stocks tab's tpGenIntraday. 30-minute bars, rescaled so the final close
-// matches the snapshot price shown on the price card.
-function tcGenIntraday(coin){
-  var rnd = tpRand(tpSeed(coin.sym + '-1d-demo'));
-  var base = coin.price;
+// Current quote, with graceful fallback to the last stored history bar
+// if only crypto-history.json loaded successfully (partial-failure
+// resilience — same philosophy as the Stocks tab's layered fallbacks).
+function tcGetQuote(sym){
+  var q = tcLiveQuotes[sym];
+  if(q && q.price != null) return q;
+  var s = tcLiveSeries[sym];
+  if(Array.isArray(s) && s.length >= 2){
+    var last = s[s.length-1], prev = s[s.length-2];
+    var chg = prev.close > 0 ? (last.close-prev.close)/prev.close*100 : 0;
+    return {price:last.close, change24hPct:chg, high24h:last.high, low24h:last.low,
+            volume24h:last.volume, asOf:last.date, derivedFromHistory:true};
+  }
+  return null;
+}
+
+var TC_TF_BARS = {'1D':2,'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':365};
+// 1D — synthesized 24-hour intraday pattern anchored to the REAL current
+// price and 24h change (CoinGecko's free tier has no true intraday feed,
+// same limitation the Stocks tab discloses for its own 1D view via
+// tpGenIntraday). Clearly labeled in the UI, not presented as real ticks.
+function tcGenIntraday(q){
+  var rnd = tpRand(tpSeed((tcCurrentSym||'x') + '-1d-' + (q.asOf||'')));
+  var base = q.price;
   var out = [];
   var step = 30, count = Math.floor((24*60)/step);
   var price = base;
@@ -2752,60 +2866,246 @@ function tcGenIntraday(coin){
     var close = Math.max(base*0.0001, open + drift);
     var high = Math.max(open,close) + rnd()*base*0.004;
     var low  = Math.max(base*0.0001, Math.min(open,close) - rnd()*base*0.004);
-    var vol  = Math.floor(200000 + rnd()*1800000);
+    var vol  = Math.floor((q.volume24h||1e6) / count * (0.5 + rnd()));
     var mins = i*step, hh = Math.floor(mins/60), mm = mins%60;
     var label = ((hh%12)||12) + ':' + String(mm).padStart(2,'0') + (hh<12?'AM':'PM');
-    out.push({date:label, open:open, high:high, low:low, close:close, volume:vol});
+    out.push({date:label, open:open, high:high, low:low, close:close, volume:vol, real:false});
     price = close;
   }
-  var f = coin.price / out[out.length-1].close;
+  var f = q.price / out[out.length-1].close;
   out.forEach(function(b){ b.open*=f; b.high*=f; b.low*=f; b.close*=f; });
   return out;
 }
 function tcGetChartSeries(sym, tf){
   if(tf === '1D'){
-    var c = tcFindCoin(sym);
-    if(c) return tcGenIntraday(c);
+    var q = tcGetQuote(sym);
+    return q ? tcGenIntraday(q) : null;
   }
   var s = tcGetSeries(sym);
+  if(!s) return null;
   var n = TC_TF_BARS[tf] || 90;
   return s.slice(Math.max(0, s.length - n));
 }
-// Mirrors tpUpdateChartTfDate on the Stocks tab — ties the mock intraday
-// pattern back to the last demo session date so 1D always shows its date.
 function tcUpdateChartTfDate(tf){
   var el = document.getElementById('tc-chart-tf-date');
   if(!el) return;
   if(tf !== '1D'){ el.style.display = 'none'; el.textContent = ''; return; }
-  var d = null;
-  try { var s = tcGetSeries(tcCurrentSym); d = s[s.length-1].date; } catch(e){}
+  var q = tcGetQuote(tcCurrentSym);
   el.style.display = 'block';
-  el.innerHTML = d
-    ? 'Simulated intraday pattern \u2014 demo session: <b>' + tpFmtDate(d) + '</b>'
-    : 'Simulated intraday pattern \u2014 session date unavailable';
+  el.innerHTML = q
+    ? 'Simulated intraday pattern \u2014 anchored to the live price as of <b>'+tpFmtDate((q.asOf||'').slice(0,10))+'</b>'
+    : 'Simulated intraday pattern \u2014 no live price yet';
 }
 
-// Simple demo signal engine — same ingredients as the stocks engine
-// (RSI 14 + SMA20 vs SMA50 with a 0.4% buffer), simplified thresholds.
+// ══════════════════════════════════════════════════════════════
+// SIGNAL ENGINE — a line-for-line port of the Stocks tab's
+// tpComputeSignal, recalibrated for crypto's higher baseline
+// volatility and 24/7 liquidity. If you change this, also update
+// backtest_crypto_signals.py's matching constants/functions, or the
+// Report Card will grade an engine that no longer runs.
+//   - RSI(14), thresholds 30/70 (classic default; crypto's liquid
+//     24/7 majors don't need PSE's illiquidity-tuned 25/75)
+//   - SMA20-vs-SMA50 trend, buffer 1.0% / confidence cap at 6% gap
+//     (PSE used 0.4%/3% — sized for a market with several times less
+//     daily volatility than crypto; a PSE-sized buffer would almost
+//     never read FLAT here)
+//   - Volume confirmation, 1.2x over prior 20 (same concept as PSE)
+//   - True ATR(14) and swing-pivot support/resistance — BOTH
+//     restricted to tcRealTail() (see module docstring on data
+//     fidelity): only bars with genuine high/low wicks feed these
+// ══════════════════════════════════════════════════════════════
+const TC_RSI_PERIOD = 14, TC_RSI_OVERSOLD = 30, TC_RSI_OVERBOUGHT = 70;
+const TC_TREND_BUFFER_PCT = 1.0, TC_TREND_CONF_CAP_PCT = 6;
+const TC_VOL_CONFIRM_RATIO = 1.2, TC_VOL_CONFIRM_PERIOD = 20;
+const TC_ATR_PERIOD = 14;
+const TC_SR_PIVOT_WING = 2, TC_SR_CLUSTER_PCT = 1.5;
+const TC_SIGNAL_THRESHOLD = 2, TC_MAX_SCORE = 3;
+const TC_REAL_WINDOW_CAP = 30;
+
+// Bars usable for wick-dependent math: only "real": true bars, taken
+// from the end of the series backward, capped. crypto-history.json
+// guarantees real bars are contiguous at the end (see the scraper).
+function tcRealTail(series, cap){
+  cap = cap || TC_REAL_WINDOW_CAP;
+  var tail = [];
+  for(var i=series.length-1; i>=0; i--){
+    if(!series[i].real) break;
+    tail.unshift(series[i]);
+    if(tail.length >= cap) break;
+  }
+  return tail;
+}
+function tcTrendState(sma20, sma50){
+  if(sma20==null || sma50==null || !sma50) return {state:'FLAT', gapPct:0, confidencePct:0};
+  var gapPct = (sma20-sma50)/sma50*100, absGap = Math.abs(gapPct);
+  if(gapPct > TC_TREND_BUFFER_PCT){
+    return {state:'BULL', gapPct:gapPct, confidencePct:Math.round(Math.min(100, (absGap-TC_TREND_BUFFER_PCT)/(TC_TREND_CONF_CAP_PCT-TC_TREND_BUFFER_PCT)*100))};
+  }
+  if(gapPct < -TC_TREND_BUFFER_PCT){
+    return {state:'BEAR', gapPct:gapPct, confidencePct:Math.round(Math.min(100, (absGap-TC_TREND_BUFFER_PCT)/(TC_TREND_CONF_CAP_PCT-TC_TREND_BUFFER_PCT)*100))};
+  }
+  return {state:'FLAT', gapPct:gapPct, confidencePct:Math.round(Math.max(0, 100-(absGap/TC_TREND_BUFFER_PCT)*100))};
+}
+function tcVolumeConfirmation(series, period){
+  period = period || TC_VOL_CONFIRM_PERIOD;
+  if(series.length < period+1) return null;
+  var vols = series.map(function(b){ return b.volume||0; });
+  var lastVol = vols[vols.length-1];
+  var prior = vols.slice(vols.length-1-period, vols.length-1);
+  var sum = prior.reduce(function(a,b){ return a+b; }, 0);
+  var avg = prior.length ? sum/prior.length : 0;
+  if(avg<=0) return {ratio:null, confirmed:false};
+  var ratio = lastVol/avg;
+  return {ratio:+ratio.toFixed(2), confirmed: ratio>=TC_VOL_CONFIRM_RATIO};
+}
+function tcATRPct(series, period){
+  period = period || TC_ATR_PERIOD;
+  var bars = tcRealTail(series);
+  if(bars.length < period+1) return null;
+  var sum=0, n=0;
+  for(var i=bars.length-period; i<bars.length; i++){
+    var cur=bars[i], prev=bars[i-1];
+    if(!prev || !(prev.close>0)) continue;
+    var hi = cur.high!=null ? cur.high : cur.close;
+    var lo = cur.low!=null ? cur.low : cur.close;
+    var tr = Math.max(hi-lo, Math.abs(hi-prev.close), Math.abs(lo-prev.close));
+    sum += tr/prev.close*100; n++;
+  }
+  return n ? +(sum/n).toFixed(2) : null;
+}
+// Round-number step scaled for crypto's wide price range (BTC ~$60k
+// down to sub-cent memecoins) — MUST match round_step() in
+// backtest_crypto_signals.py.
+function tcRoundStep(price){
+  if(price>=100) return 10;
+  if(price>=10) return 1;
+  if(price>=1) return 0.1;
+  if(price>=0.01) return 0.01;
+  return 0.001;
+}
+function tcIsRoundLevel(level){
+  if(!(level>0)) return false;
+  var step = tcRoundStep(level);
+  var nearest = Math.round(level/step)*step;
+  return Math.abs(level-nearest)/level < 0.003;
+}
+function tcSupportResistance(series){
+  var bars = tcRealTail(series);
+  if(bars.length < (TC_SR_PIVOT_WING*2+3)) return null;
+  var price = bars[bars.length-1].close;
+  if(!(price>0)) return null;
+  var pivots = [];
+  for(var i=TC_SR_PIVOT_WING; i<bars.length-TC_SR_PIVOT_WING; i++){
+    var hi = bars[i].high!=null ? bars[i].high : bars[i].close;
+    var lo = bars[i].low!=null ? bars[i].low : bars[i].close;
+    var isHigh=true, isLow=true;
+    for(var w=1; w<=TC_SR_PIVOT_WING; w++){
+      var l=bars[i-w], r=bars[i+w];
+      var lh=l.high!=null?l.high:l.close, rh=r.high!=null?r.high:r.close;
+      var ll=l.low!=null?l.low:l.close, rl=r.low!=null?r.low:r.close;
+      if(lh>hi||rh>hi) isHigh=false;
+      if(ll<lo||rl<lo) isLow=false;
+    }
+    if(isHigh) pivots.push(hi);
+    if(isLow) pivots.push(lo);
+  }
+  pivots.sort(function(a,b){ return a-b; });
+  var clusters = [];
+  pivots.forEach(function(p){
+    var last = clusters[clusters.length-1];
+    if(last && Math.abs(p-last.sum/last.n)/(last.sum/last.n)*100 <= TC_SR_CLUSTER_PCT){
+      last.sum += p; last.n += 1;
+    } else clusters.push({sum:p, n:1});
+  });
+  var levels = clusters.map(function(c){
+    var lvl = c.sum/c.n;
+    return {level:lvl, touches:c.n, isRound:tcIsRoundLevel(lvl), strength:c.n+(tcIsRoundLevel(lvl)?1:0), fallback:false};
+  });
+  var support=null, resistance=null;
+  levels.forEach(function(L){
+    if(L.level < price*0.998 && (!support || L.level > support.level)) support = L;
+    if(L.level > price*1.002 && (!resistance || L.level < resistance.level)) resistance = L;
+  });
+  var tail = bars.slice(-20);
+  if(!support && tail.length){
+    var mn = Infinity;
+    tail.forEach(function(d){ var lo=d.low!=null?d.low:d.close; if(lo<mn) mn=lo; });
+    if(isFinite(mn) && mn < price*0.998) support = {level:mn, touches:1, isRound:tcIsRoundLevel(mn), strength:1, fallback:true};
+  }
+  if(!resistance && tail.length){
+    var mx = -Infinity;
+    tail.forEach(function(d){ var hi=d.high!=null?d.high:d.close; if(hi>mx) mx=hi; });
+    if(isFinite(mx) && mx > price*1.002) resistance = {level:mx, touches:1, isRound:tcIsRoundLevel(mx), strength:1, fallback:true};
+  }
+  if(!support && !resistance) return null;
+  return {support:support, resistance:resistance};
+}
+function tcComputeSignal(series){
+  var closes = series.map(function(b){ return b.close; });
+  var lastIdx = closes.length-1;
+  var r = tpRSI(closes, TC_RSI_PERIOD);
+  var sma20 = tpSMA(closes,20,lastIdx);
+  var sma50 = tpSMA(closes,50,lastIdx);
+  var price = closes[lastIdx];
+  var score = 0;
+  if(r!=null){
+    if(r<TC_RSI_OVERSOLD) score+=2;
+    else if(r>TC_RSI_OVERBOUGHT) score-=2;
+  }
+  var trend = tcTrendState(sma20, sma50);
+  var volConf = tcVolumeConfirmation(series, TC_VOL_CONFIRM_PERIOD);
+  var trendWeight = (volConf && volConf.confirmed) ? 1 : 0.5;
+  if(trend.state==='BULL') score += trendWeight;
+  else if(trend.state==='BEAR') score -= trendWeight;
+  var signal='HOLD';
+  if(score>=TC_SIGNAL_THRESHOLD) signal='BUY';
+  else if(score<=-TC_SIGNAL_THRESHOLD) signal='SELL';
+  var confidencePct;
+  if(signal==='HOLD') confidencePct = Math.round(Math.max(0, 100-(Math.abs(score)/TC_SIGNAL_THRESHOLD)*100));
+  else confidencePct = Math.round(Math.min(100, (Math.abs(score)/TC_MAX_SCORE)*100));
+  var volPct = tcATRPct(series, TC_ATR_PERIOD);
+  var sr = tcSupportResistance(series);
+  return {
+    signal:signal, score:score, confidencePct:confidencePct, rsi:r,
+    sma20: sma20!=null ? +sma20.toFixed(sma20<1?6:2) : null,
+    sma50: sma50!=null ? +sma50.toFixed(sma50<1?6:2) : null,
+    price:price, trend:trend.state, trendGapPct:trend.gapPct, trendConfidencePct:trend.confidencePct,
+    volPct:volPct, sr:sr, volConfirmed: volConf?volConf.confirmed:null, volRatio: volConf?volConf.ratio:null,
+    series:series
+  };
+}
 function tcSignal(sym){
-  var s = tcGetSeries(sym);
-  var closes = s.map(function(b){return b.close;});
-  var end = closes.length - 1;
-  var sma20 = tpSMA(closes, 20, end);
-  var sma50 = tpSMA(closes, 50, end);
-  var rsiArr = tpRSISeries(closes, 14);
-  var rsi = rsiArr[rsiArr.length-1];
-  var gapPct = (sma20 && sma50) ? ((sma20 - sma50)/sma50)*100 : 0;
-  var trend = gapPct > 0.4 ? 'BULL' : gapPct < -0.4 ? 'BEAR' : 'FLAT';
-  var trendConf = Math.min(95, Math.round(55 + Math.abs(gapPct)*6));
-  var signal, conf;
-  if(rsi != null && rsi >= 70){ signal='SELL'; conf=Math.min(92, Math.round(55 + (rsi-70)*1.6)); }
-  else if(rsi != null && rsi <= 30){ signal='BUY'; conf=Math.min(92, Math.round(55 + (30-rsi)*1.6)); }
-  else if(trend==='BULL'){ signal = rsi < 62 ? 'BUY' : 'HOLD'; conf = Math.min(85, Math.round(52 + Math.abs(gapPct)*5)); }
-  else if(trend==='BEAR'){ signal = rsi > 38 ? 'SELL' : 'HOLD'; conf = Math.min(85, Math.round(52 + Math.abs(gapPct)*5)); }
-  else { signal='HOLD'; conf=55; }
-  return {signal:signal, confidencePct:conf, trend:trend, trendConfidencePct:trendConf,
-          rsi:rsi, sma20:sma20, sma50:sma50, gapPct:gapPct, series:s};
+  var series = tcGetSeries(sym);
+  if(!series) return null;
+  return tcComputeSignal(series);
+}
+
+// Volatility-based fallback band — same math as the Stocks tab's
+// tpProjectedBand, clipped to real S/R where it exists.
+function tcProjectedBand(sig){
+  if(sig.volPct==null || sig.price==null) return null;
+  var bias = sig.signal==='BUY' ? 1 : sig.signal==='SELL' ? -1 : 0;
+  var conf = (bias===0 ? sig.confidencePct*0.4 : sig.confidencePct) / 100;
+  var moveMag = sig.volPct * (0.75 + conf);
+  var skew = bias * moveMag * 0.35;
+  var high = sig.price * (1 + (moveMag+skew)/100);
+  var low = sig.price * (1 - (moveMag-skew)/100);
+  var sr = sig.sr;
+  if(sr && sr.resistance && sr.resistance.level > sig.price && high > sr.resistance.level) high = sr.resistance.level;
+  if(sr && sr.support && sr.support.level < sig.price && low < sr.support.level) low = sr.support.level;
+  if(low >= high){ low = Math.min(low, sig.price*0.999); high = Math.max(high, sig.price*1.001); }
+  return {bias:bias, low:low, high:high, vol:sig.volPct};
+}
+// Shared trigger levels for entry/exit plan + watchlist auto-prefill —
+// proven S/R first, ATR-volatility band as fallback.
+function tcTriggerLevels(sig){
+  var band = tcProjectedBand(sig);
+  if(!sig.price) return null;
+  var sr = sig.sr, price = sig.price;
+  var sup = (sr && sr.support && sr.support.level < price) ? sr.support.level : (band ? band.low : price*0.9);
+  var res = (sr && sr.resistance && sr.resistance.level > price) ? sr.resistance.level : (band ? band.high : price*1.1);
+  if(!isFinite(sup) || !isFinite(res) || sup<=0 || res<=0) return null;
+  return {sup:sup, res:res};
 }
 
 // ── Top Crypto Today ──
@@ -2821,21 +3121,30 @@ function tcRenderTop(){
   var el = document.getElementById('tc-gainers-list');
   var noteEl = document.getElementById('tc-gainers-note');
   if(!el) return;
+  var haveAny = TC_COINS.some(function(c){ return !!tcGetQuote(c.sym); });
+  if(!haveAny){
+    el.innerHTML = '<div class="tp-gainer-empty">No live crypto data yet \u2014 tap <b>Fetch Live Data</b> above to pull real prices from the CoinGecko API.</div>';
+    if(noteEl) noteEl.textContent = '';
+    return;
+  }
   var rows;
   if(tcGainersModeVal === 'bullish'){
     rows = TC_COINS.map(function(c){
+      var q = tcGetQuote(c.sym); if(!q) return null;
       var sig = tcSignal(c.sym);
-      return {sym:c.sym, name:c.name, price:c.price, pct:c.chg, gap:sig.gapPct, trend:sig.trend, signal:sig.signal};
-    }).filter(function(r){ return r.trend === 'BULL'; })
+      return {sym:c.sym, name:c.name, price:q.price, pct:q.change24hPct||0,
+              gap: sig?sig.trendGapPct:0, trend: sig?sig.trend:'FLAT', signal: sig?sig.signal:null};
+    }).filter(function(r){ return r && r.trend === 'BULL'; })
       .sort(function(a,b){ return b.gap - a.gap; }).slice(0,10);
   } else {
     rows = TC_COINS.map(function(c){
+      var q = tcGetQuote(c.sym); if(!q) return null;
       var sig = tcSignal(c.sym);
-      return {sym:c.sym, name:c.name, price:c.price, pct:c.chg, signal:sig.signal};
-    }).sort(function(a,b){ return b.pct - a.pct; }).slice(0,10);
+      return {sym:c.sym, name:c.name, price:q.price, pct:q.change24hPct||0, signal: sig?sig.signal:null};
+    }).filter(Boolean).sort(function(a,b){ return b.pct - a.pct; }).slice(0,10);
   }
   if(!rows.length){
-    el.innerHTML = '<div class="tp-gainer-empty">No coins currently in a confirmed uptrend \u2014 no symbol has SMA20 above SMA50 by more than the 0.4% buffer.</div>';
+    el.innerHTML = '<div class="tp-gainer-empty">No coins currently in a confirmed uptrend \u2014 no symbol has SMA20 above SMA50 by more than the '+TC_TREND_BUFFER_PCT+'% buffer.</div>';
     if(noteEl) noteEl.textContent = '';
     return;
   }
@@ -2854,8 +3163,8 @@ function tcRenderTop(){
   }).join('');
   if(noteEl){
     noteEl.textContent = tcGainersModeVal === 'bullish'
-      ? 'Coins in a confirmed uptrend ranked by SMA20-vs-SMA50 gap \u2014 same trend engine as the detail card. The % shown is today\u2019s change; the ORDER is trend strength. Demo data.'
-      : 'Demo snapshot \u2014 24-hour change from a real market snapshot; rankings are illustrative until the live crypto feed is wired.';
+      ? 'Coins in a confirmed uptrend ranked by SMA20-vs-SMA50 gap \u2014 same trend engine as the detail card. The % shown is today\u2019s change; the ORDER is trend strength.'
+      : 'Live 24h change from the CoinGecko API. Tap a coin for the full signal breakdown.';
   }
 }
 
@@ -2874,14 +3183,17 @@ function tcToggleWatch(){
   if(i >= 0){ list.splice(i,1); }
   else {
     var c = tcFindCoin(tcCurrentSym);
-    // Seeded from the SAME demo pivots the reasoning card's entry/exit
-    // section uses: High alert = the +6% ceiling (exit/target \u2014 buy
-    // trigger on HOLD), Low alert = the -6% floor (entry zone / sell
-    // trigger). Keeps the watchlist and the recommendation in sync.
-    var hp = c.price*1.06, lp = c.price*0.94;
+    var sig = tcSignal(tcCurrentSym);
+    var trig = sig ? tcTriggerLevels(sig) : null;
+    var q = tcGetQuote(tcCurrentSym);
+    // Auto-prefill from the SAME real trigger levels the reasoning card
+    // uses (proven S/R first, ATR-volatility band as fallback) — no
+    // more hardcoded demo pivots.
+    var hp = trig ? trig.res : (q ? q.price*1.06 : null);
+    var lp = trig ? trig.sup : (q ? q.price*0.94 : null);
     list.push({sym:tcCurrentSym,
-      highPrice:+(c.price>=1 ? hp.toFixed(2) : hp.toFixed(4)),
-      lowPrice:+(c.price>=1 ? lp.toFixed(2) : lp.toFixed(4))});
+      highPrice: hp!=null ? +(hp>=1 ? hp.toFixed(2) : hp.toFixed(4)) : null,
+      lowPrice:  lp!=null ? +(lp>=1 ? lp.toFixed(2) : lp.toFixed(4)) : null});
   }
   tcSaveWatch(list);
   tcRenderWatchlist();
@@ -2918,7 +3230,8 @@ function tcRenderWatchlist(){
   listEl.innerHTML = list.map(function(w){
     var c = tcFindCoin(w.sym);
     var name = c ? c.name : w.sym;
-    var last = c ? c.price : null;
+    var q = tcGetQuote(w.sym);
+    var last = q ? q.price : null;
     var lastTxt = last == null ? '\u2014' : tcFmtUSD(last);
     var hitHigh = last != null && w.highPrice != null && last >= w.highPrice;
     var hitLow  = last != null && w.lowPrice  != null && last <= w.lowPrice;
@@ -2939,11 +3252,12 @@ function tcRenderWatchlist(){
 
 // ── Coin picker (combo dropdown, same design as stocks) ──
 function tcOptRow(c){
-  var dir = c.chg > 0 ? 'up' : c.chg < 0 ? 'down' : 'flat';
+  var q = tcGetQuote(c.sym);
+  var dir = !q ? 'flat' : q.change24hPct > 0 ? 'up' : q.change24hPct < 0 ? 'down' : 'flat';
   var arrowChar = dir==='up' ? '\u25B2' : dir==='down' ? '\u25BC' : '\u2014';
   return '<div class="tp-opt" data-sym="'+c.sym+'" onmousedown="tcChooseCoin(\''+c.sym+'\')">'+
          '<span>'+c.name+' ('+c.sym+')</span>'+
-         '<span class="tp-opt-price">'+tcFmtUSD(c.price)+'</span>'+
+         '<span class="tp-opt-price">'+(q?tcFmtUSD(q.price):'\u2014')+'</span>'+
          '<span class="tp-opt-arrow '+dir+'">'+arrowChar+'</span></div>';
 }
 function tcRenderDropdown(query){
@@ -2992,7 +3306,8 @@ function tcSetTimeframe(tf){
     b.classList.toggle('active', b.dataset.tf===tf);
   });
   if(tcCurrentSym){
-    tcRenderChart(tcGetChartSeries(tcCurrentSym, tf));
+    var s = tcGetChartSeries(tcCurrentSym, tf);
+    if(s) tcRenderChart(s);
     tcUpdateChartTfDate(tf);
   }
 }
@@ -3008,28 +3323,225 @@ function tcSetView(view, el){
   if (rep) rep.style.display = (view === 'report') ? '' : 'none';
 }
 
-// ── Demo refresh button ──
-function tcDemoRefresh(){
+// ══════════════════════════════════════════════════════════════
+// FETCH LIVE DATA — triggers crypto-live-scraper.yml via
+// workflow_dispatch. Same PAT + polling flow as the Stocks tab
+// (tpGetGithubToken, shared sessionStorage token — one PAT covers both
+// tabs since they dispatch workflows on the same repo).
+// ══════════════════════════════════════════════════════════════
+var TC_GH_WORKFLOW = 'crypto-live-scraper.yml';
+var tcRefreshPollTimer = null;
+
+function tcFinishRefresh(message){
+  if(tcRefreshPollTimer){ clearTimeout(tcRefreshPollTimer); tcRefreshPollTimer=null; }
   var btn = document.getElementById('tc-refresh-btn');
   var status = document.getElementById('tc-refresh-status');
-  if(btn){ btn.disabled = true; btn.classList.add('tp-refresh-spinning'); }
-  setTimeout(function(){
-    if(btn){ btn.disabled = false; btn.classList.remove('tp-refresh-spinning'); }
-    if(status) status.textContent = 'Demo data \u2014 live crypto feed not wired yet';
-  }, 900);
+  if(btn){ btn.disabled = false; btn.classList.remove('tp-refresh-spinning'); }
+  if(status && message != null) status.textContent = message;
+}
+async function tcPollRunStatus(runId, ghHeaders, deadline){
+  var status = document.getElementById('tc-refresh-status');
+  if (Date.now() > deadline) { tcFinishRefresh('Still running — check the Actions tab on GitHub for status.'); return; }
+  try {
+    var resp = await fetch('https://api.github.com/repos/'+TP_GH_OWNER+'/'+TP_GH_REPO+'/actions/runs/'+runId, {headers: ghHeaders});
+    if (!resp.ok) { tcFinishRefresh('Lost track of run status \u274c — check the Actions tab.'); return; }
+    var run = await resp.json();
+    if (run.status === 'completed') {
+      if (run.conclusion === 'success') {
+        await loadCryptoLiveQuotes();
+        await loadCryptoHistory();
+        tcFinishRefresh(null);
+        if(status) status.textContent = 'Updated \u2705 just now';
+      } else {
+        tcFinishRefresh('Run finished with issues \u274c (' + run.conclusion + ') \u2014 check Actions tab.');
+      }
+      return;
+    }
+    if(status) status.textContent = 'Workflow ' + run.status + '... (' + Math.round((deadline-Date.now())/1000) + 's left before we stop watching)';
+    tcRefreshPollTimer = setTimeout(function(){ tcPollRunStatus(runId, ghHeaders, deadline); }, 5000);
+  } catch(e) {
+    tcFinishRefresh('Network error while checking status \u274c \u2014 ' + e.message);
+  }
+}
+async function tcFindNewRun(ghHeaders, sinceMs, deadline){
+  var status = document.getElementById('tc-refresh-status');
+  if (Date.now() > deadline) { tcFinishRefresh('Triggered, but couldn\'t confirm it started \u2014 check the Actions tab.'); return; }
+  try {
+    var resp = await fetch('https://api.github.com/repos/'+TP_GH_OWNER+'/'+TP_GH_REPO+'/actions/workflows/'+TC_GH_WORKFLOW+'/runs?event=workflow_dispatch&per_page=5', {headers: ghHeaders});
+    if (!resp.ok) { tcFinishRefresh('Lost track of the run \u274c \u2014 check the Actions tab.'); return; }
+    var data = await resp.json();
+    var runs = (data && data.workflow_runs) || [];
+    var match = runs.find(function(r){ return new Date(r.created_at).getTime() >= sinceMs; });
+    if (match) {
+      if(status) status.textContent = 'Run started \u2014 watching for completion...';
+      tcPollRunStatus(match.id, ghHeaders, deadline);
+    } else {
+      if(status) status.textContent = 'Waiting for run to appear...';
+      tcRefreshPollTimer = setTimeout(function(){ tcFindNewRun(ghHeaders, sinceMs, deadline); }, 4000);
+    }
+  } catch(e) {
+    tcFinishRefresh('Network error while locating run \u274c \u2014 ' + e.message);
+  }
+}
+async function tcTriggerRefresh(){
+  var btn = document.getElementById('tc-refresh-btn');
+  var status = document.getElementById('tc-refresh-status');
+  var token = tpGetGithubToken(); // shared PAT with the Stocks tab
+  if (!token) { if(status) status.textContent = 'Cancelled \u2014 no token entered.'; return; }
+
+  btn.disabled = true;
+  btn.classList.add('tp-refresh-spinning');
+  status.textContent = 'Triggering Crypto Live Data Scraper...';
+
+  var ghHeaders = {'Accept':'application/vnd.github+json', 'Authorization':'Bearer '+token, 'X-GitHub-Api-Version':'2022-11-28'};
+  var dispatchTime = Date.now();
+  try {
+    var resp = await fetch('https://api.github.com/repos/'+TP_GH_OWNER+'/'+TP_GH_REPO+'/actions/workflows/'+TC_GH_WORKFLOW+'/dispatches',
+      {method:'POST', headers:ghHeaders, body: JSON.stringify({ref: TP_GH_REF})});
+    if (resp.status === 204) {
+      status.textContent = 'Triggered \u2705 \u2014 locating the run... (usually finishes in 2-4 min)';
+      var deadline = Date.now() + 8*60*1000; // 8 min safety cap — 8 sequential coin fetches with rate-limit spacing
+      tcRefreshPollTimer = setTimeout(function(){ tcFindNewRun(ghHeaders, dispatchTime-5000, deadline); }, 2000);
+    } else if (resp.status === 401) {
+      sessionStorage.removeItem('tp_gh_token');
+      tcFinishRefresh('Token invalid/expired \u274c \u2014 tap again to re-enter.');
+    } else if (resp.status === 403) {
+      tcFinishRefresh('Forbidden \u274c \u2014 token needs "repo" + "workflow" scope.');
+    } else if (resp.status === 404) {
+      tcFinishRefresh('Not found \u274c \u2014 is crypto-live-scraper.yml committed to the repo?');
+    } else {
+      var body = await resp.text();
+      console.error('crypto workflow_dispatch failed:', resp.status, body);
+      tcFinishRefresh('Error ' + resp.status + ' \u274c \u2014 check console for details.');
+    }
+  } catch(e) {
+    tcFinishRefresh('Network error \u274c \u2014 ' + e.message);
+  }
 }
 
-// ── 5-day outlook (demo) — same math shape as the Stocks tab: √day-
-// widening ranges, signal-direction drift, clipped at the demo pivots.
-// Crypto trades 24/7, so days are calendar days, not trading days. ──
-function tcFiveDayOutlook(sig, c, sup, res){
-  var s = sig.series;
-  if(!s || s.length < 15 || !c || !c.price) return null;
-  var volSum = 0, n = 0;
-  for(var i = s.length - 14; i < s.length; i++){
-    if(s[i] && s[i].close > 0){ volSum += (s[i].high - s[i].low)/s[i].close*100; n++; }
+// ══════════════════════════════════════════════════════════════
+// ENGINE REPORT CARD — triggers crypto-backtest.yml (same token flow),
+// which replays the signal engine above over crypto-history.json and
+// grades every call against what actually happened next. Read-only
+// against the data pipeline. Mirrors the Stocks tab's Report Card.
+// ══════════════════════════════════════════════════════════════
+var TC_GH_BACKTEST_WORKFLOW = 'crypto-backtest.yml';
+var tcBacktestReloadTimer = null;
+var tcBacktestCollapsed = false;
+
+function tcToggleBacktestBody(){
+  tcBacktestCollapsed = !tcBacktestCollapsed;
+  var txt = document.getElementById('tc-report-text');
+  var tag = document.getElementById('tc-report-tag');
+  if (txt) txt.style.display = tcBacktestCollapsed ? 'none' : 'block';
+  if (tag) tag.textContent = 'ENGINE REPORT CARD ' + (tcBacktestCollapsed ? '\u25b8' : '\u25be');
+}
+async function tcTriggerBacktest(){
+  var btn = document.getElementById('tc-backtest-btn');
+  var status = document.getElementById('tc-backtest-status');
+  var token = tpGetGithubToken();
+  if (!token) { if(status) status.textContent = 'Cancelled \u2014 no token entered.'; return; }
+  if(btn) btn.disabled = true;
+  if(status) status.textContent = 'Triggering signal backtest...';
+  var ghHeaders = {'Accept':'application/vnd.github+json', 'Authorization':'Bearer '+token, 'X-GitHub-Api-Version':'2022-11-28'};
+  try {
+    var resp = await fetch('https://api.github.com/repos/'+TP_GH_OWNER+'/'+TP_GH_REPO+'/actions/workflows/'+TC_GH_BACKTEST_WORKFLOW+'/dispatches',
+      {method:'POST', headers:ghHeaders, body: JSON.stringify({ref: TP_GH_REF})});
+    if (resp.status === 204) {
+      if(status) status.textContent = 'Backtest running \u2705 \u2014 report reloads here in ~1 min.';
+      if (tcBacktestReloadTimer) clearTimeout(tcBacktestReloadTimer);
+      tcBacktestReloadTimer = setTimeout(function(){
+        tcLoadBacktest();
+        if(status) status.textContent = 'Report card refreshed.';
+        if(btn) btn.disabled = false;
+      }, 60*1000);
+    } else if (resp.status === 401) {
+      sessionStorage.removeItem('tp_gh_token');
+      if(status) status.textContent = 'Token invalid/expired \u274c \u2014 tap again to re-enter.';
+      if(btn) btn.disabled = false;
+    } else if (resp.status === 403) {
+      if(status) status.textContent = 'Forbidden \u274c \u2014 token needs "repo" + "workflow" scope.';
+      if(btn) btn.disabled = false;
+    } else if (resp.status === 404) {
+      if(status) status.textContent = 'Workflow not found \u274c \u2014 is crypto-backtest.yml committed?';
+      if(btn) btn.disabled = false;
+    } else {
+      if(status) status.textContent = 'Error ' + resp.status + ' \u274c \u2014 check console.';
+      if(btn) btn.disabled = false;
+    }
+  } catch(e) {
+    if(status) status.textContent = 'Network error \u274c \u2014 ' + e.message;
+    if(btn) btn.disabled = false;
   }
-  var vol = n ? volSum/n : 3;
+}
+function tcBtStat(st){ return st && st.n ? st : null; }
+function tcBtPct(x){ return (x==null) ? '\u2014' : (x>=0?'+':'')+x.toFixed(2)+'%'; }
+function tcRenderBacktest(data){
+  var el = document.getElementById('tc-report-text');
+  if (!el) return;
+  var parts = [];
+  parts.push("What this is: the engine was rewound through this site's own stored crypto price history and made to call BUY / SELL / HOLD using ONLY the data it would have had on each past day \u2014 then every call was graded against what the price actually did afterward. "
+    + "It graded <b>" + (data.barsGraded||0).toLocaleString() + " signal-days</b> across <b>" + (data.coinsTested||0) + " coins</b>"
+    + (data.dateRange && data.dateRange.from ? " (" + data.dateRange.from + " to " + data.dateRange.to + ")" : "")
+    + (data.generatedAt ? ", last run " + data.generatedAt.slice(0,10) : "") + ".");
+
+  var buy2 = tcBtStat(data.signals && data.signals.BUY && data.signals.BUY['2']);
+  if (buy2){
+    parts.push("<b>BUY signals</b> (" + buy2.n.toLocaleString() + " of them): over the next 2 calendar days the coin rose <b>" + buy2.hitRatePct + "%</b> of the time, average move " + tcBtPct(buy2.avgReturnPct) + ". When right it gained " + tcBtPct(buy2.avgWinPct) + " on average; when wrong it lost " + tcBtPct(buy2.avgLossPct!=null?-buy2.avgLossPct:null) + ". Well above 50% with wins bigger than losses means the signal has earned some trust; near 50% is closer to a coin flip.");
+  } else {
+    parts.push("<b>BUY signals</b>: none occurred in the stored history yet \u2014 the engine's BUY bar (oversold momentum inside a real trend) is deliberately hard to clear.");
+  }
+  var sell2 = tcBtStat(data.signals && data.signals.SELL && data.signals.SELL['2']);
+  if (sell2){
+    parts.push("<b>SELL signals</b> (" + sell2.n.toLocaleString() + "): the coin fell within 2 calendar days <b>" + sell2.hitRatePct + "%</b> of the time (average move " + tcBtPct(sell2.avgReturnPct!=null?-sell2.avgReturnPct:null) + " for the coin \u2014 that's how much selling would have protected).");
+  } else {
+    parts.push("<b>SELL signals</b>: none in the stored history yet \u2014 same reason as BUY.");
+  }
+  var cb = data.confidenceBuckets2d && data.confidenceBuckets2d.BUY;
+  if (cb && tcBtStat(cb.confidence80plus) && tcBtStat(cb.confidenceBelow80)){
+    var hi = cb.confidence80plus, mid = cb.confidenceBelow80;
+    var honest = (hi.hitRatePct > mid.hitRatePct)
+      ? "the high-confidence calls really were right more often \u2014 the confidence % means something."
+      : "the high-confidence calls were NOT more accurate than the ordinary ones \u2014 honest takeaway: don't size positions bigger just because the % is bigger, until this improves.";
+    parts.push("<b>Does the confidence % mean anything?</b> BUYs at 80%+ confidence were right " + hi.hitRatePct + "% of the time vs " + mid.hitRatePct + "% for lower-confidence BUYs \u2014 " + honest);
+  }
+  var srS = data.supportResistance && data.supportResistance.support;
+  var srR = data.supportResistance && data.supportResistance.resistance;
+  if ((srS && srS.touches) || (srR && srR.touches)){
+    var bits = [];
+    if (srS && srS.touches) bits.push("floors (support) held <b>" + srS.heldPct + "%</b> of the " + srS.touches.toLocaleString() + " times price came back to one");
+    if (srR && srR.touches) bits.push("ceilings (resistance) held <b>" + srR.heldPct + "%</b> of " + srR.touches.toLocaleString() + " touches");
+    parts.push("<b>Do the Key Levels actually work?</b> On this site's own data: " + bits.join("; ") + ".");
+  }
+  parts.push("<b>Honest fine print:</b> this grades the past, and the past never guarantees the future. Crypto is far more volatile than the PSE stocks this same engine design was first built for \u2014 treat every number here as a starting point for your own judgement, not an instruction.");
+  el.innerHTML = tpBulletsHTML(parts);
+}
+async function tcLoadBacktest(){
+  var el = document.getElementById('tc-report-text');
+  if (!el) return;
+  var RAW_URL = 'https://raw.githubusercontent.com/' + TP_GH_OWNER + '/' + TP_GH_REPO + '/' + TP_GH_REF + '/crypto-backtest.json';
+  try {
+    var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    tcRenderBacktest(data);
+  } catch(e) {
+    el.innerHTML = tpBulletsHTML([
+      "No report card yet. Tap the <b>Report Card</b> button above to run the first one \u2014 it rewinds through this site's stored crypto history, replays every BUY / SELL / HOLD this engine would have called, and grades each one against what the price actually did next. Takes about a minute once live data exists.",
+      "Needs crypto-history.json to exist first \u2014 tap <b>Fetch Live Data</b> on the Justification tab if you haven't yet."
+    ]);
+  }
+}
+tcLoadBacktest();
+
+// ── 5-day outlook — same math shape as the Stocks tab: \u221aday-widening
+// ranges, signal-direction drift, clipped at REAL support/resistance
+// (or the ATR-volatility band where no proven level exists yet).
+// Crypto trades 24/7, so days are calendar days, not trading days. ──
+function tcFiveDayOutlook(sig, sup, res){
+  var s = sig.series;
+  if(!s || s.length < 15 || !sig.price) return null;
+  var vol = sig.volPct != null ? sig.volPct : 3;
   var bias = sig.signal==='BUY' ? 1 : sig.signal==='SELL' ? -1 : 0;
   var conf = (bias===0 ? sig.confidencePct*0.4 : sig.confidencePct)/100;
   var halfW1 = vol * (0.75 + conf);
@@ -3041,27 +3553,108 @@ function tcFiveDayOutlook(sig, c, sup, res){
   for(var d = 1; d <= 5; d++){
     var dt = new Date(base.getTime() + d*86400000); // 24/7 market: calendar days, no closures
     var spread = halfW1 * Math.sqrt(d);
-    var mid0 = c.price * (1 + (drift*d)/100);
+    var mid0 = sig.price * (1 + (drift*d)/100);
     var hi = mid0 * (1 + spread/100);
     var lo = mid0 * (1 - spread/100);
-    var hiClip = false, loClip = false;
+    var hiClip=false, loClip=false;
     if(hi > res){ hi = res; hiClip = true; }
     if(lo < sup){ lo = sup; loClip = true; }
-    if(lo >= hi){ lo = Math.min(lo, c.price*0.999); hi = Math.max(hi, c.price*1.001); }
+    if(lo >= hi){ lo = Math.min(lo, sig.price*0.999); hi = Math.max(hi, sig.price*1.001); }
     if(hiClip && loClip && !pinnedFrom) pinnedFrom = d;
-    var mid = (lo + hi) / 2; // center of the realistic (clipped) range
-    rows.push({ d:d, date:M[dt.getMonth()]+' '+dt.getDate(), lo:lo, hi:hi, mid:mid });
+    var mid = (lo+hi)/2;
+    rows.push({d:d, date:M[dt.getMonth()]+' '+dt.getDate(), lo:lo, hi:hi, mid:mid});
   }
   var allSameMid = rows.every(function(r){ return tcFmtUSD(r.mid)===tcFmtUSD(rows[0].mid); });
   var tbl = tpOutlookTableHTML(rows, tcFmtUSD);
   var dirTxt = bias>0 ? 'with the range drifting higher each day while the BUY case holds'
     : bias<0 ? 'with the range drifting lower each day while the SELL case holds'
     : 'with no daily drift, since neither side has an edge right now';
-  var out = '5-DAY OUTLOOK (demo) \u2014 the next 5 calendar days, since crypto trades 24/7 with no weekend or holiday closures. Built from this coin\'s simulated '+vol.toFixed(2)+'% average daily swing, the '+sig.confidencePct+'% signal confidence, and the demo floor/ceiling pivots. Ranges widen each day because uncertainty grows with time, '+dirTxt+':'+tbl;
+  var volTxt = sig.volPct != null
+    ? "this coin's real trailing ATR(14) of "+vol.toFixed(2)+"% average daily range"
+    : "an assumed "+vol.toFixed(2)+"% average daily range (not enough real-wick history yet for a true ATR reading)";
+  var out = '5-DAY OUTLOOK \u2014 the next 5 calendar days, since crypto trades 24/7 with no weekend or holiday closures. Built from '+volTxt+', the '+sig.confidencePct+'% signal confidence, and the '+(sig.sr&&(sig.sr.support||sig.sr.resistance)?'proven floor/ceiling levels':'volatility-based floor/ceiling estimate')+'. Ranges widen each day because uncertainty grows with time, '+dirTxt+':'+tbl;
   var notes = ['ranges are clipped at the '+tcFmtUSD(sup)+' floor and '+tcFmtUSD(res)+' ceiling'];
   if(allSameMid) notes.push('the \u2018most likely\u2019 value repeats because '+(pinnedFrom ? 'the range is pinned between the floor and ceiling \u2014 it can\'t drift until one of them breaks' : 'there\'s no directional drift in this read \u2014 the center of the range simply stays put'));
-  out += 'Honest note: '+notes.join('; ')+'. Demo projection on simulated candles \u2014 not promises.';
+  out += 'Honest note: '+notes.join('; ')+'. These are ranges implied by recent behavior, not promises \u2014 one news event can override all five rows.';
   return out;
+}
+
+// ══════════════════════════════════════════════════════════════
+// KEY LEVELS + ENTRY/EXIT — real support/resistance narrative with
+// honest fallback disclosure, mirroring the Stocks tab's
+// tpLevelsNarrative/tpEntryExitPlan (see trade.js lines ~1860-1930).
+// ══════════════════════════════════════════════════════════════
+function tcFmtLvl(n){ return n<1 ? n.toFixed(4) : n<10 ? n.toFixed(3) : n.toFixed(2); }
+function tcLevelsNarrative(sig){
+  var sr = sig.sr, price = sig.price, P = tcFmtLvl;
+  if(!sr || (!sr.support && !sr.resistance)){
+    return 'No reliable support/resistance mapped yet \u2014 needs more real-wick trading history before floor and ceiling levels can be trusted.';
+  }
+  var lines = [];
+  if(sr.support){
+    lines.push('<b>Support (floor):</b> $'+P(sr.support.level)
+      + (sr.support.fallback ? ' \u2014 recent low (backup level, no repeated bounce found)' : ' \u2014 held '+sr.support.touches+'\u00d7 recently')
+      + (sr.support.isRound ? ' \u00b7 round number (stickier)' : ''));
+  }
+  if(sr.resistance){
+    lines.push('<b>Resistance (ceiling):</b> $'+P(sr.resistance.level)
+      + (sr.resistance.fallback ? ' \u2014 recent high (backup level, no repeated rejection found)' : ' \u2014 rejected '+sr.resistance.touches+'\u00d7 recently')
+      + (sr.resistance.isRound ? ' \u00b7 round number (stickier)' : ''));
+  }
+  if(sr.support && sr.resistance && price){
+    var up = ((sr.resistance.level-price)/price*100).toFixed(1);
+    var dn = ((price-sr.support.level)/price*100).toFixed(1);
+    lines.push('<b>Price now:</b> $'+P(price)+' \u2014 '+dn+'% above the floor, '+up+'% below the ceiling');
+  }
+  var band = tcProjectedBand(sig);
+  if(sig.signal==='BUY' && price){
+    var target = (sr.resistance && sr.resistance.level>price) ? sr.resistance.level : (band?band.high:null);
+    var stop = (sr.support && sr.support.level<price) ? sr.support.level : (band?band.low:null);
+    if(target && stop && stop<price){
+      var reward=(target-price)/price, risk=(price-stop)/price;
+      var rr = risk>0 ? reward/risk : null;
+      if(rr!=null){
+        lines.push('<b>Risk:Reward on this BUY:</b> '+rr.toFixed(1)+':1 \u2014 '+(
+          rr>=2 ? 'good \u2014 the potential prize is at least double the risk'
+          : rr>=1 ? 'workable but thin \u2014 needs a high hit rate to pay off'
+          : 'upside-down \u2014 risking more than the potential gain; a better entry price would fix this'));
+      }
+    }
+  } else if(sig.signal==='SELL' && price){
+    var target2 = (sr.support && sr.support.level<price) ? sr.support.level : (band?band.low:null);
+    var stop2 = (sr.resistance && sr.resistance.level>price) ? sr.resistance.level : (band?band.high:null);
+    if(target2 && stop2 && stop2>price){
+      var dp=((price-target2)/price*100).toFixed(1), bp=((stop2-price)/price*100).toFixed(1);
+      lines.push('<b>SELL math:</b> \u2248'+dp+'% of downside avoided by selling now vs \u2248'+bp+'% of upside given up if wrong');
+    }
+  } else if(sr.support && sr.resistance){
+    lines.push('<b>On HOLD:</b> set alerts at both levels \u2014 a move outside the box is the only event worth reacting to');
+  }
+  return lines.join('<br>');
+}
+function tcEntryExitPlan(sig){
+  var trig = tcTriggerLevels(sig);
+  if(!trig) return null;
+  var price = sig.price, P = tcFmtLvl, sup = trig.sup, res = trig.res;
+  if(sig.signal==='BUY'){
+    var entryLo = Math.max(sup, price*(1 - (sig.volPct||3)/200));
+    var stop = sup*0.99;
+    var t1 = price + (res-price)*0.5;
+    return 'WHERE TO ENTER AND EXIT:<br>' +
+      '<b>Entry:</b> from $'+P(entryLo)+' up to the current $'+P(price)+' \u2014 a small dip gets a better price, but crypto moves 24/7 and deep-discount waiting often misses the move.<br>' +
+      '<b>Take-profit / target:</b> first sell-point near $'+P(t1)+' (halfway to the ceiling), final target at the $'+P(res)+' ceiling.<br>' +
+      '<b>Stop-loss (exit if wrong):</b> $'+P(stop)+', just under the $'+P(sup)+' floor \u2014 a close below it means the setup failed.';
+  }
+  if(sig.signal==='SELL'){
+    return 'WHERE TO EXIT AND RE-ENTER:<br>' +
+      '<b>Exit (sell):</b> at or near the current $'+P(price)+' \u2014 any lift toward the $'+P(res)+' ceiling is a gift exit.<br>' +
+      '<b>Re-entry (buy back):</b> the $'+P(sup)+' floor is where a slide would most likely stall first.<br>' +
+      '<b>Invalidation:</b> a close above $'+P(res)+' means this sell read was wrong.';
+  }
+  return 'WHERE THE ENTRY/EXIT TRIGGERS SIT:<br>' +
+    '<b>Buy trigger:</b> a close above the $'+P(res)+' ceiling.<br>' +
+    '<b>Sell trigger:</b> a close below the $'+P(sup)+' floor.<br>' +
+    '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside the box is noise.';
 }
 
 // ── Main render ──
@@ -3072,16 +3665,42 @@ function tcRenderAll(sym){
   tcCurrentSym = sym;
   var input = document.getElementById('tc-coin-search');
   if(input) input.value = c.name + ' (' + c.sym + ')';
+
+  var q = tcGetQuote(sym);
   var sig = tcSignal(sym);
-  var s = sig.series;
 
   document.getElementById('tc-name').textContent = c.name + ' (' + c.sym + ')';
-  document.getElementById('tc-price').textContent = tcFmtUSD(c.price);
-  var prev = c.price / (1 + c.chg/100);
-  var chgAbs = c.price - prev;
+
+  if(!q || !sig){
+    // No live data yet for this coin — honest empty state, no fabricated numbers.
+    document.getElementById('tc-price').textContent = '\u2014';
+    document.getElementById('tc-chg').textContent = '';
+    document.getElementById('tc-trend-wrap').innerHTML = '';
+    document.getElementById('tc-badge-wrap').innerHTML = '';
+    document.getElementById('tc-summary-rec-text').innerHTML = tpBulletsHTML([
+      'No live data yet for '+c.name+'. Tap <b>Fetch Live Data</b> above to pull real prices and history from the CoinGecko API \u2014 first run takes a few minutes.'
+    ]);
+    document.getElementById('tc-summary-rec-tag').textContent = 'NO DATA';
+    document.getElementById('tc-summary-rec-tag').className = 'tp-summary-tag';
+    ['tc-summary-signal-tag','tc-summary-trend-tag'].forEach(function(id){ var e=document.getElementById(id); if(e){ e.textContent='\u2014'; e.className='tp-summary-tag'; } });
+    ['tc-summary-signal-text','tc-summary-trend-text'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='\u2014'; });
+    document.getElementById('tc-summary-levels-text').textContent = '\u2014';
+    document.getElementById('tc-range-low').textContent = '\u2014';
+    document.getElementById('tc-range-high').textContent = '\u2014';
+    var fillE=document.getElementById('tc-range-fill'), markE=document.getElementById('tc-range-marker');
+    if(fillE) fillE.style.width='0%'; if(markE) markE.style.left='0%';
+    ['tc-stat-lasttrade','tc-stat-open','tc-stat-high','tc-stat-low','tc-stat-vol','tc-stat-sma20','tc-stat-sma50'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='\u2014'; });
+    tcUpdateWatchBtn();
+    return;
+  }
+
+  document.getElementById('tc-price').textContent = tcFmtUSD(q.price);
+  var chgPct = q.change24hPct || 0;
+  var prev = chgPct !== -100 ? q.price / (1 + chgPct/100) : q.price;
+  var chgAbs = q.price - prev;
   var chgEl = document.getElementById('tc-chg');
-  chgEl.textContent = (c.chg>=0?'+':'') + (c.price>=1 ? chgAbs.toFixed(2) : chgAbs.toFixed(4)) + ' (' + (c.chg>=0?'+':'') + c.chg.toFixed(2) + '%)';
-  chgEl.className = 'tp-price-chg ' + (c.chg>=0?'up':'down');
+  chgEl.textContent = (chgPct>=0?'+':'') + (q.price>=1 ? chgAbs.toFixed(2) : chgAbs.toFixed(4)) + ' (' + (chgPct>=0?'+':'') + chgPct.toFixed(2) + '%)';
+  chgEl.className = 'tp-price-chg ' + (chgPct>=0?'up':'down');
 
   var trendArrow = sig.trend==='BULL' ? '\u25B2' : sig.trend==='BEAR' ? '\u25BC' : '\u2014';
   document.getElementById('tc-trend-wrap').innerHTML =
@@ -3089,37 +3708,15 @@ function tcRenderAll(sym){
   document.getElementById('tc-badge-wrap').innerHTML =
     '<div class="tp-signal-badge ' + sig.signal + '">' + sig.confidencePct + '% ' + sig.signal + '</div>';
 
-  // Justification (demo narrative) — verdict + entry/exit + 5-day outlook,
-  // mirroring the Stocks recommendation structure. Support/resistance use
-  // the demo pivots (±6% of spot) until real crypto S/R is wired.
   var recEl = document.getElementById('tc-summary-rec-text');
-  var actionTxt = sig.signal==='BUY' ? 'accumulating on dips looks reasonable in this demo setup'
-    : sig.signal==='SELL' ? 'trimming exposure or waiting for a reset looks reasonable in this demo setup'
-    : 'staying on the sidelines and letting the trend resolve looks reasonable in this demo setup';
-  var verdictTxt = sig.signal + ' \u2014 ' + actionTxt + '. Demo engine: same RSI-14 + SMA20/50 recipe as the Stocks tab, running on simulated candles anchored to a real price snapshot.';
-  var cSup = c.price * 0.94, cRes = c.price * 1.06;
-  var entryExitTxt;
-  if(sig.signal==='BUY'){
-    var cT1 = c.price + (cRes - c.price)*0.5;
-    entryExitTxt = 'WHERE TO ENTER AND EXIT:<br>' +
-      '<b>Entry:</b> from ' + tcFmtUSD(c.price*0.985) + ' up to the current ' + tcFmtUSD(c.price) + ' \u2014 a small dip gets a better price, but crypto moves 24/7 and deep-discount waiting often misses the move.<br>' +
-      '<b>Take-profit / target:</b> first sell-point near ' + tcFmtUSD(cT1) + ' (halfway to the ceiling), final target at the ' + tcFmtUSD(cRes) + ' ceiling.<br>' +
-      '<b>Stop-loss (exit if wrong):</b> just under the ' + tcFmtUSD(cSup) + ' floor \u2014 a close below it means the setup failed.';
-  } else if(sig.signal==='SELL'){
-    entryExitTxt = 'WHERE TO EXIT AND RE-ENTER:<br>' +
-      '<b>Exit (sell):</b> at or near the current ' + tcFmtUSD(c.price) + ' \u2014 any lift toward the ' + tcFmtUSD(cRes) + ' ceiling is a gift exit.<br>' +
-      '<b>Re-entry (buy back):</b> the ' + tcFmtUSD(cSup) + ' floor is where a slide would most likely stall first.<br>' +
-      '<b>Invalidation:</b> a close above ' + tcFmtUSD(cRes) + ' means this sell read was wrong.';
-  } else {
-    entryExitTxt = 'WHERE THE ENTRY/EXIT TRIGGERS SIT:<br>' +
-      '<b>Buy trigger:</b> a close above the ' + tcFmtUSD(cRes) + ' ceiling.<br>' +
-      '<b>Sell trigger:</b> a close below the ' + tcFmtUSD(cSup) + ' floor.<br>' +
-      '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside the box is noise.';
-  }
-  var fiveDayTxt = tcFiveDayOutlook(sig, c, cSup, cRes);
-  // Verdict + entry/exit prices form one combined practical bullet,
-  // mirroring the Stocks tab structure.
-  recEl.innerHTML = tpBulletsHTML([verdictTxt + '<br><br>' + entryExitTxt, fiveDayTxt]);
+  var actionTxt = sig.signal==='BUY' ? 'accumulating on dips looks reasonable given the current read'
+    : sig.signal==='SELL' ? 'trimming exposure or waiting for a reset looks reasonable given the current read'
+    : 'staying on the sidelines and letting the trend resolve looks reasonable given the current read';
+  var verdictTxt = sig.signal + ' \u2014 ' + actionTxt + '. RSI(14) + SMA20/50 trend (volume-confirmed) + real ATR/support-resistance where the trailing ~30 days of real-wick data allows it.';
+  var trig = tcTriggerLevels(sig);
+  var entryExitTxt = trig ? tcEntryExitPlan(sig) : 'Not enough data yet to set reliable entry/exit levels.';
+  var fiveDayTxt = trig ? tcFiveDayOutlook(sig, trig.sup, trig.res) : null;
+  recEl.innerHTML = tpBulletsHTML([verdictTxt + '<br><br>' + entryExitTxt].concat(fiveDayTxt ? [fiveDayTxt] : []));
   var recTag = document.getElementById('tc-summary-rec-tag');
   recTag.textContent = 'RECOMMENDATION';
   recTag.className = 'tp-summary-tag ' + sig.signal;
@@ -3129,39 +3726,34 @@ function tcRenderAll(sym){
   sigTag.className = 'tp-summary-tag ' + sig.signal;
   document.getElementById('tc-summary-signal-text').textContent =
     'RSI(14) is at ' + (sig.rsi!=null ? sig.rsi.toFixed(1) : '\u2014') +
-    (sig.rsi>=70 ? ' \u2014 overbought territory; momentum is stretched.' :
-     sig.rsi<=30 ? ' \u2014 oversold territory; selling pressure looks exhausted.' :
+    (sig.rsi>=TC_RSI_OVERBOUGHT ? ' \u2014 overbought territory; momentum is stretched.' :
+     sig.rsi<=TC_RSI_OVERSOLD ? ' \u2014 oversold territory; selling pressure looks exhausted.' :
      ' \u2014 neutral zone; neither side has a decisive edge.');
 
   var trTag = document.getElementById('tc-summary-trend-tag');
   trTag.textContent = sig.trendConfidencePct + '% ' + sig.trend;
   trTag.className = 'tp-summary-tag ' + (sig.trend==='BULL'?'BUY':sig.trend==='BEAR'?'SELL':'HOLD');
   document.getElementById('tc-summary-trend-text').textContent =
-    'SMA20 sits ' + (sig.gapPct>=0?'+':'') + sig.gapPct.toFixed(2) + '% vs SMA50 \u2014 ' +
-    (sig.trend==='BULL' ? 'a confirmed uptrend on this simulated series.' :
-     sig.trend==='BEAR' ? 'a confirmed downtrend on this simulated series.' :
+    'SMA20 sits ' + (sig.trendGapPct>=0?'+':'') + sig.trendGapPct.toFixed(2) + '% vs SMA50 (buffer '+TC_TREND_BUFFER_PCT+'%) \u2014 ' +
+    (sig.trend==='BULL' ? 'a confirmed uptrend'+(sig.volConfirmed?', backed by above-average volume.':', though on below-average volume (half-weighted in the score).') :
+     sig.trend==='BEAR' ? 'a confirmed downtrend'+(sig.volConfirmed?', backed by above-average volume.':', though on below-average volume (half-weighted in the score).') :
      'inside the buffer band, so no confirmed trend either way.');
 
+  document.getElementById('tc-summary-levels-text').innerHTML = tcLevelsNarrative(sig);
+
+  var s = sig.series;
   var lo52 = Math.min.apply(null, s.slice(-365).map(function(b){return b.low;}));
   var hi52 = Math.max.apply(null, s.slice(-365).map(function(b){return b.high;}));
-  document.getElementById('tc-summary-levels-text').innerHTML =
-    '<b>Support (floor):</b> ' + tcFmtUSD(cSup) + ' \u2014 demo pivot, 6% under spot<br>' +
-    '<b>Resistance (ceiling):</b> ' + tcFmtUSD(cRes) + ' \u2014 demo pivot, 6% over spot<br>' +
-    '<b>Price now:</b> ' + tcFmtUSD(c.price) + ' \u2014 midway between the two<br>' +
-    '<b>52-week demo range:</b> ' + tcFmtUSD(lo52) + ' \u2013 ' + tcFmtUSD(hi52);
-
-  // Range bar
   document.getElementById('tc-range-low').textContent = tcFmtUSD(lo52);
   document.getElementById('tc-range-high').textContent = tcFmtUSD(hi52);
-  var posPct = Math.max(0, Math.min(100, ((c.price - lo52)/(hi52 - lo52))*100));
+  var posPct = hi52>lo52 ? Math.max(0, Math.min(100, ((q.price-lo52)/(hi52-lo52))*100)) : 50;
   var fill = document.getElementById('tc-range-fill');
   var marker = document.getElementById('tc-range-marker');
   if(fill) fill.style.width = posPct + '%';
   if(marker) marker.style.left = posPct + '%';
 
-  // Stats
   var last = s[s.length-1];
-  document.getElementById('tc-stat-lasttrade').textContent = tpFmtDate(last.date) + ' \u00b7 24/7 market';
+  document.getElementById('tc-stat-lasttrade').textContent = tpFmtDate(last.date) + ' \u00b7 24/7 market' + (last.real===false ? ' (close-derived)' : '');
   document.getElementById('tc-stat-open').textContent = tcFmtUSD(last.open);
   document.getElementById('tc-stat-high').textContent = tcFmtUSD(last.high);
   document.getElementById('tc-stat-low').textContent = tcFmtUSD(last.low);
@@ -3170,7 +3762,8 @@ function tcRenderAll(sym){
   document.getElementById('tc-stat-sma50').textContent = sig.sma50!=null ? tcFmtUSD(sig.sma50) : '\u2014';
 
   tcUpdateWatchBtn();
-  try { tcRenderChart(tcGetChartSeries(sym, tcCurrentTF)); } catch(e) {}
+  var chartSeries = tcGetChartSeries(sym, tcCurrentTF);
+  if(chartSeries) { try { tcRenderChart(chartSeries); } catch(e) {} }
   tcUpdateChartTfDate(tcCurrentTF);
 }
 
@@ -3191,8 +3784,10 @@ function tcInit(){
   };
 })();
 window.addEventListener('resize', function(){
-  if(tcInited && tcCurrentSym && tpMarketMode === 'crypto')
-    tcRenderChart(tcGetChartSeries(tcCurrentSym, tcCurrentTF));
+  if(tcInited && tcCurrentSym && tpMarketMode === 'crypto'){
+    var s = tcGetChartSeries(tcCurrentSym, tcCurrentTF);
+    if(s) tcRenderChart(s);
+  }
 });
 
 function tcRenderChart(series){
@@ -3300,7 +3895,6 @@ function tcRenderChart(series){
     datesEl.innerHTML = html;
   }
 }
-
 
 // ═══════════ APP INIT (runs last; scripts are deferred in document order) ═══════════
 // Restore last-viewed Trade market (stocks/crypto) so a refresh stays on the same view
