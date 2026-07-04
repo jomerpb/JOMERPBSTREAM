@@ -968,3 +968,30 @@
 #trade-page .tp-watch-remove{width:22px;height:22px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;padding:0;margin-bottom:4px;}
 #trade-page .tp-watch-remove:hover{border-color:var(--red);color:var(--red);}
 #trade-page .tp-watch-empty{font-size:11.5px;color:var(--muted);line-height:1.5;padding:6px 0;}
+
+/* ═══════════ ACCENT BORDERS & TITLES ═══════════
+   Placed at end of sheet so these win the cascade.
+   (The older crypto override block sits mid-sheet and was being
+   cancelled for .tp-watchlist by later base rules of equal specificity.)
+   Stocks = amber, Crypto = bitcoin orange. */
+#tp-stocks-view .tp-gainers,
+#tp-stocks-view .tp-watchlist,
+#tp-stocks-view .tp-price-card,
+#tp-stocks-view .tp-summary-card,
+#tp-stocks-view .tp-stats,
+#tp-stocks-view .tp-chart-wrap,
+#tp-stocks-view .tp-combo-input{border-color:rgba(245,158,11,0.35);}
+#tp-stocks-view .tp-gainers-title,
+#tp-stocks-view .tp-watch-title,
+#tp-stocks-view .tp-stats-title{color:var(--amber);}
+
+#tp-crypto-view .tp-gainers,
+#tp-crypto-view .tp-watchlist,
+#tp-crypto-view .tp-price-card,
+#tp-crypto-view .tp-summary-card,
+#tp-crypto-view .tp-stats,
+#tp-crypto-view .tp-chart-wrap,
+#tp-crypto-view .tp-combo-input{border-color:rgba(247,147,26,0.35);}
+#tp-crypto-view .tp-gainers-title,
+#tp-crypto-view .tp-watch-title,
+#tp-crypto-view .tp-stats-title{color:#f7931a;}
