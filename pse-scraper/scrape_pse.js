@@ -15,7 +15,7 @@ const path = require('path');
 // Fill in the rest — JFC confirmed live.
 const TICKER_IDS = {
   JFC: { cmpyId: '86', securityId: '158' },
-  SM:  { cmpyId: '112', securityId: '314' },
+  SM:  { cmpyId: '599', securityId: '520' }, // FIX: was 112/314 (SMPH's IDs); 599/520 = SM Investments Corp, verified vs pse-live-quotes.json + pse-full-history.json
   ALI: { cmpyId: '180', securityId: '293' },
   BDO: { cmpyId: '260', securityId: '468' },
   TEL: { cmpyId: '6', securityId: '134' },
