@@ -19,7 +19,7 @@
        padding keeps the LOGO/CONTENT clear of the notch while the
        colored background itself still paints all the way to the true
        edges on all three pages (Stream, Oracle, Trade) that use .topbar. */
-    .topbar{position:sticky;top:0;left:0;right:0;z-index:90;min-height:var(--top-h);display:flex;align-items:center;gap:10px;padding:env(safe-area-inset-top,0) max(14px, env(safe-area-inset-right,0)) 0 max(14px, env(safe-area-inset-left,0));background:rgba(7,9,15,0.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);box-sizing:border-box;}
+    .topbar{position:sticky;top:0;left:0;right:0;z-index:90;min-height:var(--top-h);display:flex;align-items:center;gap:10px;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) 0 env(safe-area-inset-left,0);background:rgba(7,9,15,0.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);box-sizing:border-box;}
     .topbar-logo{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent);flex-shrink:0;cursor:pointer;}
     .topbar-logo span{color:var(--text);}
     .topbar-search{flex:1;display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 10px;gap:7px;height:34px;position:relative;}
