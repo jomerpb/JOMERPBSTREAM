@@ -12,8 +12,14 @@
     .page.active{display:block;}
     #oracle-page{min-height:0!important;height:auto!important;}
 
-    /* TOP BAR */
-    .topbar{position:sticky;top:0;z-index:90;height:var(--top-h);display:flex;align-items:center;gap:10px;padding:0 14px;background:rgba(7,9,15,0.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);}
+    /* TOP BAR — edge-to-edge: the bar's background spans the full physical
+       width (no ancestor sets a max-width/margin, confirmed) and, since
+       the viewport meta tag declares viewport-fit=cover, also spans full
+       bleed under any notch/status bar/rounded corner. safe-area-inset
+       padding keeps the LOGO/CONTENT clear of the notch while the
+       colored background itself still paints all the way to the true
+       edges on all three pages (Stream, Oracle, Trade) that use .topbar. */
+    .topbar{position:sticky;top:0;left:0;right:0;z-index:90;min-height:var(--top-h);display:flex;align-items:center;gap:10px;padding:env(safe-area-inset-top,0) max(14px, env(safe-area-inset-right,0)) 0 max(14px, env(safe-area-inset-left,0));background:rgba(7,9,15,0.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);box-sizing:border-box;}
     .topbar-logo{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent);flex-shrink:0;cursor:pointer;}
     .topbar-logo span{color:var(--text);}
     .topbar-search{flex:1;display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 10px;gap:7px;height:34px;position:relative;}
