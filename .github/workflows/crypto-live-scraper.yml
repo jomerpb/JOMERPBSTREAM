@@ -1,0 +1,35 @@
+name: Crypto Live Data Scraper
+
+# Manual-only, matching this repo's other data workflows (all cron
+# triggers were intentionally removed repo-wide). Dispatched either from
+# the GitHub Actions tab or by the "Fetch Live Data" button on the
+# Crypto sub-tab (same PAT + workflow_dispatch flow as the Stocks tab's
+# Fetch Live Data button).
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  scrape-crypto:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run crypto scraper (CoinGecko API)
+        run: python3 crypto-scraper/scrape_crypto_live.py
+
+      - name: Commit live data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add crypto-history.json crypto-live-quotes.json
+          git diff --staged --quiet && echo "No changes to commit" || git commit -m "Update live crypto data [automated]"
+          git push

@@ -1,0 +1,37 @@
+name: Crypto Signal Backtest (Report Card)
+
+# Manual-only, matching the repo's other workflows. Dispatched either
+# from the GitHub Actions tab or by the "Report Card" button on the
+# Crypto sub-tab (same token flow as Fetch Live Data).
+#
+# READ-ONLY with respect to the data pipeline: this job only reads
+# crypto-history.json and writes crypto-backtest.json. It never touches
+# the scraper or its output.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run signal backtest
+        run: python backtest_crypto_signals.py
+
+      - name: Commit report card
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add crypto-backtest.json
+          git diff --cached --quiet && echo "No changes to commit" || git commit -m "Update crypto signal backtest report card"
+          git push
