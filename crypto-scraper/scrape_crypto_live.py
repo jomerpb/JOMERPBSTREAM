@@ -55,17 +55,100 @@ from datetime import datetime, timezone, timedelta
 
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 
+# Optional CoinGecko Demo API key (free, no credit card — coingecko.com/en/api/pricing).
+# Set as a GitHub Actions repo secret named COINGECKO_API_KEY and passed to this
+# script via env var of the same name. With a Demo key: up to 100 calls/min.
+# Without one: falls back to the keyless public tier (5-15 calls/min) automatically —
+# the script still works either way, just slower.
+COINGECKO_API_KEY = os.environ.get("COINGECKO_API_KEY", "").strip()
+
 # symbol -> CoinGecko coin id. Verified against coingecko.com/en/coins/<id>
 # on 2026-07-04. HYPE is "hyperliquid" (NOT "hype-3", an unrelated token).
+# POL is "polygon-ecosystem-token" (post-rebrand id; the old "matic-network"
+# id still resolves to the legacy MATIC page, not the current POL token).
+# SNX/STX/CRO/WIF/FET all have legacy or alternate ids from past rebrands —
+# these are the current, verified ids as of 2026-07-05:
+#   SNX -> synthetix-network-token (NOT "havven", the pre-2018 name)
+#   STX -> stacks (NOT "blockstack", the pre-2020 name)
+#   CRO -> cronos (NOT "crypto-com-chain", a legacy id)
+#   WIF -> dogwifhat (NOT "dogwifcoin")
+#   FET -> artificial-superintelligence-alliance (post-2024 rebrand, ticker stayed FET)
+# Stablecoins (USDC/USDT/DAI) intentionally excluded — RSI/SMA signals are
+# meaningless for an asset pegged to $1.
 COINS = [
-    {"sym": "BTC",  "id": "bitcoin",     "name": "Bitcoin"},
-    {"sym": "ETH",  "id": "ethereum",    "name": "Ethereum"},
-    {"sym": "XRP",  "id": "ripple",      "name": "XRP"},
-    {"sym": "BNB",  "id": "binancecoin", "name": "BNB"},
-    {"sym": "SOL",  "id": "solana",      "name": "Solana"},
-    {"sym": "DOGE", "id": "dogecoin",    "name": "Dogecoin"},
-    {"sym": "TRX",  "id": "tron",        "name": "TRON"},
-    {"sym": "HYPE", "id": "hyperliquid", "name": "Hyperliquid"},
+    {"sym": "BTC",  "id": "bitcoin",                             "name": "Bitcoin"},
+    {"sym": "ETH",  "id": "ethereum",                            "name": "Ethereum"},
+    {"sym": "XRP",  "id": "ripple",                              "name": "XRP"},
+    {"sym": "BNB",  "id": "binancecoin",                         "name": "BNB"},
+    {"sym": "SOL",  "id": "solana",                              "name": "Solana"},
+    {"sym": "DOGE", "id": "dogecoin",                            "name": "Dogecoin"},
+    {"sym": "TRX",  "id": "tron",                                "name": "TRON"},
+    {"sym": "HYPE", "id": "hyperliquid",                         "name": "Hyperliquid"},
+    {"sym": "ADA",  "id": "cardano",                             "name": "Cardano"},
+    {"sym": "AVAX", "id": "avalanche-2",                         "name": "Avalanche"},
+    {"sym": "LINK", "id": "chainlink",                           "name": "Chainlink"},
+    {"sym": "DOT",  "id": "polkadot",                            "name": "Polkadot"},
+    {"sym": "LTC",  "id": "litecoin",                            "name": "Litecoin"},
+    {"sym": "SHIB", "id": "shiba-inu",                           "name": "Shiba Inu"},
+    {"sym": "SUI",  "id": "sui",                                 "name": "Sui"},
+    {"sym": "TON",  "id": "the-open-network",                    "name": "Toncoin"},
+    {"sym": "NEAR", "id": "near",                                "name": "NEAR Protocol"},
+    {"sym": "POL",  "id": "polygon-ecosystem-token",             "name": "Polygon"},
+    {"sym": "UNI",  "id": "uniswap",                             "name": "Uniswap"},
+    {"sym": "ATOM", "id": "cosmos",                              "name": "Cosmos"},
+    {"sym": "PAXG", "id": "pax-gold",                            "name": "PAX Gold"},
+    {"sym": "YFI",  "id": "yearn-finance",                       "name": "Yearn Finance"},
+    {"sym": "AAVE", "id": "aave",                                "name": "Aave"},
+    {"sym": "QNT",  "id": "quant-network",                       "name": "Quant"},
+    {"sym": "COMP", "id": "compound-governance-token",           "name": "Compound"},
+    {"sym": "ETC",  "id": "ethereum-classic",                    "name": "Ethereum Classic"},
+    {"sym": "INJ",  "id": "injective-protocol",                  "name": "Injective"},
+    {"sym": "ENS",  "id": "ethereum-name-service",               "name": "Ethereum Name Service"},
+    {"sym": "KSM",  "id": "kusama",                              "name": "Kusama"},
+    {"sym": "ICP",  "id": "internet-computer",                   "name": "Internet Computer"},
+    {"sym": "RENDER", "id": "render-token",                      "name": "Render"},
+    {"sym": "PENDLE", "id": "pendle",                            "name": "Pendle"},
+    {"sym": "AXS",  "id": "axie-infinity",                       "name": "Axie Infinity"},
+    {"sym": "FIL",  "id": "filecoin",                            "name": "Filecoin"},
+    {"sym": "RAY",  "id": "raydium",                             "name": "Raydium"},
+    {"sym": "AKT",  "id": "akash-network",                       "name": "Akash Network"},
+    {"sym": "APT",  "id": "aptos",                               "name": "Aptos"},
+    {"sym": "TIA",  "id": "celestia",                            "name": "Celestia"},
+    {"sym": "ONDO", "id": "ondo-finance",                        "name": "Ondo"},
+    {"sym": "LDO",  "id": "lido-dao",                            "name": "Lido DAO"},
+    {"sym": "HNT",  "id": "helium",                              "name": "Helium"},
+    {"sym": "XTZ",  "id": "tezos",                               "name": "Tezos"},
+    {"sym": "SNX",  "id": "synthetix-network-token",             "name": "Synthetix"},
+    {"sym": "CRV",  "id": "curve-dao-token",                     "name": "Curve DAO Token"},
+    {"sym": "XLM",  "id": "stellar",                             "name": "Stellar"},
+    {"sym": "FET",  "id": "artificial-superintelligence-alliance", "name": "Artificial Superintelligence Alliance"},
+    {"sym": "WIF",  "id": "dogwifhat",                           "name": "dogwifhat"},
+    {"sym": "STX",  "id": "stacks",                              "name": "Stacks"},
+    {"sym": "SUSHI", "id": "sushi",                              "name": "Sushi"},
+    {"sym": "APE",  "id": "apecoin",                             "name": "ApeCoin"},
+    {"sym": "IMX",  "id": "immutable-x",                         "name": "Immutable"},
+    {"sym": "KNC",  "id": "kyber-network-crystal",               "name": "Kyber Network Crystal"},
+    {"sym": "OP",   "id": "optimism",                            "name": "Optimism"},
+    {"sym": "BAL",  "id": "balancer",                            "name": "Balancer"},
+    {"sym": "ZRX",  "id": "0x",                                  "name": "0x"},
+    {"sym": "ALGO", "id": "algorand",                            "name": "Algorand"},
+    {"sym": "BAT",  "id": "basic-attention-token",               "name": "Basic Attention Token"},
+    {"sym": "ARB",  "id": "arbitrum",                            "name": "Arbitrum"},
+    {"sym": "ENA",  "id": "ethena",                              "name": "Ethena"},
+    {"sym": "MANA", "id": "decentraland",                        "name": "Decentraland"},
+    {"sym": "CRO",  "id": "cronos",                              "name": "Cronos"},
+    {"sym": "SAND", "id": "the-sandbox",                         "name": "The Sandbox"},
+    {"sym": "MINA", "id": "mina-protocol",                       "name": "Mina Protocol"},
+    {"sym": "KAVA", "id": "kava",                                "name": "Kava"},
+    {"sym": "PYTH", "id": "pyth-network",                        "name": "Pyth Network"},
+    {"sym": "STRK", "id": "starknet",                            "name": "Starknet"},
+    {"sym": "GRT",  "id": "the-graph",                           "name": "The Graph"},
+    {"sym": "CHZ",  "id": "chiliz",                              "name": "Chiliz"},
+    {"sym": "BLUR", "id": "blur",                                "name": "Blur"},
+    {"sym": "LRC",  "id": "loopring",                            "name": "Loopring"},
+    {"sym": "ZK",   "id": "zksync",                              "name": "ZKsync"},
+    {"sym": "BONK", "id": "bonk",                                "name": "Bonk"},
+    {"sym": "PEPE", "id": "pepe",                                "name": "Pepe"},
 ]
 
 REAL_OHLC_DAYS = 30       # true-wick window (see module docstring)
@@ -73,19 +156,25 @@ HISTORY_DAYS = 365        # full close+volume window
 REQUEST_TIMEOUT = 20      # seconds
 MAX_RETRIES = 4
 BASE_BACKOFF = 8          # seconds; doubles each retry on 429/5xx
-CALL_SPACING = 13         # seconds between calls — stays under the public
-                          # API's most conservative documented floor of
-                          # ~5 calls/min (12s/call) with a safety margin.
+
+# Call spacing: with a Demo API key (100 calls/min documented at
+# coingecko.com/en/api/pricing) we can safely space calls much closer
+# together; without one we fall back to the conservative keyless-tier
+# spacing (~5 calls/min floor, 12s/call) with a safety margin.
+CALL_SPACING = 0.7 if COINGECKO_API_KEY else 13
 
 OUT_HISTORY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "crypto-history.json")
 OUT_QUOTES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "crypto-live-quotes.json")
 
 
 def http_get_json(url, attempt=1):
-    req = urllib.request.Request(url, headers={
+    headers = {
         "Accept": "application/json",
         "User-Agent": "JOMERPBSTREAM-crypto-scraper/1.0 (+https://github.com/jomerpb/JOMERPBSTREAM)",
-    })
+    }
+    if COINGECKO_API_KEY:
+        headers["x-cg-demo-api-key"] = COINGECKO_API_KEY
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -138,14 +227,14 @@ def resample_ohlc_to_daily(raw_ohlc):
 def build_coin_series(coin):
     """Returns (series, error) where series is a list of daily bars sorted
     ascending by date, each {date, open, high, low, close, volume, real}."""
-    mc_url = f"{COINGECKO_BASE}/coins/{coin['id']}/market_chart?vs_currency=usd&days={HISTORY_DAYS}"
+    mc_url = f"{COINGECKO_BASE}/coins/{coin['id']}/market_chart?vs_currency=php&days={HISTORY_DAYS}"
     mc = http_get_json(mc_url)
     if not mc or "prices" not in mc or "total_volumes" not in mc:
         return None, f"market_chart fetch failed for {coin['sym']}"
 
     time.sleep(CALL_SPACING)
 
-    ohlc_url = f"{COINGECKO_BASE}/coins/{coin['id']}/ohlc?vs_currency=usd&days={REAL_OHLC_DAYS}"
+    ohlc_url = f"{COINGECKO_BASE}/coins/{coin['id']}/ohlc?vs_currency=php&days={REAL_OHLC_DAYS}"
     raw_ohlc = http_get_json(ohlc_url)
     real_by_date = resample_ohlc_to_daily(raw_ohlc) if isinstance(raw_ohlc, list) else {}
     if not real_by_date:
@@ -194,7 +283,7 @@ def build_coin_series(coin):
 
 def fetch_market_snapshot(coins):
     ids = ",".join(c["id"] for c in coins)
-    url = f"{COINGECKO_BASE}/coins/markets?vs_currency=usd&ids={ids}&price_change_percentage=24h"
+    url = f"{COINGECKO_BASE}/coins/markets?vs_currency=php&ids={ids}&price_change_percentage=24h"
     data = http_get_json(url)
     if not isinstance(data, list):
         return {}, "coins/markets fetch failed — no live snapshot available"
@@ -219,6 +308,10 @@ def fetch_market_snapshot(coins):
 
 
 def main():
+    if COINGECKO_API_KEY:
+        print(f"CoinGecko Demo API key detected — using {CALL_SPACING}s call spacing (up to ~100 calls/min).")
+    else:
+        print(f"No COINGECKO_API_KEY set — using conservative keyless spacing ({CALL_SPACING}s/call, ~5 calls/min).")
     print(f"Fetching live snapshot for {len(COINS)} coins...")
     quotes, quote_err = fetch_market_snapshot(COINS)
     if quote_err:
