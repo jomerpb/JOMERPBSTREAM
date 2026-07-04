@@ -24,6 +24,8 @@ jobs:
           python-version: '3.11'
 
       - name: Run crypto scraper (CoinGecko API)
+        env:
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
         run: python3 crypto-scraper/scrape_crypto_live.py
 
       - name: Commit live data
