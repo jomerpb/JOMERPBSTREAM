@@ -540,6 +540,22 @@ function tpToggleBacktestBody(){
 function tpBtStat(st){ return st && st.n ? st : null; }
 function tpBtPct(x){ return (x==null) ? '—' : (x>=0?'+':'')+x.toFixed(2)+'%'; }
 
+// Converts the raw confidencePct (how much of the engine's own scoring
+// rules agree with each other) into a Setup Quality grade for display.
+// Same underlying number as before -- only the label changes. This exists
+// because users reasonably read "92%" as "92% chance this trade wins,"
+// which isn't what the number measures (see pse-backtest.json: SELL
+// confidence80plus hitRatePct was NOT higher than confidenceBelow80,
+// i.e. confidence had zero demonstrated predictive value for SELL calls
+// as of the last backtest run). Shared by both the PSE and Crypto tabs.
+function tpConfidenceGrade(pct){
+  if(pct>=90) return 'A+';
+  if(pct>=80) return 'A';
+  if(pct>=65) return 'B';
+  if(pct>=50) return 'C';
+  return 'D';
+}
+
 // Renders pse-backtest.json as plain language a first-time trader can
 // follow: what was tested, how often each call was right, how big the
 // wins/losses were, whether high-confidence calls earned their %, and
@@ -568,14 +584,21 @@ function tpRenderBacktest(data){
     parts.push("<b>SELL signals</b>: none in the stored history yet — same reason as BUY, the trigger bar is deliberately strict.");
   }
 
-  var cb = data.confidenceBuckets2d && data.confidenceBuckets2d.BUY;
-  if (cb && tpBtStat(cb.confidence80plus) && tpBtStat(cb.confidenceBelow80)){
-    var hi = cb.confidence80plus, mid = cb.confidenceBelow80;
-    var honest = (hi.hitRatePct > mid.hitRatePct)
-      ? "the high-confidence calls really were right more often — the confidence % means something."
-      : "the high-confidence calls were NOT more accurate than the ordinary ones — honest takeaway: don't size positions bigger just because the % is bigger, until this improves.";
-    parts.push("<b>Does the confidence % mean anything?</b> BUYs at 80%+ confidence were right " + hi.hitRatePct + "% of the time vs " + mid.hitRatePct + "% for lower-confidence BUYs — " + honest);
-  }
+  // Checked for BOTH signal types now, not just BUY -- a prior version
+  // only ever validated BUY, which meant a SELL confidence% with zero
+  // predictive value could go unflagged indefinitely. See pse-backtest.json:
+  // SELL confidence80plus hitRatePct (50.0%) vs confidenceBelow80 (51.4%)
+  // is the exact case this used to miss.
+  ['BUY','SELL'].forEach(function(sigType){
+    var cb = data.confidenceBuckets2d && data.confidenceBuckets2d[sigType];
+    if (cb && tpBtStat(cb.confidence80plus) && tpBtStat(cb.confidenceBelow80)){
+      var hi = cb.confidence80plus, mid = cb.confidenceBelow80;
+      var honest = (hi.hitRatePct > mid.hitRatePct)
+        ? "the high-confidence calls really were right more often — the confidence % means something."
+        : "the high-confidence calls were NOT more accurate than the ordinary ones — honest takeaway: don't size positions bigger just because the % is bigger, until this improves.";
+      parts.push("<b>Does the confidence % mean anything for " + sigType + "?</b> " + sigType + "s at 80%+ confidence were right " + hi.hitRatePct + "% of the time vs " + mid.hitRatePct + "% for lower-confidence " + sigType + "s — " + honest);
+    }
+  });
 
   var srS = data.supportResistance && data.supportResistance.support;
   var srR = data.supportResistance && data.supportResistance.resistance;
@@ -2548,7 +2571,7 @@ async function tpRenderAll(sym){
     '<div class="tp-trend-badge ' + sig.trend + '">' + trendArrow + ' ' + sig.trendConfidencePct + '% ' + sig.trend + '</div>';
 
   document.getElementById('tp-badge-wrap').innerHTML =
-    '<div class="tp-signal-badge ' + sig.signal + '">' + sig.confidencePct + '% ' + sig.signal + '</div>';
+    '<div class="tp-signal-badge ' + sig.signal + '">' + tpConfidenceGrade(sig.confidencePct) + ' ' + sig.signal + '</div>';
 
   tpUpdateRangeAndStats(refSeries, sig, liveOk ? lq : null);
 
@@ -2556,7 +2579,7 @@ async function tpRenderAll(sym){
   // used to live in a Signal Breakdown card further down; that slot is
   // now the market-wide Top Gainers card instead.
   const signalTagEl = document.getElementById('tp-summary-signal-tag');
-  signalTagEl.textContent = sig.confidencePct + '% ' + sig.signal;
+  signalTagEl.textContent = tpConfidenceGrade(sig.confidencePct) + ' ' + sig.signal;
   signalTagEl.className = 'tp-summary-tag ' + sig.signal;
   document.getElementById('tp-summary-signal-text').innerHTML = tpBulletsHTML(tpSignalNarrative(sig));
   const trendTagEl = document.getElementById('tp-summary-trend-tag');
@@ -3588,14 +3611,20 @@ function tcRenderBacktest(data){
   } else {
     parts.push("<b>SELL signals</b>: none in the stored history yet \u2014 same reason as BUY.");
   }
-  var cb = data.confidenceBuckets2d && data.confidenceBuckets2d.BUY;
-  if (cb && tcBtStat(cb.confidence80plus) && tcBtStat(cb.confidenceBelow80)){
-    var hi = cb.confidence80plus, mid = cb.confidenceBelow80;
-    var honest = (hi.hitRatePct > mid.hitRatePct)
-      ? "the high-confidence calls really were right more often \u2014 the confidence % means something."
-      : "the high-confidence calls were NOT more accurate than the ordinary ones \u2014 honest takeaway: don't size positions bigger just because the % is bigger, until this improves.";
-    parts.push("<b>Does the confidence % mean anything?</b> BUYs at 80%+ confidence were right " + hi.hitRatePct + "% of the time vs " + mid.hitRatePct + "% for lower-confidence BUYs \u2014 " + honest);
-  }
+  // Checked for BOTH signal types now, not just BUY -- mirrors the same
+  // fix applied to the PSE tab's tpRenderBacktest, for the same reason:
+  // a SELL confidence% with no real predictive value could otherwise go
+  // unflagged indefinitely.
+  ['BUY','SELL'].forEach(function(sigType){
+    var cb = data.confidenceBuckets2d && data.confidenceBuckets2d[sigType];
+    if (cb && tcBtStat(cb.confidence80plus) && tcBtStat(cb.confidenceBelow80)){
+      var hi = cb.confidence80plus, mid = cb.confidenceBelow80;
+      var honest = (hi.hitRatePct > mid.hitRatePct)
+        ? "the high-confidence calls really were right more often \u2014 the confidence % means something."
+        : "the high-confidence calls were NOT more accurate than the ordinary ones \u2014 honest takeaway: don't size positions bigger just because the % is bigger, until this improves.";
+      parts.push("<b>Does the confidence % mean anything for " + sigType + "?</b> " + sigType + "s at 80%+ confidence were right " + hi.hitRatePct + "% of the time vs " + mid.hitRatePct + "% for lower-confidence " + sigType + "s \u2014 " + honest);
+    }
+  });
   var srS = data.supportResistance && data.supportResistance.support;
   var srR = data.supportResistance && data.supportResistance.resistance;
   if ((srS && srS.touches) || (srR && srR.touches)){
@@ -3797,7 +3826,7 @@ function tcRenderAll(sym){
   document.getElementById('tc-trend-wrap').innerHTML =
     '<div class="tp-trend-badge ' + sig.trend + '">' + trendArrow + ' ' + sig.trendConfidencePct + '% ' + sig.trend + '</div>';
   document.getElementById('tc-badge-wrap').innerHTML =
-    '<div class="tp-signal-badge ' + sig.signal + '">' + sig.confidencePct + '% ' + sig.signal + '</div>';
+    '<div class="tp-signal-badge ' + sig.signal + '">' + tpConfidenceGrade(sig.confidencePct) + ' ' + sig.signal + '</div>';
 
   var recEl = document.getElementById('tc-summary-rec-text');
   var actionTxt = sig.signal==='BUY' ? 'accumulating on dips looks reasonable given the current read'
@@ -3813,7 +3842,7 @@ function tcRenderAll(sym){
   recTag.className = 'tp-summary-tag ' + sig.signal;
 
   var sigTag = document.getElementById('tc-summary-signal-tag');
-  sigTag.textContent = sig.confidencePct + '% ' + sig.signal;
+  sigTag.textContent = tpConfidenceGrade(sig.confidencePct) + ' ' + sig.signal;
   sigTag.className = 'tp-summary-tag ' + sig.signal;
   document.getElementById('tc-summary-signal-text').textContent =
     'RSI(14) is at ' + (sig.rsi!=null ? sig.rsi.toFixed(1) : '\u2014') +
