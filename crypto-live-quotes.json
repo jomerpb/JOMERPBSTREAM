@@ -1,94 +1,94 @@
 {
-  "generatedAt": "2026-07-04T16:26:11Z",
+  "generatedAt": "2026-07-04T17:01:21Z",
   "source": "CoinGecko API /coins/markets",
   "quotes": {
     "BTC": {
       "id": "bitcoin",
       "name": "Bitcoin",
-      "price": 62797,
-      "change24hPct": 1.2476016962470906,
+      "price": 62854,
+      "change24hPct": 1.3013209404423152,
       "high24h": 62930,
-      "low24h": 61963,
-      "volume24h": 20032409558,
-      "marketCap": 1259195943617,
-      "asOf": "2026-07-04T16:22:40.577Z"
+      "low24h": 62047,
+      "volume24h": 19281086187,
+      "marketCap": 1260404000540,
+      "asOf": "2026-07-04T16:57:50.834Z"
     },
     "ETH": {
       "id": "ethereum",
       "name": "Ethereum",
-      "price": 1784.87,
-      "change24hPct": 3.0125555676787417,
+      "price": 1785.62,
+      "change24hPct": 3.077803900027896,
       "high24h": 1792.78,
-      "low24h": 1730.23,
-      "volume24h": 7828286022,
-      "marketCap": 215351386979,
-      "asOf": "2026-07-04T16:22:40.063Z"
+      "low24h": 1731.74,
+      "volume24h": 7365186771,
+      "marketCap": 215549994152,
+      "asOf": "2026-07-04T16:57:50.943Z"
     },
     "XRP": {
       "id": "ripple",
       "name": "XRP",
       "price": 1.17,
-      "change24hPct": 4.6383497084291365,
+      "change24hPct": 5.253565969378774,
       "high24h": 1.17,
       "low24h": 1.11,
-      "volume24h": 1950522463,
-      "marketCap": 72621689904,
-      "asOf": "2026-07-04T16:22:35.710Z"
+      "volume24h": 1955358580,
+      "marketCap": 72988706923,
+      "asOf": "2026-07-04T16:57:46.697Z"
     },
     "BNB": {
       "id": "binancecoin",
       "name": "BNB",
-      "price": 575.19,
-      "change24hPct": 1.7097324007177954,
+      "price": 575.33,
+      "change24hPct": 1.5680639261168507,
       "high24h": 577.18,
-      "low24h": 565.39,
-      "volume24h": 594652907,
-      "marketCap": 77508782595,
-      "asOf": "2026-07-04T16:22:40.208Z"
+      "low24h": 566.35,
+      "volume24h": 601522691,
+      "marketCap": 77547956848,
+      "asOf": "2026-07-04T16:57:50.360Z"
     },
     "SOL": {
       "id": "solana",
       "name": "Solana",
-      "price": 82.1,
-      "change24hPct": 1.1081388742096698,
+      "price": 82.17,
+      "change24hPct": 0.9902748333712519,
       "high24h": 83.74,
-      "low24h": 81.2,
-      "volume24h": 2179107511,
-      "marketCap": 47707355165,
-      "asOf": "2026-07-04T16:22:35.259Z"
+      "low24h": 81.37,
+      "volume24h": 2174980107,
+      "marketCap": 47752430429,
+      "asOf": "2026-07-04T16:57:41.914Z"
     },
     "DOGE": {
       "id": "dogecoin",
       "name": "Dogecoin",
-      "price": 0.07839,
-      "change24hPct": 2.4957925097227043,
-      "high24h": 0.078582,
-      "low24h": 0.076354,
-      "volume24h": 651162897,
-      "marketCap": 12143359573,
-      "asOf": "2026-07-04T16:22:35.514Z"
+      "price": 0.078478,
+      "change24hPct": 2.7307513686063625,
+      "high24h": 0.078673,
+      "low24h": 0.076392,
+      "volume24h": 655612729,
+      "marketCap": 12161029821,
+      "asOf": "2026-07-04T16:57:44.927Z"
     },
     "TRX": {
       "id": "tron",
       "name": "TRON",
-      "price": 0.325436,
-      "change24hPct": 1.5966075256956531,
+      "price": 0.325791,
+      "change24hPct": 1.7814706298459235,
       "high24h": 0.326156,
-      "low24h": 0.320083,
-      "volume24h": 380023397,
-      "marketCap": 30867780635,
-      "asOf": "2026-07-04T16:22:33.799Z"
+      "low24h": 0.320088,
+      "volume24h": 377552446,
+      "marketCap": 30903158542,
+      "asOf": "2026-07-04T16:57:49.392Z"
     },
     "HYPE": {
       "id": "hyperliquid",
       "name": "Hyperliquid",
-      "price": 70.59,
-      "change24hPct": 0.743210958546483,
+      "price": 70.44,
+      "change24hPct": 1.0225331744634534,
       "high24h": 71.85,
-      "low24h": 69.58,
-      "volume24h": 414549440,
-      "marketCap": 15702813680,
-      "asOf": "2026-07-04T16:22:35.766Z"
+      "low24h": 69.73,
+      "volume24h": 406034936,
+      "marketCap": 15674325347,
+      "asOf": "2026-07-04T16:57:40.629Z"
     }
   },
   "errors": []
