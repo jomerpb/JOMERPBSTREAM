@@ -686,11 +686,11 @@
 
   <div id="tp-crypto-view" style="display:none;">
   <div class="tp-refresh-row">
-    <button class="tp-refresh-btn" id="tc-refresh-btn" onclick="tcDemoRefresh()">
+    <button class="tp-refresh-btn" id="tc-refresh-btn" onclick="tcTriggerRefresh()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
       Fetch Live Data
     </button>
-    <div class="tp-refresh-status" id="tc-refresh-status">Demo data</div>
+    <div class="tp-refresh-status" id="tc-refresh-status">Loading live crypto data…</div>
   </div>
 
   <div class="tp-gainers">
@@ -780,8 +780,13 @@
 
   <div class="tp-summary-card" id="tc-report-card" style="display:none;">
     <div class="tp-summary-row tp-summary-row-bottomline">
-      <span class="tp-summary-tag REPORT" id="tc-report-tag">ENGINE REPORT CARD</span>
-      <span class="tp-summary-text" id="tc-report-text">Demo mode — the crypto backtest engine isn't wired yet. This card mirrors the Stocks Report layout and will show win-rate and signal-accuracy stats once live crypto data is connected.</span>
+      <button class="tp-refresh-btn" id="tc-backtest-btn" onclick="tcTriggerBacktest()" style="margin-bottom:10px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Report Card
+      </button>
+      <div class="tp-backtest-status" id="tc-backtest-status"></div>
+      <span class="tp-summary-tag REPORT" id="tc-report-tag" onclick="tcToggleBacktestBody()" style="cursor:pointer;">ENGINE REPORT CARD ▾</span>
+      <span class="tp-summary-text" id="tc-report-text">Loading report card…</span>
     </div>
   </div>
 
@@ -823,7 +828,7 @@
     <div class="tp-stat-row"><span>SMA 50</span><span id="tc-stat-sma50">—</span></div>
   </div>
 
-  <div class="tp-disclaimer" id="tc-disclaimer">DEMO DATA — prices seeded from a real market snapshot (Jul 2026) but candles are simulated, not live crypto feeds. Layout preview only; live data pipeline to follow. Not financial advice.</div>
+  <div class="tp-disclaimer" id="tc-disclaimer">Loading live crypto data… Prices and history come from the CoinGecko API. Signals are for decision support only; verify current prices before trading. Not financial advice.</div>
   </div><!-- /tp-crypto-view -->
 </div><!-- /tp-inner -->
 </div>
