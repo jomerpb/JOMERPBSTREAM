@@ -1111,7 +1111,7 @@ var tpGainersMode = 'current';
 function tpSetGainersMode(mode){
   if(tpGainersMode === mode) return;
   tpGainersMode = mode;
-  document.querySelectorAll('.tp-gainers-tab').forEach(function(b){
+  document.querySelectorAll('#tp-stocks-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
     b.classList.toggle('active', b.dataset.mode === mode);
   });
   tpRenderTopGainers();
