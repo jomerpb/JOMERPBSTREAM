@@ -1097,6 +1097,7 @@ var tpMarketMode = 'stocks';
 function tpSetMarket(mode){
   if(tpMarketMode === mode) return;
   tpMarketMode = mode;
+  try{ localStorage.setItem('tpMarketMode', mode); }catch(e){}
   document.querySelectorAll('#tp-market-seg .tp-gainers-tab').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-market') === mode);
   });
@@ -3158,4 +3159,8 @@ function tcRenderChart(series){
 
 
 // ═══════════ APP INIT (runs last; scripts are deferred in document order) ═══════════
+// Restore last-viewed Trade market (stocks/crypto) so a refresh stays on the same view
+try{
+  if(localStorage.getItem('tpMarketMode') === 'crypto') tpSetMarket('crypto');
+}catch(e){}
 initFromHash();
