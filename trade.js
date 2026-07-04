@@ -2443,7 +2443,13 @@ function tpUpdateRangeAndStats(refSeries, sig, liveQuote){
   const high = (liveQuote && liveQuote.high != null) ? liveQuote.high : last.high;
   const low = (liveQuote && liveQuote.low != null) ? liveQuote.low : last.low;
   const close = (liveQuote && liveQuote.last != null) ? liveQuote.last : last.close;
-  const volume = (liveQuote && liveQuote.volume != null) ? liveQuote.volume : last.volume;
+  // last.volume is peso VALUE, not a share count (see the history-loader
+  // comment above tpMergeLiveBar: volume:d.value). Only liveQuote.volume
+  // is ever a real share count. Never re-multiply last.volume by price
+  // or label it "shares" -- that double-counts pesos as if they were shares.
+  const liveValue  = (liveQuote && liveQuote.value  != null) ? liveQuote.value  : null;
+  const liveShares = (liveQuote && liveQuote.volume != null) ? liveQuote.volume : null;
+  const pesoValue  = liveValue != null ? liveValue : (last.volume || 0);
 
   document.getElementById('tp-range-low').textContent = low.toFixed(2);
   document.getElementById('tp-range-high').textContent = high.toFixed(2);
@@ -2454,7 +2460,8 @@ function tpUpdateRangeAndStats(refSeries, sig, liveQuote){
   document.getElementById('tp-stat-open').textContent = '₱'+open.toFixed(2);
   document.getElementById('tp-stat-high').textContent = '₱'+high.toFixed(2);
   document.getElementById('tp-stat-low').textContent = '₱'+low.toFixed(2);
-  document.getElementById('tp-stat-vol').textContent = tpFmtPeso(volume*close) + '  ·  ' + tpFmtNum(volume) + ' shares';
+  document.getElementById('tp-stat-vol').textContent =
+    tpFmtPeso(pesoValue) + (liveShares != null ? '  ·  ' + tpFmtNum(liveShares) + ' shares' : '');
   document.getElementById('tp-stat-sma20').textContent = sig.sma20!==null ? '₱'+sig.sma20 : '—';
   document.getElementById('tp-stat-sma50').textContent = sig.sma50!==null ? '₱'+sig.sma50 : '—';
 
