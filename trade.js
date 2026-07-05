@@ -2852,6 +2852,13 @@ const TC_COINS = [
 ];
 
 var tcLiveQuotes = {};        // sym -> {price, change24hPct, high24h, low24h, volume24h, marketCap, asOf}
+// Timestamp (client Date.now()) of the last successful DIRECT price refresh
+// (straight from CoinGecko, bypassing the GitHub Actions pipeline entirely).
+// Kept separate from CRYPTO_HISTORY_STATUS's timestamp so the status line
+// can show price-freshness and signal-freshness as two distinct facts.
+var tcLastPriceRefreshAt = null;
+var TC_PRICE_REFRESH_MS = 5*60*1000; // 5 min — see quota math discussed with the user
+var tcPriceRefreshTimer = null;
 var tcLiveSeries = {};        // sym -> [{date,open,high,low,close,volume,real}, ...] ascending
 var CRYPTO_QUOTES_STATUS = {loaded:false, source:'no live data yet — tap Fetch Live Data', error:null};
 var CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetch Live Data', error:null};
@@ -2859,7 +2866,13 @@ var CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetc
 var tcSeriesCache = {};       // memoized merged-with-live series per symbol (invalidated on reload)
 var tcCurrentSym = null;
 var tcCurrentTF = '3M';
-var tcGainersModeVal = 'current';
+// Restored from localStorage so the Gainers/Bullish choice survives a page
+// reload — previously this always reset to 'current' on refresh, which is
+// why the Bullish filter kept silently reverting to Gainers.
+var tcGainersModeVal = (function(){
+  try { return localStorage.getItem('tc_gainers_mode') === 'bullish' ? 'bullish' : 'current'; }
+  catch(e){ return 'current'; }
+})();
 var tcInited = false;
 
 function tcFmtPHP(n){
@@ -2887,18 +2900,99 @@ function tcFindCoin(sym){ return TC_COINS.find(function(c){return c.sym===sym;})
 // Mirrors loadPseLiveQuotes()'s "Data Updated ..." status line — called after
 // each loader resolves so tc-refresh-status never sits stuck on its initial
 // placeholder text once real data (or a real error) comes back.
+// Now shows Price and Signals freshness as two distinct facts, since they
+// come from two different pipelines with different speeds: Price is the
+// direct CoinGecko refresh (tcRefreshLivePriceDirect, every 5 min / on tab
+// open); Signals still depend on the GitHub Actions history scraper. Before
+// this split, one combined timestamp made it look like the BUY/SELL/HOLD
+// badges were as fresh as the price, which isn't true — they're computed
+// from crypto-history.json, refreshed only when Fetch Live Data completes.
 function tcUpdateRefreshStatusDisplay(){
   var statusEl = document.getElementById('tc-refresh-status');
   if (!statusEl) return;
-  if (CRYPTO_QUOTES_STATUS.loaded && CRYPTO_HISTORY_STATUS.loaded) {
-    var ts = CRYPTO_QUOTES_STATUS.source.match(/updated ([^)]+)\)/);
-    statusEl.textContent = ts ? 'Data Updated ' + tpFormatPH(ts[1]) : 'Data Updated';
-  } else if (CRYPTO_QUOTES_STATUS.error || CRYPTO_HISTORY_STATUS.error) {
-    statusEl.textContent = 'Data unavailable — ' + (CRYPTO_QUOTES_STATUS.error || CRYPTO_HISTORY_STATUS.error);
+
+  var priceText;
+  if (tcLastPriceRefreshAt) {
+    priceText = 'Price: live \u2014 ' + tpFormatPH(tcLastPriceRefreshAt);
+  } else if (CRYPTO_QUOTES_STATUS.loaded) {
+    var qts = CRYPTO_QUOTES_STATUS.source.match(/updated ([^)]+)\)/);
+    priceText = qts ? 'Price: ' + tpFormatPH(qts[1]) : 'Price: loaded';
+  } else if (CRYPTO_QUOTES_STATUS.error) {
+    priceText = 'Price: unavailable';
   } else {
-    statusEl.textContent = 'No live data yet — tap Fetch Live Data above';
+    priceText = 'Price: not loaded yet';
+  }
+
+  var signalsText;
+  if (CRYPTO_HISTORY_STATUS.loaded) {
+    var hts = CRYPTO_HISTORY_STATUS.source.match(/updated ([^)]+)\)/);
+    signalsText = hts ? 'Signals: updated ' + tpFormatPH(hts[1]) : 'Signals: updated';
+  } else if (CRYPTO_HISTORY_STATUS.error) {
+    signalsText = 'Signals: unavailable \u2014 ' + CRYPTO_HISTORY_STATUS.error;
+  } else {
+    signalsText = 'Signals: tap Fetch Live Data above';
+  }
+
+  statusEl.textContent = priceText + '  \u00b7  ' + signalsText;
+}
+// ══════════════════════════════════════════════════════════════
+// DIRECT LIVE PRICE REFRESH — bypasses the GitHub Actions pipeline
+// entirely. Calls CoinGecko's /coins/markets straight from the browser:
+// one batched call for all tracked coins, no PAT, no workflow_dispatch,
+// no raw.githubusercontent CDN lag. Only touches price + 24h change —
+// history/signals (RSI, SMA, ATR) still come from loadCryptoHistory()
+// via the scraper, unaffected by this.
+// Uses the keyless public tier deliberately: at a 5-min interval this is
+// ~1 call/5min, far under even the 5-15 calls/min keyless limit, so no
+// API key needs to be exposed in client-side JS for this feature.
+// ══════════════════════════════════════════════════════════════
+async function tcRefreshLivePriceDirect(){
+  try {
+    var ids = TC_COINS.map(function(c){ return c.id; }).join(',');
+    var url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=php&ids=' + ids + '&price_change_percentage=24h';
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    if (!Array.isArray(data)) throw new Error('unexpected response shape');
+    var byId = {};
+    data.forEach(function(row){ if (row && row.id) byId[row.id] = row; });
+    TC_COINS.forEach(function(c){
+      var row = byId[c.id];
+      if (!row || row.current_price == null) return; // leave existing quote in place on partial data
+      tcLiveQuotes[c.sym] = {
+        id: c.id, name: c.name,
+        price: row.current_price,
+        change24hPct: row.price_change_percentage_24h_in_currency != null
+          ? row.price_change_percentage_24h_in_currency : row.price_change_percentage_24h,
+        high24h: row.high_24h, low24h: row.low_24h,
+        volume24h: row.total_volume, marketCap: row.market_cap,
+        asOf: row.last_updated
+      };
+    });
+    tcLastPriceRefreshAt = Date.now();
+    tcUpdateRefreshStatusDisplay();
+    if (tcInited) { tcRenderTop(); tcRenderWatchlist(); if (tcCurrentSym) tcRenderAll(tcCurrentSym); }
+  } catch(e) {
+    // Silent failure by design — this is a background convenience refresh.
+    // The GitHub-Actions-backed "Fetch Live Data" button remains the
+    // reliable, user-visible path if this quietly fails (offline, CoinGecko
+    // hiccup, etc.), so we don't want an error banner every 5 minutes.
+    console.warn('Direct live price refresh failed (will retry next interval):', e.message);
   }
 }
+function tcStartLivePriceAutoRefresh(){
+  tcRefreshLivePriceDirect(); // immediate fetch the moment the Crypto tab opens / page loads
+  if (tcPriceRefreshTimer) clearInterval(tcPriceRefreshTimer);
+  tcPriceRefreshTimer = setInterval(function(){
+    if (document.hidden) return; // paused while tab is backgrounded — saves quota
+    tcRefreshLivePriceDirect();
+  }, TC_PRICE_REFRESH_MS);
+}
+document.addEventListener('visibilitychange', function(){
+  // Catch up immediately when the person comes back, rather than waiting
+  // up to 5 min for the next scheduled tick.
+  if (!document.hidden && tcInited) tcRefreshLivePriceDirect();
+});
 async function loadCryptoLiveQuotes(){
   var RAW_URL = 'https://raw.githubusercontent.com/' + TP_GH_OWNER + '/' + TP_GH_REPO + '/' + TP_GH_REF + '/crypto-live-quotes.json';
   try {
@@ -3284,6 +3378,7 @@ function tcTriggerLevels(sig){
 function tcSetGainersMode(mode){
   if(tcGainersModeVal === mode) return;
   tcGainersModeVal = mode;
+  try { localStorage.setItem('tc_gainers_mode', mode); } catch(e){}
   document.querySelectorAll('#tp-crypto-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-mode') === mode);
   });
@@ -3556,8 +3651,7 @@ async function tcVerifyFreshData(preGeneratedAt, verifyDeadline){
   await loadCryptoHistory();
   var isFresh = tcLastHistoryGeneratedAt && tcLastHistoryGeneratedAt !== preGeneratedAt;
   if (isFresh) {
-    tcFinishRefresh(null);
-    if(status) status.textContent = 'Updated \u2705 just now';
+    tcFinishRefresh(null); // loadCryptoHistory() already called tcUpdateRefreshStatusDisplay() above with the correct split Price/Signals text
     return;
   }
   if (Date.now() > verifyDeadline) {
@@ -3991,10 +4085,17 @@ function tcRenderAll(sym){
 function tcInit(){
   if(tcInited) return;
   tcInited = true;
+  // Sync the Gainers/Bullish toggle buttons to whatever mode was restored
+  // from localStorage — otherwise the buttons show "Gainers" active even
+  // when tcGainersModeVal actually restored as 'bullish'.
+  document.querySelectorAll('#tp-crypto-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-mode') === tcGainersModeVal);
+  });
   tcRenderDropdown('');
   tcRenderTop();
   tcRenderWatchlist();
   tcRenderAll('BTC');
+  tcStartLivePriceAutoRefresh();
 }
 (function(){
   var orig = tpSetMarket;
