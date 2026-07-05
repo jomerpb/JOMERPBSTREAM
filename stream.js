@@ -23,6 +23,9 @@ let tvPageState     = {sub:'popular',  region:'', page:1, hasMore:false};
 let moviePageState  = {sub:'popular',  page:1, hasMore:false};
 let searchState     = {q:'', type:'all', page:1, hasMore:false};
 
+// Similar Movies (player page) state
+let similarMoviesState = {list:[], shown:0, forId:null};
+
 // ═══════════════════════════════════════════
 // API HELPERS
 // ═══════════════════════════════════════════
@@ -141,6 +144,7 @@ window.addEventListener('popstate', async (e) => {
     updateServerButtons();
     document.querySelector('.bottom-nav').style.display='none';
     playStream(); updateEpNav();
+    loadSimilarMovies(state.item);
   }
 });
 
@@ -885,6 +889,79 @@ function renderRecRow(num, title, items) {
 }
 
 // ═══════════════════════════════════════════
+// SIMILAR MOVIES (player page, infinite scroll, sorted by rating)
+// ═══════════════════════════════════════════
+async function loadSimilarMovies(item) {
+  const section = document.getElementById('similar-movies-section');
+  if (!section) return;
+
+  if (!item || item.type !== 'movie') { section.style.display = 'none'; return; }
+
+  const id = item.tmdb_id || item.id;
+
+  // Already loaded for this movie — just make sure it's visible
+  if (similarMoviesState.forId === id && similarMoviesState.list.length) {
+    section.style.display = 'block';
+    document.getElementById('similar-movies-end').style.display =
+      similarMoviesState.shown >= similarMoviesState.list.length ? 'block' : 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  const grid = document.getElementById('similar-movies-grid');
+  const endMsg = document.getElementById('similar-movies-end');
+  grid.innerHTML = skRow(6);
+  endMsg.style.display = 'none';
+
+  try {
+    const first = await tmdb(`/movie/${id}/similar`, {page:1});
+    const totalPages = Math.min(first?.total_pages || 1, 5); // cap ~5 pages (100 movies) to limit API calls
+    const rest = [];
+    for (let p = 2; p <= totalPages; p++) rest.push(tmdb(`/movie/${id}/similar`, {page:p}));
+    const restData = await Promise.all(rest);
+
+    const seen = new Set();
+    const list = [first, ...restData]
+      .flatMap(d => d?.results || [])
+      .filter(m => m.id !== id && !seen.has(m.id) && seen.add(m.id))
+      .map(m => fromTMDB(m, 'movie'))
+      .sort((a,b) => (parseFloat(b.score)||0) - (parseFloat(a.score)||0));
+
+    similarMoviesState = {list, shown:0, forId:id};
+    grid.innerHTML = '';
+    if (!list.length) { section.style.display = 'none'; return; }
+    renderMoreSimilarMovies();
+  } catch {
+    grid.innerHTML = '';
+    section.style.display = 'none';
+  }
+}
+
+function renderMoreSimilarMovies() {
+  const grid = document.getElementById('similar-movies-grid');
+  const endMsg = document.getElementById('similar-movies-end');
+  if (!grid) return;
+  const {list, shown} = similarMoviesState;
+  const batch = list.slice(shown, shown + 12);
+  batch.forEach(item => grid.appendChild(buildGridCard(item)));
+  similarMoviesState.shown += batch.length;
+  endMsg.style.display = similarMoviesState.shown >= list.length ? 'block' : 'none';
+}
+
+const similarMoviesObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && similarMoviesState.shown < similarMoviesState.list.length) {
+      renderMoreSimilarMovies();
+    }
+  });
+}, {rootMargin:'200px'});
+
+(function attachSimilarMoviesObserver() {
+  const sentinel = document.getElementById('similar-movies-sentinel');
+  if (sentinel) similarMoviesObserver.observe(sentinel);
+})();
+
+// ═══════════════════════════════════════════
 // PLAYER
 // ═══════════════════════════════════════════
 function openPlayer(ep) {
@@ -921,6 +998,8 @@ function openPlayer(ep) {
   document.querySelectorAll('.ep-btn').forEach((b,i) => b.classList.toggle('active', i+1===ep));
   // Save to watch history
   saveToHistory(item, season, ep);
+  // Load similar movies (movies only)
+  loadSimilarMovies(item);
 }
 
 // ─── SERVER STATE ───
@@ -1499,6 +1578,7 @@ async function initFromHash() {
       document.getElementById('player-subtitle').textContent = isMovie?(item.year||''):`Episode ${currentEp}`;
       document.getElementById('player-lang-row').style.display = isAnime?'flex':'none';
       playStream(); updateEpNav();
+      loadSimilarMovies(item);
     } else { showPage('home-page'); setNav('home'); }
     return;
   }
