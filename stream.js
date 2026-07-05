@@ -89,6 +89,7 @@ function setNav(tab) {
 }
 
 function streamSeg(cat, el) {
+  localStorage.setItem('lastStreamSeg', cat);
   document.querySelectorAll('#stream-seg .seg-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('sec-anime').style.display  = (cat === 'anime')  ? '' : 'none';
@@ -1685,6 +1686,13 @@ async function initFromHash() {
   history.replaceState({page:'home-page'},'','#home');
   showPage('home-page'); setNav('home');
   loadHome();
+  // Restore whichever segment (Anime/TV/Movies) the user last had open, so a refresh doesn't bounce back to Anime
+  const savedSeg = localStorage.getItem('lastStreamSeg');
+  if (savedSeg && savedSeg !== 'anime') {
+    const idx = {anime:0, tv:1, movies:2}[savedSeg];
+    const btn = document.querySelectorAll('#stream-seg .seg-btn')[idx];
+    if (btn) streamSeg(savedSeg, btn);
+  }
 }
 
 // initFromHash moved below oracle div
