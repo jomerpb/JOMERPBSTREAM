@@ -2948,6 +2948,7 @@ async function loadCryptoHistory(){
       source: loadedCount>0 ? ('live ('+loadedCount+' coins, updated '+(data.generatedAt||'unknown')+')') : 'no coins in feed yet',
       error: stale ? 'data is stale (>3 days old)' : ((data.errors && data.errors.length) ? data.errors.join('; ') : null)
     };
+    if (data.generatedAt) tcLastHistoryGeneratedAt = data.generatedAt;
     console.log('Crypto history loaded:', CRYPTO_HISTORY_STATUS.source, CRYPTO_HISTORY_STATUS.error||'');
   } catch(e) {
     CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetch Live Data', error:e.message};
@@ -3504,6 +3505,12 @@ function tcSetView(view, el){
 // ══════════════════════════════════════════════════════════════
 var TC_GH_WORKFLOW = 'crypto-live-scraper.yml';
 var tcRefreshPollTimer = null;
+// Tracks the generatedAt timestamp from the last-loaded crypto-history.json.
+// Used to detect when raw.githubusercontent.com is still serving stale/cached
+// content after the scraper's commit has already landed (confirmed bug —
+// GitHub's own CDN has documented propagation lag independent of the
+// ?nocache= query-busting already used below).
+var tcLastHistoryGeneratedAt = null;
 
 function tcFinishRefresh(message){
   if(tcRefreshPollTimer){ clearTimeout(tcRefreshPollTimer); tcRefreshPollTimer=null; }
@@ -3512,7 +3519,7 @@ function tcFinishRefresh(message){
   if(btn){ btn.disabled = false; btn.classList.remove('tp-refresh-spinning'); }
   if(status && message != null) status.textContent = message;
 }
-async function tcPollRunStatus(runId, ghHeaders, deadline){
+async function tcPollRunStatus(runId, ghHeaders, deadline, preGeneratedAt){
   var status = document.getElementById('tc-refresh-status');
   if (Date.now() > deadline) { tcFinishRefresh('Still running — check the Actions tab on GitHub for status.'); return; }
   try {
@@ -3521,22 +3528,46 @@ async function tcPollRunStatus(runId, ghHeaders, deadline){
     var run = await resp.json();
     if (run.status === 'completed') {
       if (run.conclusion === 'success') {
-        await loadCryptoLiveQuotes();
-        await loadCryptoHistory();
-        tcFinishRefresh(null);
-        if(status) status.textContent = 'Updated \u2705 just now';
+        // Don't trust the first fetch: raw.githubusercontent.com can still
+        // serve the pre-refresh cached copy for a bit after the commit
+        // lands. Verify generatedAt actually advanced before saying "Updated".
+        if(status) status.textContent = 'Run finished \u2014 confirming fresh data...';
+        tcVerifyFreshData(preGeneratedAt, Date.now() + 3*60*1000);
       } else {
         tcFinishRefresh('Run finished with issues \u274c (' + run.conclusion + ') \u2014 check Actions tab.');
       }
       return;
     }
     if(status) status.textContent = 'Workflow ' + run.status + '... (' + Math.round((deadline-Date.now())/1000) + 's left before we stop watching)';
-    tcRefreshPollTimer = setTimeout(function(){ tcPollRunStatus(runId, ghHeaders, deadline); }, 5000);
+    tcRefreshPollTimer = setTimeout(function(){ tcPollRunStatus(runId, ghHeaders, deadline, preGeneratedAt); }, 5000);
   } catch(e) {
     tcFinishRefresh('Network error while checking status \u274c \u2014 ' + e.message);
   }
 }
-async function tcFindNewRun(ghHeaders, sinceMs, deadline){
+// Re-fetches crypto-live-quotes.json / crypto-history.json and checks
+// whether generatedAt actually moved past what was loaded before this
+// refresh started. If raw.githubusercontent.com is still handing back the
+// stale cached copy, retries every 6s until it advances or verifyDeadline
+// is hit. This is what makes "Updated \u2705" mean the data is actually new,
+// not just that the GitHub Actions run finished.
+async function tcVerifyFreshData(preGeneratedAt, verifyDeadline){
+  var status = document.getElementById('tc-refresh-status');
+  await loadCryptoLiveQuotes();
+  await loadCryptoHistory();
+  var isFresh = tcLastHistoryGeneratedAt && tcLastHistoryGeneratedAt !== preGeneratedAt;
+  if (isFresh) {
+    tcFinishRefresh(null);
+    if(status) status.textContent = 'Updated \u2705 just now';
+    return;
+  }
+  if (Date.now() > verifyDeadline) {
+    tcFinishRefresh('Run finished, but the data still looks old \u274c \u2014 GitHub\u2019s CDN can lag a bit after a push. Try Fetch Live Data again in a minute.');
+    return;
+  }
+  if(status) status.textContent = 'Run finished \u2014 waiting for GitHub\u2019s CDN to catch up...';
+  tcRefreshPollTimer = setTimeout(function(){ tcVerifyFreshData(preGeneratedAt, verifyDeadline); }, 6000);
+}
+async function tcFindNewRun(ghHeaders, sinceMs, deadline, preGeneratedAt){
   var status = document.getElementById('tc-refresh-status');
   if (Date.now() > deadline) { tcFinishRefresh('Triggered, but couldn\'t confirm it started \u2014 check the Actions tab.'); return; }
   try {
@@ -3547,10 +3578,10 @@ async function tcFindNewRun(ghHeaders, sinceMs, deadline){
     var match = runs.find(function(r){ return new Date(r.created_at).getTime() >= sinceMs; });
     if (match) {
       if(status) status.textContent = 'Run started \u2014 watching for completion...';
-      tcPollRunStatus(match.id, ghHeaders, deadline);
+      tcPollRunStatus(match.id, ghHeaders, deadline, preGeneratedAt);
     } else {
       if(status) status.textContent = 'Waiting for run to appear...';
-      tcRefreshPollTimer = setTimeout(function(){ tcFindNewRun(ghHeaders, sinceMs, deadline); }, 4000);
+      tcRefreshPollTimer = setTimeout(function(){ tcFindNewRun(ghHeaders, sinceMs, deadline, preGeneratedAt); }, 4000);
     }
   } catch(e) {
     tcFinishRefresh('Network error while locating run \u274c \u2014 ' + e.message);
@@ -3568,13 +3599,14 @@ async function tcTriggerRefresh(){
 
   var ghHeaders = {'Accept':'application/vnd.github+json', 'Authorization':'Bearer '+token, 'X-GitHub-Api-Version':'2022-11-28'};
   var dispatchTime = Date.now();
+  var preGeneratedAt = tcLastHistoryGeneratedAt; // snapshot before this refresh, to detect stale CDN responses later
   try {
     var resp = await fetch('https://api.github.com/repos/'+TP_GH_OWNER+'/'+TP_GH_REPO+'/actions/workflows/'+TC_GH_WORKFLOW+'/dispatches',
       {method:'POST', headers:ghHeaders, body: JSON.stringify({ref: TP_GH_REF})});
     if (resp.status === 204) {
       status.textContent = 'Triggered \u2705 \u2014 locating the run... (usually finishes in 2-4 min)';
       var deadline = Date.now() + 8*60*1000; // 8 min safety cap — 8 sequential coin fetches with rate-limit spacing
-      tcRefreshPollTimer = setTimeout(function(){ tcFindNewRun(ghHeaders, dispatchTime-5000, deadline); }, 2000);
+      tcRefreshPollTimer = setTimeout(function(){ tcFindNewRun(ghHeaders, dispatchTime-5000, deadline, preGeneratedAt); }, 2000);
     } else if (resp.status === 401) {
       sessionStorage.removeItem('tp_gh_token');
       tcFinishRefresh('Token invalid/expired \u274c \u2014 tap again to re-enter.');
