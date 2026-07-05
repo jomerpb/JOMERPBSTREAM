@@ -1282,9 +1282,7 @@ function resetPageFilter(page) {
     const el = document.getElementById(`${prefix}-${g}`);
     if (el) el.querySelectorAll('.chip').forEach((c,i) => c.classList.toggle('active', i===0));
   });
-  const kw = document.getElementById(`${prefix}-keywords-input`);
-  if (kw) kw.value = '';
-  const matched = document.getElementById(`${prefix}-keywords-matched`);
+  const matched = document.getElementById(`${prefix}-tag-matched`);
   if (matched) { matched.textContent = ''; matched.style.display = 'none'; }
 }
 
@@ -1366,8 +1364,8 @@ async function applyTVFilter(page=1) {
     const yearVal = getChipVal('tf-year');
     const rating  = getChipVal('tf-rating');
     const status  = getChipVal('tf-status');
+    const tagVal  = getChipVal('tf-tag');
     const yr      = getYearRange(yearVal);
-    const keywordsText = document.getElementById('tf-keywords-input')?.value || '';
     tvFilterStatus = status;
 
     const url = new URL(`${TMDB_BASE}/discover/tv`);
@@ -1387,18 +1385,18 @@ async function applyTVFilter(page=1) {
     if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
     if (status)  url.searchParams.set('with_status', status);
 
-    const keywordIds = await resolveKeywordIds(keywordsText);
-    const matchedEl = document.getElementById('tf-keywords-matched');
+    const keywordIds = await resolveKeywordIds(tagVal);
+    const matchedEl = document.getElementById('tf-tag-matched');
     if (keywordIds.ids) {
       url.searchParams.set('with_keywords', keywordIds.ids);
-      // Niche keyword-tagged content (BL, reverse harem, etc.) rarely clears a high vote-count floor —
+      // Niche tagged content (BL, reverse harem, etc.) rarely clears a high vote-count floor —
       // drop it and sort by popularity instead, same treatment as the Country filter above.
       url.searchParams.set('sort_by', 'popularity.desc');
       url.searchParams.set('vote_count.gte', '0');
-      if (matchedEl) { matchedEl.textContent = 'Matched tags: ' + keywordIds.names.join(', '); matchedEl.style.display = 'block'; }
+      if (matchedEl) { matchedEl.textContent = 'Matched TMDB tags: ' + keywordIds.names.join(', '); matchedEl.style.display = 'block'; }
     } else if (matchedEl) {
-      matchedEl.textContent = keywordsText ? 'No matching TMDB tag found for: ' + keywordsText : '';
-      matchedEl.style.display = keywordsText ? 'block' : 'none';
+      matchedEl.textContent = tagVal ? 'No matching TMDB tag found for: ' + tagVal : '';
+      matchedEl.style.display = tagVal ? 'block' : 'none';
     }
 
     // Save base URL and status for pagination
@@ -1439,8 +1437,8 @@ async function applyMovieFilter(page=1) {
     const yearVal = getChipVal('mf-year');
     const rating  = getChipVal('mf-rating');
     const status  = getChipVal('mf-status');
+    const tagVal  = getChipVal('mf-tag');
     const yr      = getYearRange(yearVal);
-    const keywordsText = document.getElementById('mf-keywords-input')?.value || '';
 
     const url = new URL(`${TMDB_BASE}/discover/movie`);
     url.searchParams.set('api_key', TMDB_KEY);
@@ -1460,17 +1458,17 @@ async function applyMovieFilter(page=1) {
     if (status === 'upcoming') url.searchParams.set('primary_release_date.gte', new Date().toISOString().slice(0,10));
     else if (status === 'released') url.searchParams.set('primary_release_date.lte', new Date().toISOString().slice(0,10));
 
-    const keywordIds = await resolveKeywordIds(keywordsText);
-    const matchedElM = document.getElementById('mf-keywords-matched');
+    const keywordIds = await resolveKeywordIds(tagVal);
+    const matchedElM = document.getElementById('mf-tag-matched');
     if (keywordIds.ids) {
       url.searchParams.set('with_keywords', keywordIds.ids);
-      // Same fix as TV: niche keyword content rarely clears a high vote-count floor
+      // Same fix as TV: niche tagged content rarely clears a high vote-count floor
       url.searchParams.set('sort_by', 'popularity.desc');
       url.searchParams.set('vote_count.gte', '0');
-      if (matchedElM) { matchedElM.textContent = 'Matched tags: ' + keywordIds.names.join(', '); matchedElM.style.display = 'block'; }
+      if (matchedElM) { matchedElM.textContent = 'Matched TMDB tags: ' + keywordIds.names.join(', '); matchedElM.style.display = 'block'; }
     } else if (matchedElM) {
-      matchedElM.textContent = keywordsText ? 'No matching TMDB tag found for: ' + keywordsText : '';
-      matchedElM.style.display = keywordsText ? 'block' : 'none';
+      matchedElM.textContent = tagVal ? 'No matching TMDB tag found for: ' + tagVal : '';
+      matchedElM.style.display = tagVal ? 'block' : 'none';
     }
 
     movieFilterUrl = url.toString();
