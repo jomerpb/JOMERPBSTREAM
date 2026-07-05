@@ -1383,7 +1383,13 @@ async function applyTVFilter(page=1) {
     if (status)  url.searchParams.set('with_status', status);
 
     const keywordIds = await resolveKeywordIds(keywordsText);
-    if (keywordIds) url.searchParams.set('with_keywords', keywordIds);
+    if (keywordIds) {
+      url.searchParams.set('with_keywords', keywordIds);
+      // Niche keyword-tagged content (BL, reverse harem, etc.) rarely clears a high vote-count floor —
+      // drop it and sort by popularity instead, same treatment as the Country filter above.
+      url.searchParams.set('sort_by', 'popularity.desc');
+      url.searchParams.set('vote_count.gte', '0');
+    }
 
     // Save base URL and status for pagination
     tvFilterUrl = url.toString();
@@ -1445,7 +1451,12 @@ async function applyMovieFilter(page=1) {
     else if (status === 'released') url.searchParams.set('primary_release_date.lte', new Date().toISOString().slice(0,10));
 
     const keywordIds = await resolveKeywordIds(keywordsText);
-    if (keywordIds) url.searchParams.set('with_keywords', keywordIds);
+    if (keywordIds) {
+      url.searchParams.set('with_keywords', keywordIds);
+      // Same fix as TV: niche keyword content rarely clears a high vote-count floor
+      url.searchParams.set('sort_by', 'popularity.desc');
+      url.searchParams.set('vote_count.gte', '0');
+    }
 
     movieFilterUrl = url.toString();
   }
