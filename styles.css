@@ -946,7 +946,7 @@
    own space next to the button (stays on the same row, just grows
    taller if needed) instead of getting cut off with an ellipsis. The
    row's flex-wrap:wrap (above) is a fallback for extreme cases only. */
-#trade-page #tc-refresh-status{font-size:9.5px;white-space:normal;overflow:visible;text-overflow:clip;flex:1 1 auto;min-width:120px;text-align:left;margin-left:8px;}
+#trade-page #tc-refresh-status{font-size:9.5px;white-space:normal;overflow:visible;text-overflow:clip;flex:1 1 auto;min-width:120px;text-align:right;margin-left:auto;}
 /* Bulleted reasoning */
 #trade-page .tp-summary-bullets{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:7px;list-style:disc;}
 #trade-page .tp-summary-bullets li{color:var(--text);font-size:12.5px;line-height:1.55;}
