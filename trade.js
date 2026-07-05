@@ -2913,7 +2913,7 @@ function tcUpdateRefreshStatusDisplay(){
 
   var priceText;
   if (tcLastPriceRefreshAt) {
-    priceText = 'Price: live \u2014 ' + tpFormatPH(tcLastPriceRefreshAt);
+    priceText = 'Price: ' + tpFormatPH(tcLastPriceRefreshAt);
   } else if (CRYPTO_QUOTES_STATUS.loaded) {
     var qts = CRYPTO_QUOTES_STATUS.source.match(/updated ([^)]+)\)/);
     priceText = qts ? 'Price: ' + tpFormatPH(qts[1]) : 'Price: loaded';
@@ -2926,14 +2926,14 @@ function tcUpdateRefreshStatusDisplay(){
   var signalsText;
   if (CRYPTO_HISTORY_STATUS.loaded) {
     var hts = CRYPTO_HISTORY_STATUS.source.match(/updated ([^)]+)\)/);
-    signalsText = hts ? 'Signals: updated ' + tpFormatPH(hts[1]) : 'Signals: updated';
+    signalsText = hts ? 'Signals: ' + tpFormatPH(hts[1]).replace(' PH','') : 'Signals: updated';
   } else if (CRYPTO_HISTORY_STATUS.error) {
     signalsText = 'Signals: unavailable \u2014 ' + CRYPTO_HISTORY_STATUS.error;
   } else {
     signalsText = 'Signals: tap Fetch Live Data above';
   }
 
-  statusEl.textContent = priceText + '  \u00b7  ' + signalsText;
+  statusEl.textContent = priceText + ' \u00b7 ' + signalsText;
 }
 // ══════════════════════════════════════════════════════════════
 // DIRECT LIVE PRICE REFRESH — bypasses the GitHub Actions pipeline

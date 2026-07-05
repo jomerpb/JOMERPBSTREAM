@@ -932,7 +932,7 @@
 #trade-page .tp-gainer-chg.down{color:var(--red);}
 #trade-page .tp-gainer-empty{padding:10px 0;font-size:12px;color:var(--muted);text-align:center;}
 #trade-page .tp-disclaimer{font-size:10px;color:var(--muted);margin-top:14px;line-height:1.5;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border);}
-#trade-page .tp-refresh-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:nowrap;}
+#trade-page .tp-refresh-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
 #trade-page .tp-refresh-btn{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:9px;font-size:11.5px;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;flex-shrink:0;white-space:nowrap;}
 #trade-page .tp-refresh-btn:active{background:var(--card);}
 #trade-page .tp-refresh-btn:disabled{opacity:0.55;cursor:default;}
@@ -940,6 +940,13 @@
 #trade-page .tp-refresh-btn.tp-refresh-spinning svg{animation:tp-spin 0.9s linear infinite;}
 @keyframes tp-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 #trade-page .tp-refresh-status{font-size:10.5px;color:var(--muted);line-height:1.4;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;margin-left:auto;}
+/* Crypto's status line carries two facts (Price + Signals) so it runs
+   longer than the Stocks tab's single "Data Updated ..." message.
+   Smaller font + white-space:normal lets it wrap internally within its
+   own space next to the button (stays on the same row, just grows
+   taller if needed) instead of getting cut off with an ellipsis. The
+   row's flex-wrap:wrap (above) is a fallback for extreme cases only. */
+#trade-page #tc-refresh-status{font-size:9.5px;white-space:normal;overflow:visible;text-overflow:clip;flex:1 1 auto;min-width:120px;text-align:left;margin-left:8px;}
 /* Bulleted reasoning */
 #trade-page .tp-summary-bullets{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:7px;list-style:disc;}
 #trade-page .tp-summary-bullets li{color:var(--text);font-size:12.5px;line-height:1.55;}
