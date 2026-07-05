@@ -144,7 +144,7 @@ window.addEventListener('popstate', async (e) => {
     updateServerButtons();
     document.querySelector('.bottom-nav').style.display='none';
     playStream(); updateEpNav();
-    loadSimilarMovies(state.item);
+    loadSimilarItems(state.item);
   }
 });
 
@@ -889,18 +889,19 @@ function renderRecRow(num, title, items) {
 }
 
 // ═══════════════════════════════════════════
-// SIMILAR MOVIES (player page, infinite scroll, sorted by rating)
+// SIMILAR ITEMS (player page, infinite scroll, sorted by rating) — movies, tv, anime
 // ═══════════════════════════════════════════
-async function loadSimilarMovies(item) {
+async function loadSimilarItems(item) {
   const section = document.getElementById('similar-movies-section');
   if (!section) return;
 
-  if (!item || item.type !== 'movie') { section.style.display = 'none'; return; }
+  if (!item || !['movie','tv','anime'].includes(item.type)) { section.style.display = 'none'; return; }
 
-  const id = item.tmdb_id || item.id;
+  const selfId = item.al_id || item.tmdb_id || item.id;
+  const key = `${item.type}-${selfId}`;
 
-  // Already loaded for this movie — just make sure it's visible
-  if (similarMoviesState.forId === id && similarMoviesState.list.length) {
+  // Already loaded for this title — just make sure it's visible
+  if (similarMoviesState.forId === key && similarMoviesState.list.length) {
     section.style.display = 'block';
     document.getElementById('similar-movies-end').style.display =
       similarMoviesState.shown >= similarMoviesState.list.length ? 'block' : 'none';
@@ -908,36 +909,57 @@ async function loadSimilarMovies(item) {
   }
 
   section.style.display = 'block';
+  document.getElementById('similar-title').textContent =
+    item.type === 'anime' ? '✨ Similar Anime' : item.type === 'tv' ? '📺 Similar Series' : '🎬 Similar Movies';
   const grid = document.getElementById('similar-movies-grid');
   const endMsg = document.getElementById('similar-movies-end');
   grid.innerHTML = skRow(6);
   endMsg.style.display = 'none';
 
   try {
-    const first = await tmdb(`/movie/${id}/similar`, {page:1});
-    const totalPages = Math.min(first?.total_pages || 1, 5); // cap ~5 pages (100 movies) to limit API calls
-    const rest = [];
-    for (let p = 2; p <= totalPages; p++) rest.push(tmdb(`/movie/${id}/similar`, {page:p}));
-    const restData = await Promise.all(rest);
+    let combined = [];
+
+    if (item.type === 'anime') {
+      const Q = `query($id:Int,$page:Int){Media(id:$id){recommendations(page:$page,perPage:25,sort:RATING_DESC){pageInfo{hasNextPage}nodes{mediaRecommendation{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}}}`;
+      for (let p = 1; p <= 3; p++) {
+        const r = await al(Q, {id: item.al_id, page: p});
+        const conn = r?.data?.Media?.recommendations;
+        const nodes = (conn?.nodes || []).map(n => n.mediaRecommendation).filter(Boolean);
+        combined.push(...nodes.map(m => ({...fromAL(m), al_id: m.id})));
+        if (!conn?.pageInfo?.hasNextPage) break;
+      }
+    } else {
+      const endpoint = item.type; // 'movie' or 'tv'
+      const rawId = item.tmdb_id || item.id;
+      const first = await tmdb(`/${endpoint}/${rawId}/similar`, {page:1});
+      const totalPages = Math.min(first?.total_pages || 1, 5); // cap ~5 pages (~100 titles)
+      const rest = [];
+      for (let p = 2; p <= totalPages; p++) rest.push(tmdb(`/${endpoint}/${rawId}/similar`, {page:p}));
+      const restData = await Promise.all(rest);
+      combined = [first, ...restData].flatMap(d => d?.results || []).map(m => fromTMDB(m, item.type));
+    }
 
     const seen = new Set();
-    const list = [first, ...restData]
-      .flatMap(d => d?.results || [])
-      .filter(m => m.id !== id && !seen.has(m.id) && seen.add(m.id))
-      .map(m => fromTMDB(m, 'movie'))
+    const list = combined
+      .filter(m => {
+        const mid = m.al_id || m.tmdb_id || m.id;
+        if (mid === selfId || seen.has(mid)) return false;
+        seen.add(mid);
+        return true;
+      })
       .sort((a,b) => (parseFloat(b.score)||0) - (parseFloat(a.score)||0));
 
-    similarMoviesState = {list, shown:0, forId:id};
+    similarMoviesState = {list, shown:0, forId:key};
     grid.innerHTML = '';
     if (!list.length) { section.style.display = 'none'; return; }
-    renderMoreSimilarMovies();
+    renderMoreSimilarItems();
   } catch {
     grid.innerHTML = '';
     section.style.display = 'none';
   }
 }
 
-function renderMoreSimilarMovies() {
+function renderMoreSimilarItems() {
   const grid = document.getElementById('similar-movies-grid');
   const endMsg = document.getElementById('similar-movies-end');
   if (!grid) return;
@@ -951,7 +973,7 @@ function renderMoreSimilarMovies() {
 const similarMoviesObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (entry.isIntersecting && similarMoviesState.shown < similarMoviesState.list.length) {
-      renderMoreSimilarMovies();
+      renderMoreSimilarItems();
     }
   });
 }, {rootMargin:'200px'});
@@ -998,8 +1020,8 @@ function openPlayer(ep) {
   document.querySelectorAll('.ep-btn').forEach((b,i) => b.classList.toggle('active', i+1===ep));
   // Save to watch history
   saveToHistory(item, season, ep);
-  // Load similar movies (movies only)
-  loadSimilarMovies(item);
+  // Load similar items (movies, tv, anime)
+  loadSimilarItems(item);
 }
 
 // ─── SERVER STATE ───
@@ -1578,7 +1600,7 @@ async function initFromHash() {
       document.getElementById('player-subtitle').textContent = isMovie?(item.year||''):`Episode ${currentEp}`;
       document.getElementById('player-lang-row').style.display = isAnime?'flex':'none';
       playStream(); updateEpNav();
-      loadSimilarMovies(item);
+      loadSimilarItems(item);
     } else { showPage('home-page'); setNav('home'); }
     return;
   }
