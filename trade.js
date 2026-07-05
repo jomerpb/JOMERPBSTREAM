@@ -556,6 +556,36 @@ function tpConfidenceGrade(pct){
   return 'D';
 }
 
+// Interpolates each signal's badge color from a light tint (low
+// confidence) to the exact solid color already defined in styles.css for
+// #trade-page (--green:#22c55e, --red:#ef4444, --amber:#f59e0b) at 100%
+// confidence. Returns {text, bg} for inline styling. Base colors are
+// hardcoded here to MATCH styles.css exactly -- if those CSS variables
+// ever change, this must be updated too or the two will drift apart.
+var TP_BADGE_BASE_RGB = {
+  BUY:  [34,197,94],   BULL: [34,197,94],
+  SELL: [239,68,68],   BEAR: [239,68,68],
+  HOLD: [245,158,11],  FLAT: [100,116,139]
+};
+function tpConfidenceColor(pct, signalType){
+  var base = TP_BADGE_BASE_RGB[signalType] || TP_BADGE_BASE_RGB.HOLD;
+  var t = 0.2 + 0.8 * Math.max(0, Math.min(100, pct)) / 100; // 0.2 (pale) .. 1.0 (full color) at 100%
+  var r = Math.round(255 + (base[0]-255)*t);
+  var g = Math.round(255 + (base[1]-255)*t);
+  var b = Math.round(255 + (base[2]-255)*t);
+  return {
+    text: 'rgb('+r+','+g+','+b+')',
+    bg:   'rgba('+base[0]+','+base[1]+','+base[2]+',0.15)'
+  };
+}
+// Convenience for small inline tags (gainer list) where a pct might be
+// null (trend not yet known for that symbol) -- defaults to 0 (palest
+// tint) rather than throwing, since a missing pct shouldn't crash render.
+function tpTagStyle(signalType, pct){
+  var c = tpConfidenceColor(pct == null ? 0 : pct, signalType);
+  return 'color:'+c.text+';background:'+c.bg+';';
+}
+
 // Renders pse-backtest.json as plain language a first-time trader can
 // follow: what was tested, how often each call was right, how big the
 // wins/losses were, whether high-confidence calls earned their %, and
@@ -1001,12 +1031,29 @@ function tpModeDate(dates){
 // tickers that actually declined (pct < 0), worst drop first. Same data,
 // same filters — just the opposite sort, so Gainers and Bearish can never
 // disagree about what "today's session" means.
+// Shared by Gainers AND Bullish so both can show a real BULL/BEAR/FLAT
+// tag. Requires 50+ REAL history bars (never the tpGenSeries mock) --
+// a fabricated series would fabricate a trend call. Returns null when
+// there isn't enough real data yet, in which case callers should render
+// no tag at all rather than guess.
+function tpGetGainerTrend(series){
+  if (!Array.isArray(series) || series.length < 50) return null;
+  var closes = series.map(function(d){ return d.close; });
+  var lastIdx = closes.length - 1;
+  var sma20 = tpSMA(closes, 20, lastIdx);
+  var sma50 = tpSMA(closes, 50, lastIdx);
+  var trend = tpGetTrendState(sma20, sma50);
+  return { signal: trend.state, trendConfidencePct: trend.confidencePct };
+}
+
 function tpComputeTopGainersFromLive(bearish){
   var candidates = [];
   PSE_ALL_STOCKS.forEach(function(t){
     var q = tpLiveQuotes[t.sym];
     if (!q || q.status !== 'Open' || q.last == null || !q.previousClose) return;
-    candidates.push({sym: t.sym, name: t.name, price: q.last, pct: q.changePct});
+    var trend = tpGetGainerTrend(tpLiveSeries[t.sym] || tpLiveSeriesAll[t.sym]);
+    candidates.push({sym: t.sym, name: t.name, price: q.last, pct: q.changePct,
+      signal: trend ? trend.signal : null, trendConfidencePct: trend ? trend.trendConfidencePct : null});
   });
   if (bearish) {
     candidates = candidates.filter(function(c){ return c.pct < 0; });
@@ -1036,8 +1083,10 @@ function tpComputeTopGainersFromHistory(bearish){
       prev = mock[mock.length-2];
     }
     if (!prev || !prev.close) return;
+    var trend = tpGetGainerTrend(series); // real series only -- null if mock was used above
     candidates.push({sym: t.sym, name: t.name, price: last.close, lastDate: last.date, prevDate: prev.date,
-      pct: (last.close-prev.close)/prev.close*100});
+      pct: (last.close-prev.close)/prev.close*100,
+      signal: trend ? trend.signal : null, trendConfidencePct: trend ? trend.trendConfidencePct : null});
   });
 
   // Session date = the date most tickers actually last traded on. Excludes
@@ -1162,7 +1211,7 @@ function tpRenderTopGainers(){
     return '<div class="tp-gainer-row" onmousedown="tpSelectTicker(\''+g.sym+'\')">'+
       '<span class="tp-gainer-rank">'+(i+1)+'</span>'+
       '<div class="tp-gainer-info">'+
-        '<div class="tp-gainer-sym">'+g.sym+(g.signal?(' <span class="tp-gainer-tag '+g.signal+'">'+g.signal+'</span>'):'')+'</div>'+
+        '<div class="tp-gainer-sym">'+g.sym+(g.signal?(' <span class="tp-gainer-tag '+g.signal+'" style="'+tpTagStyle(g.signal, g.trendConfidencePct)+'">'+g.signal+'</span>'):'')+'</div>'+
         '<div class="tp-gainer-name">'+g.name+'</div>'+
       '</div>'+
       '<span class="tp-gainer-price">\u20b1'+g.price.toFixed(2)+'</span>'+
@@ -2567,11 +2616,13 @@ async function tpRenderAll(sym){
   chgEl.className = 'tp-price-chg ' + (chg>=0?'up':'down');
 
   const trendArrow = sig.trend==='BULL' ? '\u25B2' : sig.trend==='BEAR' ? '\u25BC' : '\u2014';
+  const tpTrendCol = tpConfidenceColor(sig.trendConfidencePct, sig.trend);
   document.getElementById('tp-trend-wrap').innerHTML =
-    '<div class="tp-trend-badge ' + sig.trend + '">' + trendArrow + ' ' + sig.trendConfidencePct + '% ' + sig.trend + '</div>';
+    '<div class="tp-trend-badge ' + sig.trend + '" style="background:' + tpTrendCol.bg + ';color:' + tpTrendCol.text + ';border-color:' + tpTrendCol.text + '">' + trendArrow + ' ' + sig.trendConfidencePct + '% ' + sig.trend + '</div>';
 
+  const tpBadgeCol = tpConfidenceColor(sig.confidencePct, sig.signal);
   document.getElementById('tp-badge-wrap').innerHTML =
-    '<div class="tp-signal-badge ' + sig.signal + '">' + tpConfidenceGrade(sig.confidencePct) + ' ' + sig.signal + '</div>';
+    '<div class="tp-signal-badge ' + sig.signal + '" style="background:' + tpBadgeCol.bg + ';color:' + tpBadgeCol.text + ';border-color:' + tpBadgeCol.text + '">' + sig.confidencePct + '% ' + sig.signal + '</div>';
 
   tpUpdateRangeAndStats(refSeries, sig, liveOk ? lq : null);
 
@@ -2579,12 +2630,14 @@ async function tpRenderAll(sym){
   // used to live in a Signal Breakdown card further down; that slot is
   // now the market-wide Top Gainers card instead.
   const signalTagEl = document.getElementById('tp-summary-signal-tag');
-  signalTagEl.textContent = tpConfidenceGrade(sig.confidencePct) + ' ' + sig.signal;
+  signalTagEl.textContent = sig.confidencePct + '% ' + sig.signal;
   signalTagEl.className = 'tp-summary-tag ' + sig.signal;
+  { const c = tpConfidenceColor(sig.confidencePct, sig.signal); signalTagEl.style.color = c.text; signalTagEl.style.background = c.bg; }
   document.getElementById('tp-summary-signal-text').innerHTML = tpBulletsHTML(tpSignalNarrative(sig));
   const trendTagEl = document.getElementById('tp-summary-trend-tag');
   trendTagEl.textContent = sig.trendConfidencePct + '% ' + sig.trend;
   trendTagEl.className = 'tp-summary-tag ' + sig.trend;
+  { const c = tpConfidenceColor(sig.trendConfidencePct, sig.trend); trendTagEl.style.color = c.text; trendTagEl.style.background = c.bg; }
   document.getElementById('tp-summary-trend-text').innerHTML = tpBulletsHTML(tpTrendNarrative(sig));
   const levelsTagEl = document.getElementById('tp-summary-levels-tag');
   levelsTagEl.textContent = 'KEY LEVELS';
@@ -2594,6 +2647,7 @@ async function tpRenderAll(sym){
   const recTagEl = document.getElementById('tp-summary-rec-tag');
   recTagEl.textContent = 'RECOMMENDATION';
   recTagEl.className = 'tp-summary-tag ' + sig.signal;
+  { const c = tpConfidenceColor(sig.confidencePct, sig.signal); recTagEl.style.color = c.text; recTagEl.style.background = c.bg; }
   document.getElementById('tp-summary-rec-text').innerHTML = tpBulletsHTML(tpOverallRecommendation(sig));
 
   // Full bullet-list detail previously lived in a Signal Breakdown card
@@ -3247,14 +3301,16 @@ function tcRenderTop(){
       var q = tcGetQuote(c.sym); if(!q) return null;
       var sig = tcSignal(c.sym);
       return {sym:c.sym, name:c.name, price:q.price, pct:q.change24hPct||0,
-              gap: sig?sig.trendGapPct:0, trend: sig?sig.trend:'FLAT', signal: sig?sig.signal:null};
+              gap: sig?sig.trendGapPct:0, trend: sig?sig.trend:'FLAT', signal: sig?sig.signal:null,
+              confidencePct: sig?sig.confidencePct:null};
     }).filter(function(r){ return r && r.trend === 'BULL'; })
       .sort(function(a,b){ return b.gap - a.gap; }).slice(0,10);
   } else {
     rows = TC_COINS.map(function(c){
       var q = tcGetQuote(c.sym); if(!q) return null;
       var sig = tcSignal(c.sym);
-      return {sym:c.sym, name:c.name, price:q.price, pct:q.change24hPct||0, signal: sig?sig.signal:null};
+      return {sym:c.sym, name:c.name, price:q.price, pct:q.change24hPct||0, signal: sig?sig.signal:null,
+              confidencePct: sig?sig.confidencePct:null};
     }).filter(Boolean).sort(function(a,b){ return b.pct - a.pct; }).slice(0,10);
   }
   if(!rows.length){
@@ -3268,7 +3324,7 @@ function tcRenderTop(){
     return '<div class="tp-gainer-row" onmousedown="tcSelectCoin(\''+g.sym+'\')">'+
       '<span class="tp-gainer-rank">'+(i+1)+'</span>'+
       '<div class="tp-gainer-info">'+
-        '<div class="tp-gainer-sym">'+g.sym+(g.signal?(' <span class="tp-gainer-tag '+g.signal+'">'+g.signal+'</span>'):'')+'</div>'+
+        '<div class="tp-gainer-sym">'+g.sym+(g.signal?(' <span class="tp-gainer-tag '+g.signal+'" style="'+tpTagStyle(g.signal, g.confidencePct)+'">'+g.signal+'</span>'):'')+'</div>'+
         '<div class="tp-gainer-name">'+g.name+'</div>'+
       '</div>'+
       '<span class="tp-gainer-price">'+tcFmtUSD(g.price)+'</span>'+
@@ -3823,10 +3879,12 @@ function tcRenderAll(sym){
   chgEl.className = 'tp-price-chg ' + (chgPct>=0?'up':'down');
 
   var trendArrow = sig.trend==='BULL' ? '\u25B2' : sig.trend==='BEAR' ? '\u25BC' : '\u2014';
+  var tcTrendCol = tpConfidenceColor(sig.trendConfidencePct, sig.trend);
   document.getElementById('tc-trend-wrap').innerHTML =
-    '<div class="tp-trend-badge ' + sig.trend + '">' + trendArrow + ' ' + sig.trendConfidencePct + '% ' + sig.trend + '</div>';
+    '<div class="tp-trend-badge ' + sig.trend + '" style="background:' + tcTrendCol.bg + ';color:' + tcTrendCol.text + ';border-color:' + tcTrendCol.text + '">' + trendArrow + ' ' + sig.trendConfidencePct + '% ' + sig.trend + '</div>';
+  var tcBadgeCol = tpConfidenceColor(sig.confidencePct, sig.signal);
   document.getElementById('tc-badge-wrap').innerHTML =
-    '<div class="tp-signal-badge ' + sig.signal + '">' + tpConfidenceGrade(sig.confidencePct) + ' ' + sig.signal + '</div>';
+    '<div class="tp-signal-badge ' + sig.signal + '" style="background:' + tcBadgeCol.bg + ';color:' + tcBadgeCol.text + ';border-color:' + tcBadgeCol.text + '">' + sig.confidencePct + '% ' + sig.signal + '</div>';
 
   var recEl = document.getElementById('tc-summary-rec-text');
   var actionTxt = sig.signal==='BUY' ? 'accumulating on dips looks reasonable given the current read'
@@ -3840,10 +3898,12 @@ function tcRenderAll(sym){
   var recTag = document.getElementById('tc-summary-rec-tag');
   recTag.textContent = 'RECOMMENDATION';
   recTag.className = 'tp-summary-tag ' + sig.signal;
+  { var rc = tpConfidenceColor(sig.confidencePct, sig.signal); recTag.style.color = rc.text; recTag.style.background = rc.bg; }
 
   var sigTag = document.getElementById('tc-summary-signal-tag');
-  sigTag.textContent = tpConfidenceGrade(sig.confidencePct) + ' ' + sig.signal;
+  sigTag.textContent = sig.confidencePct + '% ' + sig.signal;
   sigTag.className = 'tp-summary-tag ' + sig.signal;
+  { var c2 = tpConfidenceColor(sig.confidencePct, sig.signal); sigTag.style.color = c2.text; sigTag.style.background = c2.bg; }
   document.getElementById('tc-summary-signal-text').textContent =
     'RSI(14) is at ' + (sig.rsi!=null ? sig.rsi.toFixed(1) : '\u2014') +
     (sig.rsi>=TC_RSI_OVERBOUGHT ? ' \u2014 overbought territory; momentum is stretched.' :
@@ -3853,6 +3913,7 @@ function tcRenderAll(sym){
   var trTag = document.getElementById('tc-summary-trend-tag');
   trTag.textContent = sig.trendConfidencePct + '% ' + sig.trend;
   trTag.className = 'tp-summary-tag ' + (sig.trend==='BULL'?'BUY':sig.trend==='BEAR'?'SELL':'HOLD');
+  { var trC = tpConfidenceColor(sig.trendConfidencePct, sig.trend); trTag.style.color = trC.text; trTag.style.background = trC.bg; }
   document.getElementById('tc-summary-trend-text').textContent =
     'SMA20 sits ' + (sig.trendGapPct>=0?'+':'') + sig.trendGapPct.toFixed(2) + '% vs SMA50 (buffer '+TC_TREND_BUFFER_PCT+'%) \u2014 ' +
     (sig.trend==='BULL' ? 'a confirmed uptrend'+(sig.volConfirmed?', backed by above-average volume.':', though on below-average volume (half-weighted in the score).') :
