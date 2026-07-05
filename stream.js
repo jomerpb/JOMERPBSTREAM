@@ -1278,10 +1278,28 @@ function getYearRange(val) {
 
 function resetPageFilter(page) {
   const prefix = page==='anime'?'af':page==='tv'?'tf':'mf';
-  ['genre','year','rating','country','status'].forEach(g => {
+  ['genre','year','rating','country','status','tag'].forEach(g => {
     const el = document.getElementById(`${prefix}-${g}`);
     if (el) el.querySelectorAll('.chip').forEach((c,i) => c.classList.toggle('active', i===0));
   });
+  const kw = document.getElementById(`${prefix}-keywords-input`);
+  if (kw) kw.value = '';
+}
+
+// ── KEYWORD RESOLUTION (TMDB) ──
+// Turns free-text like "boys love, time loop" into TMDB keyword IDs joined with OR (|)
+async function resolveKeywordIds(text) {
+  const terms = (text||'').split(',').map(t=>t.trim()).filter(Boolean);
+  if (!terms.length) return '';
+  const ids = [];
+  for (const term of terms) {
+    try {
+      const d = await tmdb('/search/keyword', {query: term});
+      const match = d?.results?.[0];
+      if (match) ids.push(match.id);
+    } catch {}
+  }
+  return ids.join('|');
 }
 
 // ── ANIME FILTER ──
@@ -1295,6 +1313,7 @@ async function applyAnimeFilter(page=1) {
     document.getElementById('anime-more').style.display = 'none';
 
     const genre   = getChipVal('af-genre');
+    const tag     = getChipVal('af-tag');
     const yearVal = getChipVal('af-year');
     const rating  = getChipVal('af-rating');
     const status  = getChipVal('af-status');
@@ -1303,15 +1322,15 @@ async function applyAnimeFilter(page=1) {
     const yGte = yr.gte ? parseInt(yr.gte.slice(0,4))*10000 : undefined;
     const yLte = yr.lte ? parseInt(yr.lte.slice(0,4))*10000+1231 : undefined;
 
-    animeFilterQ = `query($page:Int,$genre:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$status:MediaStatus){
+    animeFilterQ = `query($page:Int,$genre:String,$tag:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$status:MediaStatus){
       Page(page:$page,perPage:24){
         pageInfo{hasNextPage}
-        media(type:ANIME,isAdult:false,genre:$genre,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status:$status){
+        media(type:ANIME,isAdult:false,genre:$genre,tag:$tag,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status:$status){
           id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres
         }
       }
     }`;
-    animeFilterVars = { genre:genre||undefined, sort:['SCORE_DESC'], yGte, yLte, minScore, status:status||undefined };
+    animeFilterVars = { genre:genre||undefined, tag:tag||undefined, sort:['SCORE_DESC'], yGte, yLte, minScore, status:status||undefined };
   }
 
   const data = await al(animeFilterQ, {...animeFilterVars, page});
@@ -1343,6 +1362,7 @@ async function applyTVFilter(page=1) {
     const rating  = getChipVal('tf-rating');
     const status  = getChipVal('tf-status');
     const yr      = getYearRange(yearVal);
+    const keywordsText = document.getElementById('tf-keywords-input')?.value || '';
     tvFilterStatus = status;
 
     const url = new URL(`${TMDB_BASE}/discover/tv`);
@@ -1361,6 +1381,9 @@ async function applyTVFilter(page=1) {
     if (yr.gte)  url.searchParams.set('first_air_date.gte', yr.gte);
     if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
     if (status)  url.searchParams.set('with_status', status);
+
+    const keywordIds = await resolveKeywordIds(keywordsText);
+    if (keywordIds) url.searchParams.set('with_keywords', keywordIds);
 
     // Save base URL and status for pagination
     tvFilterUrl = url.toString();
@@ -1395,23 +1418,34 @@ async function applyMovieFilter(page=1) {
     document.getElementById('movies-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
     document.getElementById('movies-more').style.display = 'none';
 
+    const country = getChipVal('mf-country');
     const genre   = getChipVal('mf-genre');
     const yearVal = getChipVal('mf-year');
     const rating  = getChipVal('mf-rating');
     const status  = getChipVal('mf-status');
     const yr      = getYearRange(yearVal);
+    const keywordsText = document.getElementById('mf-keywords-input')?.value || '';
 
     const url = new URL(`${TMDB_BASE}/discover/movie`);
     url.searchParams.set('api_key', TMDB_KEY);
     url.searchParams.set('language', 'en-US');
-    url.searchParams.set('sort_by', 'vote_average.desc');
-    url.searchParams.set('vote_count.gte', '100');
+    if (country) {
+      url.searchParams.set('sort_by', 'popularity.desc');
+      url.searchParams.set('vote_count.gte', '0');
+    } else {
+      url.searchParams.set('sort_by', 'vote_average.desc');
+      url.searchParams.set('vote_count.gte', '100');
+    }
+    if (country) url.searchParams.set('with_origin_country', country);
     if (genre)  url.searchParams.set('with_genres', genre);
     if (rating) url.searchParams.set('vote_average.gte', rating);
     if (yr.gte) url.searchParams.set('primary_release_date.gte', yr.gte);
     if (yr.lte) url.searchParams.set('primary_release_date.lte', yr.lte);
     if (status === 'upcoming') url.searchParams.set('primary_release_date.gte', new Date().toISOString().slice(0,10));
     else if (status === 'released') url.searchParams.set('primary_release_date.lte', new Date().toISOString().slice(0,10));
+
+    const keywordIds = await resolveKeywordIds(keywordsText);
+    if (keywordIds) url.searchParams.set('with_keywords', keywordIds);
 
     movieFilterUrl = url.toString();
   }

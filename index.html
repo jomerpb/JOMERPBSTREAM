@@ -76,11 +76,28 @@
           <div class="chip" data-val="Sci-Fi" onclick="pickPageChip(this,'af-genre')">Sci-Fi</div>
           <div class="chip" data-val="Slice of Life" onclick="pickPageChip(this,'af-genre')">Slice of Life</div>
           <div class="chip" data-val="Supernatural" onclick="pickPageChip(this,'af-genre')">Supernatural</div>
-          <div class="chip" data-val="Isekai" onclick="pickPageChip(this,'af-genre')">Isekai</div>
-          <div class="chip" data-val="Shounen" onclick="pickPageChip(this,'af-genre')">Shounen</div>
           <div class="chip" data-val="Psychological" onclick="pickPageChip(this,'af-genre')">Psychological</div>
           <div class="chip" data-val="Mecha" onclick="pickPageChip(this,'af-genre')">Mecha</div>
           <div class="chip" data-val="Sports" onclick="pickPageChip(this,'af-genre')">Sports</div>
+          <div class="chip" data-val="Ecchi" onclick="pickPageChip(this,'af-genre')">Ecchi</div>
+          <div class="chip" data-val="Music" onclick="pickPageChip(this,'af-genre')">Music</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Tag</div>
+        <div class="chips-row" id="af-tag">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-tag')">All</div>
+          <div class="chip" data-val="Isekai" onclick="pickPageChip(this,'af-tag')">Isekai</div>
+          <div class="chip" data-val="Shounen" onclick="pickPageChip(this,'af-tag')">Shounen</div>
+          <div class="chip" data-val="Shoujo" onclick="pickPageChip(this,'af-tag')">Shoujo</div>
+          <div class="chip" data-val="Seinen" onclick="pickPageChip(this,'af-tag')">Seinen</div>
+          <div class="chip" data-val="Josei" onclick="pickPageChip(this,'af-tag')">Josei</div>
+          <div class="chip" data-val="Boys' Love" onclick="pickPageChip(this,'af-tag')">💙 Boys' Love (BL)</div>
+          <div class="chip" data-val="Girls' Love" onclick="pickPageChip(this,'af-tag')">💗 Girls' Love (GL)</div>
+          <div class="chip" data-val="Reincarnation" onclick="pickPageChip(this,'af-tag')">Reincarnation</div>
+          <div class="chip" data-val="Time Skip" onclick="pickPageChip(this,'af-tag')">Time Skip</div>
+          <div class="chip" data-val="Super Power" onclick="pickPageChip(this,'af-tag')">Super Power</div>
+          <div class="chip" data-val="Iyashikei" onclick="pickPageChip(this,'af-tag')">Iyashikei</div>
         </div>
       </div>
       <div class="filter-section">
@@ -169,6 +186,23 @@
           <div class="chip" data-val="14" onclick="pickPageChip(this,'tf-genre')">Fantasy</div>
           <div class="chip" data-val="27" onclick="pickPageChip(this,'tf-genre')">Horror</div>
           <div class="chip" data-val="53" onclick="pickPageChip(this,'tf-genre')">Thriller</div>
+          <div class="chip" data-val="16" onclick="pickPageChip(this,'tf-genre')">Animation</div>
+          <div class="chip" data-val="99" onclick="pickPageChip(this,'tf-genre')">Documentary</div>
+          <div class="chip" data-val="10751" onclick="pickPageChip(this,'tf-genre')">Family</div>
+          <div class="chip" data-val="10762" onclick="pickPageChip(this,'tf-genre')">Kids</div>
+          <div class="chip" data-val="10768" onclick="pickPageChip(this,'tf-genre')">War & Politics</div>
+          <div class="chip" data-val="37" onclick="pickPageChip(this,'tf-genre')">Western</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Keywords <span style="color:var(--muted);font-weight:400;">(e.g. boys love, time loop, zombie — comma-separated)</span></div>
+        <input type="text" id="tf-keywords-input" placeholder="Type a keyword..." style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:8px;"/>
+        <div class="chips-row" id="tf-keyword-presets">
+          <div class="chip" onclick="document.getElementById('tf-keywords-input').value='boys love'">💙 BL</div>
+          <div class="chip" onclick="document.getElementById('tf-keywords-input').value='girls love'">💗 GL</div>
+          <div class="chip" onclick="document.getElementById('tf-keywords-input').value='reverse harem'">Reverse Harem</div>
+          <div class="chip" onclick="document.getElementById('tf-keywords-input').value='time loop'">Time Loop</div>
+          <div class="chip" onclick="document.getElementById('tf-keywords-input').value='zombie'">Zombie</div>
         </div>
       </div>
       <div class="filter-section">
@@ -227,20 +261,52 @@
     <!-- Movie Filter Panel -->
     <div id="movie-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
       <div class="filter-section">
+        <div class="filter-label">Country</div>
+        <div class="chips-row" id="mf-country">
+          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-country')">All</div>
+          <div class="chip" data-val="KR" onclick="pickPageChip(this,'mf-country')">🇰🇷 Korea</div>
+          <div class="chip" data-val="JP" onclick="pickPageChip(this,'mf-country')">🇯🇵 Japan</div>
+          <div class="chip" data-val="CN" onclick="pickPageChip(this,'mf-country')">🇨🇳 China</div>
+          <div class="chip" data-val="TH" onclick="pickPageChip(this,'mf-country')">🇹🇭 Thailand</div>
+          <div class="chip" data-val="PH" onclick="pickPageChip(this,'mf-country')">🇵🇭 Philippines</div>
+          <div class="chip" data-val="US" onclick="pickPageChip(this,'mf-country')">🇺🇸 USA</div>
+          <div class="chip" data-val="GB" onclick="pickPageChip(this,'mf-country')">🇬🇧 UK</div>
+          <div class="chip" data-val="IN" onclick="pickPageChip(this,'mf-country')">🇮🇳 India</div>
+        </div>
+      </div>
+      <div class="filter-section">
         <div class="filter-label">Genre</div>
         <div class="chips-row" id="mf-genre">
           <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-genre')">All</div>
           <div class="chip" data-val="28" onclick="pickPageChip(this,'mf-genre')">Action</div>
           <div class="chip" data-val="12" onclick="pickPageChip(this,'mf-genre')">Adventure</div>
           <div class="chip" data-val="35" onclick="pickPageChip(this,'mf-genre')">Comedy</div>
+          <div class="chip" data-val="80" onclick="pickPageChip(this,'mf-genre')">Crime</div>
+          <div class="chip" data-val="99" onclick="pickPageChip(this,'mf-genre')">Documentary</div>
           <div class="chip" data-val="18" onclick="pickPageChip(this,'mf-genre')">Drama</div>
+          <div class="chip" data-val="10751" onclick="pickPageChip(this,'mf-genre')">Family</div>
           <div class="chip" data-val="14" onclick="pickPageChip(this,'mf-genre')">Fantasy</div>
+          <div class="chip" data-val="36" onclick="pickPageChip(this,'mf-genre')">History</div>
           <div class="chip" data-val="27" onclick="pickPageChip(this,'mf-genre')">Horror</div>
+          <div class="chip" data-val="10402" onclick="pickPageChip(this,'mf-genre')">Music</div>
           <div class="chip" data-val="9648" onclick="pickPageChip(this,'mf-genre')">Mystery</div>
           <div class="chip" data-val="10749" onclick="pickPageChip(this,'mf-genre')">Romance</div>
           <div class="chip" data-val="878" onclick="pickPageChip(this,'mf-genre')">Sci-Fi</div>
           <div class="chip" data-val="53" onclick="pickPageChip(this,'mf-genre')">Thriller</div>
+          <div class="chip" data-val="10752" onclick="pickPageChip(this,'mf-genre')">War</div>
+          <div class="chip" data-val="37" onclick="pickPageChip(this,'mf-genre')">Western</div>
           <div class="chip" data-val="16" onclick="pickPageChip(this,'mf-genre')">Animation</div>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Keywords <span style="color:var(--muted);font-weight:400;">(e.g. boys love, time loop, zombie — comma-separated)</span></div>
+        <input type="text" id="mf-keywords-input" placeholder="Type a keyword..." style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:8px;"/>
+        <div class="chips-row" id="mf-keyword-presets">
+          <div class="chip" onclick="document.getElementById('mf-keywords-input').value='boys love'">💙 BL</div>
+          <div class="chip" onclick="document.getElementById('mf-keywords-input').value='girls love'">💗 GL</div>
+          <div class="chip" onclick="document.getElementById('mf-keywords-input').value='reverse harem'">Reverse Harem</div>
+          <div class="chip" onclick="document.getElementById('mf-keywords-input').value='time loop'">Time Loop</div>
+          <div class="chip" onclick="document.getElementById('mf-keywords-input').value='zombie'">Zombie</div>
         </div>
       </div>
       <div class="filter-section">
