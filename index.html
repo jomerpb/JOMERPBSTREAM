@@ -197,6 +197,7 @@
       <div class="filter-section">
         <div class="filter-label">Keywords <span style="color:var(--muted);font-weight:400;">(e.g. boys love, time loop, zombie — comma-separated)</span></div>
         <input type="text" id="tf-keywords-input" placeholder="Type a keyword..." style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:8px;"/>
+        <div id="tf-keywords-matched" style="display:none;font-size:11px;color:var(--muted);margin-bottom:8px;"></div>
         <div class="chips-row" id="tf-keyword-presets">
           <div class="chip" onclick="document.getElementById('tf-keywords-input').value='boys love'">💙 BL</div>
           <div class="chip" onclick="document.getElementById('tf-keywords-input').value='girls love'">💗 GL</div>
@@ -301,6 +302,7 @@
       <div class="filter-section">
         <div class="filter-label">Keywords <span style="color:var(--muted);font-weight:400;">(e.g. boys love, time loop, zombie — comma-separated)</span></div>
         <input type="text" id="mf-keywords-input" placeholder="Type a keyword..." style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:8px;"/>
+        <div id="mf-keywords-matched" style="display:none;font-size:11px;color:var(--muted);margin-bottom:8px;"></div>
         <div class="chips-row" id="mf-keyword-presets">
           <div class="chip" onclick="document.getElementById('mf-keywords-input').value='boys love'">💙 BL</div>
           <div class="chip" onclick="document.getElementById('mf-keywords-input').value='girls love'">💗 GL</div>

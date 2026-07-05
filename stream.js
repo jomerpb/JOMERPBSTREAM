@@ -1284,22 +1284,27 @@ function resetPageFilter(page) {
   });
   const kw = document.getElementById(`${prefix}-keywords-input`);
   if (kw) kw.value = '';
+  const matched = document.getElementById(`${prefix}-keywords-matched`);
+  if (matched) { matched.textContent = ''; matched.style.display = 'none'; }
 }
 
 // ── KEYWORD RESOLUTION (TMDB) ──
 // Turns free-text like "boys love, time loop" into TMDB keyword IDs joined with OR (|)
+// Grabs multiple matching keyword variants per term (not just the top hit) since TMDB
+// tags the same theme inconsistently (e.g. "boys love" vs "boys' love" vs "yaoi").
 async function resolveKeywordIds(text) {
   const terms = (text||'').split(',').map(t=>t.trim()).filter(Boolean);
-  if (!terms.length) return '';
-  const ids = [];
+  if (!terms.length) return {ids:'', names:[]};
+  const idSet = new Set();
+  const names = [];
   for (const term of terms) {
     try {
       const d = await tmdb('/search/keyword', {query: term});
-      const match = d?.results?.[0];
-      if (match) ids.push(match.id);
+      const matches = (d?.results||[]).slice(0,6);
+      matches.forEach(m => { if (!idSet.has(m.id)) { idSet.add(m.id); names.push(m.name); } });
     } catch {}
   }
-  return ids.join('|');
+  return {ids: [...idSet].join('|'), names};
 }
 
 // ── ANIME FILTER ──
@@ -1383,12 +1388,17 @@ async function applyTVFilter(page=1) {
     if (status)  url.searchParams.set('with_status', status);
 
     const keywordIds = await resolveKeywordIds(keywordsText);
-    if (keywordIds) {
-      url.searchParams.set('with_keywords', keywordIds);
+    const matchedEl = document.getElementById('tf-keywords-matched');
+    if (keywordIds.ids) {
+      url.searchParams.set('with_keywords', keywordIds.ids);
       // Niche keyword-tagged content (BL, reverse harem, etc.) rarely clears a high vote-count floor —
       // drop it and sort by popularity instead, same treatment as the Country filter above.
       url.searchParams.set('sort_by', 'popularity.desc');
       url.searchParams.set('vote_count.gte', '0');
+      if (matchedEl) { matchedEl.textContent = 'Matched tags: ' + keywordIds.names.join(', '); matchedEl.style.display = 'block'; }
+    } else if (matchedEl) {
+      matchedEl.textContent = keywordsText ? 'No matching TMDB tag found for: ' + keywordsText : '';
+      matchedEl.style.display = keywordsText ? 'block' : 'none';
     }
 
     // Save base URL and status for pagination
@@ -1451,11 +1461,16 @@ async function applyMovieFilter(page=1) {
     else if (status === 'released') url.searchParams.set('primary_release_date.lte', new Date().toISOString().slice(0,10));
 
     const keywordIds = await resolveKeywordIds(keywordsText);
-    if (keywordIds) {
-      url.searchParams.set('with_keywords', keywordIds);
+    const matchedElM = document.getElementById('mf-keywords-matched');
+    if (keywordIds.ids) {
+      url.searchParams.set('with_keywords', keywordIds.ids);
       // Same fix as TV: niche keyword content rarely clears a high vote-count floor
       url.searchParams.set('sort_by', 'popularity.desc');
       url.searchParams.set('vote_count.gte', '0');
+      if (matchedElM) { matchedElM.textContent = 'Matched tags: ' + keywordIds.names.join(', '); matchedElM.style.display = 'block'; }
+    } else if (matchedElM) {
+      matchedElM.textContent = keywordsText ? 'No matching TMDB tag found for: ' + keywordsText : '';
+      matchedElM.style.display = keywordsText ? 'block' : 'none';
     }
 
     movieFilterUrl = url.toString();
