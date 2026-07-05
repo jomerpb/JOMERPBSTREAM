@@ -1917,6 +1917,9 @@ function tpEntryExitPlan(sig, band){
   const P = tpFmtLvl;
   const sup = trig.sup;
   const res = trig.res;
+  // Ceiling (resistance) highlighted green, floor (support) highlighted red.
+  const resHi = '<span style="color:var(--green);font-weight:700">\u20b1'+P(res)+'</span>';
+  const supHi = '<span style="color:var(--red);font-weight:700">\u20b1'+P(sup)+'</span>';
 
   if(sig.signal==='BUY'){
     const entryLo = Math.max(sup, price*(1 - sig.volPct/200)); // up to half a normal day's dip
@@ -1924,19 +1927,19 @@ function tpEntryExitPlan(sig, band){
     const t1 = price + (res - price)*0.5;
     return 'WHERE TO ENTER AND EXIT:<br>' +
       '<b>Entry:</b> anywhere from \u20b1'+P(entryLo)+' up to the current \u20b1'+P(price)+' \u2014 a small dip toward the floor gets a better price, but waiting for a deep discount risks missing the move entirely.<br>' +
-      '<b>Take-profit / target:</b> first sell-point around \u20b1'+P(t1)+' (halfway to the ceiling \u2014 a sensible spot to bank part of the gain), final target at the \u20b1'+P(res)+' ceiling, where sellers have stepped in before.<br>' +
-      '<b>Stop-loss (exit if wrong):</b> \u20b1'+P(stop)+', just under the \u20b1'+P(sup)+' floor \u2014 a close below that means the floor failed and the reason for owning this is gone.';
+      '<b>Take-profit / target:</b> first sell-point around \u20b1'+P(t1)+' (halfway to the ceiling \u2014 a sensible spot to bank part of the gain), final target at the '+resHi+' ceiling, where sellers have stepped in before.<br>' +
+      '<b>Stop-loss (exit if wrong):</b> \u20b1'+P(stop)+', just under the '+supHi+' floor \u2014 a close below that means the floor failed and the reason for owning this is gone.';
   }
   if(sig.signal==='SELL'){
     return 'WHERE TO EXIT AND RE-ENTER:<br>' +
-      '<b>Exit (sell):</b> at or near the current \u20b1'+P(price)+' \u2014 with a SELL read, waiting for a bounce that may never come usually costs more than acting; any lift toward the \u20b1'+P(res)+' ceiling is a gift exit.<br>' +
-      '<b>Re-entry (buy back):</b> the \u20b1'+P(sup)+' floor is where the slide would most likely stall first \u2014 the natural place to reconsider buying back in if it holds.<br>' +
-      '<b>Invalidation:</b> a close above the \u20b1'+P(res)+' ceiling means this sell read was wrong \u2014 stop waiting for lower prices at that point.';
+      '<b>Exit (sell):</b> at or near the current \u20b1'+P(price)+' \u2014 with a SELL read, waiting for a bounce that may never come usually costs more than acting; any lift toward the '+resHi+' ceiling is a gift exit.<br>' +
+      '<b>Re-entry (buy back):</b> the '+supHi+' floor is where the slide would most likely stall first \u2014 the natural place to reconsider buying back in if it holds.<br>' +
+      '<b>Invalidation:</b> a close above the '+resHi+' ceiling means this sell read was wrong \u2014 stop waiting for lower prices at that point.';
   }
   // HOLD
   return 'WHERE THE ENTRY/EXIT TRIGGERS SIT:<br>' +
-    '<b>Buy trigger:</b> a close above the \u20b1'+P(res)+' ceiling \u2014 that\'s the price proving buyers have won; buying anything below that trigger is guessing.<br>' +
-    '<b>Sell trigger:</b> a close below the \u20b1'+P(sup)+' floor \u2014 that\'s the floor failing, and the time to be out.<br>' +
+    '<b>Buy trigger:</b> a close above the '+resHi+' ceiling \u2014 that\'s the price proving buyers have won; buying anything below that trigger is guessing.<br>' +
+    '<b>Sell trigger:</b> a close below the '+supHi+' floor \u2014 that\'s the floor failing, and the time to be out.<br>' +
     '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside that box is noise, not signal.';
 }
 
@@ -3768,19 +3771,19 @@ function tcLevelsNarrative(sig){
   }
   var lines = [];
   if(sr.support){
-    lines.push('<b>Support (floor):</b> $'+P(sr.support.level)
+    lines.push('<b>Support (floor):</b> \u20b1'+P(sr.support.level)
       + (sr.support.fallback ? ' \u2014 recent low (backup level, no repeated bounce found)' : ' \u2014 held '+sr.support.touches+'\u00d7 recently')
       + (sr.support.isRound ? ' \u00b7 round number (stickier)' : ''));
   }
   if(sr.resistance){
-    lines.push('<b>Resistance (ceiling):</b> $'+P(sr.resistance.level)
+    lines.push('<b>Resistance (ceiling):</b> \u20b1'+P(sr.resistance.level)
       + (sr.resistance.fallback ? ' \u2014 recent high (backup level, no repeated rejection found)' : ' \u2014 rejected '+sr.resistance.touches+'\u00d7 recently')
       + (sr.resistance.isRound ? ' \u00b7 round number (stickier)' : ''));
   }
   if(sr.support && sr.resistance && price){
     var up = ((sr.resistance.level-price)/price*100).toFixed(1);
     var dn = ((price-sr.support.level)/price*100).toFixed(1);
-    lines.push('<b>Price now:</b> $'+P(price)+' \u2014 '+dn+'% above the floor, '+up+'% below the ceiling');
+    lines.push('<b>Price now:</b> \u20b1'+P(price)+' \u2014 '+dn+'% above the floor, '+up+'% below the ceiling');
   }
   var band = tcProjectedBand(sig);
   if(sig.signal==='BUY' && price){
@@ -3812,24 +3815,28 @@ function tcEntryExitPlan(sig){
   var trig = tcTriggerLevels(sig);
   if(!trig) return null;
   var price = sig.price, P = tcFmtLvl, sup = trig.sup, res = trig.res;
+  // Ceiling (resistance) highlighted green, floor (support) highlighted
+  // red -- same convention as the Stocks tab's tpEntryExitPlan.
+  var resHi = '<span style="color:var(--green);font-weight:700">\u20b1'+P(res)+'</span>';
+  var supHi = '<span style="color:var(--red);font-weight:700">\u20b1'+P(sup)+'</span>';
   if(sig.signal==='BUY'){
     var entryLo = Math.max(sup, price*(1 - (sig.volPct||3)/200));
     var stop = sup*0.99;
     var t1 = price + (res-price)*0.5;
     return 'WHERE TO ENTER AND EXIT:<br>' +
-      '<b>Entry:</b> from $'+P(entryLo)+' up to the current $'+P(price)+' \u2014 a small dip gets a better price, but crypto moves 24/7 and deep-discount waiting often misses the move.<br>' +
-      '<b>Take-profit / target:</b> first sell-point near $'+P(t1)+' (halfway to the ceiling), final target at the $'+P(res)+' ceiling.<br>' +
-      '<b>Stop-loss (exit if wrong):</b> $'+P(stop)+', just under the $'+P(sup)+' floor \u2014 a close below it means the setup failed.';
+      '<b>Entry:</b> from \u20b1'+P(entryLo)+' up to the current \u20b1'+P(price)+' \u2014 a small dip gets a better price, but crypto moves 24/7 and deep-discount waiting often misses the move.<br>' +
+      '<b>Take-profit / target:</b> first sell-point near \u20b1'+P(t1)+' (halfway to the ceiling), final target at the '+resHi+' ceiling.<br>' +
+      '<b>Stop-loss (exit if wrong):</b> \u20b1'+P(stop)+', just under the '+supHi+' floor \u2014 a close below it means the setup failed.';
   }
   if(sig.signal==='SELL'){
     return 'WHERE TO EXIT AND RE-ENTER:<br>' +
-      '<b>Exit (sell):</b> at or near the current $'+P(price)+' \u2014 any lift toward the $'+P(res)+' ceiling is a gift exit.<br>' +
-      '<b>Re-entry (buy back):</b> the $'+P(sup)+' floor is where a slide would most likely stall first.<br>' +
-      '<b>Invalidation:</b> a close above $'+P(res)+' means this sell read was wrong.';
+      '<b>Exit (sell):</b> at or near the current \u20b1'+P(price)+' \u2014 any lift toward the '+resHi+' ceiling is a gift exit.<br>' +
+      '<b>Re-entry (buy back):</b> the '+supHi+' floor is where a slide would most likely stall first.<br>' +
+      '<b>Invalidation:</b> a close above '+resHi+' means this sell read was wrong.';
   }
   return 'WHERE THE ENTRY/EXIT TRIGGERS SIT:<br>' +
-    '<b>Buy trigger:</b> a close above the $'+P(res)+' ceiling.<br>' +
-    '<b>Sell trigger:</b> a close below the $'+P(sup)+' floor.<br>' +
+    '<b>Buy trigger:</b> a close above the '+resHi+' ceiling.<br>' +
+    '<b>Sell trigger:</b> a close below the '+supHi+' floor.<br>' +
     '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside the box is noise.';
 }
 
