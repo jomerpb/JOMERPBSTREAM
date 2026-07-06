@@ -2001,7 +2001,9 @@ function tpLevelsNarrative(sig){
   } else if(sr.support && sr.resistance){
     lines.push('<b>On HOLD:</b> set alerts at both levels \u2014 a close outside the box is the only event worth reacting to');
   }
-  return lines.join('<br>');
+  const levelsText = lines.join('<br>');
+  const fiveDay = tpFiveDayOutlook(sig);
+  return [levelsText, fiveDay].filter(Boolean);
 }
 
 function tpActionPlan(sig, band, aligned, opposed){
@@ -2269,9 +2271,8 @@ function tpOverallRecommendation(sig){
   // "What this means in practice" and the entry/exit prices are one
   // combined practical bullet — the reasoning, then the exact levels.
   const practical = [action, entryExit].filter(Boolean).join('<br><br>');
-  const fiveDay = tpFiveDayOutlook(sig);
   const sizing = tpPositionPlan(sig, band, aligned, opposed);
-  return [context, verdict, practical, fiveDay, sizing].filter(Boolean);
+  return [context, verdict, practical, sizing].filter(Boolean);
 }
 
 // ── MORE DETAILS toggle — collapses/expands the signal (HOLD/BUY/SELL),
@@ -3935,7 +3936,10 @@ function tcLevelsNarrative(sig){
   } else if(sr.support && sr.resistance){
     lines.push('<b>On HOLD:</b> set alerts at both levels \u2014 a move outside the box is the only event worth reacting to');
   }
-  return lines.join('<br>');
+  var levelsText = lines.join('<br>');
+  var trig = tcTriggerLevels(sig);
+  var fiveDay = trig ? tcFiveDayOutlook(sig, trig.sup, trig.res) : null;
+  return [levelsText, fiveDay].filter(Boolean);
 }
 function tcEntryExitPlan(sig){
   var trig = tcTriggerLevels(sig);
@@ -3964,6 +3968,68 @@ function tcEntryExitPlan(sig){
     '<b>Buy trigger:</b> a close above the '+resHi+' ceiling.<br>' +
     '<b>Sell trigger:</b> a close below the '+supHi+' floor.<br>' +
     '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside the box is noise.';
+}
+
+// ══════════════════════════════════════════════════════════════
+// POSITION SIZING (crypto) — mirrors the Stocks tab's tpPositionPlan:
+// same \u20b1100,000 reference capital and the same aligned/opposed
+// scaling logic (see trade.js ~line 2200). Coin quantities are shown
+// to 4 decimals (tcFmtLvl) since crypto buys in fractional units,
+// not whole shares.
+// ══════════════════════════════════════════════════════════════
+function tcPositionPlan(sig, band, aligned, opposed){
+  var price = sig.price;
+  var sym = tcCurrentSym || 'this coin';
+
+  if(sig.signal==='BUY'){
+    var pct = (aligned && sig.confidencePct>=80) ? 60 : opposed ? 20 : 40;
+    var alloc = TP_REF_CAPITAL * pct/100;
+    var cash = TP_REF_CAPITAL - alloc;
+    var txt = "How much to buy (on a \u20b1"+tpPesoFmt(TP_REF_CAPITAL)+" reference): deploy about "+pct+"% \u2014 roughly \u20b1"+tpPesoFmt(alloc);
+    if(price){
+      var units = alloc/price;
+      if(units>0) txt += ", which buys around "+tcFmtLvl(units)+" "+sym+" at \u20b1"+tcFmtLvl(price);
+    }
+    txt += " \u2014 and keep the other "+(100-pct)+"% (\u20b1"+tpPesoFmt(cash)+") in cash. ";
+    txt += (aligned && sig.confidencePct>=80)
+      ? "The larger allocation is justified because momentum and trend both agree here; this is the strongest setup shape this model produces, but even then it never puts the full amount at risk on one idea."
+      : opposed
+        ? "The small allocation is deliberate: this buy is fighting the current downtrend, so only a starter position makes sense until the trend actually turns."
+        : "A middle-sized allocation fits a genuine-but-unconfirmed setup \u2014 enough to matter if it works, small enough to add more later once the price confirms.";
+    if(band && price){
+      var units2 = alloc/price;
+      var riskPeso = Math.max(0,(price - band.low)) * units2;
+      var gainPeso = Math.max(0,(band.high - price)) * units2;
+      txt += " In peso terms on that position: roughly \u20b1"+tpPesoFmt(gainPeso)+" of potential gain if it reaches \u20b1"+tcFmtLvl(band.high)+", against about \u20b1"+tpPesoFmt(riskPeso)+" of loss if the stop under \u20b1"+tcFmtLvl(band.low)+" gets hit.";
+    }
+    return txt;
+  }
+
+  if(sig.signal==='SELL'){
+    var pctS = (aligned && sig.confidencePct>=80) ? 100 : opposed ? 30 : 50;
+    var sellAmt = TP_REF_CAPITAL * pctS/100;
+    var keepAmt = TP_REF_CAPITAL - sellAmt;
+    var txtS = "How much to sell (if you hold \u20b1"+tpPesoFmt(TP_REF_CAPITAL)+" of "+sym+"): unload about "+pctS+"% \u2014 roughly \u20b1"+tpPesoFmt(sellAmt)+" worth";
+    if(price){
+      var unitsS = sellAmt/price;
+      if(unitsS>0) txtS += " (around "+tcFmtLvl(unitsS)+" "+sym+" at \u20b1"+tcFmtLvl(price)+")";
+    }
+    txtS += pctS===100 ? ". " : ", keeping \u20b1"+tpPesoFmt(keepAmt)+" riding with a stop-loss in place. ";
+    txtS += (aligned && sig.confidencePct>=80)
+      ? "A full exit is warranted when momentum and trend both point down together \u2014 that double-confirmation is rare, and hoping it blows over usually costs more than re-buying later if you turn out wrong."
+      : opposed
+        ? "Only a partial trim makes sense because the overall trend is still pointed up \u2014 you're taking some money off the table on a warning sign, not abandoning a coin that's still climbing."
+        : "A half-position sale matches a real-but-unconfirmed sell case: it locks in meaningful protection without fully exiting before the trend has actually broken.";
+    if(band && price){
+      var downPct = Math.max(0,(price - band.low)/price);
+      var protectedPeso = sellAmt * downPct;
+      txtS += " In peso terms: selling that portion now protects roughly \u20b1"+tpPesoFmt(protectedPeso)+" of value if the price slides to \u20b1"+tcFmtLvl(band.low)+" as this read expects.";
+    }
+    return txtS;
+  }
+
+  // HOLD
+  return "How much to trade (on a \u20b1"+tpPesoFmt(TP_REF_CAPITAL)+" reference): \u20b10 \u2014 keep the full amount in cash for this coin. A HOLD means neither buying nor selling has an edge right now, so any peso deployed here would be paying for a guess. If you already own it, this isn't a signal to sell either \u2014 just hold what you have and wait for the levels above to break.";
 }
 
 // ── Main render ──
@@ -4026,8 +4092,11 @@ function tcRenderAll(sym){
   var verdictTxt = sig.signal + ' \u2014 ' + actionTxt + '. RSI(14) + SMA20/50 trend (volume-confirmed) + real ATR/support-resistance where the trailing ~30 days of real-wick data allows it.';
   var trig = tcTriggerLevels(sig);
   var entryExitTxt = trig ? tcEntryExitPlan(sig) : 'Not enough data yet to set reliable entry/exit levels.';
-  var fiveDayTxt = trig ? tcFiveDayOutlook(sig, trig.sup, trig.res) : null;
-  recEl.innerHTML = tpBulletsHTML([verdictTxt + '<br><br>' + entryExitTxt].concat(fiveDayTxt ? [fiveDayTxt] : []));
+  var aligned = (sig.signal==='BUY' && sig.trend==='BULL') || (sig.signal==='SELL' && sig.trend==='BEAR');
+  var opposed = (sig.signal==='BUY' && sig.trend==='BEAR') || (sig.signal==='SELL' && sig.trend==='BULL');
+  var band = tcProjectedBand(sig);
+  var sizingTxt = tcPositionPlan(sig, band, aligned, opposed);
+  recEl.innerHTML = tpBulletsHTML([verdictTxt + '<br><br>' + entryExitTxt].concat(sizingTxt ? [sizingTxt] : []));
   var recTag = document.getElementById('tc-summary-rec-tag');
   recTag.textContent = 'RECOMMENDATION';
   recTag.className = 'tp-summary-tag ' + sig.signal;
@@ -4053,7 +4122,7 @@ function tcRenderAll(sym){
      sig.trend==='BEAR' ? 'a confirmed downtrend'+(sig.volConfirmed?', backed by above-average volume.':', though on below-average volume (half-weighted in the score).') :
      'inside the buffer band, so no confirmed trend either way.');
 
-  document.getElementById('tc-summary-levels-text').innerHTML = tcLevelsNarrative(sig);
+  document.getElementById('tc-summary-levels-text').innerHTML = tpBulletsHTML(tcLevelsNarrative(sig));
 
   var s = sig.series;
   var lo52 = Math.min.apply(null, s.slice(-365).map(function(b){return b.low;}));
