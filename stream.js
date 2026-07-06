@@ -1026,7 +1026,23 @@ function openPlayer(ep) {
 }
 
 // ─── SERVER STATE ───
+// Picklist order matches user-specified order. Movies/TV only — anime keeps its fixed MegaPlay path below.
+const SERVER_LIST = [
+  { key:'vidlink',    label:'Vidlink' },
+  { key:'vidsrc',     label:'Vidsrc' },
+  { key:'videasy',    label:'Videasy' },
+  { key:'vixsrc',     label:'Vixsrc' },
+  { key:'2embed',     label:'2embed' },
+  { key:'superembed', label:'Superembed' },
+  { key:'autoembed',  label:'Auto embed' },
+  { key:'vidfast',    label:'VidFast' },
+  { key:'cinepro',    label:'CinePro' },   // no public embed endpoint — self-hosted only; auto-skips
+  { key:'vidcore',    label:'VidCore' },
+  { key:'ezvidapi',   label:'ezvidapi' }
+];
 let currentServer = 'vidlink';
+let triedServers = new Set();
+let serverLoadTimer = null;
 
 function buildUrl(server) {
   const item = currentItem;
@@ -1039,20 +1055,54 @@ function buildUrl(server) {
 
   const tmdbId = item.tmdb_id || item.id;
   const seasonNum = season?.season_number || 1;
+  const isMovie = item.type === 'movie';
 
-  if (server === 'vidlink') {
-    if (item.type === 'movie')
-      return `https://vidlink.pro/movie/${tmdbId}?autoplay=true&primaryColor=e63946`;
-    return `https://vidlink.pro/tv/${tmdbId}/${seasonNum}/${currentEp}?autoplay=true&primaryColor=e63946`;
+  switch (server) {
+    case 'vidlink':
+      return isMovie
+        ? `https://vidlink.pro/movie/${tmdbId}?autoplay=true&primaryColor=e63946`
+        : `https://vidlink.pro/tv/${tmdbId}/${seasonNum}/${currentEp}?autoplay=true&primaryColor=e63946`;
+    case 'vidsrc':
+      return isMovie
+        ? `https://vidsrc.mov/embed/movie/${tmdbId}`
+        : `https://vidsrc.mov/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case 'videasy':
+      return isMovie
+        ? `https://player.videasy.net/movie/${tmdbId}`
+        : `https://player.videasy.net/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case 'vixsrc':
+      return isMovie
+        ? `https://vixsrc.to/movie/${tmdbId}`
+        : `https://vixsrc.to/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case '2embed':
+      return isMovie
+        ? `https://www.2embed.cc/embed/${tmdbId}`
+        : `https://www.2embed.cc/embedtv/${tmdbId}&s=${seasonNum}&e=${currentEp}`;
+    case 'superembed':
+      return isMovie
+        ? `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`
+        : `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${seasonNum}&e=${currentEp}`;
+    case 'autoembed':
+      return isMovie
+        ? `https://player.autoembed.cc/embed/movie/${tmdbId}`
+        : `https://player.autoembed.cc/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case 'vidfast':
+      return isMovie
+        ? `https://vidfast.pro/movie/${tmdbId}`
+        : `https://vidfast.pro/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case 'vidcore':
+      return isMovie
+        ? `https://vidcore.org/embed/movie/${tmdbId}`
+        : `https://vidcore.org/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case 'ezvidapi':
+      return isMovie
+        ? `https://ezvidapi.com/embed/movie/${tmdbId}`
+        : `https://ezvidapi.com/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case 'cinepro':
+      return ''; // self-hosted scraper, no public embed URL — handled as auto-skip in loadServerUrl()
+    default:
+      return '';
   }
-
-  if (server === 'vidsrcmov') {
-    if (item.type === 'movie')
-      return `https://vidsrc.mov/embed/movie/${tmdbId}`;
-    return `https://vidsrc.mov/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
-  }
-
-  return '';
 }
 
 function updateServerButtons() {
@@ -1063,11 +1113,58 @@ function updateServerButtons() {
     btns.innerHTML = '<span style="font-size:10px;color:var(--muted)">Server: <b style="color:var(--accent2)">MegaPlay</b></span>';
     return;
   }
+  const opts = SERVER_LIST.map(s =>
+    `<option value="${s.key}" ${currentServer===s.key ? 'selected' : ''}>${s.label}</option>`
+  ).join('');
   btns.innerHTML = `
-    <span style="font-size:10px;color:var(--muted);margin-right:2px;">Server:</span>
-    <button class="srv-btn ${currentServer==='vidlink'?'active':''}" onclick="switchServer('vidlink')">VidLink</button>
-    <button class="srv-btn ${currentServer==='vidsrcmov'?'active':''}" onclick="switchServer('vidsrcmov')">VidSrc</button>
+    <select id="server-picklist" onchange="switchServer(this.value)" style="width:100%;box-sizing:border-box;display:block;background:var(--surface);color:#fff;border:1px solid var(--border);border-radius:0;padding:12px 10px;font-size:13px;font-weight:600;text-align:center;text-align-last:center;-moz-text-align-last:center;">
+      ${opts}
+    </select>
+    <div id="server-status" style="display:none;font-size:11px;color:var(--muted);text-align:center;padding:6px 10px;"></div>
   `;
+}
+
+// Loads the current server's URL into the iframe, with a load-timeout fallback.
+// Note: cross-origin iframes can't be inspected for app-level errors (e.g. a provider's
+// own "not found" page) — only network-level failures (onerror) and a load timeout are
+// detectable. That's the best available signal without per-provider integration.
+function loadServerUrl() {
+  clearTimeout(serverLoadTimer);
+  const item = currentItem;
+  const isAnime = item?.type === 'anime';
+  const iframe = document.getElementById('player-iframe');
+  const status = document.getElementById('server-status');
+  const url = buildUrl(currentServer);
+
+  if (!isAnime && !url) {
+    const label = SERVER_LIST.find(s => s.key === currentServer)?.label || currentServer;
+    if (status) { status.style.display = 'block'; status.textContent = `${label} has no direct embed — trying next server…`; }
+    autoFallback();
+    return;
+  }
+
+  if (status) status.style.display = 'none';
+  iframe.onerror = function() { autoFallback(); };
+  iframe.onload = function() { clearTimeout(serverLoadTimer); };
+  iframe.src = url;
+
+  if (!isAnime) {
+    serverLoadTimer = setTimeout(autoFallback, 10000); // no 'load' fired in 10s → assume dead/blocked
+  }
+}
+
+function autoFallback() {
+  const status = document.getElementById('server-status');
+  triedServers.add(currentServer);
+  const next = SERVER_LIST.find(s => !triedServers.has(s.key));
+  if (!next) {
+    if (status) { status.style.display = 'block'; status.textContent = 'No working server found. Try again later or pick one manually.'; }
+    return;
+  }
+  currentServer = next.key;
+  triedServers.add(next.key);
+  updateServerButtons();
+  loadServerUrl();
 }
 
 // ── WATCH TIMER ──
@@ -1114,19 +1211,31 @@ function resumeFromTracked() {
   var seasonNum = season ? (season.season_number || 1) : 1;
   if (!tmdbId) return;
   var url = '';
+  // Only providers with a confirmed resume/seek parameter are handled here.
+  // Others will reload from the start via loadServerUrl().
   if (currentServer === 'vidlink') {
     if (item.type === 'movie')
       url = `https://vidlink.pro/movie/${tmdbId}?autoplay=true&primaryColor=e63946&startAt=${t}`;
     else
       url = `https://vidlink.pro/tv/${tmdbId}/${seasonNum}/${currentEp}?autoplay=true&primaryColor=e63946&startAt=${t}`;
-  } else if (currentServer === 'vidsrcmov') {
+  } else if (currentServer === 'vidsrc') {
     // vidsrc.mov supports ?t= for timestamp
     if (item.type === 'movie')
       url = `https://vidsrc.mov/embed/movie/${tmdbId}?t=${t}`;
     else
       url = `https://vidsrc.mov/embed/tv/${tmdbId}/${seasonNum}/${currentEp}?t=${t}`;
+  } else if (currentServer === 'vixsrc') {
+    if (item.type === 'movie')
+      url = `https://vixsrc.to/movie/${tmdbId}?startAt=${t}`;
+    else
+      url = `https://vixsrc.to/tv/${tmdbId}/${seasonNum}/${currentEp}?startAt=${t}`;
   }
-  if (url) document.getElementById('player-iframe').src = url;
+  if (url) {
+    clearTimeout(serverLoadTimer);
+    document.getElementById('player-iframe').src = url;
+  } else {
+    loadServerUrl(); // provider has no confirmed resume param; reload from start
+  }
   startWatchTimer(); // restart timer from 0 on new server
 }
 
@@ -1135,7 +1244,8 @@ function switchServer(srv) {
   stopWatchTimer();
   showResume();
   currentServer = srv;
-  localStorage.setItem('preferredServer', srv);
+  localStorage.setItem('preferredServer', srv); // manual pick becomes the new default
+  triedServers = new Set([srv]); // fresh fallback chain starting from this pick
   // Update current history state to include new server
   try {
     var st = history.state || {};
@@ -1143,16 +1253,19 @@ function switchServer(srv) {
     history.replaceState(st, '');
   } catch(e) {}
   updateServerButtons();
-  document.getElementById('player-iframe').src = buildUrl(currentServer);
+  loadServerUrl();
   startWatchTimer();
 }
 
 function playStream() {
-  currentServer = localStorage.getItem('preferredServer') || 'vidlink';
+  var stored = localStorage.getItem('preferredServer') || 'vidlink';
+  if (stored === 'vidsrcmov') stored = 'vidsrc'; // migrate old key name from before the picklist update
+  currentServer = stored;
+  triedServers = new Set([currentServer]);
   hideResume();
   stopWatchTimer();
-  document.getElementById('player-iframe').src = buildUrl(currentServer);
   updateServerButtons();
+  loadServerUrl();
   startWatchTimer();
 }
 
