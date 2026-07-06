@@ -329,13 +329,28 @@ var TP_GH_REF = 'main';
 var tpRefreshPollTimer = null;
 var tpRefreshTimeoutTimer = null;
 
+var TP_GH_TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 function tpGetGithubToken(){
-  var t = sessionStorage.getItem('tp_gh_token');
-  if (!t) {
-    t = window.prompt('Paste your GitHub Personal Access Token (needs "repo" + "workflow" scope).\n\nStored only for this browser session — never saved to the site or the repo.');
-    if (t && t.trim()) sessionStorage.setItem('tp_gh_token', t.trim());
+  var raw = localStorage.getItem('tp_gh_token');
+  if (raw) {
+    try {
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.token && parsed.ts && (Date.now() - parsed.ts) < TP_GH_TOKEN_MAX_AGE_MS) {
+        return parsed.token;
+      }
+    } catch(e){}
+    localStorage.removeItem('tp_gh_token'); // expired or malformed — fall through to re-prompt
   }
-  return t ? t.trim() : null;
+  var t = window.prompt('Paste your GitHub Personal Access Token (needs "repo" + "workflow" scope).\n\nStored on this device for up to 30 days — never saved to the site or the repo.');
+  if (t && t.trim()) {
+    localStorage.setItem('tp_gh_token', JSON.stringify({token: t.trim(), ts: Date.now()}));
+    return t.trim();
+  }
+  return null;
+}
+function tpClearGithubToken(){
+  localStorage.removeItem('tp_gh_token');
 }
 
 function tpClearRefreshTimers(){
@@ -436,7 +451,7 @@ async function tpTriggerRefresh(){
       var deadline = Date.now() + 5 * 60 * 1000; // 5 min safety cap
       tpRefreshPollTimer = setTimeout(function(){ tpFindNewRun(ghHeaders, dispatchTime - 5000, deadline); }, 2000);
     } else if (resp.status === 401) {
-      sessionStorage.removeItem('tp_gh_token');
+      tpClearGithubToken();
       tpFinishRefresh('Token invalid/expired ❌ — tap again to re-enter.');
     } else if (resp.status === 403) {
       tpFinishRefresh('Forbidden ❌ — token needs "repo" + "workflow" scope.');
@@ -493,7 +508,7 @@ async function tpTriggerBacktest(){
         btn.disabled = false;
       }, 3 * 60 * 1000);
     } else if (resp.status === 401) {
-      sessionStorage.removeItem('tp_gh_token');
+      tpClearGithubToken();
       status.textContent = 'Token invalid/expired ❌ — tap again to re-enter.';
       btn.disabled = false;
     } else if (resp.status === 403) {
@@ -3409,7 +3424,8 @@ function tcRenderTop(){
     rows = TC_COINS.map(function(c){
       var q = tcGetQuote(c.sym); if(!q) return null;
       var sig = tcSignal(c.sym);
-      return {sym:c.sym, name:c.name, price:q.price, pct:q.change24hPct||0, signal: sig?sig.signal:null,
+      return {sym:c.sym, name:c.name, price:q.price, pct:q.change24hPct||0,
+              signal: sig?sig.signal:null, trend: sig?sig.trend:'FLAT',
               confidencePct: sig?sig.confidencePct:null};
     }).filter(Boolean).sort(function(a,b){ return b.pct - a.pct; }).slice(0,10);
   }
@@ -3421,10 +3437,18 @@ function tcRenderTop(){
   el.innerHTML = rows.map(function(g, i){
     var dir = g.pct >= 0 ? 'up' : 'down';
     var sign = g.pct >= 0 ? '+' : '';
+    // Only badge confirmed, aligned calls — momentum (signal) AND trend
+    // agreeing. BUY+FLAT, SELL+FLAT, HOLD, or the (currently impossible)
+    // BUY+BEAR/SELL+BULL combos all show no badge, but the row still shows.
+    var aligned = (g.signal==='BUY' && g.trend==='BULL') || (g.signal==='SELL' && g.trend==='BEAR');
+    var badge = aligned
+      ? ' <span class="tp-gainer-tag '+g.signal+'" style="'+tpTagStyle(g.signal, g.confidencePct)+'">'+g.signal+'</span>'+
+        ' <span class="tp-gainer-tag '+g.trend+'" style="'+tpTagStyle(g.trend, g.confidencePct)+'">'+g.trend+'</span>'
+      : '';
     return '<div class="tp-gainer-row" onmousedown="tcSelectCoin(\''+g.sym+'\')">'+
       '<span class="tp-gainer-rank">'+(i+1)+'</span>'+
       '<div class="tp-gainer-info">'+
-        '<div class="tp-gainer-sym">'+g.sym+(g.signal?(' <span class="tp-gainer-tag '+g.signal+'" style="'+tpTagStyle(g.signal, g.confidencePct)+'">'+g.signal+'</span>'):'')+'</div>'+
+        '<div class="tp-gainer-sym">'+g.sym+badge+'</div>'+
         '<div class="tp-gainer-name">'+g.name+'</div>'+
       '</div>'+
       '<span class="tp-gainer-price">'+tcFmtUSD(g.price)+'</span>'+
@@ -3703,7 +3727,7 @@ async function tcTriggerRefresh(){
       var deadline = Date.now() + 8*60*1000; // 8 min safety cap — 8 sequential coin fetches with rate-limit spacing
       tcRefreshPollTimer = setTimeout(function(){ tcFindNewRun(ghHeaders, dispatchTime-5000, deadline, preGeneratedAt); }, 2000);
     } else if (resp.status === 401) {
-      sessionStorage.removeItem('tp_gh_token');
+      tpClearGithubToken();
       tcFinishRefresh('Token invalid/expired \u274c \u2014 tap again to re-enter.');
     } else if (resp.status === 403) {
       tcFinishRefresh('Forbidden \u274c \u2014 token needs "repo" + "workflow" scope.');
@@ -3756,7 +3780,7 @@ async function tcTriggerBacktest(){
         if(btn) btn.disabled = false;
       }, 60*1000);
     } else if (resp.status === 401) {
-      sessionStorage.removeItem('tp_gh_token');
+      tpClearGithubToken();
       if(status) status.textContent = 'Token invalid/expired \u274c \u2014 tap again to re-enter.';
       if(btn) btn.disabled = false;
     } else if (resp.status === 403) {
