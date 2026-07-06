@@ -173,8 +173,9 @@
     .player-top-info{flex:1;min-width:0;}
     .player-top-info h3{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .player-top-info p{font-size:10px;color:var(--muted);margin-top:1px;}
-    .player-frame{width:100%;padding-top:56.25%;position:sticky;top:0;z-index:80;background:#000;}
+    .player-frame{width:100%;padding-top:56.25%;position:relative;background:#000;}
     .player-frame iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none;display:block;}
+    .player-sticky-wrap{position:sticky;top:0;z-index:80;background:var(--bg);}
     .player-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);}
     .server-label{font-size:10px;color:var(--muted);}
     .server-label b{color:var(--accent2);}
