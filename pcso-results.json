@@ -1,21 +1,15 @@
 {
-  "updated": "2026-07-06T20:16:49.424264+08:00",
-  "date": "July 6, 2026",
+  "updated": "2026-07-07T06:28:49.980168+08:00",
+  "date": "July 7, 2026",
   "ez2": [
     {
       "draw": "2PM",
-      "nums": [
-        22,
-        1
-      ],
+      "nums": [],
       "cutoff": 14
     },
     {
       "draw": "5PM",
-      "nums": [
-        4,
-        12
-      ],
+      "nums": [],
       "cutoff": 17
     },
     {
@@ -48,16 +42,16 @@
     {
       "game": "6/55",
       "nums": [
-        14,
-        15,
-        23,
-        13,
-        45,
-        9
+        49,
+        4,
+        25,
+        55,
+        18,
+        42
       ],
       "done": true,
-      "jackpot": "₱59.6M",
-      "draw_date": "July 04, 2026",
+      "jackpot": "₱63.1M",
+      "draw_date": "July 06, 2026",
       "winners": 0,
       "days": [
         1,
@@ -88,17 +82,17 @@
     {
       "game": "6/45",
       "nums": [
-        43,
-        2,
-        13,
-        5,
+        3,
         36,
-        1
+        6,
+        32,
+        16,
+        45
       ],
       "done": true,
-      "jackpot": "₱98.0M",
-      "draw_date": "July 03, 2026",
-      "winners": 1,
+      "jackpot": "₱15.0M",
+      "draw_date": "July 06, 2026",
+      "winners": 0,
       "days": [
         1,
         3,
