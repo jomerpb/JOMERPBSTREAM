@@ -1066,9 +1066,11 @@ function tpComputeTopGainersFromLive(bearish){
   PSE_ALL_STOCKS.forEach(function(t){
     var q = tpLiveQuotes[t.sym];
     if (!q || q.status !== 'Open' || q.last == null || !q.previousClose) return;
-    var trend = tpGetGainerTrend(tpLiveSeries[t.sym] || tpLiveSeriesAll[t.sym]);
+    var series = tpLiveSeries[t.sym] || tpLiveSeriesAll[t.sym];
+    var sig = (Array.isArray(series) && series.length >= 50) ? tpComputeSignal(series) : null;
     candidates.push({sym: t.sym, name: t.name, price: q.last, pct: q.changePct,
-      signal: trend ? trend.signal : null, trendConfidencePct: trend ? trend.trendConfidencePct : null});
+      signal: sig ? sig.signal : null, trend: sig ? sig.trend : 'FLAT',
+      confidencePct: sig ? sig.confidencePct : null});
   });
   if (bearish) {
     candidates = candidates.filter(function(c){ return c.pct < 0; });
@@ -1098,10 +1100,11 @@ function tpComputeTopGainersFromHistory(bearish){
       prev = mock[mock.length-2];
     }
     if (!prev || !prev.close) return;
-    var trend = tpGetGainerTrend(series); // real series only -- null if mock was used above
+    var sig = (Array.isArray(series) && series.length >= 50) ? tpComputeSignal(series) : null;
     candidates.push({sym: t.sym, name: t.name, price: last.close, lastDate: last.date, prevDate: prev.date,
       pct: (last.close-prev.close)/prev.close*100,
-      signal: trend ? trend.signal : null, trendConfidencePct: trend ? trend.trendConfidencePct : null});
+      signal: sig ? sig.signal : null, trend: sig ? sig.trend : 'FLAT',
+      confidencePct: sig ? sig.confidencePct : null});
   });
 
   // Session date = the date most tickers actually last traded on. Excludes
@@ -1153,6 +1156,7 @@ function tpComputeTopBullish(){
     var sma50 = tpSMA(closes, 50, lastIdx);
     var trend = tpGetTrendState(sma20, sma50);
     if (trend.state !== 'BULL') return;
+    var sig = tpComputeSignal(series);
     // Price + today's % change come from the live-quotes snapshot when
     // available (fresher than the EOD history bars), else the last two
     // history closes — same preference order as the picklist.
@@ -1167,7 +1171,7 @@ function tpComputeTopBullish(){
       pct = (prev && prev.close) ? (price - prev.close) / prev.close * 100 : 0;
     }
     candidates.push({sym: t.sym, name: t.name, price: price, pct: pct,
-      gapPct: trend.gapPct, trendConfidencePct: trend.confidencePct, signal: 'BULL'});
+      gapPct: trend.gapPct, trend: 'BULL', signal: sig.signal, confidencePct: sig.confidencePct});
   });
   // Strongest SMA20/SMA50 separation first — the widest, cleanest gap is
   // the most established uptrend (this is also what drives the trend
@@ -1223,10 +1227,18 @@ function tpRenderTopGainers(){
   el.innerHTML = top.map(function(g, i){
     var dir = g.pct >= 0 ? 'up' : 'down';
     var sign = g.pct >= 0 ? '+' : '';
+    // Only badge confirmed, aligned calls — momentum (signal) AND trend
+    // agreeing. HOLD, BUY+FLAT, SELL+FLAT (or the mathematically
+    // impossible BUY+BEAR/SELL+BULL) show no badge, row still shows.
+    var aligned = (g.signal==='BUY' && g.trend==='BULL') || (g.signal==='SELL' && g.trend==='BEAR');
+    var badge = aligned
+      ? ' <span class="tp-gainer-tag '+g.signal+'" style="'+tpTagStyle(g.signal, g.confidencePct)+'">'+g.signal+'</span>'+
+        ' <span class="tp-gainer-tag '+g.trend+'" style="'+tpTagStyle(g.trend, g.confidencePct)+'">'+g.trend+'</span>'
+      : '';
     return '<div class="tp-gainer-row" onmousedown="tpSelectTicker(\''+g.sym+'\')">'+
       '<span class="tp-gainer-rank">'+(i+1)+'</span>'+
       '<div class="tp-gainer-info">'+
-        '<div class="tp-gainer-sym">'+g.sym+(g.signal?(' <span class="tp-gainer-tag '+g.signal+'" style="'+tpTagStyle(g.signal, g.trendConfidencePct)+'">'+g.signal+'</span>'):'')+'</div>'+
+        '<div class="tp-gainer-sym">'+g.sym+badge+'</div>'+
         '<div class="tp-gainer-name">'+g.name+'</div>'+
       '</div>'+
       '<span class="tp-gainer-price">\u20b1'+g.price.toFixed(2)+'</span>'+
