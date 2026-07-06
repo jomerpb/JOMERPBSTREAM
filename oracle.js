@@ -509,6 +509,100 @@ function layerIChing(drawHour){
   };
 }
 
+// ══════════════════════════
+// LAYER 9: TAROT (Major Arcana — card of the day)
+// Date digits reduced into Major Arcana range 0–21, per the standard
+// "Tarot card of the day" numerology method. No personal data.
+// ══════════════════════════
+function layerTarot(drawHour){
+  var dateStr=String(_D)+String(_M)+String(_Y);
+  var rawSum=dateStr.split('').reduce(function(a,b){return a+parseInt(b);},0);
+  var cardNum=rawSum;
+  var wasReduced=false;
+  while(cardNum>21){
+    cardNum=String(cardNum).split('').reduce(function(a,b){return a+parseInt(b);},0);
+    wasReduced=true;
+  }
+  var majorArcana=[
+    {name:'The Fool',gambling:'Fresh, unpredictable energy · take the leap'},
+    {name:'The Magician',gambling:'Willpower manifests · confident choices favored'},
+    {name:'The High Priestess',gambling:'Trust intuition over pure logic today'},
+    {name:'The Empress',gambling:'Abundance flowing · receptive to gain'},
+    {name:'The Emperor',gambling:'Structure and discipline in number choice'},
+    {name:'The Hierophant',gambling:'Stick to known patterns · tradition favored'},
+    {name:'The Lovers',gambling:'Balance of two forces · pairs significant'},
+    {name:'The Chariot',gambling:'Willful drive forward · decisive picks'},
+    {name:'Strength',gambling:'Quiet inner confidence · patience rewarded'},
+    {name:'The Hermit',gambling:'Solitary reflection · trust your own system'},
+    {name:'Wheel of Fortune',gambling:'Cycles turning · classic luck-card energy'},
+    {name:'Justice',gambling:'Balance and fairness · measured approach'},
+    {name:'The Hanged Man',gambling:'Pause before acting · reconsider numbers'},
+    {name:'Death',gambling:'Endings clear the way for new sequences'},
+    {name:'Temperance',gambling:'Moderation · blend hot and cold numbers'},
+    {name:'The Devil',gambling:'Watch for impulsive over-betting'},
+    {name:'The Tower',gambling:'Sudden change · unexpected numbers surface'},
+    {name:'The Star',gambling:'Hope and renewal · favorable open energy'},
+    {name:'The Moon',gambling:'Uncertainty · lean on data over illusion'},
+    {name:'The Sun',gambling:'Bright, favorable energy · optimistic pick'},
+    {name:'Judgement',gambling:'Reckoning and renewal · reassess your pattern'},
+    {name:'The World',gambling:'Completion · a cycle of picks closes well'},
+  ];
+  var card=majorArcana[cardNum]||majorArcana[0];
+  var reducedDigit=reduce(cardNum);
+  var extraDigits=[];
+  if(cardNum>=10){
+    var tens=Math.floor(cardNum/10),ones=cardNum%10;
+    extraDigits=[tens===0?9:tens,ones===0?9:ones];
+  }
+  var nums=[...new Set([reducedDigit,...extraDigits])];
+  return {
+    nums,cardNum,cardName:card.name,gambling:card.gambling,
+    steps:[
+      `<b>Date digit sum:</b> ${dateStr.split('').join('+')}=${rawSum}`+(wasReduced?` → reduced to <b>${cardNum}</b> (Major Arcana range 0–21)`:''),
+      `<b>Card of the day:</b> ${cardNum} — <b>${card.name}</b>`,
+      `<b>Reading:</b> ${card.gambling}`,
+      `<b>Card digit(s):</b> <b>${nums.join(',')}</b>`,
+    ]
+  };
+}
+
+// ══════════════════════════
+// LAYER 10: ANGEL NUMBERS (repeating-digit resonance)
+// Scans today's date+hour string for genuine repeating-digit patterns
+// (111, 777, mirror dates like 07/07, etc). Deliberately contributes NO
+// digits on days with no real pattern — this layer does not manufacture
+// hits, consistent with how the practice is actually used. No personal data.
+// ══════════════════════════
+function layerAngelNumbers(drawHour){
+  var h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
+  var dateStr=pad(_D)+pad(_M)+String(_Y)+String(h);
+  var hits=[];
+  var i=0;
+  while(i<dateStr.length){
+    var j=i;
+    while(j<dateStr.length&&dateStr[j]===dateStr[i]) j++;
+    var runLen=j-i;
+    if(runLen>=3){
+      var digRaw=parseInt(dateStr[i]);
+      hits.push({pattern:dateStr[i].repeat(runLen),digit:digRaw===0?9:digRaw});
+    }
+    i=j;
+  }
+  var mirrorHit=(_D===_M);
+  var nums=[...new Set(hits.map(function(x){return x.digit;}))];
+  if(mirrorHit){ var md=reduce(_D); if(!nums.includes(md)) nums.push(md); }
+  var hasSignal=nums.length>0;
+  return {
+    nums,hasSignal,hits,mirrorHit,dateStr,
+    steps:[
+      `<b>Date+hour string:</b> ${dateStr}`,
+      hits.length?`<b>Repeating digit run(s):</b> ${hits.map(function(x){return x.pattern;}).join(', ')} → digit(s): <b>${nums.join(',')}</b>`:`<b>No repeating digit run found today</b>`,
+      mirrorHit?`<b>Mirror date:</b> Day=Month(${_D}) → resonance digit <b>${reduce(_D)}</b>`:`<b>No day=month mirror today</b>`,
+      hasSignal?`<b>Angel number signal active today</b>`:`<b>No angel number pattern today — this layer honestly contributes no digits (not manufactured)</b>`,
+    ]
+  };
+}
+
 function layerStats(gameKey,drawHour){
   var game=GAMES[gameKey];
   var isEZ2=gameKey==='ez2';
@@ -576,11 +670,11 @@ function calcEnergy(bazi,astro,fs){
 }
 
 // ══════════════════════════
-// MASTER CONVERGENCE — 8 digit sources
+// MASTER CONVERGENCE — 10 digit sources
 // ══════════════════════════
 function convergence(layers,gameKey){
   var game=GAMES[gameKey];
-  var LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
+  var LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','Ta','An','St'];
   var digitScores={};
   var rawStatW={};
   for(var d=1;d<=9;d++) rawStatW[d]=layers.stats.digitWeight[d]||0;
@@ -594,16 +688,18 @@ function convergence(layers,gameKey){
     if(layers.fs.nums.includes(d)) inL.push(4);
     if(layers.iching.nums.includes(d)) inL.push(5);
     if(layers.astro.pofNums.includes(d)) inL.push(6);
-    if(layers.stats.topDigits.slice(0,4).includes(d)) inL.push(7);
+    if(layers.tarot.nums.includes(d)) inL.push(7);
+    if(layers.angel.nums.includes(d)) inL.push(8);
+    if(layers.stats.topDigits.slice(0,4).includes(d)) inL.push(9);
     var statFrac=rawStatW[d]/maxStatW; // 0–1, game-specific
-    // CORRECTION: indices 0-6 (Py,Ch,As,Ba,Fs,IC,PoF) are all derived from the
-    // same date/hour input — they are not independent confirmations of each
-    // other, so their combined contribution is capped/dampened rather than
-    // summed 1-for-1. Index 7 (Stats) is the only layer built from real
+    // CORRECTION: indices 0-8 (Py,Ch,As,Ba,Fs,IC,PoF,Ta,An) are all derived
+    // from the same date/hour input — they are not independent confirmations
+    // of each other, so their combined contribution is capped/dampened rather
+    // than summed 1-for-1. Index 9 (Stats) is the only layer built from real
     // historical draw data, so it is weighted on its own scale instead of
     // being just "1 more vote" among many correlated ones.
-    var metaCount=inL.filter(i=>i<7).length; // 0-7
-    var metaWeight=Math.min(1,metaCount/7)*4; // correlated cluster, capped at 4
+    var metaCount=inL.filter(i=>i<9).length; // 0-9
+    var metaWeight=Math.min(1,metaCount/9)*4; // correlated cluster, capped at 4
     var statScore=statFrac*5; // real-data layer, weighted up to 5
     digitScores[d]={count:inL.length,layers:inL,statWeight:rawStatW[d],metaCount:metaCount,score:metaWeight+statScore};
   }
@@ -736,8 +832,10 @@ async function generate(){
     `⚡ Clashes · combines · hidden stems · element balance…`,
     `🏮 Flying Star Lo Shu · monthly star · ${TODAY_PH}…`,
     `🔮 I Ching · hexagram from today's energy field…`,
+    `🃏 Tarot · Major Arcana card of the day…`,
+    `😇 Angel Numbers · scanning for repeating-digit resonance…`,
     `📊 PCSO ${game.short} historical data · freq+hot+overdue…`,
-    `🎯 8-source digit convergence · mapping to 1–${game.max}…`,
+    `🎯 10-source digit convergence · mapping to 1–${game.max}…`,
   ];
   var si=0;
   var el=document.getElementById('lsteps');
@@ -745,15 +843,17 @@ async function generate(){
   var iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
   setTimeout(()=>{
     clearInterval(iv);
-    var num,astro,bazi,fs,iching,stats,energy,layers,conv;
+    var num,astro,bazi,fs,iching,tarot,angel,stats,energy,layers,conv;
     try{num=layerNumerology(dh);}catch(e){console.error('layerNumerology:',e);num={pyNums:[7],chNums:[3],allNums:[3,7],steps:[]};}
     try{astro=layerAstrology(dh);}catch(e){console.error('layerAstrology:',e);astro={nums:[1,6],pofNums:[2],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,aspects:[],steps:[]};}
     try{bazi=layerBazi(dh);}catch(e){console.error('layerBazi:',e);bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',branch:'Wu',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
     try{fs=layerFengshui();}catch(e){console.error('layerFengshui:',e);fs={nums:[7,8,9],loShu:{C:8},steps:[]};}
     try{iching=layerIChing(dh);}catch(e){console.error('layerIChing:',e);iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
+    try{tarot=layerTarot(dh);}catch(e){console.error('layerTarot:',e);tarot={nums:[5],cardNum:5,cardName:'The Hierophant',gambling:'',steps:[]};}
+    try{angel=layerAngelNumbers(dh);}catch(e){console.error('layerAngelNumbers:',e);angel={nums:[],hasSignal:false,hits:[],mirrorHit:false,steps:[]};}
     try{stats=layerStats(currentGame,dh);}catch(e){console.error('layerStats:',e);stats={topDigits:[9,1,3],digitWeight:{},topNums:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){console.error('calcEnergy:',e);energy={bars:{Fire:30,Water:30,Wood:9,Metal:9,Earth:22}};}
-    layers={num,astro,bazi,fs,iching,stats};
+    layers={num,astro,bazi,fs,iching,tarot,angel,stats};
     try{conv=convergence(layers,currentGame);}catch(e){console.error('convergence:',e);conv={sorted:[],best:[]};}
     document.getElementById('loader').style.display='none';
     try{
@@ -776,8 +876,8 @@ async function generate(){
 // ══════════════════════════
 var BTIERS=['b1','b2','b3','b4','b5','b6'];
 function dotHTML(idxs,labels){
-  var icons=['Py','Ch','As','Ba','Fs','IC','PoF','St'];
-  var cls=['on','on','on','on','on','teal','teal','gold'];
+  var icons=['Py','Ch','As','Ba','Fs','IC','PoF','Ta','An','St'];
+  var cls=['on','on','on','on','on','teal','teal','teal','teal','gold'];
   return labels.map((l,i)=>`<span class="dot ${idxs.includes(i)?cls[i]:'off'}" title="${l}">${icons[i]}</span>`).join('');
 }
 function dCls(c){ return c>=8?'s8':c>=7?'s7':c>=6?'s6':c>=5?'s5':'s4'; }
@@ -805,7 +905,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     var d=digitOf(n);
     var ds=conv.digitScores[d];
     return `<div class="ball ${BTIERS[Math.min(i,5)]}">
-      ${pad(n)}<span class="btag">d${d}·${ds.count}/8</span>
+      ${pad(n)}<span class="btag">d${d}·${ds.count}/10</span>
     </div>`;
   }).join('');
   var altHTML=conv.altPicks.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
@@ -838,7 +938,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
   var digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
     <div class="dcard ${dCls(s.count)}">
       <div class="dnum">${s.digit}</div>
-      <div class="dscore">${s.count}/8 layers</div>
+      <div class="dscore">${s.count}/10 layers</div>
       <div class="ddots">${dotHTML(s.layers,conv.LABELS)}</div>
     </div>`).join('');
 
@@ -937,8 +1037,8 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       <div class="balls-eyebrow">Primary Pick — 12-Layer Expert Oracle</div>
       <div class="balls-row">${ballsHTML}</div>
       <div class="balls-note">
-        Ball tag = digit (d) + convergence score out of 8 sources<br>
-        Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · St=Stats
+        Ball tag = digit (d) + convergence score out of 10 sources<br>
+        Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · St=Stats
       </div>
     </div>
     <div class="alt-card" style="margin-bottom:14px;text-align:center;">
@@ -956,10 +1056,10 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       ${energyHTML}
     </div>
 
-    <div class="slabel">Step 1 — Digit Convergence · 8 Sources</div>
+    <div class="slabel">Step 1 — Digit Convergence · 10 Sources</div>
     <div class="legend">
       <span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span>
-      <span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF</span>
+      <span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF · Tarot · Angel Numbers</span>
       <span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span>
       <span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span>
     </div>
@@ -978,6 +1078,8 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
     ${lcard('🏮','Feng Shui — Flying Star + Lo Shu + Fixed Stars',layers.fs.nums,layers.fs.steps,'',false)}
     ${lcard('☯','I Ching — Hexagram 45 + Nuclear + Changing Line',layers.iching.nums,layers.iching.steps,ichingHTML,true)}
+    ${lcard('🃏','Tarot — Major Arcana Card of the Day',layers.tarot.nums,layers.tarot.steps,'',true)}
+    ${lcard('😇','Angel Numbers — Repeating-Digit Resonance',layers.angel.nums.length?layers.angel.nums:['—'],layers.angel.steps,'',true)}
     <div class="lcard">
       <div class="lhead">
         <div class="licon">📊</div>
@@ -998,7 +1100,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     </div>
 
     <div class="disc">
-      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified ${TODAY_PH} ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (dynamic daily pillars) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (cast from today's date) with nuclear and changing line, and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
+      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified ${TODAY_PH} ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (dynamic daily pillars) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (cast from today's date) with nuclear and changing line, Tarot (Major Arcana card of the day), Angel Numbers (repeating-digit resonance scan), and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
     </div>
   `;
 }
@@ -1020,20 +1122,22 @@ async function generatePersonal(){
   document.getElementById('loader').style.display='block';
   var gw=document.querySelector('#oracle-page .game-wrap'); if(gw) gw.style.display='none';
   document.getElementById('loader').scrollIntoView({behavior:'smooth',block:'start'});
-  var msgs=['🔢 Analyzing your numbers — Pythagorean + Chaldean…','🪐 Cross-referencing planetary positions…','🏛️ Horary chart — 5th house gambling…','⭐ Part of Fortune alignment…','☯️ BaZi day pillar compatibility…','🏮 Flying Star Lo Shu resonance…','🔮 I Ching hexagram match…','📊 PCSO '+game.short+' historical analysis…','🎯 Convergence scoring your numbers…'];
+  var msgs=['🔢 Analyzing your numbers — Pythagorean + Chaldean…','🪐 Cross-referencing planetary positions…','🏛️ Horary chart — 5th house gambling…','⭐ Part of Fortune alignment…','☯️ BaZi day pillar compatibility…','🏮 Flying Star Lo Shu resonance…','🔮 I Ching hexagram match…','🃏 Tarot card of the day…','😇 Angel Numbers scan…','📊 PCSO '+game.short+' historical analysis…','🎯 Convergence scoring your numbers…'];
   var si=0; var el=document.getElementById('lsteps'); el.innerHTML='';
   var iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
   setTimeout(()=>{
     clearInterval(iv);
-    var dh=currentGame==='ez2'?currentDraw:'9PM'; var num,astro,bazi,fs,iching,stats,energy,layers,conv;
+    var dh=currentGame==='ez2'?currentDraw:'9PM'; var num,astro,bazi,fs,iching,tarot,angel,stats,energy,layers,conv;
     try{num=layerNumerology(dh);}catch(e){num={pyNums:[7],chNums:[3],allNums:[3,7],steps:[]};}
     try{astro=layerAstrology(dh);}catch(e){astro={nums:[1,6],pofNums:[2],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,aspects:[],steps:[]};}
     try{bazi=layerBazi(dh);}catch(e){bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',branch:'Wu',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
     try{fs=layerFengshui();}catch(e){fs={nums:[7,8,9],loShu:{C:8},steps:[]};}
     try{iching=layerIChing(dh);}catch(e){iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
+    try{tarot=layerTarot(dh);}catch(e){tarot={nums:[5],cardNum:5,cardName:'The Hierophant',gambling:'',steps:[]};}
+    try{angel=layerAngelNumbers(dh);}catch(e){angel={nums:[],hasSignal:false,hits:[],mirrorHit:false,steps:[]};}
     try{stats=layerStats(currentGame,dh);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},topNums:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy={bars:{Fire:30,Water:30,Wood:9,Metal:9,Earth:22}};}
-    layers={num,astro,bazi,fs,iching,stats};
+    layers={num,astro,bazi,fs,iching,tarot,angel,stats};
     try{conv=convergence(layers,currentGame);}catch(e){conv={sorted:[],best:[]};}
     conv.picks=nums; conv.altPicks=[];
     document.getElementById('loader').style.display='none';
@@ -1052,7 +1156,7 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   var elCls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
   var elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
   var energyHTML=elOrder.map(e=>`<div class="erow"><span class="elabel">${elEmoji[e]} ${e}</span><div class="ebar-wrap"><div class="ebar ${elCls[e]}" style="width:0%" data-w="${energy[e].pct}%"></div></div><span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span></div>`).join('');
-  var ballsHTML=userNums.map((n,i)=>{ var d=digitOf(n); var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="ball ${BTIERS[Math.min(i,5)]}">${pad(n)}<span class="btag">d${d}·${ds.count}/8</span></div>`; }).join('');
+  var ballsHTML=userNums.map((n,i)=>{ var d=digitOf(n); var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="ball ${BTIERS[Math.min(i,5)]}">${pad(n)}<span class="btag">d${d}·${ds.count}/10</span></div>`; }).join('');
   var totalScore=userNums.reduce((s,n)=>{ var d=digitOf(n); return s+(conv.digitScores&&conv.digitScores[d]?conv.digitScores[d].score:0); },0);
   var pct=Math.round(totalScore/(userNums.length*9)*100);
   var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
@@ -1070,18 +1174,18 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
     ? `<div style="font-size:11px;color:var(--muted2);margin-top:4px;">📊 Historical check: ${backtestPct}% of last ${histDraws.length} draws had at least one number matching these digits (real data, not the formula)</div>`
     : '';
   var sourceHTML=`<div style="font-size:10px;color:${PCSO_HISTORY_STATUS.loaded?'var(--muted)':'#ff6b6b'};margin-top:4px;">${PCSO_HISTORY_STATUS.loaded?'✓':'⚠'} Data source: ${PCSO_HISTORY_STATUS.source}</div>`;
-  var seen={}; var digitCardsHTML=userNums.map(n=>{ var d=digitOf(n); if(seen[d]) return ''; seen[d]=true; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0,layers:[]}; return `<div class="dcard ${dCls(ds.count)}"><div class="dnum">${d}</div><div class="dscore">${ds.count}/8 layers</div><div class="ddots">${dotHTML(ds.layers,conv.LABELS||[])}</div></div>`; }).filter(Boolean).join('');
-  var mapHTML=userNums.map(n=>{ var d=digitOf(n); var cls=hotNums.includes(n)?'hot':(layers.stats.freq&&(layers.stats.freq[n]||0)>=2)?'warm':'cold'; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="maprow"><span class="mapdig">Your # <b>${pad(n)}</b> <span style="color:var(--muted)">(digit ${d} · ${ds.count}/8)</span></span><div class="mapnums"><span class="mn ${cls}">${pad(n)}</span></div></div>`; }).join('');
+  var seen={}; var digitCardsHTML=userNums.map(n=>{ var d=digitOf(n); if(seen[d]) return ''; seen[d]=true; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0,layers:[]}; return `<div class="dcard ${dCls(ds.count)}"><div class="dnum">${d}</div><div class="dscore">${ds.count}/10 layers</div><div class="ddots">${dotHTML(ds.layers,conv.LABELS||[])}</div></div>`; }).filter(Boolean).join('');
+  var mapHTML=userNums.map(n=>{ var d=digitOf(n); var cls=hotNums.includes(n)?'hot':(layers.stats.freq&&(layers.stats.freq[n]||0)>=2)?'warm':'cold'; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="maprow"><span class="mapdig">Your # <b>${pad(n)}</b> <span style="color:var(--muted)">(digit ${d} · ${ds.count}/10)</span></span><div class="mapnums"><span class="mn ${cls}">${pad(n)}</span></div></div>`; }).join('');
   var freqBarsHTML=userNums.map(n=>{ var f=layers.stats.freq&&layers.stats.freq[n]?layers.stats.freq[n]:0; var w=Math.min(100,f*12); return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:10px;color:var(--muted2);width:22px">${pad(n)}</span><div style="flex:1;height:6px;background:var(--border);border-radius:3px"><div style="height:6px;background:${hotNums.includes(n)?'var(--gold)':'var(--teal)'};border-radius:3px;width:${w}%"></div></div><span style="font-size:10px;color:var(--muted)">${f}x</span></div>`; }).join('');
   var horaryHTML=conv._horaryHTML||''; var baziHTML=conv._baziHTML||''; var ichingHTML=conv._ichingHTML||'';
   document.getElementById('results').innerHTML=`
     <div class="slabel">✦ Personal Number Analysis · ${game.name}</div>
-    <div class="balls-card"><div class="balls-eyebrow">Your Numbers — Oracle Convergence Check</div><div class="balls-row">${ballsHTML}</div><div class="balls-note">Ball tag = digit (d) + convergence score out of 8 sources<br>Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · St=Stats</div></div>
+    <div class="balls-card"><div class="balls-eyebrow">Your Numbers — Oracle Convergence Check</div><div class="balls-row">${ballsHTML}</div><div class="balls-note">Ball tag = digit (d) + convergence score out of 10 sources<br>Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · St=Stats</div></div>
     <div class="alt-card" style="margin-bottom:14px;text-align:center;"><div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div><div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div><div style="font-size:13px;color:var(--muted2)">${al}</div>${collisionHTML}${backtestHTML}${sourceHTML}</div>
     <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
     <div class="eflow"><div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>${energyHTML}</div>
     <div class="slabel">Step 1 — Digit Convergence · Your Numbers</div>
-    <div class="legend"><span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span><span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF</span><span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span><span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span></div>
+    <div class="legend"><span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span><span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF · Tarot · Angel Numbers</span><span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span><span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span></div>
     <div class="dgrid">${digitCardsHTML}</div>
     <div class="slabel">Step 2 — Your Numbers vs Oracle Map · 1–${game.max}</div>
     <div class="lcard"><div class="lsteps" style="border:none;padding:0;margin-bottom:10px">🔥 Gold = Hot number &nbsp; 💜 Purple = 2+ recent &nbsp; Gray = Cold</div>${mapHTML}</div>
@@ -1093,6 +1197,8 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
     ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
     ${lcard('🏮','Feng Shui — Flying Star + Lo Shu + Fixed Stars',layers.fs.nums,layers.fs.steps,'',false)}
     ${lcard('☯','I Ching — Hexagram + Nuclear + Changing Line',layers.iching.nums,layers.iching.steps,ichingHTML,true)}
+    ${lcard('🃏','Tarot — Major Arcana Card of the Day',layers.tarot.nums,layers.tarot.steps,'',true)}
+    ${lcard('😇','Angel Numbers — Repeating-Digit Resonance',layers.angel.nums.length?layers.angel.nums:['—'],layers.angel.steps,'',true)}
     <div class="lcard"><div class="lhead"><div class="licon">📊</div><div><div class="lname">PCSO ${game.short} — Historical Data</div><div class="lpills">${layers.stats.topDigits.slice(0,5).map(d=>`<span class="pill g">${d}</span>`).join('')}</div></div></div><div class="lsteps">• <b>Hot numbers:</b> ${hotNums.map(n=>pad(n)).join(', ')}<br>• <b>Top stat digits:</b> ${layers.stats.topDigits.slice(0,5).join(', ')}<br>• <b>Draws analyzed:</b> ${layers.stats.draws?layers.stats.draws.length:16} · Pool: 1–${game.max}</div><div class="st-grid"><div class="stbox"><div class="stitle">🔥 Hot Numbers</div>${hotNums.map(n=>`<span class="hnum">${pad(n)}</span>`).join('')}</div><div class="stbox"><div class="stitle">📈 Your Numbers Frequency</div>${freqBarsHTML}</div></div></div>
     <div class="disc">⚠️ [Guessing] — For entertainment only. No method can guarantee lottery outcomes. Play responsibly.</div>`;
 }
