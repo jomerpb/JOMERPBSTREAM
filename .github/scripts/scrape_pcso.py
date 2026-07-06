@@ -140,7 +140,7 @@ def parse_individual(html, max_val):
         if not h2:
             continue
 
-        nums, jackpot, draw_date = [], '', ''
+        nums, jackpot, draw_date, winners = [], '', '', 0
 
         for sib in h2.next_siblings:
             if hasattr(sib, 'name') and sib.name == 'h2':
@@ -157,10 +157,13 @@ def parse_individual(html, max_val):
                 draw_date = m_dt.group(1)
                 continue
 
-            # Jackpot: 'JACKPOT:128,000,000'
-            m_jp = re.search(r'JACKPOT[:\s]*([0-9,]+)', t, re.I)
+            # Jackpot + winners: 'JACKPOT: 128,000,000 - WINNERS: 0'
+            m_jp = re.search(r'JACKPOT[:\s]*([0-9,]+(?:\.\d+)?)', t, re.I)
             if m_jp:
                 jackpot = format_jackpot(m_jp.group(1))
+                m_w = re.search(r'WINNERS?[:\s]*(\d+)', t, re.I)
+                if m_w:
+                    winners = int(m_w.group(1))
                 continue
 
             # Numbers — concatenated 2-digit pairs in a div
@@ -168,9 +171,9 @@ def parse_individual(html, max_val):
                 nums = extract_ball_nums(t, max_val)
 
         if len(nums) == 6:
-            return {'nums': nums, 'jackpot': jackpot, 'draw_date': draw_date}
+            return {'nums': nums, 'jackpot': jackpot, 'draw_date': draw_date, 'winners': winners}
 
-    return {'nums': [], 'jackpot': '', 'draw_date': ''}
+    return {'nums': [], 'jackpot': '', 'draw_date': '', 'winners': 0}
 
 
 def build_output(ez2_map, balls_map):
@@ -189,7 +192,7 @@ def build_output(ez2_map, balls_map):
                 'done':      len(balls_map[gk]['nums']) == 6,
                 'jackpot':   balls_map[gk]['jackpot'],
                 'draw_date': balls_map[gk]['draw_date'],
-                'winners':   0,
+                'winners':   balls_map[gk].get('winners', 0),
                 'days':      SCHED[gk],
             }
             for gk in ['6/58', '6/55', '6/49', '6/45', '6/42']
@@ -203,7 +206,7 @@ def main():
     print('=' * 50)
 
     ez2_map   = {'2PM': [], '5PM': [], '9PM': []}
-    balls_map = {g: {'nums': [], 'jackpot': '', 'draw_date': ''} for g in BALL_PAGES}
+    balls_map = {g: {'nums': [], 'jackpot': '', 'draw_date': '', 'winners': 0} for g in BALL_PAGES}
 
     # Step 1 — Consolidated page
     try:
