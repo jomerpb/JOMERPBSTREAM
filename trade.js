@@ -2094,12 +2094,10 @@ function tpActionPlan(sig, band, aligned, opposed){
     ]);
   }
 
-  // HOLD
-  return tpPick(sym+'-action-hold',[
-    "What this means in practice: the right move is no move at all — right now isn't a good point to buy or sell in either direction. An experienced trader wouldn't force a trade here. Instead, a useful habit is setting a price alert at ₱"+band.L+" (a break below that would tilt this toward a sell signal) and at ₱"+band.H+" (a break above would tilt this toward a buy signal), then letting the stock actually show its hand before committing any money. Trading now, in either direction, would mean paying for a guess rather than a real signal.",
-    "What this means in practice: sit this one out for now. There's no real edge to work with, so the useful thing to do is keep an eye out for the momentum gauge or the trend to break out of this quiet range — a move above ₱"+band.H+" or below ₱"+band.L+" is what would actually change the call and create a real opportunity to act. Putting money in before that happens means trading on noise, not on an actual signal.",
-    "What this means in practice: this is a moment to wait, not to trade — neither the current price nor right now is the right moment to act. A disciplined approach is staying in cash on this stock and checking back once the price either clears ₱"+band.H+" or drops below ₱"+band.L+" — either of those would give a genuine reason to act."
-  ]);
+  // HOLD — no separate "what this means in practice" bullet: it quoted the
+  // volatility band's H/L, which conflicted with the proven S/R prices in
+  // LEVELS TO WATCH (tpEntryExitPlan) right below it. One set of levels only.
+  return null;
 }
 
 // ══════════════════════════════════════════════════════════════
