@@ -3021,6 +3021,11 @@ async function tcRefreshLivePriceDirect(){
       };
     });
     tcLastPriceRefreshAt = Date.now();
+    // Without this, tcGetSeries() keeps returning the merged series from
+    // whenever the cache was last built (page load) — tcMergeLiveBar exists
+    // to fold the live quote in as the newest bar, but never got a chance
+    // to re-run on each 5-min tick. This is the fix for that.
+    tcSeriesCache = {};
     tcUpdateRefreshStatusDisplay();
     if (tcInited) { tcRenderTop(); tcRenderWatchlist(); if (tcCurrentSym) tcRenderAll(tcCurrentSym); }
   } catch(e) {
