@@ -810,6 +810,8 @@
 #oracle-page .pcso-hist-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 #oracle-page .pcso-hist-none{font-size:11px;color:var(--muted);font-style:italic}
 #oracle-page .pcso-hist-jackpot{font-size:11px;color:#4cfc9a;font-weight:700;margin-top:8px;text-align:center}
+#oracle-page .pcso-hist-oracle-label{font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:.15em;color:var(--muted2);margin-top:12px;margin-bottom:6px;text-align:center}
+#oracle-page .pnum-gold{background:rgba(245,200,66,.25)!important;border-color:var(--gold)!important;color:var(--gold)!important;box-shadow:0 0 8px rgba(245,200,66,.35)}
 
 /* ═══════════ TRADE PAGE ═══════════ */
 #trade-page{

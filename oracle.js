@@ -1372,6 +1372,79 @@ function pcsoHistDateChanged(){
   pcsoHistRender();
 }
 
+// ══ ORACLE HISTORICAL RECOMPUTE ══
+// Re-derives what Oracle's "Best Pick" would have been for a PAST date, using
+// only the PCSO_HISTORY draws that had already happened before that date (so
+// the Stats layer never sees data it couldn't have known about yet). Swaps
+// the module-level date globals (_D/_M/_Y/_DOW) for the duration of the calc,
+// runs the existing layer functions unchanged, then restores everything.
+function computeOracleAsOf(gameKey,dateStr){
+  var g=GAMES[gameKey];
+  var saved={_D:_D,_M:_M,_Y:_Y,_DOW:_DOW};
+  var parts=dateStr.split('-');
+  var y=parseInt(parts[0]),m=parseInt(parts[1]),d=parseInt(parts[2]);
+  var dObj=new Date(y,m-1,d);
+  _D=d; _M=m; _Y=y; _DOW=dObj.getDay();
+
+  function runOne(drawHour,gk){
+    var num,astro,bazi,fs,iching,tarot,angel,stats,layers,conv;
+    try{num=layerNumerology(drawHour);}catch(e){num={pyNums:[],chNums:[],allNums:[],nums:[]};}
+    try{astro=layerAstrology(drawHour);}catch(e){astro={nums:[],pofNums:[]};}
+    try{bazi=layerBazi(drawHour);}catch(e){bazi={nums:[]};}
+    try{fs=layerFengshui();}catch(e){fs={nums:[]};}
+    try{iching=layerIChing(drawHour);}catch(e){iching={nums:[]};}
+    try{tarot=layerTarot(drawHour);}catch(e){tarot={nums:[]};}
+    try{angel=layerAngelNumbers(drawHour);}catch(e){angel={nums:[]};}
+    try{stats=layerStats(gk,drawHour);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},topNums:[],freq:{},hotNums:[]};}
+    layers={num,astro,bazi,fs,iching,tarot,angel,stats};
+    try{conv=convergence(layers,gk);}catch(e){conv={picks:[]};}
+    return conv.picks;
+  }
+
+  var result;
+  if(gameKey==='ez2'){
+    var restore={draws:g.draws,hot:g.hot};
+    var entries=(PCSO_HISTORY.ez2||[]).filter(function(e){return e.date&&e.date<dateStr;});
+    var byHour={'2PM':[],'5PM':[],'9PM':[]};
+    entries.forEach(function(e){
+      if(!e.draws) return;
+      ['2PM','5PM','9PM'].forEach(function(hh){
+        if(Array.isArray(e.draws[hh])&&e.draws[hh].length===2) byHour[hh].push(e.draws[hh]);
+      });
+    });
+    g.draws=byHour;
+    var hot={};
+    ['2PM','5PM','9PM'].forEach(function(hh){
+      var freq={};
+      byHour[hh].slice(0,30).forEach(function(dr){dr.forEach(function(n){freq[n]=(freq[n]||0)+1;});});
+      hot[hh]=Object.entries(freq).sort(function(a,b){return b[1]-a[1];}).slice(0,6).map(function(e){return parseInt(e[0]);});
+    });
+    g.hot=hot;
+    try{
+      result={'2PM':runOne('2PM','ez2'),'5PM':runOne('5PM','ez2'),'9PM':runOne('9PM','ez2')};
+    } finally {
+      g.draws=restore.draws; g.hot=restore.hot;
+    }
+  } else {
+    var restore2={recent:g.recent,hot:g.hot};
+    var entries2=(PCSO_HISTORY[gameKey]||[]).filter(function(e){return e.date&&e.date<dateStr;});
+    var draws=entries2.map(function(e){return e.nums;}).filter(function(n){return Array.isArray(n);});
+    g.recent=draws;
+    var recentWindow=draws.slice(0,30);
+    var freq2={};
+    recentWindow.forEach(function(dr){dr.forEach(function(n){freq2[n]=(freq2[n]||0)+1;});});
+    g.hot=Object.entries(freq2).sort(function(a,b){return b[1]-a[1];}).slice(0,6).map(function(e){return parseInt(e[0]);});
+    try{
+      result=runOne('9PM',gameKey);
+    } finally {
+      g.recent=restore2.recent; g.hot=restore2.hot;
+    }
+  }
+
+  _D=saved._D; _M=saved._M; _Y=saved._Y; _DOW=saved._DOW;
+  return result;
+}
+
 function pcsoHistRender(){
   var gameSel=document.getElementById('pcso-hist-game');
   var dateInp=document.getElementById('pcso-hist-date');
@@ -1388,10 +1461,21 @@ function pcsoHistRender(){
   }
   if(game==='ez2'){
     var order=['2PM','5PM','9PM'];
+    var oraclePicks=null;
+    try{ oraclePicks=computeOracleAsOf('ez2',dateVal); }catch(e){ console.error('computeOracleAsOf ez2:',e); }
     var cols=order.map(function(t){
       var nums=(entry.draws&&entry.draws[t])||[];
       var inner=nums.length?nums.map(function(x){return '<span class="pnum ez">'+p2(x)+'</span>';}).join(''):'<span class="pcso-hist-none">Pending…</span>';
-      return '<div style="display:flex;flex-direction:column;align-items:center;gap:5px"><span style="font-size:9px;color:var(--muted)">'+t+'</span><div style="display:flex;gap:4px">'+inner+'</div></div>';
+      var oracleRow='';
+      if(oraclePicks&&oraclePicks[t]&&oraclePicks[t].length){
+        var op=oraclePicks[t];
+        var opInner=op.map(function(x){
+          var isMatch=nums.indexOf(x)>=0;
+          return '<span class="pnum ez'+(isMatch?' pnum-gold':'')+'">'+p2(x)+'</span>';
+        }).join('');
+        oracleRow='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick</div><div style="display:flex;gap:4px">'+opInner+'</div>';
+      }
+      return '<div style="display:flex;flex-direction:column;align-items:center;gap:5px"><span style="font-size:9px;color:var(--muted)">'+t+'</span><div style="display:flex;gap:4px">'+inner+'</div>'+oracleRow+'</div>';
     }).join('');
     out.innerHTML='<div style="display:flex;justify-content:center;gap:18px;flex-wrap:wrap;width:100%">'+cols+'</div>';
     return;
@@ -1405,7 +1489,18 @@ function pcsoHistRender(){
     jpDisplay='₱'+(jpNum>=1000000?(jpNum/1000000).toFixed(1)+'M':jpNum.toLocaleString());
   }
   var jackpotHtml=jp?('<div class="pcso-hist-jackpot">'+jpDisplay+' jackpot</div>'):'';
-  out.innerHTML='<div class="pcso-hist-row">'+numsHtml+'</div>'+jackpotHtml;
+  var oracleHtml='';
+  try{
+    var oraclePicks2=computeOracleAsOf(game,dateVal);
+    if(oraclePicks2&&oraclePicks2.length){
+      var opHtml=oraclePicks2.map(function(x){
+        var isMatch=entry.nums.indexOf(x)>=0;
+        return '<span class="pnum '+cls+(isMatch?' pnum-gold':'')+'">'+p2(x)+'</span>';
+      }).join('');
+      oracleHtml='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick</div><div class="pcso-hist-row">'+opHtml+'</div>';
+    }
+  }catch(e){ console.error('computeOracleAsOf:',e); }
+  out.innerHTML='<div class="pcso-hist-row">'+numsHtml+'</div>'+jackpotHtml+oracleHtml;
 }
 
 (function initPcsoHist(){
