@@ -2451,8 +2451,13 @@ function tpRenderCombinedChart(series){
   const vctx = setup(volCanvas, volH);
   const rctx = setup(rsiCanvas, rsiH);
 
+  // Right-hand gutter reserved for price-axis labels so they never sit on
+  // top of the candles — candles/volume/RSI all plot within chartW, and
+  // price labels live in the [chartW, cssW] strip with their own backdrop.
+  const padRight = 46;
+  const chartW = cssW - padRight;
   const n = series.length;
-  const slotW = cssW/n;
+  const slotW = chartW/n;
   const bodyW = Math.max(1.5, slotW*0.55);
 
   const highs=series.map(function(d){return d.high;}), lows=series.map(function(d){return d.low;});
@@ -2460,6 +2465,12 @@ function tpRenderCombinedChart(series){
   const range=(max-min)||1;
   const padTop=8, padBottom=8;
   const usableH=priceH-padTop-padBottom;
+
+  // Clip candle/trend drawing strictly to the chart area — guards against
+  // the bodyW floor (min 1.5px) bleeding a sub-pixel past the gutter line
+  // on dense timeframes (1Y/2Y) where slotW shrinks below the floor width.
+  pctx.save();
+  pctx.beginPath(); pctx.rect(0,0,chartW,priceH); pctx.clip();
 
   series.forEach(function(d,i){
     const x=i*slotW+slotW/2;
@@ -2488,11 +2499,23 @@ function tpRenderCombinedChart(series){
     if(!tStarted){ pctx.moveTo(x,y); tStarted=true; } else pctx.lineTo(x,y);
   });
   pctx.stroke();
+  pctx.restore();
 
-  pctx.fillStyle='#7a7a88'; pctx.font='9px Inter,sans-serif'; pctx.textAlign='right';
+  // Divider line marking the boundary between candle area and price gutter
+  pctx.strokeStyle = 'rgba(122,122,136,0.25)'; pctx.lineWidth = 1;
+  pctx.beginPath(); pctx.moveTo(chartW+0.5, 0); pctx.lineTo(chartW+0.5, priceH); pctx.stroke();
+
+  pctx.font='9px Inter,sans-serif'; pctx.textAlign='left';
   [max, min+range/2, min].forEach(function(v){
     const y = padTop + (1-(v-min)/range)*usableH;
-    pctx.fillText(v.toFixed(2), cssW-2, Math.max(9,Math.min(priceH-2,y+3)));
+    const ly = Math.max(9,Math.min(priceH-2,y+3));
+    const label = v.toFixed(2);
+    const tw = pctx.measureText(label).width;
+    // backdrop so the label stays legible regardless of what's behind it
+    pctx.fillStyle = 'rgba(18,18,24,0.72)';
+    pctx.fillRect(chartW+4, ly-9, tw+6, 11);
+    pctx.fillStyle = '#a7a7b4';
+    pctx.fillText(label, chartW+7, ly);
   });
 
   const vols = series.map(function(d){return d.volume;});
@@ -2510,7 +2533,7 @@ function tpRenderCombinedChart(series){
   rctx.strokeStyle='rgba(122,122,136,0.35)'; rctx.lineWidth=1; rctx.setLineDash([2,2]);
   [30,70].forEach(function(v){
     const y=rsiH-(v/100)*rsiH;
-    rctx.beginPath(); rctx.moveTo(0,y); rctx.lineTo(cssW,y); rctx.stroke();
+    rctx.beginPath(); rctx.moveTo(0,y); rctx.lineTo(chartW,y); rctx.stroke();
   });
   rctx.setLineDash([]);
   rctx.strokeStyle='#8b5cf6'; rctx.lineWidth=1.5; rctx.beginPath();
@@ -2893,7 +2916,7 @@ var CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetc
 
 var tcSeriesCache = {};       // memoized merged-with-live series per symbol (invalidated on reload)
 var tcCurrentSym = null;
-var tcCurrentTF = '3M';
+var tcCurrentTF = '1D'; // default chart view for crypto — user requested 1D instead of 3M
 // Restored from localStorage so the Gainers/Bullish choice survives a page
 // reload — previously this always reset to 'current' on refresh, which is
 // why the Bullish filter kept silently reverting to Gainers.
@@ -4238,8 +4261,13 @@ function tcRenderChart(series){
   const vctx = setup(volCanvas, volH);
   const rctx = setup(rsiCanvas, rsiH);
 
+  // Right-hand gutter reserved for price-axis labels so they never sit on
+  // top of the candles — candles/volume/RSI all plot within chartW, and
+  // price labels live in the [chartW, cssW] strip with their own backdrop.
+  const padRight = 46;
+  const chartW = cssW - padRight;
   const n = series.length;
-  const slotW = cssW/n;
+  const slotW = chartW/n;
   const bodyW = Math.max(1.5, slotW*0.55);
 
   const highs=series.map(function(d){return d.high;}), lows=series.map(function(d){return d.low;});
@@ -4247,6 +4275,12 @@ function tcRenderChart(series){
   const range=(max-min)||1;
   const padTop=8, padBottom=8;
   const usableH=priceH-padTop-padBottom;
+
+  // Clip candle/trend drawing strictly to the chart area — guards against
+  // the bodyW floor (min 1.5px) bleeding a sub-pixel past the gutter line
+  // on dense timeframes (1Y/2Y) where slotW shrinks below the floor width.
+  pctx.save();
+  pctx.beginPath(); pctx.rect(0,0,chartW,priceH); pctx.clip();
 
   series.forEach(function(d,i){
     const x=i*slotW+slotW/2;
@@ -4275,11 +4309,23 @@ function tcRenderChart(series){
     if(!tStarted){ pctx.moveTo(x,y); tStarted=true; } else pctx.lineTo(x,y);
   });
   pctx.stroke();
+  pctx.restore();
 
-  pctx.fillStyle='#7a7a88'; pctx.font='9px Inter,sans-serif'; pctx.textAlign='right';
+  // Divider line marking the boundary between candle area and price gutter
+  pctx.strokeStyle = 'rgba(122,122,136,0.25)'; pctx.lineWidth = 1;
+  pctx.beginPath(); pctx.moveTo(chartW+0.5, 0); pctx.lineTo(chartW+0.5, priceH); pctx.stroke();
+
+  pctx.font='9px Inter,sans-serif'; pctx.textAlign='left';
   [max, min+range/2, min].forEach(function(v){
     const y = padTop + (1-(v-min)/range)*usableH;
-    pctx.fillText(v.toFixed(2), cssW-2, Math.max(9,Math.min(priceH-2,y+3)));
+    const ly = Math.max(9,Math.min(priceH-2,y+3));
+    const label = v.toFixed(2);
+    const tw = pctx.measureText(label).width;
+    // backdrop so the label stays legible regardless of what's behind it
+    pctx.fillStyle = 'rgba(18,18,24,0.72)';
+    pctx.fillRect(chartW+4, ly-9, tw+6, 11);
+    pctx.fillStyle = '#a7a7b4';
+    pctx.fillText(label, chartW+7, ly);
   });
 
   const vols = series.map(function(d){return d.volume;});
@@ -4297,7 +4343,7 @@ function tcRenderChart(series){
   rctx.strokeStyle='rgba(122,122,136,0.35)'; rctx.lineWidth=1; rctx.setLineDash([2,2]);
   [30,70].forEach(function(v){
     const y=rsiH-(v/100)*rsiH;
-    rctx.beginPath(); rctx.moveTo(0,y); rctx.lineTo(cssW,y); rctx.stroke();
+    rctx.beginPath(); rctx.moveTo(0,y); rctx.lineTo(chartW,y); rctx.stroke();
   });
   rctx.setLineDash([]);
   rctx.strokeStyle='#f7931a'; rctx.lineWidth=1.5; rctx.beginPath();
