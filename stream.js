@@ -1038,7 +1038,8 @@ const SERVER_LIST = [
   { key:'vidfast',    label:'VidFast' },
   { key:'cinepro',    label:'CinePro' },   // no public embed endpoint — self-hosted only; auto-skips
   { key:'vidcore',    label:'VidCore' },
-  { key:'ezvidapi',   label:'ezvidapi' }
+  { key:'ezvidapi',   label:'ezvidapi' },
+  { key:'okru',       label:'OK.ru' }   // no public TMDB-id embed API — see buildUrl(); auto-skips like cinepro
 ];
 let currentServer = 'vidlink';
 let triedServers = new Set();
@@ -1100,6 +1101,9 @@ function buildUrl(server) {
         : `https://ezvidapi.com/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
     case 'cinepro':
       return ''; // self-hosted scraper, no public embed URL — handled as auto-skip in loadServerUrl()
+    case 'okru':
+      return ''; // ok.ru has no public TMDB-id → video-id mapping (its IDs are internal to ok.ru's own catalog),
+                 // so it can't be built from tmdbId like the others — handled as auto-skip in loadServerUrl()
     default:
       return '';
   }
