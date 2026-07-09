@@ -662,7 +662,7 @@ function tpRenderBacktest(data){
 async function tpLoadBacktest(){
   var el = document.getElementById('tp-backtest-text');
   if (!el) return;
-  var RAW_URL = 'https://raw.githubusercontent.com/' + TP_GH_OWNER + '/' + TP_GH_REPO + '/' + TP_GH_REF + '/pse-backtest.json';
+  var RAW_URL = 'pse-backtest.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   try {
     var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -688,7 +688,7 @@ function tpFormatPH(iso){
   } catch(e) { return iso; }
 }
 async function loadPseHistory(){
-  var RAW_URL = 'https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pse-history.json';
+  var RAW_URL = 'pse-history.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   try {
     var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -777,7 +777,7 @@ function tpGetSeries(sym, days){
 var tpLiveSeriesAll = {};
 var PSE_FULL_HISTORY_STATUS = {loaded:false, tickerCount:0, error:null};
 var PSE_FULL_HISTORY_READY = (async function loadPseFullHistory(){
-  var RAW_URL = 'https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pse-full-history.json';
+  var RAW_URL = 'pse-full-history.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   try {
     var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -820,7 +820,7 @@ var PSE_FULL_HISTORY_READY = (async function loadPseFullHistory(){
 var tpLiveQuotes = {};
 var PSE_LIVE_QUOTES_STATUS = {loaded:false, tickerCount:0, error:null, generatedAt:null};
 async function loadPseLiveQuotes(){
-  var RAW_URL = 'https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pse-live-quotes.json';
+  var RAW_URL = 'pse-live-quotes.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   try {
     var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -3048,7 +3048,7 @@ document.addEventListener('visibilitychange', function(){
   if (!document.hidden && tcInited) tcRefreshLivePriceDirect();
 });
 async function loadCryptoLiveQuotes(){
-  var RAW_URL = 'https://raw.githubusercontent.com/' + TP_GH_OWNER + '/' + TP_GH_REPO + '/' + TP_GH_REF + '/crypto-live-quotes.json';
+  var RAW_URL = 'crypto-live-quotes.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   try {
     var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -3071,7 +3071,7 @@ async function loadCryptoLiveQuotes(){
   if(tcInited){ tcRenderTop(); tcRenderWatchlist(); if(tcCurrentSym) tcRenderAll(tcCurrentSym); }
 }
 async function loadCryptoHistory(){
-  var RAW_URL = 'https://raw.githubusercontent.com/' + TP_GH_OWNER + '/' + TP_GH_REPO + '/' + TP_GH_REF + '/crypto-history.json';
+  var RAW_URL = 'crypto-history.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   try {
     var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -3887,7 +3887,7 @@ function tcRenderBacktest(data){
 async function tcLoadBacktest(){
   var el = document.getElementById('tc-report-text');
   if (!el) return;
-  var RAW_URL = 'https://raw.githubusercontent.com/' + TP_GH_OWNER + '/' + TP_GH_REPO + '/' + TP_GH_REF + '/crypto-backtest.json';
+  var RAW_URL = 'crypto-backtest.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   try {
     var resp = await fetch(RAW_URL + '?nocache=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
