@@ -1033,7 +1033,8 @@ const SERVER_LIST = [
   { key:'videasy',    label:'Videasy' },
   { key:'vixsrc',     label:'Vixsrc' },
   { key:'2embed',     label:'2embed' },
-  { key:'peachify',   label:'Peachify' }
+  { key:'peachify',   label:'Peachify' },
+  { key:'cinezo',     label:'Cinezo' }
 ];
 let currentServer = 'vidlink';
 let triedServers = new Set();
@@ -1077,6 +1078,10 @@ function buildUrl(server) {
       return isMovie
         ? `https://peachify.top/embed/movie/${tmdbId}`
         : `https://peachify.top/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case 'cinezo':
+      return isMovie
+        ? `https://player.cinezo.live/embed/movie/${tmdbId}`
+        : `https://player.cinezo.live/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
     default:
       return '';
   }
