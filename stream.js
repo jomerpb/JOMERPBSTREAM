@@ -1033,13 +1033,7 @@ const SERVER_LIST = [
   { key:'videasy',    label:'Videasy' },
   { key:'vixsrc',     label:'Vixsrc' },
   { key:'2embed',     label:'2embed' },
-  { key:'superembed', label:'Superembed' },
-  { key:'autoembed',  label:'Auto embed' },
-  { key:'vidfast',    label:'VidFast' },
-  { key:'cinepro',    label:'CinePro' },   // no public embed endpoint — self-hosted only; auto-skips
-  { key:'vidcore',    label:'VidCore' },
-  { key:'ezvidapi',   label:'ezvidapi' },
-  { key:'okru',       label:'OK.ru' }   // no public TMDB-id embed API — see buildUrl(); auto-skips like cinepro
+  { key:'peachify',   label:'Peachify' }
 ];
 let currentServer = 'vidlink';
 let triedServers = new Set();
@@ -1079,31 +1073,10 @@ function buildUrl(server) {
       return isMovie
         ? `https://www.2embed.cc/embed/${tmdbId}`
         : `https://www.2embed.cc/embedtv/${tmdbId}&s=${seasonNum}&e=${currentEp}`;
-    case 'superembed':
+    case 'peachify':
       return isMovie
-        ? `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`
-        : `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${seasonNum}&e=${currentEp}`;
-    case 'autoembed':
-      return isMovie
-        ? `https://player.autoembed.cc/embed/movie/${tmdbId}`
-        : `https://player.autoembed.cc/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
-    case 'vidfast':
-      return isMovie
-        ? `https://vidfast.pro/movie/${tmdbId}`
-        : `https://vidfast.pro/tv/${tmdbId}/${seasonNum}/${currentEp}`;
-    case 'vidcore':
-      return isMovie
-        ? `https://vidcore.org/embed/movie/${tmdbId}`
-        : `https://vidcore.org/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
-    case 'ezvidapi':
-      return isMovie
-        ? `https://ezvidapi.com/embed/movie/${tmdbId}`
-        : `https://ezvidapi.com/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
-    case 'cinepro':
-      return ''; // self-hosted scraper, no public embed URL — handled as auto-skip in loadServerUrl()
-    case 'okru':
-      return ''; // ok.ru has no public TMDB-id → video-id mapping (its IDs are internal to ok.ru's own catalog),
-                 // so it can't be built from tmdbId like the others — handled as auto-skip in loadServerUrl()
+        ? `https://peachify.top/embed/movie/${tmdbId}`
+        : `https://peachify.top/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
     default:
       return '';
   }
