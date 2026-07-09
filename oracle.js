@@ -61,12 +61,49 @@ var GAMES={
 // the Oracle always has *something* to compute from, it just may be stale.
 // ══════════════════════════
 var PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:null};
+var PCSO_HISTORY_LOAD_FAILED=false; // lets pcsoHistRender() tell "genuinely no draw" apart from "fetch failed"
 var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
   var RAW_URL='https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pcso-history.json';
+  var MAX_ATTEMPTS=3;
+  var TIMEOUT_MS=8000;
+  var BACKOFF_MS=[0,800,1600];
+  var BACKOFF_429_MS=[0,3000,6000];
+  var lastErr=null;
+  var lastWas429=false;
+  var data=null;
+
+  for(var attempt=1; attempt<=MAX_ATTEMPTS; attempt++){
+    if(attempt>1){
+      var backoffArr=lastWas429?BACKOFF_429_MS:BACKOFF_MS;
+      await pcsoSleep(backoffArr[attempt-1]);
+    }
+    lastWas429=false;
+    try{
+      var resp=await pcsoFetchWithTimeout(RAW_URL+'?nocache='+Date.now(), TIMEOUT_MS);
+      if(!resp.ok){
+        lastWas429=(resp.status===429);
+        throw new Error('HTTP '+resp.status);
+      }
+      data=await resp.json();
+      break;
+    }catch(e){
+      lastErr=e;
+      console.error('PCSO history fetch attempt '+attempt+' of '+MAX_ATTEMPTS+':', e.message);
+    }
+  }
+
+  if(!data){
+    var reason=(lastErr&&lastErr.message?lastErr.message:'unknown error')+(lastWas429?' — rate limited by GitHub':'');
+    PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:reason};
+    PCSO_HISTORY_LOAD_FAILED=true;
+    console.error('PCSO history fetch failed after '+MAX_ATTEMPTS+' attempts, using hardcoded fallback:', reason);
+    if(typeof pcsoHistRender==='function'&&document.getElementById('pcso-hist-result')){
+      pcsoHistRender();
+    }
+    return;
+  }
+
   try{
-    var resp=await fetch(RAW_URL+'?nocache='+Date.now());
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    var data=await resp.json();
     var slashToKey={'6/58':'658','6/55':'655','6/49':'649','6/45':'645','6/42':'642'};
     for(var slashKey in slashToKey){
       var gk=slashToKey[slashKey];
@@ -103,6 +140,7 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
       }
     }
     PCSO_HISTORY_STATUS={loaded:true,source:'live (pcso-history.json, updated '+(data.updated||'unknown')+')',error:null};
+    PCSO_HISTORY_LOAD_FAILED=false;
     console.log('PCSO history loaded:', PCSO_HISTORY_STATUS.source);
 
     // Also wire the "Look Up Past Result" date-picker lookup (previously mock
@@ -136,7 +174,11 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
     }
   }catch(e){
     PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:e.message};
-    console.error('PCSO history fetch failed, using hardcoded fallback:', e.message);
+    PCSO_HISTORY_LOAD_FAILED=true;
+    console.error('PCSO history processing failed, using hardcoded fallback:', e.message);
+    if(typeof pcsoHistRender==='function'&&document.getElementById('pcso-hist-result')){
+      pcsoHistRender();
+    }
   }
 })();
 
@@ -1766,7 +1808,12 @@ function pcsoHistRender(){
   var entry=null;
   for(var i=0;i<list.length;i++){ if(list[i].date===dateVal){ entry=list[i]; break; } }
   if(!entry){
-    out.innerHTML='<span class="pcso-hist-none">No result on file for this date.</span>';
+    if(typeof PCSO_HISTORY_LOAD_FAILED!=='undefined'&&PCSO_HISTORY_LOAD_FAILED){
+      var reasonTxt=(typeof PCSO_HISTORY_STATUS!=='undefined'&&PCSO_HISTORY_STATUS.error)?PCSO_HISTORY_STATUS.error:'network error';
+      out.innerHTML='<span class="pcso-hist-none" style="color:var(--accent)">⚠️ Historical data failed to load ('+reasonTxt+'). Showing limited offline data only — reload the page to retry.</span>';
+    } else {
+      out.innerHTML='<span class="pcso-hist-none">No result on file for this date.</span>';
+    }
     return;
   }
   if(game==='ez2'){
@@ -1905,17 +1952,27 @@ async function pcsoRefreshFromRaw(){
   var MAX_ATTEMPTS=3;
   var TIMEOUT_MS=8000;
   var BACKOFF_MS=[0,800,1600];
+  var BACKOFF_429_MS=[0,3000,6000]; // GitHub rate-limit needs real wait time, not a quick retry
   var fetchStatusEl=document.getElementById('pcso-fetch-status');
   var lastErr=null;
+  var lastWas429=false;
 
   for(var attempt=1; attempt<=MAX_ATTEMPTS; attempt++){
     if(attempt>1){
-      if(fetchStatusEl) fetchStatusEl.textContent='Retrying… (attempt '+attempt+' of '+MAX_ATTEMPTS+')';
-      await pcsoSleep(BACKOFF_MS[attempt-1]);
+      var backoffArr=lastWas429?BACKOFF_429_MS:BACKOFF_MS;
+      var waitMs=backoffArr[attempt-1];
+      if(fetchStatusEl) fetchStatusEl.textContent=lastWas429
+        ? 'Rate limited by GitHub — waiting '+(waitMs/1000)+'s before retry (attempt '+attempt+' of '+MAX_ATTEMPTS+')'
+        : 'Retrying… (attempt '+attempt+' of '+MAX_ATTEMPTS+')';
+      await pcsoSleep(waitMs);
     }
+    lastWas429=false;
     try{
       var resp=await pcsoFetchWithTimeout(RAW_URL+'?nocache='+Date.now(), TIMEOUT_MS);
-      if(!resp.ok) throw new Error('HTTP '+resp.status);
+      if(!resp.ok){
+        lastWas429=(resp.status===429);
+        throw new Error('HTTP '+resp.status);
+      }
       var data=await resp.json();
       if(data.ez2&&Array.isArray(data.ez2)){
         PCSO_DATA.ez2=data.ez2.map(function(e){return{draw:e.draw,nums:e.nums||[],cutoff:e.cutoff||21};});
@@ -1946,7 +2003,11 @@ async function pcsoRefreshFromRaw(){
 
   pcsoRender();
   var fetchStatusElErr=document.getElementById('pcso-fetch-status');
-  if(fetchStatusElErr) fetchStatusElErr.textContent='Data unavailable ❌ — ' + (lastErr&&lastErr.message?lastErr.message:'network error') + ' (after '+MAX_ATTEMPTS+' attempts)';
+  if(fetchStatusElErr){
+    fetchStatusElErr.textContent=lastWas429
+      ? 'Rate limited by GitHub ❌ — please wait a minute and tap Fetch Live again (HTTP 429 after '+MAX_ATTEMPTS+' attempts)'
+      : 'Data unavailable ❌ — ' + (lastErr&&lastErr.message?lastErr.message:'network error') + ' (after '+MAX_ATTEMPTS+' attempts)';
+  }
   throw lastErr;
 }
 
