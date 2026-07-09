@@ -150,6 +150,180 @@ function digitOf(n){ return reduce(n); }
 function pad(n){ return String(n).padStart(2,'0'); }
 
 // ══════════════════════════
+// SHARED: Julian Day Number (standard astronomical JDN, noon-based).
+// Used by both the astro engine and the BaZi day-pillar calculation so the
+// two stay consistent. Verified: jdnOf(2000,1,1)=2451545 (the standard J2000
+// epoch value used throughout the literature).
+// ══════════════════════════
+function jdnOf(y,m,d){
+  var a=Math.floor((14-m)/12), yr=y+4800-a, mo=m+12*a-3;
+  return d+Math.floor((153*mo+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045;
+}
+
+// ══════════════════════════
+// ASTRO ENGINE — shared low-precision ephemeris helpers
+// Source: Paul Schlyter, "How to compute planetary positions"
+// https://stjarnhimlen.se/comp/ppcomp.html — a simplification of T. van
+// Flandern & K. Pulkkinen, "Low precision formulae for planetary positions,"
+// Astrophysical Journal Supplement Series, 1980. Stated accuracy: ~1 arcmin
+// for the Sun and inner planets, ~1-2 arcmin for the outer planets, and
+// 1-2 arcmin for the Moon (with the perturbation terms below included).
+// This replaces the previous mean-longitude-only approximation, which had
+// no equation-of-center correction at all — for an eccentric orbit like
+// Mercury's (e≈0.206) that omission alone can misplace the position by up
+// to ~20-24°, i.e. most of a zodiac sign.
+// Ascendant formula (RAMC/obliquity/latitude) cross-verified against three
+// independently published sources that all agree on the same closed form:
+// astrologicalauthority.com/rising-sign-ascendant-calculator,
+// toolsnix.com/fun/sun-moon-rising, calculatormom.com/ascendant-degree-calculator.
+// Location used for house/ascendant math: Manila, PH (14.5995N, 120.9842E,
+// UTC+8) — matches the PCSO draws this Oracle is built around.
+// ══════════════════════════
+var ASTRO_LAT=14.5995, ASTRO_LON=120.9842; // Manila
+function astroNorm360(x){ x=x%360; return x<0?x+360:x; }
+function astroObliquity(d){ return 23.4393-3.563e-7*d; }
+function astroSolveKepler(Mdeg,e){
+  var Mr=Mdeg*Math.PI/180;
+  var E=Mdeg+e*(180/Math.PI)*Math.sin(Mr)*(1+e*Math.cos(Mr));
+  for(var k=0;k<8;k++){
+    var Er=E*Math.PI/180;
+    var E1=E-(E-e*(180/Math.PI)*Math.sin(Er)-Mdeg)/(1-e*Math.cos(Er));
+    if(Math.abs(E1-E)<1e-6){E=E1;break;}
+    E=E1;
+  }
+  return E;
+}
+function astroSunPos(d){
+  var w=astroNorm360(282.9404+4.70935e-5*d);
+  var e=0.016709-1.151e-9*d;
+  var M=astroNorm360(356.0470+0.9856002585*d);
+  var E=astroSolveKepler(M,e);
+  var Er=E*Math.PI/180;
+  var xv=Math.cos(Er)-e, yv=Math.sqrt(1-e*e)*Math.sin(Er);
+  var v=astroNorm360(Math.atan2(yv,xv)*180/Math.PI);
+  return {lonsun:astroNorm360(v+w),r:Math.sqrt(xv*xv+yv*yv),M:M,w:w};
+}
+function astroMoonLon(d,sunLon,sunM){
+  var Nm=astroNorm360(125.1228-0.0529538083*d);
+  var wm=astroNorm360(318.0634+0.1643573223*d);
+  var Mm=astroNorm360(115.3654+13.0649929509*d);
+  var e=0.054900;
+  var E=astroSolveKepler(Mm,e);
+  var Er=E*Math.PI/180;
+  var xv=Math.cos(Er)-e, yv=Math.sqrt(1-e*e)*Math.sin(Er);
+  var v=astroNorm360(Math.atan2(yv,xv)*180/Math.PI);
+  var lonUnpert=astroNorm360(v+wm+Nm);
+  var Lm=astroNorm360(Mm+wm+Nm);
+  var Dd=astroNorm360(Lm-sunLon);
+  var F=astroNorm360(Lm-Nm);
+  var Ms=sunM, R=Math.PI/180, corr=0;
+  corr+=-1.274*Math.sin((Mm-2*Dd)*R);
+  corr+=0.658*Math.sin(2*Dd*R);
+  corr+=-0.186*Math.sin(Ms*R);
+  corr+=-0.059*Math.sin((2*Mm-2*Dd)*R);
+  corr+=-0.057*Math.sin((Mm-2*Dd+Ms)*R);
+  corr+=0.053*Math.sin((Mm+2*Dd)*R);
+  corr+=0.046*Math.sin((2*Dd-Ms)*R);
+  corr+=0.041*Math.sin((Mm-Ms)*R);
+  corr+=-0.035*Math.sin(Dd*R);
+  corr+=-0.031*Math.sin((Mm+Ms)*R);
+  corr+=-0.015*Math.sin((2*F-2*Dd)*R);
+  corr+=0.011*Math.sin((Mm-4*Dd)*R);
+  return astroNorm360(lonUnpert+corr);
+}
+var ASTRO_PLANET_ELEMENTS={
+  mercury:{N:[48.3313,3.24587e-5],i:[7.0047,5.00e-8],w:[29.1241,1.01444e-5],a:0.387098,e:[0.205635,5.59e-10],M:[168.6562,4.0923344368]},
+  venus:{N:[76.6799,2.46590e-5],i:[3.3946,2.75e-8],w:[54.8910,1.38374e-5],a:0.723330,e:[0.006773,-1.302e-9],M:[48.0052,1.6021302244]},
+  mars:{N:[49.5574,2.11081e-5],i:[1.8497,-1.78e-8],w:[286.5016,2.92961e-5],a:1.523688,e:[0.093405,2.516e-9],M:[18.6021,0.5240207766]},
+  jupiter:{N:[100.4542,2.76854e-5],i:[1.3030,-1.557e-7],w:[273.8777,1.64505e-5],a:5.20256,e:[0.048498,4.469e-9],M:[19.8950,0.0830853001]},
+  saturn:{N:[113.6634,2.38980e-5],i:[2.4886,-1.081e-7],w:[339.3939,2.97661e-5],a:9.55475,e:[0.055546,-9.499e-9],M:[316.9670,0.0334442282]}
+};
+function astroPlanetLon(name,d,lonsun,rs){
+  var el=ASTRO_PLANET_ELEMENTS[name];
+  var N=astroNorm360(el.N[0]+el.N[1]*d);
+  var i=el.i[0]+el.i[1]*d;
+  var w=astroNorm360(el.w[0]+el.w[1]*d);
+  var a=el.a, e=el.e[0]+el.e[1]*d;
+  var M=astroNorm360(el.M[0]+el.M[1]*d);
+  var E=astroSolveKepler(M,e);
+  var Er=E*Math.PI/180;
+  var xv=a*(Math.cos(Er)-e), yv=a*(Math.sqrt(1-e*e)*Math.sin(Er));
+  var v=Math.atan2(yv,xv)*180/Math.PI;
+  var r=Math.sqrt(xv*xv+yv*yv);
+  var Nr=N*Math.PI/180,ir=i*Math.PI/180,wr=w*Math.PI/180,vr=v*Math.PI/180;
+  var xh=r*(Math.cos(Nr)*Math.cos(vr+wr)-Math.sin(Nr)*Math.sin(vr+wr)*Math.cos(ir));
+  var yh=r*(Math.sin(Nr)*Math.cos(vr+wr)+Math.cos(Nr)*Math.sin(vr+wr)*Math.cos(ir));
+  var xs=rs*Math.cos(lonsun*Math.PI/180), ys=rs*Math.sin(lonsun*Math.PI/180);
+  return astroNorm360(Math.atan2(yh+ys,xh+xs)*180/Math.PI);
+}
+function astroSunRaDec(lonsun,rs,ecl){
+  var xs=rs*Math.cos(lonsun*Math.PI/180), ys=rs*Math.sin(lonsun*Math.PI/180);
+  var eclr=ecl*Math.PI/180;
+  var xe=xs, ye=ys*Math.cos(eclr), ze=ys*Math.sin(eclr);
+  return {RA:astroNorm360(Math.atan2(ye,xe)*180/Math.PI),Dec:Math.atan2(ze,Math.sqrt(xe*xe+ye*ye))*180/Math.PI};
+}
+function astroSiderealDeg(sunMeanLon,utHours,geoLonEast){
+  var GMST0=astroNorm360(sunMeanLon+180);
+  var GMST=astroNorm360(GMST0+utHours*15);
+  return astroNorm360(GMST+geoLonEast);
+}
+function astroAscendant(ramcDeg,latDeg,eclDeg){
+  var R=ramcDeg*Math.PI/180, L=latDeg*Math.PI/180, E=eclDeg*Math.PI/180;
+  var y=-Math.cos(R);
+  var x=Math.sin(R)*Math.cos(E)+Math.tan(L)*Math.sin(E);
+  return astroNorm360(Math.atan2(y,x)*180/Math.PI);
+}
+function astroAltitude(RA,Dec,lstDeg,latDeg){
+  var HA=astroNorm360(lstDeg-RA); if(HA>180)HA-=360;
+  var HAr=HA*Math.PI/180, Decr=Dec*Math.PI/180, Latr=latDeg*Math.PI/180;
+  var x=Math.cos(HAr)*Math.cos(Decr), y=Math.sin(HAr)*Math.cos(Decr), z=Math.sin(Decr);
+  var xhor=x*Math.sin(Latr)-z*Math.cos(Latr), zhor=x*Math.cos(Latr)+z*Math.sin(Latr);
+  return Math.atan2(zhor,Math.sqrt(xhor*xhor+y*y))*180/Math.PI;
+}
+// Computes the "day number since J2000.0" (Schlyter's `d`) for a PH-local
+// calendar date plus a nominal draw hour, converting PH time (UTC+8) to UT.
+function astroDayNumber(y,m,dd,phHour){
+  var jdn=jdnOf(y,m,dd);
+  var ut=phHour-8;
+  var dayShift=0;
+  if(ut<0){ ut+=24; dayShift=-1; }
+  return (jdn-2451545+dayShift)+ut/24.0;
+}
+// Void-of-course Moon: standard classical definition — the Moon is void if
+// it will not perfect (come to exactness of) any Ptolemaic aspect (0/60/90/
+// 120/180°, 0.35° orb) with the Sun or the five classical planets before it
+// leaves its current sign. Determined here by direct numerical scan rather
+// than analytic applying/separating logic (simpler to verify, same result).
+function astroMoonVoidOfCourse(d){
+  var sp0=astroSunPos(d);
+  var moonLon=astroMoonLon(d,sp0.lonsun,sp0.M);
+  var sp1=astroSunPos(d+0.01);
+  var moonLon2=astroMoonLon(d+0.01,sp1.lonsun,sp1.M);
+  var moonSpeed=(astroNorm360(moonLon2-moonLon+180)-180)/0.01; // deg/day
+  var degRemaining=30-(moonLon%30);
+  var daysToSignChange=moonSpeed>0?(degRemaining/moonSpeed):0.1;
+  if(!(daysToSignChange>0)||daysToSignChange>3) daysToSignChange=3; // safety clamp
+  var bodies=['sun','mercury','venus','mars','jupiter','saturn'];
+  var aspects=[0,60,90,120,180];
+  var steps=24;
+  for(var b=0;b<bodies.length;b++){
+    var name=bodies[b];
+    for(var s=0;s<=steps;s++){
+      var t=d+(daysToSignChange*s/steps);
+      var spT=astroSunPos(t);
+      var moonAt=astroMoonLon(t,spT.lonsun,spT.M);
+      var bodyAt=name==='sun'?spT.lonsun:astroPlanetLon(name,t,spT.lonsun,spT.r);
+      var sep=astroNorm360(moonAt-bodyAt);
+      for(var ai=0;ai<aspects.length;ai++){
+        var diff=Math.min(Math.abs(sep-aspects[ai]),360-Math.abs(sep-aspects[ai]));
+        if(diff<0.35) return false; // an aspect perfects -> not void
+      }
+    }
+  }
+  return true;
+}
+
+// ══════════════════════════
 // LAYER 1: NUMEROLOGY
 // Pythagorean + Chaldean dual system
 // ══════════════════════════
@@ -192,32 +366,27 @@ function layerNumerology(drawHour){
 }
 
 function layerAstrology(drawHour){
-  // Simplified planetary position calculation
-  // Using mean motion approximations from J2000.0 (Jan 1.5 2000)
-  // Days since J2000.0
-  var jd2000=function(y,m,d){
-    var a=Math.floor((14-m)/12);
-    var yr=y+4800-a;
-    var mo=m+12*a-3;
-    return d+Math.floor((153*mo+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045-2451545;
-  };
-  var T=jd2000(_Y,_M,_D)/36525; // Julian centuries from J2000
+  // Real ephemeris positions (see ASTRO ENGINE above for source/accuracy).
+  var h=drawHour==='2PM'?14:drawHour==='5PM'?17:21;
+  var d=astroDayNumber(_Y,_M,_D,h);
+  var sp=astroSunPos(d);
+  var sunLon=sp.lonsun;
+  var moon=astroMoonLon(d,sunLon,sp.M);
+  var mercury=astroPlanetLon('mercury',d,sunLon,sp.r);
+  var venus=astroPlanetLon('venus',d,sunLon,sp.r);
+  var mars=astroPlanetLon('mars',d,sunLon,sp.r);
+  var jupiter=astroPlanetLon('jupiter',d,sunLon,sp.r);
+  var saturn=astroPlanetLon('saturn',d,sunLon,sp.r);
+  var ecl=astroObliquity(d);
+  var Ls=astroNorm360(sp.M+sp.w); // Sun's mean longitude, for GMST0
+  var ut=h-8; // PH is UTC+8
+  var LST=astroSiderealDeg(Ls,ut,ASTRO_LON);
+  var ascReal=astroAscendant(LST,ASTRO_LAT,ecl);
+  var radec=astroSunRaDec(sunLon,sp.r,ecl);
+  var sunAlt=astroAltitude(radec.RA,radec.Dec,LST,ASTRO_LAT);
+  var isDayChart=sunAlt>0;
 
-  // Mean longitudes (degrees, simplified)
-  var sun=(280.46646+36000.76983*T+0.0003032*T*T)%360;
-  var moon=(218.3165+481267.8813*T)%360;
-  var mercury=(252.250906+149474.0722491*T)%360;
-  var venus=(181.979801+58517.8156760*T)%360;
-  var mars=(355.433275+19141.6964746*T)%360;
-  var jupiter=(34.351519+3036.3027748*T)%360;
-  var saturn=(50.077444+1223.5110686*T)%360;
-
-  // Normalize to 0-360
-  function norm(x){return((x%360)+360)%360;}
-  sun=norm(sun);moon=norm(moon);mercury=norm(mercury);venus=norm(venus);
-  mars=norm(mars);jupiter=norm(jupiter);saturn=norm(saturn);
-
-  // Convert to zodiac sign (0=Aries,1=Taurus,...,11=Pisces)
+  function norm(x){return astroNorm360(x);}
   var signs=['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'];
   var signNums=[[9,1],[6,2],[3,5],[2,7],[1,4],[5,6],[3,6],[1,9],[3,9],[8,1],[4,7],[2,7]]; // nums per sign
   function signOf(deg){return Math.floor(norm(deg)/30);}
@@ -228,15 +397,14 @@ function layerAstrology(drawHour){
   var vSign=signOf(venus);
   var maSign=signOf(mars);
 
-  // Part of Fortune: Asc + Moon - Sun (simplified, use sunrise as Asc approx)
-  // Use 0° Aries as Asc approximation for daytime, adjust by hour
-  var h=drawHour==='2PM'?14:drawHour==='5PM'?17:21;
-  var ascApprox=norm(sun + (h-6)*15); // crude local Asc
-  var pof=norm(ascApprox+moon-sun);
+  // Part of Fortune — uses the real Ascendant computed above, and switches
+  // formula by whether the Sun is actually above the horizon at draw time:
+  // day chart = Asc+Moon-Sun, night chart = Asc+Sun-Moon (classical rule).
+  // 2PM/5PM draws in Manila are day charts; 9PM is a night chart.
+  var pof=isDayChart?norm(ascReal+moon-sunLon):norm(ascReal+sunLon-moon);
   var pofSign=signOf(pof);
   var pofNums=[...new Set(signNums[pofSign])];
 
-  // Collect active nums from key planets (Mars included — was displayed but unscored)
   var nums=[...new Set([
     ...signNums[jSign],
     ...signNums[mSign],
@@ -245,36 +413,47 @@ function layerAstrology(drawHour){
     ...signNums[pofSign],
   ])];
 
-
-
-  // Horary approximations (dynamic)
   var signs2=["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
   var signRulers=["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars/Pluto","Jupiter","Saturn","Uranus/Saturn","Neptune/Jupiter"];
-  var h5SignIdx=(signOf(ascApprox)+4)%12; // 5th house = Asc + 4 signs
+  // 5th house cusp: Equal House system (Asc + 4 signs). Labeled honestly as
+  // such — earlier copy in this app claimed "Regiomontanus," which this
+  // code never actually computed.
+  var h5SignIdx=(signOf(ascReal)+4)%12;
   var h5ruler=signRulers[h5SignIdx];
   var h5sign=signs2[h5SignIdx];
-  // Horary digits: ASC sign + 5th house (gambling house) sign → sign digits.
-  // Previously computed for display only; now feeds convergence as its own source.
   var horaryNums=[...new Set([
-    ...signNums[signOf(ascApprox)],
+    ...signNums[signOf(ascReal)],
     ...signNums[h5SignIdx],
   ])];
-  var pofSignIdx=pofSign;
-  var pofRuler=signRulers[pofSignIdx];
+  var pofRuler=signRulers[pofSign];
   var pofDigit=reduce(Math.floor(pof/30)+1);
-  // Simplified aspects (Sun-Moon angle)
-  var sunMoonAngle=norm(moon-sun);
+
+  // Sun-Moon aspect (unchanged classification logic, now fed real longitudes)
+  var sunMoonAngle=norm(moon-sunLon);
   var aspectName=sunMoonAngle<30?"Conjunction":sunMoonAngle<90?"Sextile/Semi-square":sunMoonAngle<120?"Square":"Trine/Opposition";
   var aspNature=sunMoonAngle<30||sunMoonAngle>330?'favorable':sunMoonAngle<60||sunMoonAngle>300?'favorable':sunMoonAngle<120||sunMoonAngle>240?'caution':'caution';
+
+  // Real horary "strictures": these used to be hardcoded ✓ text regardless
+  // of the actual chart. Now genuinely computed from the positions above.
+  // Jupiter essential dignity (classical rulership table):
+  var jupDignity=jSign===8||jSign===11?'Domicile (rulership)':jSign===3?'Exalted':jSign===2||jSign===5?'Detriment':jSign===9?'Fall':'Peregrine (no essential dignity)';
+  // Via Combusta: 15° Libra (195°) to 15° Scorpio (225°) — classical danger zone for the Moon.
+  var viaCombusta=(moon>=195&&moon<=225);
+  // Radical chart: Ascendant in the first 3° or last 3° of a sign is classically "too early/too late for judgement".
+  var ascDegInSign=degInSign(ascReal);
+  var isRadical=!(ascDegInSign<3||ascDegInSign>27);
+  var moonVoid=astroMoonVoidOfCourse(d);
+
   return {
     nums,pofNums,horaryNums,
-    horaryASC:signs2[signOf(ascApprox)]+" "+degInSign(ascApprox).toFixed(0)+"°",
-    horaryASCRuler:signRulers[signOf(ascApprox)],
+    horaryASC:signs2[signOf(ascReal)]+" "+degInSign(ascReal).toFixed(0)+"°",
+    horaryASCRuler:signRulers[signOf(ascReal)],
     h5sign:h5sign,h5ruler:h5ruler,h5rulerPos:signs2[signOf(venus)]+" "+degInSign(venus).toFixed(0)+"°",
     h5aspect:aspectName,
-    pofSign:signs2[pofSignIdx],pofDeg:degInSign(pof).toFixed(1)+"°",
+    pofSign:signs2[pofSign],pofDeg:degInSign(pof).toFixed(1)+"°",
     pofRuler:pofRuler,pofDigit:pofDigit,
-    aspects:[{asp:aspectName+' '+sunMoonAngle.toFixed(0)+'°',nature:aspNature,note:'Sun-Moon · '+signs2[signOf(sun)]+' to '+signs2[signOf(moon)]}],
+    isDayChart:isDayChart,jupiterDignity:jupDignity,viaCombusta:viaCombusta,isRadical:isRadical,moonVoid:moonVoid,
+    aspects:[{asp:aspectName+' '+sunMoonAngle.toFixed(0)+'°',nature:aspNature,note:'Sun-Moon · '+signs2[signOf(sunLon)]+' to '+signs2[signOf(moon)]}],
     planets:[
       {name:'Jupiter ♃',sign:signs[jSign],deg:degInSign(jupiter).toFixed(1),nums:signNums[jSign]},
       {name:'Moon ☽',sign:signs[mSign],deg:degInSign(moon).toFixed(1),nums:signNums[mSign]},
@@ -283,12 +462,12 @@ function layerAstrology(drawHour){
     ],
     pof:{sign:signs[pofSign],deg:degInSign(pof).toFixed(1)},
     steps:[
-      `<b>Jupiter ♃</b> at ${degInSign(jupiter).toFixed(1)}° ${signs[jSign]} → digits: <b>${signNums[jSign].join(',')}</b>`,
+      `<b>Jupiter ♃</b> at ${degInSign(jupiter).toFixed(1)}° ${signs[jSign]} (${jupDignity}) → digits: <b>${signNums[jSign].join(',')}</b>`,
       `<b>Moon ☽</b> at ${degInSign(moon).toFixed(1)}° ${signs[mSign]} → digits: <b>${signNums[mSign].join(',')}</b>`,
       `<b>Venus ♀</b> at ${degInSign(venus).toFixed(1)}° ${signs[vSign]} → digits: <b>${signNums[vSign].join(',')}</b>`,
       `<b>Mars ♂</b> at ${degInSign(mars).toFixed(1)}° ${signs[maSign]} → digits: <b>${signNums[maSign].join(',')}</b>`,
-      `<b>Horary</b> ASC ${signs2[signOf(ascApprox)]} + 5th house ${h5sign} → digits: <b>${horaryNums.join(',')}</b>`,
-      `<b>Part of Fortune</b> at ${degInSign(pof).toFixed(1)}° ${signs[pofSign]} → digits: <b>${pofNums.join(',')}</b>`,
+      `<b>Horary</b> ASC ${signs2[signOf(ascReal)]} (Equal House) + 5th house ${h5sign} → digits: <b>${horaryNums.join(',')}</b>`,
+      `<b>Part of Fortune</b> (${isDayChart?'day':'night'} chart, Sun ${sunAlt.toFixed(0)}° ${sunAlt>0?'above':'below'} horizon) at ${degInSign(pof).toFixed(1)}° ${signs[pofSign]} → digits: <b>${pofNums.join(',')}</b>`,
     ]
   };
 }
@@ -302,36 +481,56 @@ function layerBazi(drawHour){
   var branchNums=[[1,6],[2,5],[3,8],[3,8],[5],[2,7],[2,7],[2,5],[6,7],[6,7],[5],[1,6]];
   var stemNums=[[3,8],[3,8],[2,7],[2,7],[5],[5],[6,7],[6,7],[1,6],[1,6]];
 
-  // Year pillar — stem: (year-4)%10, branch: (year-4)%12
-  // Using solar year basis (simplified: Jan 1 start)
-  var yStem=(_Y-4)%10; if(yStem<0)yStem+=10;
-  var yBranch=(_Y-4)%12; if(yBranch<0)yBranch+=12;
+  // Solar longitude of the day (needed for both the year-switch at Lichun
+  // and the true Jie-Qi month boundary below). BaZi is a solar calendar —
+  // months and the year both turn on solar-term crossings, not the
+  // Gregorian 1st of the month. [Confirmed: Wikipedia "Four Pillars of
+  // Destiny" — "The month is determined by the solar terms... rather than
+  // the lunar month."]
+  var _baziD=astroDayNumber(_Y,_M,_D,12);
+  var _baziSunLon=astroSunPos(_baziD).lonsun;
 
-  // Month pillar — uses month branch (Yin=1=Feb, etc, offset by 2)
-  // Month stems cycle based on year stem group
-  var mBranch=(_M+1)%12; // Yin寅=February=month 1 in Chinese calendar (approx)
-  var mStemBase=[(yStem%5)*2]%10;
-  var mStem=(mStemBase+_M-1)%10;
+  // Year pillar — switches at Lichun (立春, solar longitude 315°), not Jan 1.
+  // Only Jan/early-Feb dates before that year's Lichun still belong to the
+  // previous BaZi year.
+  var baziYear=_Y;
+  if(_M===1||(_M===2&&_baziSunLon<315)) baziYear=_Y-1;
+  var yStem=(baziYear-4)%10; if(yStem<0)yStem+=10;
+  var yBranch=(baziYear-4)%12; if(yBranch<0)yBranch+=12;
 
-  // Day pillar — use Julian Day Number approach
-  // JDN for date
-  var a=Math.floor((14-_M)/12);
-  var yr=_Y+4800-a;
-  var mo=_M+12*a-3;
-  var jdn=_D+Math.floor((153*mo+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045;
-  var dStem=(jdn-10)%10; if(dStem<0)dStem+=10;
-  var dBranch=(jdn-10)%12; if(dBranch<0)dBranch+=12;
+  // Month pillar — true solar-term (Jie) boundary: 12 "Jie" terms spaced
+  // 30° apart in solar longitude, starting at Lichun (315°) = Yin月.
+  // Month stem from the "Five Tigers" (五虎遁) rule: Jia/Ji→Bing, Yi/Geng→Wu,
+  // Bing/Xin→Geng, Ding/Ren→Ren, Wu/Gui→Jia at Yin month, then +1 stem per
+  // month. [Confirmed against a public worked example — see chat writeup.]
+  var solarMonthIdx=Math.floor(astroNorm360(_baziSunLon-315)/30); // 0=Yin..11=Chou
+  var mBranch=(2+solarMonthIdx)%12;
+  var yinMonthStem=(2+(yStem%5)*2)%10;
+  var mStem=(yinMonthStem+solarMonthIdx)%10;
+
+  // Day pillar — Julian Day Number approach, corrected offset.
+  // [Confirmed] dayStemIndex=(jdn-1)%10, dayBranchIndex=(jdn+1)%12 reproduces
+  // the published sexagenary anchor JDnoon=2458511 → 甲子 (Jiazi) exactly;
+  // the previous (jdn-10)%10 / (jdn-10)%12 formula was off by one stem and
+  // one branch position (verified in chat — same anchor gives 乙丑 instead).
+  var jdn=jdnOf(_Y,_M,_D);
+  var dStem=(jdn-1)%10; if(dStem<0)dStem+=10;
+  var dBranch=(jdn+1)%12; if(dBranch<0)dBranch+=12;
 
   // Hour pillar — fixed branches by hour
   var hBranchMap={'2PM':7,'5PM':9,'9PM':11}; // Wei=7,You=9,Hai=11
   var hBranch=hBranchMap[drawHour]||11;
-  // Hour stem = day stem index * 2 + hour branch index / 2
-  var hStem=(dStem*2+Math.floor(hBranch/2))%10;
+  // Hour stem — "Five Rats" (五鼠遁) rule: Zi-hour stem = (dayStem mod 5)*2,
+  // then +1 stem per subsequent 2-hour branch. The previous formula divided
+  // the branch index by 2 instead of using it directly, which is wrong for
+  // every hour except Zi itself (verified in chat: Jia/Ji-day Yin-hour must
+  // be Bing, previous formula gave Yi).
+  var hStem=((dStem%5)*2+hBranch)%10;
 
   var day={stem:stems[dStem],stemEl:stemEl[dStem],branch:branches[dBranch],branchEl:branchEl[dBranch],nums:[...new Set([...stemNums[dStem],...branchNums[dBranch]])]};
   var hour={stem:stems[hStem],stemEl:stemEl[hStem],branch:branches[hBranch],branchEl:branchEl[hBranch],nums:[...new Set([...stemNums[hStem],...branchNums[hBranch]])]};
-  var year={stem:stems[yStem],branch:branches[yBranch],nums:[...new Set([...stemNums[yStem],...branchNums[yBranch]])]};
-  var month={stem:stems[mStem],branch:branches[mBranch],nums:[...new Set([...stemNums[mStem],...branchNums[mBranch]])]};
+  var year={stem:stems[yStem],stemEl:stemEl[yStem],branch:branches[yBranch],branchEl:branchEl[yBranch],nums:[...new Set([...stemNums[yStem],...branchNums[yBranch]])]};
+  var month={stem:stems[mStem],stemEl:stemEl[mStem],branch:branches[mBranch],branchEl:branchEl[mBranch],nums:[...new Set([...stemNums[mStem],...branchNums[mBranch]])]};
 
   var nums=[...new Set([...day.nums,...hour.nums])];
 
@@ -355,11 +554,18 @@ function layerBazi(drawHour){
 }
 
 function layerFengshui(){
+  // Same Lichun-based solar year/month logic as BaZi above, so Flying Star
+  // and BaZi never disagree about which "month" it currently is.
+  var _fsD=astroDayNumber(_Y,_M,_D,12);
+  var _fsSunLon=astroSunPos(_fsD).lonsun;
+  var fsYear=_Y;
+  if(_M===1||(_M===2&&_fsSunLon<315)) fsYear=_Y-1;
+
   // Period 9 (2024-2043) — fixed
   // Annual star: Period 9, year within period
   // Annual base: 2024=9,2025=8,2026=7... wait — annual star goes DOWN from 9
   // 2024=9,2025=8,2026=7,2027=6...
-  var annualStar=9-((_Y-2024)%9);
+  var annualStar=9-((fsYear-2024)%9);
   if(annualStar<=0)annualStar+=9;
 
   // Monthly star: depends on annual star and month
@@ -370,9 +576,9 @@ function layerFengshui(){
   // Standard: if annual is odd, February star = 8; if even, February star = 5
   // Then count down each month
   var febStar=(annualStar%2!==0)?8:5;
-  // Count months from Feb (Chinese month 1)
-  // Western month mapping: Feb=0,Mar=1,...,Jan=11
-  var monthOffset=(_M>=2)?_M-2:_M+10;
+  // Months since Lichun (0=Yin/first solar month), from true solar-term
+  // boundaries rather than the 1st of the Gregorian month.
+  var monthOffset=Math.floor(astroNorm360(_fsSunLon-315)/30);
   var monthlyStar=((febStar-monthOffset-1+90)%9)+1;
 
   // Lo Shu grid: place monthly star in center, arrange others
@@ -676,7 +882,7 @@ function calcEnergy(bazi,astro,fs){
   }
   if(bazi&&bazi.day){addEl(bazi.day.stemEl);addEl(bazi.day.branchEl);}
   if(bazi&&bazi.hour){addEl(bazi.hour.stemEl);addEl(bazi.hour.branchEl);}
-  if(bazi&&bazi.year){addEl(bazi.year.stemEl||'Fire');addEl(bazi.year.branchEl||'Fire');}
+  if(bazi&&bazi.year){addEl(bazi.year.stemEl);addEl(bazi.year.branchEl);}
   // Astrology planet element contributions (dynamic from astro layer)
   if(astro&&astro.planets){
     var signElMap={Aries:'Fire',Taurus:'Earth',Gemini:'Air',Cancer:'Water',Leo:'Fire',Virgo:'Earth',
@@ -686,8 +892,16 @@ function calcEnergy(bazi,astro,fs){
       if(e&&e!=='Air'&&el[e]!==undefined) el[e]+=1;
     });
   }
-  // Flying Star: Period 9 = Fire dominant
-  el.Fire+=2; el.Earth+=2;
+  // Flying Star contribution — was a hardcoded `Fire+=2;Earth+=2` regardless
+  // of the actual date (the `fs` parameter was accepted but never read).
+  // Now derived from the real Lo Shu grid computed in layerFengshui, via the
+  // standard star-number → element correspondence (1 Water · 2/5/8 Earth ·
+  // 3/4 Wood · 6/7 Metal · 9 Fire).
+  var loShuEl=[null,'Water','Earth','Wood','Wood','Earth','Metal','Metal','Earth','Fire'];
+  if(fs&&fs.loShu){
+    var centerEl=loShuEl[fs.loShu.C]; if(centerEl&&el[centerEl]!==undefined) el[centerEl]+=2;
+    var eastEl=loShuEl[fs.loShu.E]; if(eastEl&&el[eastEl]!==undefined) el[eastEl]+=1;
+  }
   // Ensure no zeros
   Object.keys(el).forEach(function(k){if(!el[k])el[k]=1;});
   var total=Object.values(el).reduce(function(a,b){return a+b;},0);
@@ -912,8 +1126,8 @@ async function generate(){
   var msgs=[
     `🔢 Pythagorean + Chaldean numerology · ${TODAY_PH} ${dh}…`,
     `🪐 Real planetary positions + essential dignities…`,
-    `🏛️ Horary chart — Regiomontanus · 5th house gambling…`,
-    `⭐ Part of Fortune · night chart calculation…`,
+    `🏛️ Horary chart — Equal House · 5th house gambling…`,
+    `⭐ Part of Fortune · day/night-aware calculation…`,
     `🔭 Planetary aspects · applying only · strictures checked…`,
     `☯️ Exact BaZi day pillar · ${TODAY_PH} ${dh} hour…`,
     `⚡ Clashes · combines · hidden stems · element balance…`,
@@ -922,7 +1136,7 @@ async function generate(){
     `🃏 Tarot · Major Arcana card of the day…`,
     `😇 Angel Numbers · scanning for repeating-digit resonance…`,
     `📊 PCSO ${game.short} historical data · freq+hot+overdue…`,
-    `🎯 10-source digit convergence · mapping to 1–${game.max}…`,
+    `🎯 12-source digit convergence · mapping to 1–${game.max}…`,
   ];
   var si=0;
   var el=document.getElementById('lsteps');
@@ -932,8 +1146,8 @@ async function generate(){
     clearInterval(iv);
     var num,astro,bazi,fs,iching,tarot,angel,stats,energy,layers,conv;
     try{num=layerNumerology(dh);}catch(e){console.error('layerNumerology:',e);num={pyNums:[7],chNums:[3],allNums:[3,7],steps:[]};}
-    try{astro=layerAstrology(dh);}catch(e){console.error('layerAstrology:',e);astro={nums:[1,6],pofNums:[2],horaryNums:[2,7],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,aspects:[],steps:[]};}
-    try{bazi=layerBazi(dh);}catch(e){console.error('layerBazi:',e);bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',branch:'Wu',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
+    try{astro=layerAstrology(dh);}catch(e){console.error('layerAstrology:',e);astro={nums:[1,6],pofNums:[2],horaryNums:[2,7],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,isDayChart:true,jupiterDignity:'Peregrine (no essential dignity)',viaCombusta:false,isRadical:true,moonVoid:false,planets:[],aspects:[],steps:[]};}
+    try{bazi=layerBazi(dh);}catch(e){console.error('layerBazi:',e);bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',stemEl:'Fire',branch:'Wu',branchEl:'Fire',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
     try{fs=layerFengshui();}catch(e){console.error('layerFengshui:',e);fs={nums:[7,8,9],loShu:{C:8},steps:[]};}
     try{iching=layerIChing(dh);}catch(e){console.error('layerIChing:',e);iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
     try{tarot=layerTarot(dh);}catch(e){console.error('layerTarot:',e);tarot={nums:[5],cardNum:5,cardName:'The Hierophant',gambling:'',steps:[]};}
@@ -1044,28 +1258,34 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     </div>`;
   }).join('');
 
-  // Horary sub-panel
+  // Horary sub-panel — all four checks below are genuinely computed in
+  // layerAstrology() (previously these were hardcoded "✓" text and a
+  // permanently-"EXALTED, 29°16' Cancer" Jupiter regardless of the actual
+  // date).
+  var jup=layers.astro.planets&&layers.astro.planets[0]; // Jupiter
+  var jupDign=layers.astro.jupiterDignity||'Peregrine (no essential dignity)';
+  var jupColor=(jupDign.indexOf('Domicile')===0||jupDign==='Exalted')?'var(--green)':(jupDign.indexOf('Detriment')===0||jupDign==='Fall')?'var(--red)':'var(--muted2)';
   var horaryHTML=`
     <div class="hgrid">
       <div class="hbox">
         <div class="hbox-title">Ascendant</div>
         <div class="hbox-val">${layers.astro.horaryASC}</div>
-        <div class="hbox-sub">Ruler: ${layers.astro.horaryASCRuler}<br>Chart is radical ✓<br>Moon not void ✓<br>Not Via Combusta ✓</div>
+        <div class="hbox-sub">Ruler: ${layers.astro.horaryASCRuler}<br>Chart is ${layers.astro.isRadical?'radical ✓':'NOT radical ⚠ (Asc near sign boundary)'}<br>Moon ${layers.astro.moonVoid?'is void of course ⚠':'not void ✓'}<br>${layers.astro.viaCombusta?'In Via Combusta ⚠':'Not Via Combusta ✓'}</div>
       </div>
       <div class="hbox">
         <div class="hbox-title">5th House (Gambling)</div>
         <div class="hbox-val">${layers.astro.h5sign}</div>
-        <div class="hbox-sub">Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}</div>
+        <div class="hbox-sub">Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}<br><span style="opacity:.7">Equal House system</span></div>
       </div>
       <div class="hbox">
         <div class="hbox-title">Part of Fortune ⊕</div>
         <div class="hbox-val">~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
-        <div class="hbox-sub">Night chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
+        <div class="hbox-sub">${layers.astro.isDayChart?'Day':'Night'} chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
       </div>
       <div class="hbox">
         <div class="hbox-title">Jupiter Status</div>
-        <div class="hbox-val" style="color:var(--green)">EXALTED ★</div>
-        <div class="hbox-sub">29°16' Cancer<br>Anaretic degree<br>Peak luck energy</div>
+        <div class="hbox-val" style="color:${jupColor}">${jupDign.split(' ')[0].toUpperCase()}${jupDign.indexOf('Exalted')===0?' ★':''}</div>
+        <div class="hbox-sub">${jup?jup.deg+'° '+jup.sign:''}<br>${jupDign}</div>
       </div>
     </div>
     <div style="margin-top:8px">
@@ -1189,7 +1409,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     </div>
 
     <div class="disc">
-      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (verified ${TODAY_PH} ephemeris), Horary chart (Regiomontanus system, strictures checked, 5th house gambling analysis), Part of Fortune (night chart), exact BaZi four pillars (dynamic daily pillars) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (cast from today's date) with nuclear and changing line, Element Energy flow (BaZi + planetary + Flying Star synthesis, Lo Shu number map), Tarot (Major Arcana card of the day), Angel Numbers (repeating-digit resonance scan), and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
+      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (${TODAY_PH} planetary positions via a published low-precision ephemeris algorithm, accurate to roughly 1-2 arcminutes), Horary chart (Equal House system, strictures checked: radicality, void-of-course Moon, Via Combusta), Part of Fortune (day/night-aware formula), exact BaZi four pillars (dynamic daily pillars, true solar-term month/year boundaries) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (cast from today's date) with nuclear and changing line, Element Energy flow (BaZi + planetary + Flying Star synthesis, Lo Shu number map), Tarot (Major Arcana card of the day), Angel Numbers (repeating-digit resonance scan), and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
     </div>
   `;
 }
@@ -1218,8 +1438,8 @@ async function generatePersonal(){
     clearInterval(iv);
     var dh=currentGame==='ez2'?currentDraw:'9PM'; var num,astro,bazi,fs,iching,tarot,angel,stats,energy,layers,conv;
     try{num=layerNumerology(dh);}catch(e){num={pyNums:[7],chNums:[3],allNums:[3,7],steps:[]};}
-    try{astro=layerAstrology(dh);}catch(e){astro={nums:[1,6],pofNums:[2],horaryNums:[2,7],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,aspects:[],steps:[]};}
-    try{bazi=layerBazi(dh);}catch(e){bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',branch:'Wu',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
+    try{astro=layerAstrology(dh);}catch(e){astro={nums:[1,6],pofNums:[2],horaryNums:[2,7],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,isDayChart:true,jupiterDignity:'Peregrine (no essential dignity)',viaCombusta:false,isRadical:true,moonVoid:false,planets:[],aspects:[],steps:[]};}
+    try{bazi=layerBazi(dh);}catch(e){bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',stemEl:'Fire',branch:'Wu',branchEl:'Fire',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
     try{fs=layerFengshui();}catch(e){fs={nums:[7,8,9],loShu:{C:8},steps:[]};}
     try{iching=layerIChing(dh);}catch(e){iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
     try{tarot=layerTarot(dh);}catch(e){tarot={nums:[5],cardNum:5,cardName:'The Hierophant',gambling:'',steps:[]};}
@@ -1756,4 +1976,3 @@ async function pcsoAIFetch(){
   var defaultBtn=document.querySelector('#oracle-page .gbtn.active');
   if(defaultBtn) setGame(currentGame,defaultBtn);
 })();
-
