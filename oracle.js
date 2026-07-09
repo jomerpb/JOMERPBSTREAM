@@ -1887,42 +1887,67 @@ async function pcsoWaitForRun(workflowFile, ghHeaders, sinceMs, statusEl, label,
   throw new Error(label + ': timed out — run never appeared');
 }
 
+async function pcsoFetchWithTimeout(url, timeoutMs){
+  var controller = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  var timer = controller ? setTimeout(function(){ controller.abort(); }, timeoutMs) : null;
+  try{
+    var resp = await fetch(url, controller ? {signal: controller.signal} : {});
+    return resp;
+  } finally {
+    if(timer) clearTimeout(timer);
+  }
+}
+
 async function pcsoRefreshFromRaw(){
   var grid=document.getElementById('pcso-grid');
   if(grid){grid.innerHTML='<div class="pcso-row"><span class="pcso-pending">Loading latest results…</span></div>';}
   var RAW_URL='https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pcso-results.json';
-  try{
-    var resp=await fetch(RAW_URL+'?nocache='+Date.now());
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    var data=await resp.json();
-    if(data.ez2&&Array.isArray(data.ez2)){
-      PCSO_DATA.ez2=data.ez2.map(function(e){return{draw:e.draw,nums:e.nums||[],cutoff:e.cutoff||21};});
+  var MAX_ATTEMPTS=3;
+  var TIMEOUT_MS=8000;
+  var BACKOFF_MS=[0,800,1600];
+  var fetchStatusEl=document.getElementById('pcso-fetch-status');
+  var lastErr=null;
+
+  for(var attempt=1; attempt<=MAX_ATTEMPTS; attempt++){
+    if(attempt>1){
+      if(fetchStatusEl) fetchStatusEl.textContent='Retrying… (attempt '+attempt+' of '+MAX_ATTEMPTS+')';
+      await pcsoSleep(BACKOFF_MS[attempt-1]);
     }
-    if(data.balls&&Array.isArray(data.balls)){
-      var sched={'6/58':[0,2,5],'6/55':[1,3,6],'6/49':[0,2,4],'6/45':[1,3,5],'6/42':[2,4,6]};
-      PCSO_DATA.balls=data.balls.map(function(g){
-        return{game:g.game,draw_date:g.draw_date||'',nums:g.nums||[],done:!!(g.nums&&g.nums.length>0),
-          jackpot:g.jackpot||'',winners:g.winners||0,days:g.days||sched[g.game]||[]};
-      });
+    try{
+      var resp=await pcsoFetchWithTimeout(RAW_URL+'?nocache='+Date.now(), TIMEOUT_MS);
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
+      var data=await resp.json();
+      if(data.ez2&&Array.isArray(data.ez2)){
+        PCSO_DATA.ez2=data.ez2.map(function(e){return{draw:e.draw,nums:e.nums||[],cutoff:e.cutoff||21};});
+      }
+      if(data.balls&&Array.isArray(data.balls)){
+        var sched={'6/58':[0,2,5],'6/55':[1,3,6],'6/49':[0,2,4],'6/45':[1,3,5],'6/42':[2,4,6]};
+        PCSO_DATA.balls=data.balls.map(function(g){
+          return{game:g.game,draw_date:g.draw_date||'',nums:g.nums||[],done:!!(g.nums&&g.nums.length>0),
+            jackpot:g.jackpot||'',winners:g.winners||0,days:g.days||sched[g.game]||[]};
+        });
+      }
+      if(data.date) PCSO_DATA.date=data.date;
+      pcsoRender();
+      if(data.updated){
+        var upd=new Date(data.updated);
+        var lbl=document.getElementById('pcso-date-lbl');
+        if(lbl) lbl.textContent='Updated '+upd.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'});
+        if(fetchStatusEl) fetchStatusEl.textContent='Data Updated '+upd.toLocaleString('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' PH';
+      } else if(fetchStatusEl){
+        fetchStatusEl.textContent='Data timestamp unavailable';
+      }
+      return;
+    } catch(err){
+      lastErr=err;
+      console.error('PCSO raw refresh attempt '+attempt+' of '+MAX_ATTEMPTS+':',err);
     }
-    if(data.date) PCSO_DATA.date=data.date;
-    pcsoRender();
-    var fetchStatusEl=document.getElementById('pcso-fetch-status');
-    if(data.updated){
-      var upd=new Date(data.updated);
-      var lbl=document.getElementById('pcso-date-lbl');
-      if(lbl) lbl.textContent='Updated '+upd.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'});
-      if(fetchStatusEl) fetchStatusEl.textContent='Data Updated '+upd.toLocaleString('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' PH';
-    } else if(fetchStatusEl){
-      fetchStatusEl.textContent='Data timestamp unavailable';
-    }
-  } catch(err){
-    console.error('PCSO raw refresh:',err);
-    pcsoRender();
-    var fetchStatusElErr=document.getElementById('pcso-fetch-status');
-    if(fetchStatusElErr) fetchStatusElErr.textContent='Data unavailable ❌ — ' + err.message;
-    throw err;
   }
+
+  pcsoRender();
+  var fetchStatusElErr=document.getElementById('pcso-fetch-status');
+  if(fetchStatusElErr) fetchStatusElErr.textContent='Data unavailable ❌ — ' + (lastErr&&lastErr.message?lastErr.message:'network error') + ' (after '+MAX_ATTEMPTS+' attempts)';
+  throw lastErr;
 }
 
 async function pcsoAIFetch(){
