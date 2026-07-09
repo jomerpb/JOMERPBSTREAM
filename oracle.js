@@ -1540,7 +1540,7 @@ document.getElementById('ez2wrap').style.display='block';
 var PCSO_DATA = {
   date: TODAY_PH_FULL,
   ez2: [
-    {draw:'2PM', nums:[24,4],  cutoff:14},
+    {draw:'2PM', nums:[],  cutoff:14},
     {draw:'5PM', nums:[],      cutoff:17},
     {draw:'9PM', nums:[],      cutoff:21}
   ],
