@@ -63,7 +63,7 @@ var GAMES={
 var PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:null};
 var PCSO_HISTORY_LOAD_FAILED=false; // lets pcsoHistRender() tell "genuinely no draw" apart from "fetch failed"
 var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
-  var RAW_URL='https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pcso-history.json';
+  var RAW_URL='pcso-history.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   var MAX_ATTEMPTS=3;
   var TIMEOUT_MS=8000;
   var BACKOFF_MS=[0,800,1600];
@@ -1948,7 +1948,7 @@ async function pcsoFetchWithTimeout(url, timeoutMs){
 async function pcsoRefreshFromRaw(){
   var grid=document.getElementById('pcso-grid');
   if(grid){grid.innerHTML='<div class="pcso-row"><span class="pcso-pending">Loading latest results…</span></div>';}
-  var RAW_URL='https://raw.githubusercontent.com/jomerpb/JOMERPBSTREAM/main/pcso-results.json';
+  var RAW_URL='pcso-results.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   var MAX_ATTEMPTS=3;
   var TIMEOUT_MS=8000;
   var BACKOFF_MS=[0,800,1600];
