@@ -2914,7 +2914,7 @@ var CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetc
 
 var tcSeriesCache = {};       // memoized merged-with-live series per symbol (invalidated on reload)
 var tcCurrentSym = null;
-var tcCurrentTF = '1D'; // default chart view for crypto — user requested 1D instead of 3M
+var tcCurrentTF = '1H'; // default chart view for crypto — user requested 1H instead of 1D
 // Restored from localStorage so the Gainers/Bullish choice survives a page
 // reload — previously this always reset to 'current' on refresh, which is
 // why the Bullish filter kept silently reverting to Gainers.
@@ -3169,7 +3169,80 @@ function tcGetQuote(sym){
   return null;
 }
 
-var TC_TF_BARS = {'1D':2,'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':365};
+var TC_TF_BARS = {'1H':1,'1D':2,'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':365};
+// 1H — synthesized last-60-minutes pattern anchored to the REAL current
+// price, one simulated bar per minute, anchored to actual wall-clock time.
+// Same disclosed-simulation approach as 1D (see below) — CoinGecko's free
+// tier has no true minute-level feed.
+//
+// UNLIKE 1D (which fully reseeds/rebuilds on every render), 1H is a
+// PERSISTENT ROLLING WINDOW: tcHourlyCache keeps each symbol's last-built
+// 60 bars in memory, and each time a fresh quote comes in (tcRefreshLivePriceDirect,
+// every 5 min / on tab-visible) we just APPEND however many minutes have
+// elapsed and drop the same number off the front — old bars are never
+// rewritten or rescaled, so the chart extends smoothly instead of jumping
+// to a brand-new random pattern every refresh. Only the newest bar is
+// anchored to the real fetched price; everything before it is left alone.
+var tcHourlyCache = {}; // sym -> { bars:[...60 bars...], lastAt: epoch-ms of most recent bar }
+function tcHourlyBuildBar(rnd, anchorBase, prevClose, tMs, volPerMin){
+  var drift = (rnd()-0.5) * anchorBase * 0.0012;
+  var open = prevClose;
+  var close = Math.max(anchorBase*0.0001, open + drift);
+  var high = Math.max(open,close) + rnd()*anchorBase*0.0009;
+  var low  = Math.max(anchorBase*0.0001, Math.min(open,close) - rnd()*anchorBase*0.0009);
+  var vol  = Math.floor(volPerMin * (0.5 + rnd()));
+  var t = new Date(tMs), hh = t.getHours(), mm = t.getMinutes();
+  var label = ((hh%12)||12) + ':' + String(mm).padStart(2,'0') + (hh<12?'AM':'PM');
+  return {date:label, open:open, high:high, low:low, close:close, volume:vol, real:false};
+}
+// First time a symbol's 1H chart is built: synthesize a full plausible hour
+// ending at the live price (one-time backward-scale — no prior bars exist
+// yet, so there's no continuity to break).
+function tcHourlyBuildFull(sym, q){
+  var rnd = tpRand(tpSeed(sym + '-1h-' + (q.asOf||Date.now())));
+  var base = q.price, count = 60, price = base, now = Date.now();
+  var volPerMin = (q.volume24h||1e6) / (24*60);
+  var out = [];
+  for(var i=0;i<count;i++){
+    var bar = tcHourlyBuildBar(rnd, base, price, now-(count-1-i)*60000, volPerMin);
+    out.push(bar);
+    price = bar.close;
+  }
+  var f = q.price / out[out.length-1].close;
+  out.forEach(function(b){ b.open*=f; b.high*=f; b.low*=f; b.close*=f; });
+  return out;
+}
+function tcGetHourlySeries(sym, q){
+  var cache = tcHourlyCache[sym];
+  var nowMs = Date.now();
+  if(!cache || !cache.bars.length){
+    cache = { bars: tcHourlyBuildFull(sym, q), lastAt: nowMs };
+    tcHourlyCache[sym] = cache;
+    return cache.bars;
+  }
+  var elapsedMin = Math.floor((nowMs - cache.lastAt) / 60000);
+  if(elapsedMin >= 1){
+    var rnd = tpRand(tpSeed(sym + '-1h-append-' + nowMs));
+    var volPerMin = (q.volume24h||1e6) / (24*60);
+    var appendCount = Math.min(elapsedMin, 60); // window is only 60 wide anyway
+    var price = cache.bars[cache.bars.length-1].close;
+    for(var i=1;i<=appendCount;i++){
+      var bar = tcHourlyBuildBar(rnd, q.price, price, cache.lastAt + i*60000, volPerMin);
+      price = bar.close;
+      cache.bars.push(bar);
+    }
+    // Anchor only the newest bar to the real fetched price — never rescale
+    // history, so already-drawn candles stay put.
+    var lastBar = cache.bars[cache.bars.length-1];
+    var openBeforeAnchor = lastBar.open;
+    lastBar.close = q.price;
+    lastBar.high = Math.max(lastBar.high, openBeforeAnchor, q.price);
+    lastBar.low  = Math.min(lastBar.low, openBeforeAnchor, q.price);
+    if(cache.bars.length > 60) cache.bars = cache.bars.slice(cache.bars.length-60);
+    cache.lastAt = nowMs;
+  }
+  return cache.bars;
+}
 // 1D — synthesized 24-hour intraday pattern anchored to the REAL current
 // price and 24h change (CoinGecko's free tier has no true intraday feed,
 // same limitation the Stocks tab discloses for its own 1D view via
@@ -3197,6 +3270,10 @@ function tcGenIntraday(q){
   return out;
 }
 function tcGetChartSeries(sym, tf){
+  if(tf === '1H'){
+    var q = tcGetQuote(sym);
+    return q ? tcGetHourlySeries(sym, q) : null;
+  }
   if(tf === '1D'){
     var q = tcGetQuote(sym);
     return q ? tcGenIntraday(q) : null;
@@ -3209,12 +3286,13 @@ function tcGetChartSeries(sym, tf){
 function tcUpdateChartTfDate(tf){
   var el = document.getElementById('tc-chart-tf-date');
   if(!el) return;
-  if(tf !== '1D'){ el.style.display = 'none'; el.textContent = ''; return; }
+  if(tf !== '1D' && tf !== '1H'){ el.style.display = 'none'; el.textContent = ''; return; }
   var q = tcGetQuote(tcCurrentSym);
   el.style.display = 'block';
+  var label = tf === '1H' ? 'Simulated last-hour pattern' : 'Simulated intraday pattern';
   el.innerHTML = q
-    ? 'Simulated intraday pattern \u2014 anchored to the live price as of <b>'+tpFmtDate((q.asOf||'').slice(0,10))+'</b>'
-    : 'Simulated intraday pattern \u2014 no live price yet';
+    ? label + ' \u2014 anchored to the live price as of <b>'+tpFmtDate((q.asOf||'').slice(0,10))+'</b>'
+    : label + ' \u2014 no live price yet';
 }
 
 // ══════════════════════════════════════════════════════════════
