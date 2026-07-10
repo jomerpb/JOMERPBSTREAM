@@ -88,10 +88,32 @@ function setNav(tab) {
   if (el) { el.classList.add('active'); el.querySelector('.nav-dot').style.display = 'block'; }
 }
 
+function updateSegSlide(el, instant) {
+  const slide = document.getElementById('stream-seg-slide');
+  if (!slide || !el) return;
+  if (instant) {
+    const prevTransition = slide.style.transition;
+    slide.style.transition = 'none';
+    slide.style.width = el.offsetWidth + 'px';
+    slide.style.left = el.offsetLeft + 'px';
+    // Force reflow so the 'none' transition is committed before restoring it
+    void slide.offsetWidth;
+    slide.style.transition = prevTransition;
+  } else {
+    slide.style.width = el.offsetWidth + 'px';
+    slide.style.left = el.offsetLeft + 'px';
+  }
+}
+window.addEventListener('resize', () => {
+  const active = document.querySelector('#stream-seg .seg-btn.active');
+  if (active) updateSegSlide(active, true);
+});
+
 function streamSeg(cat, el) {
   localStorage.setItem('lastStreamSeg', cat);
   document.querySelectorAll('#stream-seg .seg-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
+  updateSegSlide(el);
   document.getElementById('sec-anime').style.display  = (cat === 'anime')  ? '' : 'none';
   document.getElementById('sec-tv').style.display     = (cat === 'tv')     ? '' : 'none';
   document.getElementById('sec-movies').style.display = (cat === 'movies') ? '' : 'none';
@@ -1789,5 +1811,12 @@ async function initFromHash() {
     if (btn) streamSeg(savedSeg, btn);
   }
 }
+
+// Position the seg-slide under whichever button is active on first paint
+// (covers the default "Anime" case, which never calls streamSeg() directly).
+requestAnimationFrame(() => {
+  const activeSegBtn = document.querySelector('#stream-seg .seg-btn.active');
+  if (activeSegBtn) updateSegSlide(activeSegBtn, true);
+});
 
 // initFromHash moved below oracle div

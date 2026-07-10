@@ -49,9 +49,10 @@
 
     /* ROWS */
     .row-section{margin-bottom:24px;}
-    .seg-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px;margin:0 0 16px;}
-    .seg-btn{flex:1;text-align:center;padding:8px 0;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:background .15s,color .15s;user-select:none;white-space:nowrap;}
+    .seg-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px;margin:0 0 16px;position:relative;}
+    .seg-btn{flex:1;position:relative;z-index:1;text-align:center;padding:8px 0;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:color .15s;user-select:none;white-space:nowrap;}
     .seg-btn.active{background:var(--accent);color:#fff;}
+    .seg-slide{position:absolute;z-index:0;top:3px;bottom:3px;left:3px;border-radius:999px;background:var(--accent);transition:left .32s cubic-bezier(.4,0,.2,1),width .32s cubic-bezier(.4,0,.2,1);}
 
     /* Floating frosted-glass filter — scoped to #stream-seg only, so Trade
        page's .seg-toggle/.seg-btn usage elsewhere is untouched. */
@@ -70,7 +71,9 @@
       margin:0;
     }
     #stream-seg .seg-btn{padding:11px 0;border-radius:14px;font-size:14px;}
-    #stream-seg .seg-btn.active{
+    #stream-seg .seg-btn.active{background:transparent;box-shadow:none;}
+    #stream-seg .seg-slide{
+      top:5px;bottom:5px;left:5px;border-radius:14px;
       box-shadow:0 0 6px 1px rgba(230,57,70,0.4),0 0 12px 2px rgba(230,57,70,0.25),0 4px 14px rgba(230,57,70,0.35);
       animation:segGlowPulse 2s ease-in-out infinite;
     }
@@ -79,7 +82,7 @@
       50%{box-shadow:0 0 8px 2px rgba(230,57,70,0.5),0 0 16px 3px rgba(230,57,70,0.3),0 4px 14px rgba(230,57,70,0.35);}
     }
     @media (prefers-reduced-motion: reduce){
-      #stream-seg .seg-btn.active{animation:none;}
+      #stream-seg .seg-slide{animation:none;transition:none;}
     }
     /* Extra bottom clearance on the Stream page so scrolled content
        doesn't sit underneath the floating filter bar. */
