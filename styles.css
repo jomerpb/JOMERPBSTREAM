@@ -52,6 +52,38 @@
     .seg-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px;margin:0 0 16px;}
     .seg-btn{flex:1;text-align:center;padding:8px 0;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:background .15s,color .15s;user-select:none;white-space:nowrap;}
     .seg-btn.active{background:var(--accent);color:#fff;}
+
+    /* Floating frosted-glass filter — scoped to #stream-seg only, so Trade
+       page's .seg-toggle/.seg-btn usage elsewhere is untouched. */
+    #stream-seg{
+      position:fixed;
+      left:4px;right:4px;
+      bottom:calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
+      z-index:95;
+      padding:5px;
+      border-radius:18px;
+      background:rgba(15,16,20,0.6);
+      -webkit-backdrop-filter:blur(24px) saturate(160%);
+      backdrop-filter:blur(24px) saturate(160%);
+      border:1px solid rgba(255,255,255,0.08);
+      box-shadow:0 8px 30px rgba(0,0,0,0.45);
+      margin:0;
+    }
+    #stream-seg .seg-btn{padding:11px 0;border-radius:14px;font-size:14px;}
+    #stream-seg .seg-btn.active{
+      box-shadow:0 0 6px 1px rgba(230,57,70,0.4),0 0 12px 2px rgba(230,57,70,0.25),0 4px 14px rgba(230,57,70,0.35);
+      animation:segGlowPulse 2s ease-in-out infinite;
+    }
+    @keyframes segGlowPulse{
+      0%,100%{box-shadow:0 0 6px 1px rgba(230,57,70,0.4),0 0 12px 2px rgba(230,57,70,0.25),0 4px 14px rgba(230,57,70,0.35);}
+      50%{box-shadow:0 0 8px 2px rgba(230,57,70,0.5),0 0 16px 3px rgba(230,57,70,0.3),0 4px 14px rgba(230,57,70,0.35);}
+    }
+    @media (prefers-reduced-motion: reduce){
+      #stream-seg .seg-btn.active{animation:none;}
+    }
+    /* Extra bottom clearance on the Stream page so scrolled content
+       doesn't sit underneath the floating filter bar. */
+    #home-page{padding-bottom:76px;}
     .row-header{display:flex;align-items:center;justify-content:space-between;padding:0;margin-bottom:10px;}
     .row-title{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;color:var(--text);}
     .row-see-all{font-size:11px;color:var(--accent2);font-weight:600;cursor:pointer;}
