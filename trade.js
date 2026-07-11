@@ -3578,7 +3578,7 @@ function tcRenderTop(){
   }
 }
 
-// ── Watchlist (localStorage, separate key from stocks) ──
+// ── Portfolios (localStorage — 'tcWatchlist' key kept so existing saved coins survive; separate key from stocks) ──
 function tcGetWatch(){
   try { return JSON.parse(localStorage.getItem('tcWatchlist')||'[]'); } catch(e){ return []; }
 }
@@ -3603,7 +3603,8 @@ function tcToggleWatch(){
     var lp = trig ? trig.sup : (q ? q.price*0.94 : null);
     list.push({sym:tcCurrentSym,
       highPrice: hp!=null ? +(hp>=1 ? hp.toFixed(2) : hp.toFixed(4)) : null,
-      lowPrice:  lp!=null ? +(lp>=1 ? lp.toFixed(2) : lp.toFixed(4)) : null});
+      lowPrice:  lp!=null ? +(lp>=1 ? lp.toFixed(2) : lp.toFixed(4)) : null,
+      side:'buy', shares:null, entry:null});
   }
   tcSaveWatch(list);
   tcRenderWatchlist();
@@ -3629,12 +3630,107 @@ function tcUpdateWatchBtn(){
   var on = tcIsWatched(tcCurrentSym);
   b.textContent = on ? '\u2713' : '\uFF0B';
   b.classList.toggle('on', on);
-  b.title = on ? 'Remove from watchlist' : 'Add to watchlist';
+  b.title = on ? 'Remove from portfolio' : 'Add to portfolio';
 }
+// ── Portfolios fee engine ──
+// Fees auto-calculated at current Philippine stock-market rates (applied
+// to crypto positions by design — a standardized cost model, NOT a Maya
+// receipt match). Buy side per the COL/PSE published schedule; sell side
+// adds the 0.1% Stock Transaction Tax in force since 1 Jul 2025 under
+// RA 12214 (CMEPA), which cut the STT from 0.6%.
+var TC_FEE = { comm:0.0025, commMin:20, vat:0.12, pse:0.00005, sccp:0.0001, stt:0.001 };
+function tcTradeFees(gross, side){
+  if(!(gross > 0) || !isFinite(gross)) return null;
+  var comm = Math.max(gross*TC_FEE.comm, TC_FEE.commMin);   // 0.25% of gross, min \u20b120
+  var vat  = comm*TC_FEE.vat;                               // 12% VAT on commission
+  var pse  = gross*TC_FEE.pse;                              // 0.005% PSE transaction fee
+  var sccp = gross*TC_FEE.sccp;                             // 0.01% SCCP clearing fee
+  var stt  = side==='sell' ? gross*TC_FEE.stt : 0;          // 0.1% STT \u2014 sell side only (CMEPA)
+  var fees = comm+vat+pse+sccp+stt;
+  return {comm:comm, vat:vat, pse:pse, sccp:sccp, stt:stt, fees:fees,
+          total: side==='sell' ? gross-fees : gross+fees};
+}
+// Buy row:  total = cash out incl. fees; G/L = (shares \u00d7 current) \u2212 total.
+// Sell row: total = net proceeds after fees+STT; G/L = proceeds \u2212 (shares \u00d7
+// current), i.e. how much better/worse off vs still holding the coins.
+function tcPortCompute(side, shares, entry, cur){
+  var out = {total:null, fees:null, comm:null, vat:null, pse:null, sccp:null, stt:0, gl:null, glPct:null};
+  if(shares==null || entry==null || !(shares>0) || !(entry>0)) return out;
+  var f = tcTradeFees(shares*entry, side);
+  if(!f) return out;
+  out.total=f.total; out.fees=f.fees; out.comm=f.comm; out.vat=f.vat; out.pse=f.pse; out.sccp=f.sccp; out.stt=f.stt;
+  if(cur != null){
+    var curVal = shares*cur;
+    out.gl = side==='sell' ? f.total-curVal : curVal-f.total;
+    out.glPct = f.total>0 ? out.gl/f.total*100 : null;
+  }
+  return out;
+}
+function tcFmtSignedPHP(n){
+  if(n==null || !isFinite(n)) return '\u2014';
+  return (n<0 ? '\u2212' : '+') + tcFmtPHP(Math.abs(n));
+}
+function tcPortFeeTitle(r){
+  if(r.fees==null) return '';
+  var parts = ['Commission '+tcFmtPHP(r.comm), 'VAT '+tcFmtPHP(r.vat), 'PSE fee '+tcFmtPHP(r.pse), 'SCCP '+tcFmtPHP(r.sccp)];
+  if(r.stt>0) parts.push('STT 0.1% '+tcFmtPHP(r.stt));
+  return parts.join(' \u00b7 ');
+}
+function tcPortGlText(r){
+  if(r.gl==null) return '\u2014';
+  var pct = r.glPct==null ? '' : ' ('+(r.glPct<0?'\u2212':'+')+Math.abs(r.glPct).toFixed(2)+'%)';
+  return tcFmtSignedPHP(r.gl)+pct;
+}
+// Live preview while typing — recomputes Total/G-L from the row's current
+// (possibly unsaved) inputs. Nothing persists until Save.
+function tcPortRecalc(sym){
+  var shEl = document.getElementById('tc-port-shares-'+sym);
+  var enEl = document.getElementById('tc-port-entry-'+sym);
+  var totEl = document.getElementById('tc-port-total-'+sym);
+  var feeEl = document.getElementById('tc-port-fees-'+sym);
+  var glEl  = document.getElementById('tc-port-gl-'+sym);
+  if(!shEl || !enEl || !totEl || !glEl) return;
+  var sideEl = document.querySelector('input[name="tc-port-side-'+sym+'"]:checked');
+  var side = sideEl ? sideEl.value : 'buy';
+  var sh = parseFloat(shEl.value), en = parseFloat(enEl.value);
+  var q = tcGetQuote(sym);
+  var r = tcPortCompute(side, isNaN(sh)?null:sh, isNaN(en)?null:en, q?q.price:null);
+  totEl.textContent = r.total==null ? '\u2014' : tcFmtPHP(r.total);
+  if(feeEl){
+    feeEl.textContent = r.fees==null ? '' : 'incl. '+tcFmtPHP(r.fees)+' fees & tax';
+    feeEl.title = tcPortFeeTitle(r);
+  }
+  glEl.textContent = tcPortGlText(r);
+  glEl.classList.toggle('gain', r.gl!=null && r.gl>=0);
+  glEl.classList.toggle('loss', r.gl!=null && r.gl<0);
+}
+function tcSavePortRow(sym){
+  var list = tcGetWatch();
+  var w = list.find(function(x){return x.sym===sym;});
+  if(!w) return;
+  var shEl = document.getElementById('tc-port-shares-'+sym);
+  var enEl = document.getElementById('tc-port-entry-'+sym);
+  var sideEl = document.querySelector('input[name="tc-port-side-'+sym+'"]:checked');
+  var sh = shEl ? parseFloat(shEl.value) : NaN;
+  var en = enEl ? parseFloat(enEl.value) : NaN;
+  w.shares = isNaN(sh) ? null : sh;
+  w.entry  = isNaN(en) ? null : en;
+  w.side   = sideEl ? sideEl.value : 'buy';
+  tcSaveWatch(list);
+  tcRenderWatchlist();
+}
+// ── Portfolios renderer (function name kept — 6 existing call sites) ──
+// Entry schema: {sym, highPrice, lowPrice, side:'buy'|'sell', shares, entry}.
+// New keys are optional, so legacy {sym, highPrice, lowPrice} rows saved
+// under the same 'tcWatchlist' localStorage key keep working untouched.
 function tcRenderWatchlist(){
   var listEl = document.getElementById('tc-watch-list');
   var emptyEl = document.getElementById('tc-watch-empty');
   if(!listEl) return;
+  // Don't rebuild while the user is typing in the card — the 5-min live
+  // price refresh calls this and would otherwise wipe unsaved edits.
+  var ae = document.activeElement;
+  if(ae && ae.tagName==='INPUT' && listEl.contains(ae)) return;
   var list = tcGetWatch();
   if(emptyEl) emptyEl.style.display = list.length ? 'none' : 'block';
   listEl.innerHTML = list.map(function(w){
@@ -3647,15 +3743,38 @@ function tcRenderWatchlist(){
     var hitLow  = last != null && w.lowPrice  != null && last <= w.lowPrice;
     var hVal = w.highPrice == null ? '' : w.highPrice;
     var lVal = w.lowPrice == null ? '' : w.lowPrice;
-    return '<div class="tp-watch-row">'+
+    var side = w.side==='sell' ? 'sell' : 'buy';
+    var shVal = w.shares==null ? '' : w.shares;
+    var enVal = w.entry==null ? '' : w.entry;
+    var r = tcPortCompute(side, w.shares!=null?w.shares:null, w.entry!=null?w.entry:null, last);
+    var glCls = r.gl==null ? '' : (r.gl>=0 ? ' gain' : ' loss');
+    return '<div class="tp-watch-row tc-port-row">'+
       '<div class="tp-watch-name" onclick="tcSelectCoin(\''+w.sym+'\')">'+w.sym+' \u00b7 <small>'+name+'</small></div>'+
-      '<div class="tp-watch-inbox tp-watch-lastbox"><span class="tp-watch-inlabel">Last</span>'+
+      '<div class="tp-watch-inbox tp-watch-lastbox"><span class="tp-watch-inlabel">Current</span>'+
         '<div class="tp-watch-last">'+lastTxt+'</div></div>'+
       '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+
         '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="\u20b1 high" value="'+hVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'highPrice\', this.value)"></div>'+
       '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Low</span>'+
         '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitLow?' hit-low':'')+'" placeholder="\u20b1 low" value="'+lVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'lowPrice\', this.value)"></div>'+
       '<button class="tp-watch-remove" onclick="tcRemoveWatch(\''+w.sym+'\')" title="Remove">\u2715</button>'+
+      '<div class="tc-port-block">'+
+        '<div class="tc-port-siderow">'+
+          '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="buy"'+(side!=='sell'?' checked':'')+' onchange="tcPortRecalc(\''+w.sym+'\')"><span>Buy</span></label>'+
+          '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="sell"'+(side==='sell'?' checked':'')+' onchange="tcPortRecalc(\''+w.sym+'\')"><span>Sell</span></label>'+
+        '</div>'+
+        '<div class="tc-port-grid">'+
+          '<div class="tp-watch-inbox"><span class="tp-watch-inlabel"># Shares</span>'+
+            '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-shares-'+w.sym+'" placeholder="0.00" value="'+shVal+'" oninput="tcPortRecalc(\''+w.sym+'\')"></div>'+
+          '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Price \u20b1/coin</span>'+
+            '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-entry-'+w.sym+'" placeholder="\u20b1 at buy/sell" value="'+enVal+'" oninput="tcPortRecalc(\''+w.sym+'\')"></div>'+
+        '</div>'+
+        '<div class="tc-port-calc">'+
+          '<div class="tc-port-line">Total incl. tax <b id="tc-port-total-'+w.sym+'">'+(r.total==null?'\u2014':tcFmtPHP(r.total))+'</b>'+
+            '<span class="tc-port-fees" id="tc-port-fees-'+w.sym+'" title="'+tcPortFeeTitle(r)+'">'+(r.fees==null?'':'incl. '+tcFmtPHP(r.fees)+' fees & tax')+'</span></div>'+
+          '<div class="tc-port-line">Gain / Loss <b id="tc-port-gl-'+w.sym+'" class="tc-port-gl'+glCls+'">'+tcPortGlText(r)+'</b></div>'+
+        '</div>'+
+        '<button class="tc-port-save" onclick="tcSavePortRow(\''+w.sym+'\')">Save</button>'+
+      '</div>'+
     '</div>';
   }).join('');
 }
@@ -4107,7 +4226,7 @@ function tcEntryExitPlan(sig){
   return 'LEVELS TO WATCH (not automatic triggers \u2014 the HOLD badge won\u2019t flip on its own when these break, and the model recalculates fresh floors/ceilings after a break):<br>' +
     '<b>Ceiling to watch:</b> a daily close above the '+resHi+' ceiling is the first real bullish confirmation \u2014 reassess for entry then, not before.<br>' +
     '<b>Floor to watch:</b> a daily close below the '+supHi+' floor invalidates this HOLD read \u2014 reassess then; an intraday wick that recovers doesn\u2019t count.<br>' +
-    '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside the box is noise. Set watchlist High/Low alerts at these levels if you want a ping when one breaks.';
+    '<b>Between those two prices:</b> no entry, no exit \u2014 everything inside the box is noise. Set Portfolios High/Low alerts at these levels if you want a ping when one breaks.';
 }
 
 // ══════════════════════════════════════════════════════════════

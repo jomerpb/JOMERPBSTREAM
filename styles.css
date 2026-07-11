@@ -1019,6 +1019,23 @@
 #trade-page .tp-watch-remove{width:22px;height:22px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;padding:0;margin-bottom:4px;}
 #trade-page .tp-watch-remove:hover{border-color:var(--red);color:var(--red);}
 #trade-page .tp-watch-empty{font-size:11.5px;color:var(--muted);line-height:1.5;padding:6px 0;}
+/* ── Portfolios card (crypto) — Buy/Sell position block under each coin row ── */
+#trade-page .tc-port-block{flex:1 1 100%;display:flex;flex-direction:column;gap:9px;margin-top:4px;padding-top:9px;border-top:1px dashed var(--border);}
+#trade-page .tc-port-siderow{display:flex;gap:16px;align-items:center;}
+#trade-page .tc-port-side{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;}
+#trade-page .tc-port-side input{accent-color:var(--accent2);width:14px;height:14px;margin:0;cursor:pointer;}
+#tp-crypto-view .tc-port-side input{accent-color:#f7931a;}
+#trade-page .tc-port-grid{display:flex;gap:8px;}
+#trade-page .tc-port-calc{display:flex;flex-direction:column;gap:3px;}
+#trade-page .tc-port-line{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+#trade-page .tc-port-line b{font-size:13.5px;letter-spacing:0;text-transform:none;color:var(--text);font-weight:700;white-space:nowrap;}
+#trade-page .tc-port-fees{font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--muted);cursor:help;}
+#trade-page .tc-port-gl.gain{color:var(--green);}
+#trade-page .tc-port-gl.loss{color:var(--red);}
+#trade-page .tc-port-save{align-self:flex-end;height:30px;padding:0 20px;border-radius:8px;border:1px solid var(--accent2);background:rgba(59,130,246,0.12);color:var(--accent2);font-size:12px;font-weight:700;letter-spacing:0.6px;cursor:pointer;transition:all 0.15s;}
+#trade-page .tc-port-save:hover{background:rgba(59,130,246,0.25);}
+#tp-crypto-view .tc-port-save{border-color:rgba(247,147,26,0.55);background:rgba(247,147,26,0.10);color:#f7931a;}
+#tp-crypto-view .tc-port-save:hover{background:rgba(247,147,26,0.22);}
 
 /* ═══════════ ACCENT BORDERS & TITLES ═══════════
    Placed at end of sheet so these win the cascade.
