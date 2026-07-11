@@ -1,0 +1,32 @@
+name: Oracle Snapshot (Daily)
+
+on:
+  schedule:
+    - cron: '5 16 * * *'   # 00:05 Asia/Manila (UTC+8) — just after midnight, before any draw that day
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Oracle snapshot (computes today's pick via computeOracleAsOf, engine-frozen)
+        run: node snapshot_oracle.mjs
+
+      - name: Commit results (only if something changed)
+        run: |
+          git config user.name "Oracle Snapshot Bot"
+          git config user.email "oracle-snapshot-bot@jomerpb.github.io"
+          git add oracle-history.json
+          git diff --staged --quiet || git commit -m "chore: log Oracle pick $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
