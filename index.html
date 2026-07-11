@@ -812,8 +812,10 @@
             <input type="text" inputmode="decimal" autocomplete="off" class="tp-watch-input" id="tc-funds-pocket" placeholder="₱ 0.00" oninput="tcFundsFilterInput(this)"></div>
           <div class="tp-watch-inbox"><span class="tp-watch-inlabel">Power (PHP)</span>
             <div class="tc-port-ro" id="tc-funds-power" title="Available buying power">₱0.00</div></div>
-          <button class="tc-funds-btn deposit" onclick="tcFundsDeposit()">Deposit</button>
+        </div>
+        <div class="tc-funds-grid">
           <button class="tc-funds-btn withdraw" onclick="tcFundsWithdraw()">Withdraw</button>
+          <button class="tc-funds-btn deposit" onclick="tcFundsDeposit()">Deposit</button>
         </div>
         <div class="tc-funds-info" id="tc-funds-info"></div>
         <div class="tc-funds-msg" id="tc-funds-msg"></div>

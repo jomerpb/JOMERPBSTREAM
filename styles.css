@@ -1021,10 +1021,10 @@
 #trade-page .tp-watch-empty{font-size:11.5px;color:var(--muted);line-height:1.5;padding:6px 0;}
 /* ── Portfolios card (crypto) — Buy/Sell position rows ── */
 #trade-page .tc-port-row{row-gap:9px;}
-#trade-page .tc-port-head{flex:1 1 100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-#trade-page .tc-port-head .tp-watch-name{flex:1 1 auto;min-width:0;}
+#trade-page .tc-port-head{flex:1 1 100%;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0;}
+#trade-page .tc-port-head .tp-watch-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #trade-page .tc-port-cur{font-size:13.5px;font-weight:700;color:var(--text);white-space:nowrap;}
-#trade-page .tc-port-side{display:inline-flex;gap:5px;align-items:center;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;}
+#trade-page .tc-port-side{display:inline-flex;gap:5px;align-items:center;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;flex:0 0 auto;white-space:nowrap;}
 #trade-page .tc-port-side input{accent-color:var(--accent2);width:14px;height:14px;margin:0;cursor:pointer;}
 #tp-crypto-view .tc-port-side input{accent-color:#f7931a;}
 #trade-page .tc-port-head .tp-watch-remove{margin-bottom:0;}
@@ -1034,7 +1034,7 @@
 #trade-page .tc-port-eqsign{font-size:13px;letter-spacing:0;color:var(--muted);}
 #trade-page .tc-port-gl.gain{color:var(--green);}
 #trade-page .tc-port-gl.loss{color:var(--red);}
-#trade-page .tc-port-sublabel{flex:1 1 100%;font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding-left:12px;margin-top:12px;margin-bottom:-4px;}
+#trade-page .tc-port-sublabel{flex:1 1 100%;font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:12px;margin-bottom:-4px;}
 #trade-page .tc-port-calcline{align-items:flex-end;}
 #trade-page .tc-port-calcline .tp-watch-inbox{flex:1 1 0;min-width:0;}
 #trade-page .tc-port-op{font-size:14px;font-weight:700;color:var(--muted);padding-bottom:9px;flex:0 0 auto;}
@@ -1093,11 +1093,11 @@
 /* ── Portfolios lifecycle + Funds (2026-07-11): read-only Total box, Save/
    status chips, gated Remove, and the global Funds / Power block ── */
 #trade-page .tc-port-ro{width:100%;min-width:0;height:30px;box-sizing:border-box;display:flex;align-items:center;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12.5px;font-weight:700;padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help;}
-#trade-page .tc-port-save{height:24px;padding:0 12px;border-radius:8px;border:1px solid var(--accent2);background:transparent;color:var(--accent2);font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;flex:0 0 auto;transition:background 0.15s;}
+#trade-page .tc-port-save{height:24px;padding:0 10px;border-radius:8px;border:1px solid var(--accent2);background:transparent;color:var(--accent2);font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;flex:0 0 auto;transition:background 0.15s;}
 #tp-crypto-view .tc-port-save{border-color:#f7931a;color:#f7931a;}
 #tp-crypto-view .tc-port-save:hover{background:rgba(247,147,26,0.12);}
-#trade-page .tc-port-chip{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);flex:0 0 auto;}
-#trade-page .tc-port-chip.bought{border-color:#f7931a;color:#f7931a;}
+#trade-page .tc-port-chip{height:24px;padding:0 10px;border-radius:8px;border:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;display:inline-flex;align-items:center;flex:0 0 auto;white-space:nowrap;}
+#trade-page .tc-port-chip.bought{border-color:var(--accent2);color:var(--accent2);}
 #trade-page .tc-port-chip.sold{border-color:var(--green);color:var(--green);}
 #trade-page .tc-port-msg{flex:1 1 100%;font-size:10.5px;color:var(--red);}
 #trade-page .tc-port-msg:empty{display:none;}
@@ -1107,9 +1107,9 @@
 #trade-page .tc-port-eqwrap{display:inline-flex;align-items:baseline;gap:7px;}
 #trade-page .tc-funds{border-top:1px solid var(--border);margin-top:14px;padding-top:12px;}
 #trade-page .tc-funds-label{font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
-#trade-page .tc-funds-grid{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}
-#trade-page .tc-funds-grid .tp-watch-inbox{flex:1 1 120px;}
-#trade-page .tc-funds-btn{height:30px;padding:0 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:12px;font-weight:700;cursor:pointer;flex:1 1 90px;min-width:0;transition:background 0.15s;}
+#trade-page .tc-funds-grid{display:flex;gap:8px;align-items:flex-end;}
+#trade-page .tc-funds-grid + .tc-funds-grid{margin-top:10px;}
+#trade-page .tc-funds-btn{height:30px;padding:0 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:12px;font-weight:700;cursor:pointer;flex:1 1 0;min-width:0;transition:background 0.15s;}
 #trade-page .tc-funds-btn.deposit{border-color:var(--green);color:var(--green);}
 #trade-page .tc-funds-btn.deposit:hover{background:rgba(34,197,94,0.12);}
 #trade-page .tc-funds-btn.withdraw{border-color:var(--red);color:var(--red);}
