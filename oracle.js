@@ -104,15 +104,27 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
   }
 
   try{
+    // ── ENGINE FREEZE ──
+    // The scoring engine (layerStats via GAMES.*) only ever sees draws dated
+    // STRICTLY BEFORE today (Manila). Same-day results appended by the
+    // scrapers therefore cannot shift Run Expert, Analyze My Numbers, or any
+    // stats display until the next calendar day — the live engine output is
+    // identical to computeOracleAsOf(today) by construction.
+    // PCSO_HISTORY (the lookup dict built further below) intentionally keeps
+    // the FULL unfiltered data: actual winning numbers still display, and
+    // computeOracleAsOf can still serve any date.
+    var _fz=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
+    var ENGINE_TODAY_PH=_fz.getFullYear()+'-'+String(_fz.getMonth()+1).padStart(2,'0')+'-'+String(_fz.getDate()).padStart(2,'0');
     var slashToKey={'6/58':'658','6/55':'655','6/49':'649','6/45':'645','6/42':'642'};
     for(var slashKey in slashToKey){
       var gk=slashToKey[slashKey];
-      var entries=data[slashKey];
-      if(!Array.isArray(entries)||!entries.length||!GAMES[gk]) continue;
-      // entries are already sorted newest-first
+      var entriesRaw=data[slashKey];
+      if(!Array.isArray(entriesRaw)||!entriesRaw.length||!GAMES[gk]) continue;
+      // entries are already sorted newest-first; drop anything dated today or later
+      var entries=entriesRaw.filter(function(e){return e.date&&e.date<ENGINE_TODAY_PH;});
       var allDraws=entries.map(function(e){return e.nums;}).filter(function(n){return Array.isArray(n)&&n.length===6;});
       if(!allDraws.length) continue;
-      GAMES[gk].recent=allDraws; // full verified history, not just last 16
+      GAMES[gk].recent=allDraws; // verified history as of yesterday (engine freeze)
       // hot numbers = top-frequency within the most recent 30 draws (recency-weighted, per earlier design)
       var recentWindow=allDraws.slice(0,30);
       var freq={};
@@ -123,6 +135,7 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
       var byHour={'2PM':[],'5PM':[],'9PM':[]};
       data.ez2.forEach(function(e){
         if(!e.draws) return;
+        if(!e.date||e.date>=ENGINE_TODAY_PH) return; // engine freeze — see above
         ['2PM','5PM','9PM'].forEach(function(h){
           if(Array.isArray(e.draws[h])&&e.draws[h].length===2) byHour[h].push(e.draws[h]);
         });
@@ -139,7 +152,7 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
         GAMES.ez2.hot=hot;
       }
     }
-    PCSO_HISTORY_STATUS={loaded:true,source:'live (pcso-history.json, updated '+(data.updated||'unknown')+')',error:null};
+    PCSO_HISTORY_STATUS={loaded:true,source:'live (pcso-history.json, updated '+(data.updated||'unknown')+')',engineCutoff:ENGINE_TODAY_PH,error:null};
     PCSO_HISTORY_LOAD_FAILED=false;
     console.log('PCSO history loaded:', PCSO_HISTORY_STATUS.source);
 
@@ -181,6 +194,56 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
     }
   }
 })();
+
+// ══════════════════════════
+// ORACLE PICK LOG (oracle-history.json)
+// Daily immutable record of the engine's pick, appended by
+// .github/workflows/oracle-snapshot.yml (00:05 Manila) running
+// scripts/snapshot_oracle.mjs — which calls this same file's
+// computeOracleAsOf(), so the logged value equals what Run Expert
+// shows all day under the engine freeze. The Look Up panel prefers
+// this recorded value; dates before the log existed fall back to a
+// live recompute (labeled ↻).
+// ══════════════════════════
+var ORACLE_HISTORY=null; // {updated, entries:[{date, engineSha, picks:{ez2:{'2PM':[a,b],...}, '642':[..6..], ...}}]} newest-first
+var ORACLE_HISTORY_READY=(async function loadOracleHistory(){
+  try{
+    var resp=await pcsoFetchWithTimeout('oracle-history.json?nocache='+Date.now(),6000);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    var data=await resp.json();
+    if(data&&Array.isArray(data.entries)) ORACLE_HISTORY=data;
+  }catch(e){
+    console.warn('oracle-history.json not loaded ('+(e&&e.message?e.message:'error')+') — lookup will recompute picks live.');
+  }
+  if(ORACLE_HISTORY&&typeof pcsoHistRender==='function'&&document.getElementById('pcso-hist-result')){
+    try{pcsoHistRender();}catch(e){}
+  }
+})();
+
+// Pure source-selection helper (unit-testable, no DOM):
+// returns {picks, source:'recorded'|'recomputed'} or null.
+// 'recorded'   → taken verbatim from oracle-history.json (immutable audit log)
+// 'recomputed' → computeOracleAsOf() fallback for dates the log doesn't cover
+function oracleHistLookup(gameKey,dateStr){
+  if(ORACLE_HISTORY&&Array.isArray(ORACLE_HISTORY.entries)){
+    for(var i=0;i<ORACLE_HISTORY.entries.length;i++){
+      var en=ORACLE_HISTORY.entries[i];
+      if(en&&en.date===dateStr&&en.picks&&en.picks[gameKey]){
+        return {picks:en.picks[gameKey],source:'recorded'};
+      }
+    }
+  }
+  var rc=null;
+  try{ rc=computeOracleAsOf(gameKey,dateStr); }catch(e){ console.error('computeOracleAsOf '+gameKey+':',e); }
+  if(!rc) return null;
+  return {picks:rc,source:'recomputed'};
+}
+function oracleSrcTag(source,withWord){
+  if(!source) return '';
+  var icon=source==='recorded'?'\uD83D\uDCCC':'\u21BB';
+  var word=withWord?(' '+source):'';
+  return ' <span style="font-size:8px;color:var(--muted);font-weight:400">'+icon+word+'</span>';
+}
 
 // ══════════════════════════
 function reduce(n){
@@ -1818,8 +1881,9 @@ function pcsoHistRender(){
   }
   if(game==='ez2'){
     var order=['2PM','5PM','9PM'];
-    var oraclePicks=null;
-    try{ oraclePicks=computeOracleAsOf('ez2',dateVal); }catch(e){ console.error('computeOracleAsOf ez2:',e); }
+    var oraclePicks=null,oracleSrc=null;
+    var _oh=oracleHistLookup('ez2',dateVal);
+    if(_oh){ oraclePicks=_oh.picks; oracleSrc=_oh.source; }
     var cols=order.map(function(t){
       var nums=(entry.draws&&entry.draws[t])||[];
       var inner=nums.length?nums.map(function(x){return '<span class="pnum ez">'+p2(x)+'</span>';}).join(''):'<span class="pcso-hist-none">Pending…</span>';
@@ -1830,7 +1894,7 @@ function pcsoHistRender(){
           var isMatch=nums.indexOf(x)>=0;
           return '<span class="pnum ez'+(isMatch?' pnum-gold':'')+'">'+p2(x)+'</span>';
         }).join('');
-        oracleRow='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick</div><div style="display:flex;gap:4px">'+opInner+'</div>';
+        oracleRow='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick'+oracleSrcTag(oracleSrc,false)+'</div><div style="display:flex;gap:4px">'+opInner+'</div>';
       }
       return '<div style="display:flex;flex-direction:column;align-items:center;gap:5px"><span style="font-size:9px;color:var(--muted)">'+t+'</span><div style="display:flex;gap:4px">'+inner+'</div>'+oracleRow+'</div>';
     }).join('');
@@ -1848,15 +1912,15 @@ function pcsoHistRender(){
   var jackpotHtml=jp?('<div class="pcso-hist-jackpot">'+jpDisplay+' jackpot</div>'):'';
   var oracleHtml='';
   try{
-    var oraclePicks2=computeOracleAsOf(game,dateVal);
-    if(oraclePicks2&&oraclePicks2.length){
-      var opHtml=oraclePicks2.map(function(x){
+    var _oh2=oracleHistLookup(game,dateVal);
+    if(_oh2&&_oh2.picks&&_oh2.picks.length){
+      var opHtml=_oh2.picks.map(function(x){
         var isMatch=entry.nums.indexOf(x)>=0;
         return '<span class="pnum '+cls+(isMatch?' pnum-gold':'')+'">'+p2(x)+'</span>';
       }).join('');
-      oracleHtml='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick</div><div class="pcso-hist-row">'+opHtml+'</div>';
+      oracleHtml='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick'+oracleSrcTag(_oh2.source,true)+'</div><div class="pcso-hist-row">'+opHtml+'</div>';
     }
-  }catch(e){ console.error('computeOracleAsOf:',e); }
+  }catch(e){ console.error('oracleHistLookup:',e); }
   out.innerHTML='<div class="pcso-hist-row">'+numsHtml+'</div>'+jackpotHtml+oracleHtml;
 }
 
