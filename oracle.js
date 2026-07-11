@@ -1155,7 +1155,20 @@ function convergence(layers,gameKey){
   var altPicks=ranked.slice(needed,needed*2);
   altPicks.sort((a,b)=>a-b);
 
-  return {sorted,digitScores,digitToNums,picks,altPicks,LABELS,needed};
+  // FULL SPREAD picks — breadth instead of depth: one best number from each
+  // of the top `needed` DISTINCT digit families (within-family order = same
+  // bestNums ranking as above). Scores lower under the alignment metric than
+  // the max-score picks by construction, but samples the top `needed` digit
+  // signals instead of repeating the single strongest one. Deliberately NOT
+  // wired into the daily oracle log / lookup: spread picks are deterministic
+  // (date + history in → same numbers out), so any past date can be
+  // recomputed on demand if ever needed.
+  var spreadPicks=sorted.slice(0,needed).map(ds=>bestNums(ds.digit)[0]);
+  spreadPicks.sort((a,b)=>a-b);
+  var spreadAlt=sorted.slice(0,needed).map(ds=>bestNums(ds.digit)[1]).filter(n=>n!==undefined);
+  spreadAlt.sort((a,b)=>a-b);
+
+  return {sorted,digitScores,digitToNums,picks,altPicks,spreadPicks,spreadAlt,LABELS,needed};
 }
 
 // ══════════════════════════
@@ -1164,6 +1177,17 @@ function convergence(layers,gameKey){
 var currentGame='ez2';
 var currentDraw='9PM';
 var savedNums={};
+// Oracle pick mode: 'max' = all picks from the strongest digit family
+// (max-score picker), 'spread' = one number from each of the top families.
+// Persisted so the choice survives reloads. Affects the Expert display only —
+// the daily log keeps recording the max-score picks (not wired, by design).
+var oracleMode=(function(){ try{ var m=localStorage.getItem('oracleMode'); return m==='spread'?'spread':'max'; }catch(e){ return 'max'; } })();
+function setOracleMode(m,btn){
+  oracleMode=(m==='spread')?'spread':'max';
+  try{ localStorage.setItem('oracleMode',oracleMode); }catch(e){}
+  document.querySelectorAll('.omode-btn').forEach(function(b){ b.classList.remove('active'); });
+  if(btn) btn.classList.add('active');
+}
 
 function limitDigits(el){
   var v=String(el.value).replace(/[^0-9]/g,'');
@@ -1294,6 +1318,11 @@ function lcard(icon,name,nums,steps,extra='',isNew=false){
 function renderResults(layers,conv,energy,gameKey,drawHour){
   var game=GAMES[gameKey];
   var isEZ2=gameKey==='ez2';
+  // Mode-aware pick selection (display only — logging is untouched)
+  var isSpread=(typeof oracleMode!=='undefined')&&oracleMode==='spread'&&Array.isArray(conv.spreadPicks)&&conv.spreadPicks.length===conv.needed;
+  var showPicks=isSpread?conv.spreadPicks:conv.picks;
+  var showAlt=isSpread?(conv.spreadAlt||[]):conv.altPicks;
+  var modeHTML='<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: '+(isSpread?'🌐 Full Spread — top '+showPicks.length+' digit energies, one number each':'⚡ Max Score — all-in on today&#39;s strongest digit')+'</div>';
 
   // Energy bars
   var elOrder=['Fire','Water','Wood','Metal','Earth'];
@@ -1306,17 +1335,17 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       <span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span>
     </div>`).join('');
 
-  // Balls
-  var ballsHTML=conv.picks.map((n,i)=>{
+  // Balls (mode-aware: max-score picks or full-spread picks)
+  var ballsHTML=showPicks.map((n,i)=>{
     var d=digitOf(n);
     var ds=conv.digitScores[d];
     return `<div class="ball ${BTIERS[Math.min(i,5)]}">
       ${pad(n)}<span class="btag">d${d}·${ds.count}/12</span>
     </div>`;
   }).join('');
-  var altHTML=conv.altPicks.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
-  var totalScore=conv.picks.reduce((s,n)=>{ var d=digitOf(n); return s+(conv.digitScores[d]?conv.digitScores[d].score:0); },0);
-  var pct=Math.round(totalScore/(conv.picks.length*10)*100);
+  var altHTML=showAlt.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
+  var totalScore=showPicks.reduce((s,n)=>{ var d=digitOf(n); return s+(conv.digitScores[d]?conv.digitScores[d].score:0); },0);
+  var pct=Math.round(totalScore/(showPicks.length*10)*100);
   var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
   var al=pct>=70?'🟢 Strong Alignment':pct>=45?'🟡 Moderate Alignment':'🔴 Weak Alignment';
 
@@ -1325,7 +1354,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
   // not a warning. Each shared digit means that family's score is counted once
   // per pick riding it.
   var pickDigitCounts={};
-  conv.picks.forEach(n=>{ var d=digitOf(n); pickDigitCounts[d]=(pickDigitCounts[d]||0)+1; });
+  showPicks.forEach(n=>{ var d=digitOf(n); pickDigitCounts[d]=(pickDigitCounts[d]||0)+1; });
   var collisions=Object.entries(pickDigitCounts).filter(([d,c])=>c>1);
   var collisionHTML=collisions.length
     ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;">ℹ ${collisions.map(([d,c])=>`${c} picks ride digit ${d}`).join(', ')} — concentrated on the strongest digit score by design</div>`
@@ -1333,7 +1362,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
 
   // CORRECTION: backtest — how often have numbers sharing today's picked
   // digits actually appeared in real historical draws, vs. just trusting the formula.
-  var pickedDigits=[...new Set(conv.picks.map(n=>digitOf(n)))];
+  var pickedDigits=[...new Set(showPicks.map(n=>digitOf(n)))];
   var histDraws=layers.stats.draws||[];
   var hitDraws=histDraws.filter(draw=>draw.some(n=>pickedDigits.includes(digitOf(n))));
   var backtestPct=histDraws.length?Math.round(hitDraws.length/histDraws.length*100):null;
@@ -1459,6 +1488,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       <div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div>
       <div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div>
       <div style="font-size:13px;color:var(--muted2)">${al}</div>
+      ${modeHTML}
       ${collisionHTML}
       ${backtestHTML}
       ${sourceHTML}
@@ -2125,4 +2155,15 @@ async function pcsoAIFetch(){
 (function initPersonalInputsCount(){
   var defaultBtn=document.querySelector('#oracle-page .gbtn.active');
   if(defaultBtn) setGame(currentGame,defaultBtn);
+})();
+
+// Sync the mode toggle buttons with the persisted oracleMode on initial load
+(function initOracleModeButtons(){
+  try{
+    var bs=document.querySelectorAll('.omode-btn');
+    if(bs.length===2){
+      bs[0].classList.toggle('active',oracleMode!=='spread');
+      bs[1].classList.toggle('active',oracleMode==='spread');
+    }
+  }catch(e){}
 })();

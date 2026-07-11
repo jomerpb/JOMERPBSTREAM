@@ -1062,3 +1062,9 @@
     width: min(92vw, 420px);
   }
 }
+
+/* ── Oracle pick mode toggle (Max Score / Full Spread) ── */
+#oracle-page .omode-row{display:flex;gap:8px;margin:0 0 10px;}
+#oracle-page .omode-btn{flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted2);font-size:12px;font-weight:700;letter-spacing:.05em;cursor:pointer;transition:all .18s;}
+#oracle-page .omode-btn.active{border-color:var(--accent3);color:#fff;background:rgba(139,92,246,.16);}
+#oracle-page .omode-btn:active{transform:scale(.98);}
