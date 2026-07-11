@@ -3654,21 +3654,18 @@ function tcTradeFees(gross, side){
 // Sell row: total = net proceeds after fees+STT; G/L = proceeds \u2212 (shares \u00d7
 // current), i.e. how much better/worse off vs still holding the coins.
 function tcPortCompute(side, shares, entry, cur){
-  var out = {total:null, fees:null, comm:null, vat:null, pse:null, sccp:null, stt:0, gl:null, glPct:null};
+  var out = {total:null, fees:null, comm:null, vat:null, pse:null, sccp:null, stt:0, gl:null, glPct:null, curVal:null};
   if(shares==null || entry==null || !(shares>0) || !(entry>0)) return out;
   var f = tcTradeFees(shares*entry, side);
   if(!f) return out;
   out.total=f.total; out.fees=f.fees; out.comm=f.comm; out.vat=f.vat; out.pse=f.pse; out.sccp=f.sccp; out.stt=f.stt;
   if(cur != null){
     var curVal = shares*cur;
+    out.curVal = curVal;
     out.gl = side==='sell' ? f.total-curVal : curVal-f.total;
     out.glPct = f.total>0 ? out.gl/f.total*100 : null;
   }
   return out;
-}
-function tcFmtSignedPHP(n){
-  if(n==null || !isFinite(n)) return '\u2014';
-  return (n<0 ? '\u2212' : '+') + tcFmtPHP(Math.abs(n));
 }
 function tcPortFeeTitle(r){
   if(r.fees==null) return '';
@@ -3676,48 +3673,66 @@ function tcPortFeeTitle(r){
   if(r.stt>0) parts.push('STT 0.1% '+tcFmtPHP(r.stt));
   return parts.join(' \u00b7 ');
 }
-function tcPortGlText(r){
-  if(r.gl==null) return '\u2014';
+// One-line equation: total incl. tax  [\u00b1 G/L (pct)]  =  value at current
+// price. Operator is chosen so the arithmetic is literally true both ways:
+//   buy : total + gl = shares\u00d7current   (gain shows +, loss shows \u2212)
+//   sell: total \u2212 gl = shares\u00d7current   (gain shows \u2212, loss shows +)
+function tcPortEqParts(side, r){
+  var p = {totalTxt:'\u2014', glTxt:'', glCls:'', eqTxt:'', valTxt:'', feesTxt:''};
+  if(r.total==null) return p;
+  p.totalTxt = tcFmtPHP(r.total);
+  p.feesTxt = 'incl. '+tcFmtPHP(r.fees)+' fees & tax';
+  if(r.gl==null) return p;
+  var op = side==='sell' ? (r.gl>=0 ? '\u2212' : '+') : (r.gl>=0 ? '+' : '\u2212');
   var pct = r.glPct==null ? '' : ' ('+(r.glPct<0?'\u2212':'+')+Math.abs(r.glPct).toFixed(2)+'%)';
-  return tcFmtSignedPHP(r.gl)+pct;
+  p.glTxt = op+' '+tcFmtPHP(Math.abs(r.gl))+pct;
+  p.glCls = r.gl>=0 ? ' gain' : ' loss';
+  p.eqTxt = '=';
+  p.valTxt = tcFmtPHP(r.curVal);
+  return p;
 }
-// Live preview while typing — recomputes Total/G-L from the row's current
-// (possibly unsaved) inputs. Nothing persists until Save.
+// Recompute the row's live bits (current price + equation line) from the
+// DOM's current \u2014 possibly not-yet-blurred \u2014 inputs. Pure display; the
+// per-field onchange handlers do the persisting.
 function tcPortRecalc(sym){
   var shEl = document.getElementById('tc-port-shares-'+sym);
   var enEl = document.getElementById('tc-port-entry-'+sym);
   var totEl = document.getElementById('tc-port-total-'+sym);
-  var feeEl = document.getElementById('tc-port-fees-'+sym);
-  var glEl  = document.getElementById('tc-port-gl-'+sym);
-  if(!shEl || !enEl || !totEl || !glEl) return;
+  if(!shEl || !enEl || !totEl) return;
   var sideEl = document.querySelector('input[name="tc-port-side-'+sym+'"]:checked');
   var side = sideEl ? sideEl.value : 'buy';
   var sh = parseFloat(shEl.value), en = parseFloat(enEl.value);
   var q = tcGetQuote(sym);
+  var curEl = document.getElementById('tc-port-cur-'+sym);
+  if(curEl) curEl.textContent = q ? tcFmtPHP(q.price) : '\u2014';
   var r = tcPortCompute(side, isNaN(sh)?null:sh, isNaN(en)?null:en, q?q.price:null);
-  totEl.textContent = r.total==null ? '\u2014' : tcFmtPHP(r.total);
-  if(feeEl){
-    feeEl.textContent = r.fees==null ? '' : 'incl. '+tcFmtPHP(r.fees)+' fees & tax';
-    feeEl.title = tcPortFeeTitle(r);
+  var p = tcPortEqParts(side, r);
+  totEl.textContent = p.totalTxt;
+  totEl.title = tcPortFeeTitle(r);
+  var glEl = document.getElementById('tc-port-gl-'+sym);
+  if(glEl){
+    glEl.textContent = p.glTxt;
+    glEl.className = 'tc-port-gl'+p.glCls;
   }
-  glEl.textContent = tcPortGlText(r);
-  glEl.classList.toggle('gain', r.gl!=null && r.gl>=0);
-  glEl.classList.toggle('loss', r.gl!=null && r.gl<0);
+  var eqEl = document.getElementById('tc-port-eq-'+sym);
+  if(eqEl) eqEl.textContent = p.eqTxt;
+  var valEl = document.getElementById('tc-port-eqval-'+sym);
+  if(valEl) valEl.textContent = p.valTxt;
+  var feeEl = document.getElementById('tc-port-fees-'+sym);
+  if(feeEl){ feeEl.textContent = p.feesTxt; feeEl.title = tcPortFeeTitle(r); }
 }
-function tcSavePortRow(sym){
+// Autosave \u2014 same pattern as the High/Low alerts: every field change
+// persists immediately, no Save button. The coin itself was already
+// persisted the moment the \uFF0B button added it.
+function tcSetPortField(sym, field, val){
   var list = tcGetWatch();
   var w = list.find(function(x){return x.sym===sym;});
   if(!w) return;
-  var shEl = document.getElementById('tc-port-shares-'+sym);
-  var enEl = document.getElementById('tc-port-entry-'+sym);
-  var sideEl = document.querySelector('input[name="tc-port-side-'+sym+'"]:checked');
-  var sh = shEl ? parseFloat(shEl.value) : NaN;
-  var en = enEl ? parseFloat(enEl.value) : NaN;
-  w.shares = isNaN(sh) ? null : sh;
-  w.entry  = isNaN(en) ? null : en;
-  w.side   = sideEl ? sideEl.value : 'buy';
+  if(field==='side'){ w.side = val==='sell' ? 'sell' : 'buy'; }
+  else { var num = parseFloat(val); w[field] = isNaN(num) ? null : num; }
   tcSaveWatch(list);
-  tcRenderWatchlist();
+  tcRenderWatchlist();   // focus-guard below keeps mid-typing rows intact
+  tcPortRecalc(sym);     // equation stays fresh even when the rebuild is skipped
 }
 // ── Portfolios renderer (function name kept — 6 existing call sites) ──
 // Entry schema: {sym, highPrice, lowPrice, side:'buy'|'sell', shares, entry}.
@@ -3747,33 +3762,35 @@ function tcRenderWatchlist(){
     var shVal = w.shares==null ? '' : w.shares;
     var enVal = w.entry==null ? '' : w.entry;
     var r = tcPortCompute(side, w.shares!=null?w.shares:null, w.entry!=null?w.entry:null, last);
-    var glCls = r.gl==null ? '' : (r.gl>=0 ? ' gain' : ' loss');
+    var p = tcPortEqParts(side, r);
     return '<div class="tp-watch-row tc-port-row">'+
-      '<div class="tp-watch-name" onclick="tcSelectCoin(\''+w.sym+'\')">'+w.sym+' \u00b7 <small>'+name+'</small></div>'+
-      '<div class="tp-watch-inbox tp-watch-lastbox"><span class="tp-watch-inlabel">Current</span>'+
-        '<div class="tp-watch-last">'+lastTxt+'</div></div>'+
-      '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+
-        '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="\u20b1 high" value="'+hVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'highPrice\', this.value)"></div>'+
-      '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Low</span>'+
-        '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitLow?' hit-low':'')+'" placeholder="\u20b1 low" value="'+lVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'lowPrice\', this.value)"></div>'+
-      '<button class="tp-watch-remove" onclick="tcRemoveWatch(\''+w.sym+'\')" title="Remove">\u2715</button>'+
-      '<div class="tc-port-block">'+
-        '<div class="tc-port-siderow">'+
-          '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="buy"'+(side!=='sell'?' checked':'')+' onchange="tcPortRecalc(\''+w.sym+'\')"><span>Buy</span></label>'+
-          '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="sell"'+(side==='sell'?' checked':'')+' onchange="tcPortRecalc(\''+w.sym+'\')"><span>Sell</span></label>'+
-        '</div>'+
-        '<div class="tc-port-grid">'+
-          '<div class="tp-watch-inbox"><span class="tp-watch-inlabel"># Shares</span>'+
-            '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-shares-'+w.sym+'" placeholder="0.00" value="'+shVal+'" oninput="tcPortRecalc(\''+w.sym+'\')"></div>'+
-          '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Price \u20b1/coin</span>'+
-            '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-entry-'+w.sym+'" placeholder="\u20b1 at buy/sell" value="'+enVal+'" oninput="tcPortRecalc(\''+w.sym+'\')"></div>'+
-        '</div>'+
-        '<div class="tc-port-calc">'+
-          '<div class="tc-port-line">Total incl. tax <b id="tc-port-total-'+w.sym+'">'+(r.total==null?'\u2014':tcFmtPHP(r.total))+'</b>'+
-            '<span class="tc-port-fees" id="tc-port-fees-'+w.sym+'" title="'+tcPortFeeTitle(r)+'">'+(r.fees==null?'':'incl. '+tcFmtPHP(r.fees)+' fees & tax')+'</span></div>'+
-          '<div class="tc-port-line">Gain / Loss <b id="tc-port-gl-'+w.sym+'" class="tc-port-gl'+glCls+'">'+tcPortGlText(r)+'</b></div>'+
-        '</div>'+
-        '<button class="tc-port-save" onclick="tcSavePortRow(\''+w.sym+'\')">Save</button>'+
+      '<div class="tc-port-head">'+
+        '<div class="tp-watch-name" onclick="tcSelectCoin(\''+w.sym+'\')">'+w.sym+' \u00b7 <small>'+name+'</small></div>'+
+        '<div class="tc-port-cur" id="tc-port-cur-'+w.sym+'">'+lastTxt+'</div>'+
+        '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="buy"'+(side!=='sell'?' checked':'')+' onchange="tcSetPortField(\''+w.sym+'\', \'side\', this.value)"><span>Buy</span></label>'+
+        '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="sell"'+(side==='sell'?' checked':'')+' onchange="tcSetPortField(\''+w.sym+'\', \'side\', this.value)"><span>Sell</span></label>'+
+        '<button class="tp-watch-remove" onclick="tcRemoveWatch(\''+w.sym+'\')" title="Remove">\u2715</button>'+
+      '</div>'+
+      '<div class="tc-port-grid">'+
+        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel"># Shares</span>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-shares-'+w.sym+'" placeholder="0.00" value="'+shVal+'" oninput="tcPortRecalc(\''+w.sym+'\')" onchange="tcSetPortField(\''+w.sym+'\', \'shares\', this.value)"></div>'+
+        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Price \u20b1/coin</span>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-entry-'+w.sym+'" placeholder="\u20b1 at buy/sell" value="'+enVal+'" oninput="tcPortRecalc(\''+w.sym+'\')" onchange="tcSetPortField(\''+w.sym+'\', \'entry\', this.value)"></div>'+
+      '</div>'+
+      '<div class="tc-port-eqline">'+
+        '<span class="tc-port-eqlabel">Total incl. tax</span>'+
+        '<b id="tc-port-total-'+w.sym+'" title="'+tcPortFeeTitle(r)+'">'+p.totalTxt+'</b>'+
+        '<b class="tc-port-gl'+p.glCls+'" id="tc-port-gl-'+w.sym+'">'+p.glTxt+'</b>'+
+        '<span class="tc-port-eqsign" id="tc-port-eq-'+w.sym+'">'+p.eqTxt+'</span>'+
+        '<b id="tc-port-eqval-'+w.sym+'">'+p.valTxt+'</b>'+
+        '<span class="tc-port-fees" id="tc-port-fees-'+w.sym+'" title="'+tcPortFeeTitle(r)+'">'+p.feesTxt+'</span>'+
+      '</div>'+
+      '<div class="tc-port-sublabel">Watchlist</div>'+
+      '<div class="tc-port-grid">'+
+        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="\u20b1 high" value="'+hVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'highPrice\', this.value)"></div>'+
+        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Low</span>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitLow?' hit-low':'')+'" placeholder="\u20b1 low" value="'+lVal+'" onchange="tcSetWatchPrice(\''+w.sym+'\', \'lowPrice\', this.value)"></div>'+
       '</div>'+
     '</div>';
   }).join('');
