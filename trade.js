@@ -3585,12 +3585,101 @@ function tcGetWatch(){
 function tcSaveWatch(list){
   try { localStorage.setItem('tcWatchlist', JSON.stringify(list)); } catch(e){}
 }
+// ── Funds / buying Power (localStorage 'tcFunds') — global block, lives in
+// index.html OUTSIDE the rebuilt list so removing coins can never touch it.
+// Power moves ONLY on Deposit / Withdraw / a confirmed Save (user 2026-07-11):
+// buy deducts total incl. tax, sell adds net proceeds (realized G/L is baked
+// into the proceeds by construction — no separate G/L posting needed). ──
+var TC_FUNDS_KEY = 'tcFunds';
+function tcGetFunds(){
+  try { var f = JSON.parse(localStorage.getItem(TC_FUNDS_KEY)||'{}'); return {power: isFinite(f.power) ? +f.power : 0}; }
+  catch(e){ return {power:0}; }
+}
+function tcSaveFunds(f){
+  try { localStorage.setItem(TC_FUNDS_KEY, JSON.stringify(f)); } catch(e){}
+}
+// Cash balances are always 2dp — tcFmtPHP's 4dp sub-\u20b11 branch is for coin
+// prices, not money, so \u20b10 must read \u20b10.00 rather than \u20b10.0000.
+function tcFmtPHPCash(n){
+  if(n == null || !isFinite(n)) return '\u2014';
+  return '\u20b1' + n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+// Numbers-only guard for Pocket money: digits + a single decimal point.
+function tcFundsFilterInput(el){
+  var v = el.value.replace(/[^0-9.]/g,'');
+  var i = v.indexOf('.');
+  if(i >= 0) v = v.slice(0, i+1) + v.slice(i+1).replace(/\./g,'');
+  el.value = v;
+}
+function tcFundsMsg(txt){
+  var m = document.getElementById('tc-funds-msg');
+  if(m) m.textContent = txt || '';
+}
+function tcFundsAmount(){
+  var el = document.getElementById('tc-funds-pocket');
+  var n = el ? parseFloat(el.value) : NaN;
+  return (!isNaN(n) && n > 0) ? n : null;
+}
+function tcFundsDeposit(){
+  var amt = tcFundsAmount();
+  if(amt == null){ tcFundsMsg('Enter an amount above zero to deposit.'); return; }
+  var f = tcGetFunds();
+  f.power = +(f.power + amt).toFixed(2);
+  tcSaveFunds(f);
+  var el = document.getElementById('tc-funds-pocket'); if(el) el.value = '';
+  tcFundsMsg('');
+  tcRenderFunds();
+}
+function tcFundsWithdraw(){
+  var amt = tcFundsAmount();
+  if(amt == null){ tcFundsMsg('Enter an amount above zero to withdraw.'); return; }
+  var f = tcGetFunds();
+  if(amt > f.power + 1e-9){ tcFundsMsg('Not enough Power — you have '+tcFmtPHPCash(f.power)+'.'); return; }
+  f.power = +(f.power - amt).toFixed(2);
+  tcSaveFunds(f);
+  var el = document.getElementById('tc-funds-pocket'); if(el) el.value = '';
+  tcFundsMsg('');
+  tcRenderFunds();
+}
+// Unrealized G/L across OPEN positions (status 'bought') at live prices vs
+// the confirmed buy cost; % against total cost basis. Sold rows are excluded
+// — their realized G/L already reached Power inside the sell proceeds. Rows
+// with no live quote are left out of both sums rather than guessed at.
+function tcOpenPositionsGl(){
+  var list = tcGetWatch(), gl = 0, basis = 0, n = 0;
+  list.forEach(function(w){
+    if(w.status !== 'bought' || !(w.buyTotal > 0)) return;
+    var q = tcGetQuote(w.sym);
+    if(!q || q.price == null) return;
+    var fN = tcTradeFees((w.buyShares||0) * q.price, 'sell');
+    if(!fN) return;
+    gl += fN.total - w.buyTotal; basis += w.buyTotal; n++;
+  });
+  return {gl:gl, basis:basis, count:n};
+}
+function tcRenderFunds(){
+  var pEl = document.getElementById('tc-funds-power');
+  if(pEl) pEl.textContent = tcFmtPHPCash(tcGetFunds().power);
+  var iEl = document.getElementById('tc-funds-info');
+  if(!iEl) return;
+  var o = tcOpenPositionsGl();
+  if(!o.count){ iEl.innerHTML = 'No open positions — confirmed buys will show their live gain / loss here.'; return; }
+  var pct = o.basis > 0 ? o.gl / o.basis * 100 : 0;
+  var cls = o.gl >= 0 ? 'gain' : 'loss';
+  var word = o.gl >= 0 ? 'gained' : 'lost';
+  var sign = o.gl >= 0 ? '+' : '\u2212';
+  iEl.innerHTML = 'You have '+word+' <b class="'+cls+'">'+sign+tcFmtPHPCash(Math.abs(o.gl))+' ('+sign+Math.abs(pct).toFixed(2)+'%)</b> on '+o.count+' open position'+(o.count>1?'s':'')+'.';
+}
 function tcIsWatched(sym){ return tcGetWatch().some(function(w){return w.sym===sym;}); }
 function tcToggleWatch(){
   if(!tcCurrentSym) return;
   var list = tcGetWatch();
   var i = list.findIndex(function(w){return w.sym===tcCurrentSym;});
-  if(i >= 0){ list.splice(i,1); }
+  if(i >= 0){
+    // Bought positions can't be removed — sell first (user 2026-07-11).
+    if(list[i].status === 'bought'){ tcPortMsg(tcCurrentSym, 'You bought this position \u2014 sell it first before removing.'); return; }
+    list.splice(i,1);
+  }
   else {
     var c = tcFindCoin(tcCurrentSym);
     var sig = tcSignal(tcCurrentSym);
@@ -3611,7 +3700,12 @@ function tcToggleWatch(){
   tcUpdateWatchBtn();
 }
 function tcRemoveWatch(sym){
-  tcSaveWatch(tcGetWatch().filter(function(w){return w.sym!==sym;}));
+  var w = tcGetWatch().find(function(x){return x.sym===sym;});
+  // Bought positions can't be removed — sell first (user 2026-07-11). Drafts
+  // (incl. legacy rows with no status) and sold rows remove freely; the
+  // Funds block lives outside the list and is untouched either way.
+  if(w && w.status === 'bought'){ tcPortMsg(sym, 'You bought this position \u2014 sell it first before removing.'); return; }
+  tcSaveWatch(tcGetWatch().filter(function(x){return x.sym!==sym;}));
   tcRenderWatchlist();
   tcUpdateWatchBtn();
 }
@@ -3687,6 +3781,96 @@ function tcPortGlTxt(r){
   var pct = r.glPct==null ? '' : ' ('+(r.glPct<0?'\u2212':'+')+Math.abs(r.glPct).toFixed(2)+'%)';
   return (r.gl<0?'\u2212':'+')+tcFmtPHP(Math.abs(r.gl))+pct;
 }
+// Status-aware card numbers. Drafts keep the 2026-07-11 side-based formula
+// untouched. Once a buy is CONFIRMED, Total (buy side) and G/L pin to the
+// snapshotted buyTotal — the exact amount Power was debited — so the row,
+// the Funds info line, and Power can never disagree; the sell side keeps
+// computing live from the price field so you can plan the exit. Sold rows
+// are frozen at the booked proceeds and realized G/L.
+function tcPortNumbers(w, side, sh, en, cur){
+  if(w && w.status === 'sold'){
+    return {total: w.sellProceeds!=null ? w.sellProceeds : null, feeTitle:'',
+            gl: w.realizedGl!=null ? w.realizedGl : null,
+            glPct: (w.realizedGl!=null && w.buyTotal>0) ? w.realizedGl/w.buyTotal*100 : null,
+            sellNow:null, sellNowFees:null};
+  }
+  if(w && w.status === 'bought'){
+    var out = {sellNow:null, sellNowFees:null, gl:null, glPct:null};
+    if(side === 'sell'){
+      var fs = (en>0) ? tcTradeFees((w.buyShares||0)*en, 'sell') : null;
+      out.total = fs ? fs.total : null;
+      out.feeTitle = fs ? tcPortFeeTitle(fs) : '';
+    } else {
+      var fb = tcTradeFees((w.buyShares||0)*(w.buyPrice||0), 'buy');
+      out.total = w.buyTotal!=null ? w.buyTotal : null;
+      out.feeTitle = fb ? tcPortFeeTitle(fb) : '';
+    }
+    if(cur != null){
+      var fN = tcTradeFees((w.buyShares||0)*cur, 'sell');
+      if(fN){
+        out.sellNow = fN.total; out.sellNowFees = fN.fees;
+        out.gl = fN.total - (w.buyTotal||0);
+        out.glPct = w.buyTotal>0 ? out.gl/w.buyTotal*100 : null;
+      }
+    }
+    return out;
+  }
+  var r = tcPortCompute(side, sh, en, cur);
+  return {total:r.total, feeTitle:tcPortFeeTitle(r), gl:r.gl, glPct:r.glPct,
+          sellNow:r.sellNow, sellNowFees:r.sellNowFees};
+}
+function tcPortMsg(sym, txt){
+  var m = document.getElementById('tc-port-msg-'+sym);
+  if(m) m.textContent = txt || '';
+}
+// Save beside the Buy/Sell radios — the ONLY action that moves Power
+// (user 2026-07-11). Buy: validates shares/price, blocks when Power can't
+// cover total incl. tax, then debits Power, snapshots the cost basis and
+// locks the position ('bought'). Sell: allowed only on a bought position,
+// credits Power with net proceeds (gross \u2212 sell fees \u2212 STT — realized G/L
+// included by construction), freezes the row ('sold') and unlocks Remove.
+function tcPortSave(sym){
+  var list = tcGetWatch();
+  var w = list.find(function(x){return x.sym===sym;});
+  if(!w) return;
+  var sideEl = document.querySelector('input[name="tc-port-side-'+sym+'"]:checked');
+  var side = sideEl ? sideEl.value : (w.side==='sell' ? 'sell' : 'buy');
+  var shEl = document.getElementById('tc-port-shares-'+sym);
+  var enEl = document.getElementById('tc-port-entry-'+sym);
+  var sh = shEl ? parseFloat(shEl.value) : NaN;
+  var en = enEl ? parseFloat(enEl.value) : NaN;
+  if(w.status === 'sold'){ tcPortMsg(sym, 'Position already sold \u2014 you can remove the row.'); return; }
+  if(side === 'buy'){
+    if(w.status === 'bought'){ tcPortMsg(sym, 'Already bought \u2014 switch to Sell to close the position.'); return; }
+    if(!(sh>0) || !(en>0)){ tcPortMsg(sym, 'Enter shares and a buy price first.'); return; }
+    var fb = tcTradeFees(sh*en, 'buy');
+    if(!fb){ tcPortMsg(sym, 'Enter shares and a buy price first.'); return; }
+    var funds = tcGetFunds();
+    if(fb.total > funds.power + 1e-9){
+      tcPortMsg(sym, 'Not enough Power \u2014 this buy needs '+tcFmtPHPCash(fb.total)+', you have '+tcFmtPHPCash(funds.power)+'. Deposit to Funds below first.');
+      return;
+    }
+    funds.power = +(funds.power - fb.total).toFixed(2);
+    tcSaveFunds(funds);
+    w.status='bought'; w.side='buy'; w.shares=sh; w.entry=en;
+    w.buyShares=sh; w.buyPrice=en; w.buyTotal=fb.total; w.buyAt=Date.now();
+    tcSaveWatch(list);
+    tcRenderWatchlist();
+  } else {
+    if(w.status !== 'bought'){ tcPortMsg(sym, 'Nothing to sell \u2014 confirm a Buy first.'); return; }
+    if(!(en>0)){ tcPortMsg(sym, 'Enter your sell price first.'); return; }
+    var fs2 = tcTradeFees((w.buyShares||0)*en, 'sell');
+    if(!fs2){ tcPortMsg(sym, 'Enter your sell price first.'); return; }
+    var funds2 = tcGetFunds();
+    funds2.power = +(funds2.power + fs2.total).toFixed(2);
+    tcSaveFunds(funds2);
+    w.status='sold'; w.side='sell'; w.entry=en;
+    w.sellPrice=en; w.sellProceeds=fs2.total;
+    w.realizedGl=+(fs2.total - (w.buyTotal||0)).toFixed(2); w.sellAt=Date.now();
+    tcSaveWatch(list);
+    tcRenderWatchlist();
+  }
+}
 // Recompute the row's live bits (current price, total, gain/loss, sell-now)
 // from the DOM's current \u2014 possibly not-yet-blurred \u2014 inputs. Pure display;
 // the per-field onchange handlers do the persisting.
@@ -3695,35 +3879,41 @@ function tcPortRecalc(sym){
   var enEl = document.getElementById('tc-port-entry-'+sym);
   var totEl = document.getElementById('tc-port-total-'+sym);
   if(!shEl || !enEl || !totEl) return;
-  var sideEl = document.querySelector('input[name="tc-port-side-'+sym+'"]:checked');
-  var side = sideEl ? sideEl.value : 'buy';
-  var sh = parseFloat(shEl.value), en = parseFloat(enEl.value);
   var q = tcGetQuote(sym);
   var curEl = document.getElementById('tc-port-cur-'+sym);
   if(curEl) curEl.textContent = q ? tcFmtPHP(q.price) : '\u2014';
-  var r = tcPortCompute(side, isNaN(sh)?null:sh, isNaN(en)?null:en, q?q.price:null);
-  totEl.textContent = r.total==null ? '\u2014' : tcFmtPHP(r.total);
-  totEl.title = tcPortFeeTitle(r);
+  var w = tcGetWatch().find(function(x){return x.sym===sym;}) || {};
+  if(w.status === 'sold') return;   // frozen row — the renderer owns its numbers
+  var sideEl = document.querySelector('input[name="tc-port-side-'+sym+'"]:checked');
+  var side = sideEl ? sideEl.value : 'buy';
+  var sh = parseFloat(shEl.value), en = parseFloat(enEl.value);
+  var n = tcPortNumbers(w, side, isNaN(sh)?null:sh, isNaN(en)?null:en, q?q.price:null);
+  totEl.textContent = n.total==null ? '\u2014' : tcFmtPHP(n.total);
+  totEl.title = n.feeTitle;
   var glEl = document.getElementById('tc-port-gl-'+sym);
   if(glEl){
-    glEl.textContent = tcPortGlTxt(r);
-    glEl.className = 'tc-port-gl'+(r.gl==null ? '' : (r.gl>=0 ? ' gain' : ' loss'));
+    glEl.textContent = tcPortGlTxt(n);
+    glEl.className = 'tc-port-gl'+(n.gl==null ? '' : (n.gl>=0 ? ' gain' : ' loss'));
   }
+  // "If sold now" shows in Sell mode only (user 2026-07-11).
+  var wrapEl = document.getElementById('tc-port-eqwrap-'+sym);
+  if(wrapEl) wrapEl.style.display = side==='sell' ? 'inline-flex' : 'none';
   var valEl = document.getElementById('tc-port-eqval-'+sym);
   if(valEl){
-    valEl.textContent = r.sellNow==null ? '\u2014' : tcFmtPHP(r.sellNow);
-    valEl.title = r.sellNowFees==null ? '' : 'Net of sell-side fees + STT: '+tcFmtPHP(r.sellNowFees);
+    valEl.textContent = n.sellNow==null ? '\u2014' : tcFmtPHP(n.sellNow);
+    valEl.title = n.sellNowFees==null ? '' : 'Net of sell-side fees + STT: '+tcFmtPHP(n.sellNowFees);
   }
-  var feeEl = document.getElementById('tc-port-fees-'+sym);
-  if(feeEl) feeEl.textContent = r.sellNowFees==null ? '' : 'net of '+tcFmtPHP(r.sellNowFees)+' sell fees';
 }
-// Autosave \u2014 same pattern as the High/Low alerts: every field change
-// persists immediately, no Save button. The coin itself was already
-// persisted the moment the \uFF0B button added it.
+// Autosave for the row FIELDS (shares/price/side/alerts) — same pattern as
+// the High/Low alerts. Power, however, only moves on an explicit Save
+// (tcPortSave): typing here never books a trade. Locks: shares freeze once
+// bought (full-position sell only), everything freezes once sold.
 function tcSetPortField(sym, field, val){
   var list = tcGetWatch();
   var w = list.find(function(x){return x.sym===sym;});
   if(!w) return;
+  if(w.status === 'sold') return;
+  if(w.status === 'bought' && field === 'shares') return;
   if(field==='side'){ w.side = val==='sell' ? 'sell' : 'buy'; }
   else { var num = parseFloat(val); w[field] = isNaN(num) ? null : num; }
   tcSaveWatch(list);
@@ -3731,10 +3921,16 @@ function tcSetPortField(sym, field, val){
   tcPortRecalc(sym);     // numbers stay fresh even when the rebuild is skipped
 }
 // ── Portfolios renderer (function name kept — 6 existing call sites) ──
-// Entry schema: {sym, highPrice, lowPrice, side:'buy'|'sell', shares, entry}.
-// New keys are optional, so legacy {sym, highPrice, lowPrice} rows saved
-// under the same 'tcWatchlist' localStorage key keep working untouched.
+// Entry schema: {sym, highPrice, lowPrice, side:'buy'|'sell', shares, entry,
+//   status?:'bought'|'sold', buyShares?, buyPrice?, buyTotal?, buyAt?,
+//   sellPrice?, sellProceeds?, realizedGl?, sellAt?}.
+// No status key = draft: fully editable and removable, exactly like before —
+// legacy rows under the same 'tcWatchlist' localStorage key keep working.
+// Lifecycle (user 2026-07-11): draft → Save on Buy → 'bought' (shares locked,
+// Remove blocked, Power debited) → Save on Sell → 'sold' (row frozen, Power
+// credited with net proceeds, Remove unlocked).
 function tcRenderWatchlist(){
+  tcRenderFunds();   // Funds block lives OUTSIDE the rebuilt list — always safe to refresh
   var listEl = document.getElementById('tc-watch-list');
   var emptyEl = document.getElementById('tc-watch-empty');
   if(!listEl) return;
@@ -3754,36 +3950,51 @@ function tcRenderWatchlist(){
     var hitLow  = last != null && w.lowPrice  != null && last <= w.lowPrice;
     var hVal = w.highPrice == null ? '' : w.highPrice;
     var lVal = w.lowPrice == null ? '' : w.lowPrice;
-    var side = w.side==='sell' ? 'sell' : 'buy';
-    var shVal = w.shares==null ? '' : w.shares;
+    var status = w.status === 'bought' ? 'bought' : w.status === 'sold' ? 'sold' : 'draft';
+    var side = status==='sold' ? 'sell' : (w.side==='sell' ? 'sell' : 'buy');
+    var shVal = status!=='draft' ? (w.buyShares==null?'':w.buyShares) : (w.shares==null ? '' : w.shares);
     var enVal = w.entry==null ? '' : w.entry;
-    var r = tcPortCompute(side, w.shares!=null?w.shares:null, w.entry!=null?w.entry:null, last);
-    var glCls = r.gl==null ? '' : (r.gl>=0 ? ' gain' : ' loss');
+    var n = tcPortNumbers(w, side, w.shares!=null?w.shares:null, w.entry!=null?w.entry:null, last);
+    var glCls = n.gl==null ? '' : (n.gl>=0 ? ' gain' : ' loss');
+    var shLock = status!=='draft';
+    var enLock = status==='sold';
+    var radioLock = status==='sold' ? ' disabled' : '';
+    var showEq = side==='sell' && status!=='sold';   // "If sold now" — Sell mode only
+    var chip = status==='bought' ? '<span class="tc-port-chip bought">Bought</span>'
+             : status==='sold'   ? '<span class="tc-port-chip sold">Sold</span>' : '';
+    var saveBtn = status==='sold' ? ''
+      : '<button class="tc-port-save" onclick="tcPortSave(\''+w.sym+'\')" title="Confirm this '+(side==='sell'?'sale':'purchase')+' \u2014 updates your Power">Save</button>';
+    var rmAttr = status==='bought'
+      ? ' disabled title="Sell first \u2014 bought positions can\u2019t be removed"'
+      : ' title="Remove"';
     return '<div class="tp-watch-row tc-port-row">'+
       '<div class="tc-port-head">'+
         '<div class="tp-watch-name" onclick="tcSelectCoin(\''+w.sym+'\')">'+w.sym+' \u00b7 <small>'+name+'</small></div>'+
         '<div class="tc-port-cur" id="tc-port-cur-'+w.sym+'">'+lastTxt+'</div>'+
-        '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="buy"'+(side!=='sell'?' checked':'')+' onchange="tcSetPortField(\''+w.sym+'\', \'side\', this.value)"><span>Buy</span></label>'+
-        '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="sell"'+(side==='sell'?' checked':'')+' onchange="tcSetPortField(\''+w.sym+'\', \'side\', this.value)"><span>Sell</span></label>'+
-        '<button class="tp-watch-remove" onclick="tcRemoveWatch(\''+w.sym+'\')" title="Remove">\u2715</button>'+
+        '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="buy"'+(side!=='sell'?' checked':'')+radioLock+' onchange="tcSetPortField(\''+w.sym+'\', \'side\', this.value)"><span>Buy</span></label>'+
+        '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+w.sym+'" value="sell"'+(side==='sell'?' checked':'')+radioLock+' onchange="tcSetPortField(\''+w.sym+'\', \'side\', this.value)"><span>Sell</span></label>'+
+        chip + saveBtn +
+        '<button class="tp-watch-remove" onclick="tcRemoveWatch(\''+w.sym+'\')"'+rmAttr+'>\u2715</button>'+
       '</div>'+
+      '<div class="tc-port-msg" id="tc-port-msg-'+w.sym+'"></div>'+
       '<div class="tc-port-grid tc-port-calcline">'+
         '<div class="tp-watch-inbox"><span class="tp-watch-inlabel"># Shares</span>'+
-          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-shares-'+w.sym+'" placeholder="0.00" value="'+shVal+'" oninput="tcPortRecalc(\''+w.sym+'\')" onchange="tcSetPortField(\''+w.sym+'\', \'shares\', this.value)"></div>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-shares-'+w.sym+'" placeholder="0.00" value="'+shVal+'"'+(shLock?' readonly':'')+' oninput="tcPortRecalc(\''+w.sym+'\')" onchange="tcSetPortField(\''+w.sym+'\', \'shares\', this.value)"></div>'+
         '<span class="tc-port-op">\u00d7</span>'+
         '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Price \u20b1/coin</span>'+
-          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-entry-'+w.sym+'" placeholder="\u20b1 at buy/sell" value="'+enVal+'" oninput="tcPortRecalc(\''+w.sym+'\')" onchange="tcSetPortField(\''+w.sym+'\', \'entry\', this.value)"></div>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-entry-'+w.sym+'" placeholder="\u20b1 at buy/sell" value="'+enVal+'"'+(enLock?' readonly':'')+' oninput="tcPortRecalc(\''+w.sym+'\')" onchange="tcSetPortField(\''+w.sym+'\', \'entry\', this.value)"></div>'+
         '<span class="tc-port-op">=</span>'+
-        '<div class="tc-port-totalbox"><span class="tp-watch-inlabel">Total incl. tax</span>'+
-          '<b id="tc-port-total-'+w.sym+'" title="'+tcPortFeeTitle(r)+'">'+(r.total==null?'\u2014':tcFmtPHP(r.total))+'</b></div>'+
+        '<div class="tp-watch-inbox tc-port-totalbox"><span class="tp-watch-inlabel">Total incl. tax</span>'+
+          '<div class="tc-port-ro" id="tc-port-total-'+w.sym+'" title="'+n.feeTitle+'">'+(n.total==null?'\u2014':tcFmtPHP(n.total))+'</div></div>'+
       '</div>'+
       '<div class="tc-port-eqline">'+
-        '<span class="tc-port-eqlabel">Gain / Loss</span>'+
-        '<b class="tc-port-gl'+glCls+'" id="tc-port-gl-'+w.sym+'">'+tcPortGlTxt(r)+'</b>'+
-        '<span class="tc-port-eqsign">\u00b7</span>'+
-        '<span class="tc-port-eqlabel">If sold now</span>'+
-        '<b id="tc-port-eqval-'+w.sym+'" title="'+(r.sellNowFees==null?'':'Net of sell-side fees + STT: '+tcFmtPHP(r.sellNowFees))+'">'+(r.sellNow==null?'\u2014':tcFmtPHP(r.sellNow))+'</b>'+
-        '<span class="tc-port-fees" id="tc-port-fees-'+w.sym+'">'+(r.sellNowFees==null?'':'net of '+tcFmtPHP(r.sellNowFees)+' sell fees')+'</span>'+
+        '<span class="tc-port-eqlabel">'+(status==='sold'?'Realized gain / loss':'Gain / Loss')+'</span>'+
+        '<b class="tc-port-gl'+glCls+'" id="tc-port-gl-'+w.sym+'">'+tcPortGlTxt(n)+'</b>'+
+        '<span class="tc-port-eqwrap" id="tc-port-eqwrap-'+w.sym+'" style="display:'+(showEq?'inline-flex':'none')+'">'+
+          '<span class="tc-port-eqsign">\u00b7</span>'+
+          '<span class="tc-port-eqlabel">If sold now</span>'+
+          '<b id="tc-port-eqval-'+w.sym+'" title="'+(n.sellNowFees==null?'':'Net of sell-side fees + STT: '+tcFmtPHP(n.sellNowFees))+'">'+(n.sellNow==null?'\u2014':tcFmtPHP(n.sellNow))+'</b>'+
+        '</span>'+
       '</div>'+
       '<div class="tc-port-sublabel">Watchlist</div>'+
       '<div class="tc-port-grid">'+

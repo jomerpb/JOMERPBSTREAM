@@ -804,7 +804,20 @@
     </div>
     <div class="tp-card-body" id="tp-body-cwatch">
       <div id="tc-watch-list"></div>
-      <div class="tp-watch-empty" id="tc-watch-empty">No coins in your portfolio yet. Select a coin below, then tap the ＋ button beside its name. Pick Buy or Sell, enter your shares and price — the total incl. tax, gain/loss, and if-sold-now amount compute at current PH stock-market rates, and every change saves automatically. High/Low alerts stay pre-filled at the model's recommended levels.</div>
+      <div class="tp-watch-empty" id="tc-watch-empty">No coins in your portfolio yet. Select a coin below, then tap the ＋ button beside its name. Enter your shares and buy price, then hit Save to confirm the purchase — the total incl. tax (PH stock-market rates) is deducted from your Power below, and the position locks until you sell. Switch to Sell, enter your price and Save to close it; net proceeds flow back into Power. High/Low alerts stay pre-filled at the model's recommended levels.</div>
+      <div class="tc-funds" id="tc-funds">
+        <div class="tc-funds-label">Funds</div>
+        <div class="tc-funds-grid">
+          <div class="tp-watch-inbox"><span class="tp-watch-inlabel">Pocket money (PHP)</span>
+            <input type="text" inputmode="decimal" autocomplete="off" class="tp-watch-input" id="tc-funds-pocket" placeholder="₱ 0.00" oninput="tcFundsFilterInput(this)"></div>
+          <div class="tp-watch-inbox"><span class="tp-watch-inlabel">Power (PHP)</span>
+            <div class="tc-port-ro" id="tc-funds-power" title="Available buying power">₱0.00</div></div>
+          <button class="tc-funds-btn deposit" onclick="tcFundsDeposit()">Deposit</button>
+          <button class="tc-funds-btn withdraw" onclick="tcFundsWithdraw()">Withdraw</button>
+        </div>
+        <div class="tc-funds-info" id="tc-funds-info"></div>
+        <div class="tc-funds-msg" id="tc-funds-msg"></div>
+      </div>
     </div>
   </div>
 

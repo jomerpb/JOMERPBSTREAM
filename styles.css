@@ -1032,16 +1032,14 @@
 #trade-page .tc-port-eqline{flex:1 1 100%;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
 #trade-page .tc-port-eqline b{font-size:13.5px;letter-spacing:0;text-transform:none;color:var(--text);font-weight:700;white-space:nowrap;}
 #trade-page .tc-port-eqsign{font-size:13px;letter-spacing:0;color:var(--muted);}
-#trade-page .tc-port-fees{font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--muted);cursor:help;}
 #trade-page .tc-port-gl.gain{color:var(--green);}
 #trade-page .tc-port-gl.loss{color:var(--red);}
 #trade-page .tc-port-sublabel{flex:1 1 100%;font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding-left:12px;margin-top:12px;margin-bottom:-4px;}
 #trade-page .tc-port-calcline{align-items:flex-end;}
 #trade-page .tc-port-calcline .tp-watch-inbox{flex:1 1 0;min-width:0;}
 #trade-page .tc-port-op{font-size:14px;font-weight:700;color:var(--muted);padding-bottom:9px;flex:0 0 auto;}
-#trade-page .tc-port-totalbox{flex:1 1 auto;display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;}
+#trade-page .tc-port-totalbox{flex:1 1 0;}
 #trade-page .tc-port-totalbox .tp-watch-inlabel{white-space:nowrap;}
-#trade-page .tc-port-totalbox b{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;padding-bottom:6px;cursor:help;}
 
 /* ═══════════ ACCENT BORDERS & TITLES ═══════════
    Placed at end of sheet so these win the cascade.
@@ -1091,3 +1089,34 @@
 #oracle-page .omode-btn{flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted2);font-size:12px;font-weight:700;letter-spacing:.05em;cursor:pointer;transition:all .18s;}
 #oracle-page .omode-btn.active{border-color:var(--accent3);color:#fff;background:rgba(139,92,246,.16);}
 #oracle-page .omode-btn:active{transform:scale(.98);}
+
+/* ── Portfolios lifecycle + Funds (2026-07-11): read-only Total box, Save/
+   status chips, gated Remove, and the global Funds / Power block ── */
+#trade-page .tc-port-ro{width:100%;min-width:0;height:30px;box-sizing:border-box;display:flex;align-items:center;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12.5px;font-weight:700;padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help;}
+#trade-page .tc-port-save{height:24px;padding:0 12px;border-radius:8px;border:1px solid var(--accent2);background:transparent;color:var(--accent2);font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;flex:0 0 auto;transition:background 0.15s;}
+#tp-crypto-view .tc-port-save{border-color:#f7931a;color:#f7931a;}
+#tp-crypto-view .tc-port-save:hover{background:rgba(247,147,26,0.12);}
+#trade-page .tc-port-chip{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);flex:0 0 auto;}
+#trade-page .tc-port-chip.bought{border-color:#f7931a;color:#f7931a;}
+#trade-page .tc-port-chip.sold{border-color:var(--green);color:var(--green);}
+#trade-page .tc-port-msg{flex:1 1 100%;font-size:10.5px;color:var(--red);}
+#trade-page .tc-port-msg:empty{display:none;}
+#trade-page .tp-watch-remove:disabled{opacity:0.35;cursor:not-allowed;}
+#trade-page .tp-watch-remove:disabled:hover{border-color:var(--border);color:var(--muted);}
+#trade-page .tc-port-row .tp-watch-input:read-only{background:rgba(255,255,255,0.03);color:var(--muted);}
+#trade-page .tc-port-eqwrap{display:inline-flex;align-items:baseline;gap:7px;}
+#trade-page .tc-funds{border-top:1px solid var(--border);margin-top:14px;padding-top:12px;}
+#trade-page .tc-funds-label{font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+#trade-page .tc-funds-grid{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}
+#trade-page .tc-funds-grid .tp-watch-inbox{flex:1 1 120px;}
+#trade-page .tc-funds-btn{height:30px;padding:0 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:12px;font-weight:700;cursor:pointer;flex:1 1 90px;min-width:0;transition:background 0.15s;}
+#trade-page .tc-funds-btn.deposit{border-color:var(--green);color:var(--green);}
+#trade-page .tc-funds-btn.deposit:hover{background:rgba(34,197,94,0.12);}
+#trade-page .tc-funds-btn.withdraw{border-color:var(--red);color:var(--red);}
+#trade-page .tc-funds-btn.withdraw:hover{background:rgba(239,68,68,0.12);}
+#trade-page .tc-funds-info{margin-top:10px;font-size:12px;color:var(--muted);}
+#trade-page .tc-funds-info b{font-weight:700;}
+#trade-page .tc-funds-info .gain{color:var(--green);}
+#trade-page .tc-funds-info .loss{color:var(--red);}
+#trade-page .tc-funds-msg{margin-top:6px;font-size:10.5px;color:var(--red);}
+#trade-page .tc-funds-msg:empty{display:none;}
