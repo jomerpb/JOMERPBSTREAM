@@ -1133,42 +1133,50 @@ function convergence(layers,gameKey){
 
   var isEZ2=gameKey==='ez2';
   var needed=isEZ2?2:6;
-  // MAX-SCORE PICKER (all games): the old loop took ONE number per digit
-  // family (forced distinct digits), so the oracle's own combination could
-  // score BELOW a user combination that doubled up on the day's top digit
-  // (oracle d3+d7 = 84% vs user 21-12 both d3 = 88%, Jul 8 2026 5PM). The
-  // alignment metric sums each pick's digit-family score, so the provably
-  // optimal combination is simply the `needed` numbers with the highest
-  // family scores: fill from the strongest digit family first (family order
-  // = `sorted`; within-family order = bestNums: 30-draw freq + hot + date
-  // full-number bonuses). No other combination of `needed` distinct numbers
-  // can out-score the oracle under its own metric. altPicks = next `needed`
-  // numbers in the same ranking. Expect same-digit EZ2 pairs and 6-ball
-  // picks that consume a whole top family — that is now by design.
+  // HYBRID PICKER — Constrained Max Score. Merges the old Max Score and Full
+  // Spread modes into ONE combination: greedy fill in `ranked` order (the
+  // score-optimal order under the alignment metric — family order = `sorted`,
+  // within-family order = bestNums: 30-draw freq + hot + date full-number
+  // bonuses) with a per-digit-family cap. Lotto: cap 2 → guarantees at least
+  // 3 distinct digit families in 6 picks while still doubling up on the
+  // strongest signals. EZ2: cap 1 → the top two digit signals, best number
+  // each. By construction the hybrid's alignment score sits between the old
+  // Full Spread (cap 1 everywhere) and old Max Score (no cap); verified by
+  // simulation Jul 11 2026 (spread=100 <= hybrid=158 <= max=360 on an
+  // adversarial 6/58 case). altPicks = second capped pass over the leftovers,
+  // so the alternate set obeys the same spread guarantee.
   var ranked=[];
   for(var ds of sorted)
     for(var n of bestNums(ds.digit))
       ranked.push(n);
-  var picks=ranked.slice(0,needed);
+  var FAMILY_CAP=needed<=2?1:2;
+  function cappedFill(exclude){
+    var out=[],cnt={};
+    for(var n of ranked){
+      if(exclude.indexOf(n)>=0||out.indexOf(n)>=0) continue;
+      var d=digitOf(n);
+      if((cnt[d]||0)>=FAMILY_CAP) continue;
+      cnt[d]=(cnt[d]||0)+1;
+      out.push(n);
+      if(out.length===needed) break;
+    }
+    // Safety net: if the capped pool can't fill `needed` (never true for the
+    // real games — 9 families x cap >= needed), top up ignoring the cap.
+    if(out.length<needed)
+      for(var m of ranked){
+        if(exclude.indexOf(m)>=0||out.indexOf(m)>=0) continue;
+        out.push(m);
+        if(out.length===needed) break;
+      }
+    return out;
+  }
+  var picks=cappedFill([]);
+  var pickSet=picks.slice();
   picks.sort((a,b)=>a-b);
-
-  var altPicks=ranked.slice(needed,needed*2);
+  var altPicks=cappedFill(pickSet);
   altPicks.sort((a,b)=>a-b);
 
-  // FULL SPREAD picks — breadth instead of depth: one best number from each
-  // of the top `needed` DISTINCT digit families (within-family order = same
-  // bestNums ranking as above). Scores lower under the alignment metric than
-  // the max-score picks by construction, but samples the top `needed` digit
-  // signals instead of repeating the single strongest one. Deliberately NOT
-  // wired into the daily oracle log / lookup: spread picks are deterministic
-  // (date + history in → same numbers out), so any past date can be
-  // recomputed on demand if ever needed.
-  var spreadPicks=sorted.slice(0,needed).map(ds=>bestNums(ds.digit)[0]);
-  spreadPicks.sort((a,b)=>a-b);
-  var spreadAlt=sorted.slice(0,needed).map(ds=>bestNums(ds.digit)[1]).filter(n=>n!==undefined);
-  spreadAlt.sort((a,b)=>a-b);
-
-  return {sorted,digitScores,digitToNums,picks,altPicks,spreadPicks,spreadAlt,LABELS,needed};
+  return {sorted,digitScores,digitToNums,picks,altPicks,LABELS,needed};
 }
 
 // ══════════════════════════
@@ -1177,17 +1185,9 @@ function convergence(layers,gameKey){
 var currentGame='ez2';
 var currentDraw='9PM';
 var savedNums={};
-// Oracle pick mode: 'max' = all picks from the strongest digit family
-// (max-score picker), 'spread' = one number from each of the top families.
-// Persisted so the choice survives reloads. Affects the Expert display only —
-// the daily log keeps recording the max-score picks (not wired, by design).
-var oracleMode=(function(){ try{ var m=localStorage.getItem('oracleMode'); return m==='spread'?'spread':'max'; }catch(e){ return 'max'; } })();
-function setOracleMode(m,btn){
-  oracleMode=(m==='spread')?'spread':'max';
-  try{ localStorage.setItem('oracleMode',oracleMode); }catch(e){}
-  document.querySelectorAll('.omode-btn').forEach(function(b){ b.classList.remove('active'); });
-  if(btn) btn.classList.add('active');
-}
+// Oracle pick mode toggle removed Jul 11 2026: Max Score and Full Spread were
+// merged into the single hybrid capped picker above. The old persisted
+// localStorage key 'oracleMode' is simply ignored if present.
 
 function limitDigits(el){
   var v=String(el.value).replace(/[^0-9]/g,'');
@@ -1318,11 +1318,10 @@ function lcard(icon,name,nums,steps,extra='',isNew=false){
 function renderResults(layers,conv,energy,gameKey,drawHour){
   var game=GAMES[gameKey];
   var isEZ2=gameKey==='ez2';
-  // Mode-aware pick selection (display only — logging is untouched)
-  var isSpread=(typeof oracleMode!=='undefined')&&oracleMode==='spread'&&Array.isArray(conv.spreadPicks)&&conv.spreadPicks.length===conv.needed;
-  var showPicks=isSpread?conv.spreadPicks:conv.picks;
-  var showAlt=isSpread?(conv.spreadAlt||[]):conv.altPicks;
-  var modeHTML='<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: '+(isSpread?'🌐 Full Spread — top '+showPicks.length+' digit energies, one number each':'⚡ Max Score — all-in on today&#39;s strongest digit')+'</div>';
+  // Single hybrid pick set (Max Score constrained by a per-family spread cap)
+  var showPicks=conv.picks;
+  var showAlt=conv.altPicks;
+  var modeHTML='<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: ⚡🌐 Hybrid — strongest digit energies, max '+(conv.needed<=2?'one number':'two numbers')+' per digit family</div>';
 
   // Energy bars
   var elOrder=['Fire','Water','Wood','Metal','Earth'];
@@ -2155,15 +2154,4 @@ async function pcsoAIFetch(){
 (function initPersonalInputsCount(){
   var defaultBtn=document.querySelector('#oracle-page .gbtn.active');
   if(defaultBtn) setGame(currentGame,defaultBtn);
-})();
-
-// Sync the mode toggle buttons with the persisted oracleMode on initial load
-(function initOracleModeButtons(){
-  try{
-    var bs=document.querySelectorAll('.omode-btn');
-    if(bs.length===2){
-      bs[0].classList.toggle('active',oracleMode!=='spread');
-      bs[1].classList.toggle('active',oracleMode==='spread');
-    }
-  }catch(e){}
 })();
