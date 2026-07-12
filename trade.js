@@ -3807,9 +3807,10 @@ function tcPortNumbers(w, side, sh, en, cur){
     var out = {sellNow:null, sellNowFees:null, gl:null, glPct:null};
     if(side === 'sell'){
       // Post-buy the sale executes at the LIVE price (user 2026-07-12). The
-      // sell-side Total covers the QTY in the shares field (partial sells,
-      // user 2026-07-12) — with the whole position entered it equals the
-      // if-sold-now number exactly, as before.
+      // sell-side Total covers the QTY typed in the shares field (partial
+      // sells, user 2026-07-12) — with the whole position entered it equals
+      // the full liquidation value (the old on-card "If sold now", removed
+      // from display 2026-07-12; G/L still uses the same number internally).
       var qty = (sh > 0) ? sh : (w.buyShares || 0);
       var fs = (cur!=null) ? tcTradeFees(qty*cur, 'sell') : null;
       out.total = fs ? fs.total : null;
@@ -3833,6 +3834,30 @@ function tcPortNumbers(w, side, sh, en, cur){
   return {total:r.total, feeTitle:tcPortFeeTitle(r), gl:r.gl, glPct:r.glPct,
           sellNow:r.sellNow, sellNowFees:r.sellNowFees};
 }
+// Buy-timestamp pretty-printer for the row DETAILS panel — device locale,
+// e.g. "Jul 12, 2026, 1:38 PM". Rows bought before buyAt existed show a dash.
+function tcFmtWhen(ts){
+  if(!ts || !isFinite(ts)) return '\u2014';
+  try {
+    var d = new Date(ts);
+    return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})
+         + ', ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  } catch(e){ return '\u2014'; }
+}
+// ── DETAILS toggle on portfolio rows — same caret pattern as the reasoning
+// card's MORE DETAILS (tpToggleMoreDetails), but per-row via uid, with the
+// open state remembered in-session so the 5-min live-price rebuild doesn't
+// snap an open panel shut (user 2026-07-12). ──
+var tcPortDetOpen = {};
+function tcPortToggleDetails(uid){
+  var box = document.getElementById('tc-port-det-'+uid);
+  var tag = document.getElementById('tc-port-dettag-'+uid);
+  if(!box) return;
+  var open = box.style.display === 'none';   // collapsed → open it
+  box.style.display = open ? '' : 'none';
+  if(tag) tag.textContent = open ? 'DETAILS \u25be' : 'DETAILS \u25b8';
+  tcPortDetOpen[uid] = open;
+}
 function tcPortMsg(uid, txt){
   var m = document.getElementById('tc-port-msg-'+uid);
   if(m) m.textContent = txt || '';
@@ -3841,7 +3866,8 @@ function tcPortMsg(uid, txt){
 // (user 2026-07-11). Buy: validates shares/price, blocks when Power can't
 // cover total incl. tax, then debits Power, snapshots the cost basis and
 // locks the position ('bought'). Sell: allowed only on a bought position,
-// for the qty in the shares field — empty means the whole position. Full
+// for the qty typed in the shares field — the qty is REQUIRED; an empty
+// field is an error, never a full liquidation (user 2026-07-12). Full
 // qty credits Power with net proceeds (gross \u2212 sell fees \u2212 STT — realized
 // G/L included by construction), freezes the row ('sold') and unlocks
 // Remove; a partial qty (user 2026-07-12) credits the slice's proceeds,
@@ -3886,13 +3912,15 @@ function tcPortSave(uid){
     if(w.status !== 'bought'){ tcPortMsg(uid, 'Nothing to sell \u2014 confirm a Buy first.'); return; }
     // Sales execute at the LIVE quote — the locked price column is the live
     // price, not an order ticket (user 2026-07-12). Qty comes from the
-    // shares field (editable in Sell mode); empty = whole position. A qty
-    // below the held amount is a PARTIAL sell (user 2026-07-12): proceeds
-    // go to Power, the sold slice's prorated cost basis leaves the row, and
-    // the row stays 'bought' with the remainder.
+    // shares field (editable in Sell mode) and MUST be typed — an empty qty
+    // is an ERROR, never "sell everything" (user 2026-07-12); the field
+    // starts blank in Sell mode so a background rebuild can never re-arm a
+    // full-position sale. A qty below the held amount is a PARTIAL sell
+    // (user 2026-07-12): proceeds go to Power, the sold slice's prorated
+    // cost basis leaves the row, and the row stays 'bought' with the rest.
     var held = w.buyShares || 0;
-    var qty = (sh > 0) ? sh : held;
-    if(!(qty > 0)){ tcPortMsg(uid, 'Enter how many shares to sell.'); return; }
+    if(!(sh > 0)){ tcPortMsg(uid, 'Enter how many to sell \u2014 you hold '+held+'.'); return; }
+    var qty = sh;
     if(qty > held + 1e-9){ tcPortMsg(uid, 'You only hold '+held+' \u2014 enter '+held+' or less.'); return; }
     var q = tcGetQuote(w.sym);
     if(!q || q.price == null){ tcPortMsg(uid, 'No live price to sell at \u2014 tap Fetch Live Data first.'); return; }
@@ -3918,7 +3946,7 @@ function tcPortSave(uid){
       // Disarm after a partial (user 2026-07-12): the row snaps back to the
       // Buy display so a stray extra fire is a harmless "Already bought"
       // instead of a sale of the remainder. Selling more = tap Sell again
-      // (the qty prefills with what's left).
+      // (the qty field starts blank — type how many of the rest to sell).
       w.side = 'buy';
       tcSaveWatch(list);
       tcRenderWatchlist();
@@ -3965,11 +3993,14 @@ function tcPortRecalc(uid){
   var side = sideEl ? sideEl.value : 'buy';
   // The focus guard often skips the rebuild on radio flips, so the shares
   // lock is mirrored here: bought rows unlock shares in Sell mode (partial
-  // sells, user 2026-07-12) and snap back to the held amount on Buy.
+  // sells, user 2026-07-12) and snap back to the held amount on Buy. The
+  // sell qty itself is never written here — it starts blank (the placeholder
+  // shows what's held) and must be typed (user 2026-07-12).
   if(w.status === 'bought'){
     var lockSh = side !== 'sell';
     shEl.readOnly = lockSh;
     if(lockSh && w.buyShares != null) shEl.value = w.buyShares;
+    shEl.placeholder = lockSh ? '0.00' : 'of '+(w.buyShares!=null?w.buyShares:0)+' held';
   }
   var sh = parseFloat(shEl.value), en = parseFloat(enEl.value);
   var n = tcPortNumbers(w, side, isNaN(sh)?null:sh, isNaN(en)?null:en, q?q.price:null);
@@ -3979,14 +4010,6 @@ function tcPortRecalc(uid){
   if(glEl){
     glEl.textContent = tcPortGlTxt(n);
     glEl.className = 'tc-port-gl'+(n.gl==null ? '' : (n.gl>=0 ? ' gain' : ' loss'));
-  }
-  // "If sold now" shows in Sell mode only (user 2026-07-11).
-  var wrapEl = document.getElementById('tc-port-eqwrap-'+uid);
-  if(wrapEl) wrapEl.style.display = side==='sell' ? 'inline-flex' : 'none';
-  var valEl = document.getElementById('tc-port-eqval-'+uid);
-  if(valEl){
-    valEl.textContent = n.sellNow==null ? '\u2014' : tcFmtPHP(n.sellNow);
-    valEl.title = n.sellNowFees==null ? '' : 'Net of sell-side fees + STT: '+tcFmtPHP(n.sellNowFees);
   }
 }
 // Autosave for the row FIELDS (shares/price/side/alerts) — same pattern as
@@ -4004,7 +4027,15 @@ function tcSetPortField(uid, field, val){
   // shares value typed in Sell mode is the sell qty for tcPortSave — kept
   // in the DOM on purpose, never written to the row (user 2026-07-12).
   if(w.status === 'bought' && field !== 'side') return;
-  if(field==='side'){ w.side = val==='sell' ? 'sell' : 'buy'; }
+  if(field==='side'){
+    w.side = val==='sell' ? 'sell' : 'buy';
+    // Flipping side on a bought row clears the transient sell ticket — the
+    // qty must be typed fresh every time; nothing prefills (user 2026-07-12).
+    if(w.status === 'bought'){
+      var flipEl = document.getElementById('tc-port-shares-'+uid);
+      if(flipEl){ flipEl.value=''; flipEl.placeholder = w.side==='sell' ? ('of '+(w.buyShares!=null?w.buyShares:0)+' held') : '0.00'; }
+    }
+  }
   else { var num = parseFloat(val); w[field] = isNaN(num) ? null : num; }
   tcSaveWatch(list);
   tcRenderWatchlist();   // focus-guard below keeps mid-typing rows intact
@@ -4021,10 +4052,13 @@ function tcSetPortField(uid, field, val){
 // that it tracks the live price and the sale executes at it. High/Low stay
 // read-only at the model's recommended levels.
 // Lifecycle (user 2026-07-11): draft → Save on Buy → 'bought' (price locked,
-// Remove blocked, Power debited; shares re-open in Sell mode as the sell
-// qty — a partial qty keeps the row 'bought' with the remainder, user
-// 2026-07-12) → Save on Sell of the full qty → 'sold' (row frozen, Power
-// credited, Remove unlocked).
+// Remove blocked, Power debited; shares re-open BLANK in Sell mode as the
+// sell qty, which must be typed — a partial qty keeps the row 'bought' with
+// the remainder, user 2026-07-12) → Save on Sell of the full qty → 'sold'
+// (row frozen, Power credited, Remove unlocked). Bought & sold rows carry a
+// DETAILS caret under Gain/Loss with the booked buy breakdown; the
+// Watchlist High/Low block sits below it as its own section
+// (user 2026-07-12).
 function tcRenderWatchlist(){
   tcRenderFunds();   // Funds block lives OUTSIDE the rebuilt list — always safe to refresh
   var listEl = document.getElementById('tc-watch-list');
@@ -4048,7 +4082,11 @@ function tcRenderWatchlist(){
     var lVal = w.lowPrice == null ? '' : w.lowPrice;
     var status = w.status === 'bought' ? 'bought' : w.status === 'sold' ? 'sold' : 'draft';
     var side = status==='sold' ? 'sell' : (w.side==='sell' ? 'sell' : 'buy');
-    var shVal = status!=='draft' ? (w.buyShares==null?'':w.buyShares) : (w.shares==null ? '' : w.shares);
+    // Sell-armed rows render the qty BLANK — the sell ticket must be typed
+    // fresh; the placeholder shows what's held (user 2026-07-12).
+    var sellArm = status==='bought' && side==='sell';
+    var shVal = sellArm ? '' : (status!=='draft' ? (w.buyShares==null?'':w.buyShares) : (w.shares==null ? '' : w.shares));
+    var shPh = sellArm ? ('of '+(w.buyShares!=null?w.buyShares:0)+' held') : '0.00';
     // Price column: draft = user's editable entry (pre-filled at add time);
     // bought = LIVE price (locked, sale executes at it); sold = booked price.
     var enVal;
@@ -4058,12 +4096,13 @@ function tcRenderWatchlist(){
     var n = tcPortNumbers(w, side, w.shares!=null?w.shares:null, w.entry!=null?w.entry:null, last);
     var glCls = n.gl==null ? '' : (n.gl>=0 ? ' gain' : ' loss');
     // Shares: editable on drafts AND on bought rows in Sell mode — that's
-    // the sell qty, enabling partial sells (user 2026-07-12). Locked on
-    // bought+Buy and on sold rows.
+    // the sell qty (starts blank, must be typed), enabling partial sells
+    // (user 2026-07-12). Locked on bought+Buy and on sold rows, where the
+    // label flips to "# Sold" so a closed row can't read as a holding
+    // (user 2026-07-12).
     var shLock = status==='sold' || (status==='bought' && side!=='sell');
     var enLock = status!=='draft';   // price locks at buy — live-driven from then on
     var radioLock = status==='sold' ? ' disabled' : '';
-    var showEq = side==='sell' && status!=='sold';   // "If sold now" — Sell mode only
     var chip = status==='bought' ? '<span class="tc-port-chip bought">Bought</span>'
              : status==='sold'   ? '<span class="tc-port-chip sold">Sold</span>' : '';
     var saveBtn = status==='sold' ? ''
@@ -4072,6 +4111,24 @@ function tcRenderWatchlist(){
       ? ' disabled title="Sell first \u2014 bought positions can\u2019t be removed"'
       : ' title="Remove"';
     var uid = w.uid;
+    // Transaction breakdown DETAILS — bought & sold rows only; a draft has
+    // no transaction yet. Fees are derived from the booked numbers
+    // (buyTotal − shares×price) so a post-partial remainder stays exactly
+    // consistent with its prorated Amount paid (user 2026-07-12).
+    var det = '';
+    if(status!=='draft'){
+      var grossD = (w.buyShares||0)*(w.buyPrice||0);
+      var feesD  = (w.buyTotal!=null && grossD>0) ? (w.buyTotal-grossD) : null;
+      var pctD   = (feesD!=null && grossD>0) ? (feesD/grossD*100) : null;
+      var detOpen = !!tcPortDetOpen[uid];
+      det = '<div class="tc-port-detrow"><span class="tc-port-dettag" id="tc-port-dettag-'+uid+'" onclick="tcPortToggleDetails(\''+uid+'\')">DETAILS '+(detOpen?'\u25be':'\u25b8')+'</span></div>'+
+        '<div class="tc-port-det" id="tc-port-det-'+uid+'" style="display:'+(detOpen?'':'none')+'">'+
+          '<div class="tc-port-detline"><span>Bought on</span><b>'+tcFmtWhen(w.buyAt)+'</b></div>'+
+          '<div class="tc-port-detline"><span>Bought at</span><b>'+(w.buyPrice==null?'\u2014':tcFmtPHP(w.buyPrice)+' / coin')+'</b></div>'+
+          '<div class="tc-port-detline"><span>Fees &amp; tax</span><b>'+(feesD==null?'\u2014':tcFmtPHPCash(feesD)+' ('+pctD.toFixed(2)+'% of gross)')+'</b></div>'+
+          '<div class="tc-port-detline"><span>Amount paid</span><b>'+(w.buyTotal==null?'\u2014':tcFmtPHPCash(w.buyTotal))+'</b></div>'+
+        '</div>';
+    }
     return '<div class="tp-watch-row tc-port-row">'+
       '<div class="tc-port-head">'+
         '<div class="tp-watch-name" onclick="tcSelectCoin(\''+w.sym+'\')">'+w.sym+' \u00b7 <small>'+name+'</small></div>'+
@@ -4083,8 +4140,8 @@ function tcRenderWatchlist(){
       '</div>'+
       '<div class="tc-port-msg" id="tc-port-msg-'+uid+'"></div>'+
       '<div class="tc-port-grid tc-port-calcline">'+
-        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel"># Shares</span>'+
-          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-shares-'+uid+'" placeholder="0.00" value="'+shVal+'"'+(shLock?' readonly':'')+' oninput="tcPortRecalc(\''+uid+'\')" onchange="tcSetPortField(\''+uid+'\', \'shares\', this.value)"></div>'+
+        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">'+(status==='sold'?'# Sold':'# Shares')+'</span>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-shares-'+uid+'" placeholder="'+shPh+'" value="'+shVal+'"'+(shLock?' readonly':'')+' oninput="tcPortRecalc(\''+uid+'\')" onchange="tcSetPortField(\''+uid+'\', \'shares\', this.value)"></div>'+
         '<span class="tc-port-op">\u00d7</span>'+
         '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Price \u20b1/coin</span>'+
           '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input" id="tc-port-entry-'+uid+'" placeholder="\u20b1 buy price" value="'+enVal+'"'+(enLock?' readonly':'')+' oninput="tcPortRecalc(\''+uid+'\')" onchange="tcSetPortField(\''+uid+'\', \'entry\', this.value)"></div>'+
@@ -4095,12 +4152,8 @@ function tcRenderWatchlist(){
       '<div class="tc-port-eqline">'+
         '<span class="tc-port-eqlabel">'+(status==='sold'?'Realized gain / loss':'Gain / Loss')+'</span>'+
         '<b class="tc-port-gl'+glCls+'" id="tc-port-gl-'+uid+'">'+tcPortGlTxt(n)+'</b>'+
-        '<span class="tc-port-eqwrap" id="tc-port-eqwrap-'+uid+'" style="display:'+(showEq?'inline-flex':'none')+'">'+
-          '<span class="tc-port-eqsign">\u00b7</span>'+
-          '<span class="tc-port-eqlabel">If sold now</span>'+
-          '<b id="tc-port-eqval-'+uid+'" title="'+(n.sellNowFees==null?'':'Net of sell-side fees + STT: '+tcFmtPHP(n.sellNowFees))+'">'+(n.sellNow==null?'\u2014':tcFmtPHP(n.sellNow))+'</b>'+
-        '</span>'+
       '</div>'+
+      det +
       '<div class="tc-port-sublabel">Watchlist</div>'+
       '<div class="tc-port-grid">'+
         '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+

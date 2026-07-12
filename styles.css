@@ -1104,7 +1104,11 @@
 #trade-page .tp-watch-remove:disabled{opacity:0.35;cursor:not-allowed;}
 #trade-page .tp-watch-remove:disabled:hover{border-color:var(--border);color:var(--muted);}
 #trade-page .tc-port-row .tp-watch-input:read-only{background:rgba(255,255,255,0.03);color:var(--muted);}
-#trade-page .tc-port-eqwrap{display:inline-flex;align-items:baseline;gap:7px;}
+#trade-page .tc-port-detrow{flex:1 1 100%;margin-top:9px;}
+#trade-page .tc-port-dettag{display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;padding:2px 8px;border-radius:10px;background:rgba(148,163,184,0.12);color:var(--muted);cursor:pointer;user-select:none;}
+#trade-page .tc-port-det{flex:1 1 100%;display:flex;flex-direction:column;gap:5px;margin-top:7px;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:rgba(148,163,184,0.05);}
+#trade-page .tc-port-detline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+#trade-page .tc-port-detline b{font-size:12.5px;letter-spacing:0;text-transform:none;color:var(--text);font-weight:600;text-align:right;}
 #trade-page .tc-funds{border-top:1px solid var(--border);margin-top:14px;padding-top:12px;}
 #trade-page .tc-funds-label{font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
 #trade-page .tc-funds-grid{display:flex;gap:8px;align-items:flex-end;}
