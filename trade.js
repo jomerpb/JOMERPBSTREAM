@@ -3873,6 +3873,7 @@ function tcPortSave(uid){
     w.buyShares=sh; w.buyPrice=en; w.buyTotal=fb.total; w.buyAt=Date.now();
     tcSaveWatch(list);
     tcRenderWatchlist();
+    tcPortRecalc(uid);   // row bits refresh even if the focus guard skipped the rebuild
   } else {
     if(w.status !== 'bought'){ tcPortMsg(uid, 'Nothing to sell \u2014 confirm a Buy first.'); return; }
     // Sales execute at the LIVE quote — the locked price column is the live
@@ -3898,6 +3899,7 @@ function tcPortSave(uid){
       w.realizedGl=+(fs2.total - (w.buyTotal||0)).toFixed(2); w.sellAt=Date.now();
       tcSaveWatch(list);
       tcRenderWatchlist();
+      tcPortRecalc(uid);   // unlocks ✕ in place when the rebuild is skipped
     } else {
       var slice = +((w.buyTotal||0) * qty / held).toFixed(2);
       var sliceGl = +(fs2.total - slice).toFixed(2);
@@ -3906,6 +3908,12 @@ function tcPortSave(uid){
       w.buyTotal = +((w.buyTotal||0) - slice).toFixed(2);
       tcSaveWatch(list);
       tcRenderWatchlist();
+      // If the focus guard skipped the rebuild, the qty field still shows
+      // the amount just sold — snap it to the remaining shares, then let
+      // recalc refresh totals and the (still locked) ✕ in place.
+      var shEl2 = document.getElementById('tc-port-shares-'+uid);
+      if(shEl2) shEl2.value = w.buyShares;
+      tcPortRecalc(uid);
       tcPortMsg(uid, 'Sold '+qty+' of '+held+' at the live price \u2014 '+tcFmtPHPCash(fs2.total)+' added to Power ('+(sliceGl<0?'\u2212':'+')+tcFmtPHPCash(Math.abs(sliceGl))+' realized). '+w.buyShares+' left in the position.');
     }
   }
@@ -3922,6 +3930,16 @@ function tcPortRecalc(uid){
   var q = w.sym ? tcGetQuote(w.sym) : null;
   var curEl = document.getElementById('tc-port-cur-'+uid);
   if(curEl) curEl.textContent = q ? tcFmtPHP(q.price) : '\u2014';
+  // The focus guard can skip the rebuild (radios and the qty field are
+  // INPUTs and often keep focus on mobile taps), so the Remove button is
+  // mirrored here too: locked while a position is OPEN ('bought' — incl.
+  // after a partial sell), clickable again on drafts and sold rows
+  // (user 2026-07-12).
+  var rmEl = document.getElementById('tc-port-rm-'+uid);
+  if(rmEl){
+    rmEl.disabled = w.status === 'bought';
+    rmEl.title = w.status === 'bought' ? 'Sell first \u2014 bought positions can\u2019t be removed' : 'Remove';
+  }
   if(w.status === 'sold') return;   // frozen row — the renderer owns its numbers
   if(w.status === 'bought' && q && q.price != null){
     // Locked price column tracks the live quote (user 2026-07-12).
@@ -4045,7 +4063,7 @@ function tcRenderWatchlist(){
         '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+uid+'" value="buy"'+(side!=='sell'?' checked':'')+radioLock+' onchange="tcSetPortField(\''+uid+'\', \'side\', this.value)"><span>Buy</span></label>'+
         '<label class="tc-port-side"><input type="radio" name="tc-port-side-'+uid+'" value="sell"'+(side==='sell'?' checked':'')+radioLock+' onchange="tcSetPortField(\''+uid+'\', \'side\', this.value)"><span>Sell</span></label>'+
         chip + saveBtn +
-        '<button class="tp-watch-remove" onclick="tcRemoveWatch(\''+uid+'\')"'+rmAttr+'>\u2715</button>'+
+        '<button class="tp-watch-remove" id="tc-port-rm-'+uid+'" onclick="tcRemoveWatch(\''+uid+'\')"'+rmAttr+'>\u2715</button>'+
       '</div>'+
       '<div class="tc-port-msg" id="tc-port-msg-'+uid+'"></div>'+
       '<div class="tc-port-grid tc-port-calcline">'+
