@@ -3844,7 +3844,7 @@ function tcFmtWhen(ts){
          + ', ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
   } catch(e){ return '\u2014'; }
 }
-// ── DETAILS toggle on portfolio rows — same caret pattern as the reasoning
+// ── TRANSACTION DETAILS toggle on portfolio rows — same caret pattern as the reasoning
 // card's MORE DETAILS (tpToggleMoreDetails), but per-row via uid, with the
 // open state remembered in-session so the 5-min live-price rebuild doesn't
 // snap an open panel shut (user 2026-07-12). ──
@@ -3855,7 +3855,7 @@ function tcPortToggleDetails(uid){
   if(!box) return;
   var open = box.style.display === 'none';   // collapsed → open it
   box.style.display = open ? '' : 'none';
-  if(tag) tag.textContent = open ? 'DETAILS \u25be' : 'DETAILS \u25b8';
+  if(tag) tag.textContent = open ? 'TRANSACTION DETAILS \u25be' : 'TRANSACTION DETAILS \u25b8';
   tcPortDetOpen[uid] = open;
 }
 function tcPortMsg(uid, txt){
@@ -4056,9 +4056,9 @@ function tcSetPortField(uid, field, val){
 // sell qty, which must be typed — a partial qty keeps the row 'bought' with
 // the remainder, user 2026-07-12) → Save on Sell of the full qty → 'sold'
 // (row frozen, Power credited, Remove unlocked). Bought & sold rows carry a
-// DETAILS caret under Gain/Loss with the booked buy breakdown; the
-// Watchlist High/Low block sits below it as its own section
-// (user 2026-07-12).
+// TRANSACTION DETAILS caret under Gain/Loss with the booked buy breakdown
+// and the Watchlist High/Low block inside the panel; drafts keep the
+// Watchlist standalone (user 2026-07-12).
 function tcRenderWatchlist(){
   tcRenderFunds();   // Funds block lives OUTSIDE the rebuilt list — always safe to refresh
   var listEl = document.getElementById('tc-watch-list');
@@ -4111,22 +4111,33 @@ function tcRenderWatchlist(){
       ? ' disabled title="Sell first \u2014 bought positions can\u2019t be removed"'
       : ' title="Remove"';
     var uid = w.uid;
-    // Transaction breakdown DETAILS — bought & sold rows only; a draft has
-    // no transaction yet. Fees are derived from the booked numbers
+    // TRANSACTION DETAILS — bought & sold rows only; a draft has no
+    // transaction yet. Fees are derived from the booked numbers
     // (buyTotal − shares×price) so a post-partial remainder stays exactly
-    // consistent with its prorated Amount paid (user 2026-07-12).
+    // consistent with its prorated Amount paid (user 2026-07-12). The
+    // Watchlist High/Low block lives INSIDE the panel; drafts (no panel)
+    // keep it standalone so the alert levels never disappear
+    // (user 2026-07-12).
+    var wl = '<div class="tc-port-sublabel">Watchlist</div>'+
+      '<div class="tc-port-grid">'+
+        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="\u20b1 high" value="'+hVal+'" readonly></div>'+
+        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Low</span>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitLow?' hit-low':'')+'" placeholder="\u20b1 low" value="'+lVal+'" readonly></div>'+
+      '</div>';
     var det = '';
     if(status!=='draft'){
       var grossD = (w.buyShares||0)*(w.buyPrice||0);
       var feesD  = (w.buyTotal!=null && grossD>0) ? (w.buyTotal-grossD) : null;
       var pctD   = (feesD!=null && grossD>0) ? (feesD/grossD*100) : null;
       var detOpen = !!tcPortDetOpen[uid];
-      det = '<div class="tc-port-detrow"><span class="tc-port-dettag" id="tc-port-dettag-'+uid+'" onclick="tcPortToggleDetails(\''+uid+'\')">DETAILS '+(detOpen?'\u25be':'\u25b8')+'</span></div>'+
+      det = '<div class="tc-port-detrow"><span class="tc-port-dettag" id="tc-port-dettag-'+uid+'" onclick="tcPortToggleDetails(\''+uid+'\')">TRANSACTION DETAILS '+(detOpen?'\u25be':'\u25b8')+'</span></div>'+
         '<div class="tc-port-det" id="tc-port-det-'+uid+'" style="display:'+(detOpen?'':'none')+'">'+
           '<div class="tc-port-detline"><span>Bought on</span><b>'+tcFmtWhen(w.buyAt)+'</b></div>'+
           '<div class="tc-port-detline"><span>Bought at</span><b>'+(w.buyPrice==null?'\u2014':tcFmtPHP(w.buyPrice)+' / coin')+'</b></div>'+
           '<div class="tc-port-detline"><span>Fees &amp; tax</span><b>'+(feesD==null?'\u2014':tcFmtPHPCash(feesD)+' ('+pctD.toFixed(2)+'% of gross)')+'</b></div>'+
           '<div class="tc-port-detline"><span>Amount paid</span><b>'+(w.buyTotal==null?'\u2014':tcFmtPHPCash(w.buyTotal))+'</b></div>'+
+          wl +
         '</div>';
     }
     return '<div class="tp-watch-row tc-port-row">'+
@@ -4154,13 +4165,7 @@ function tcRenderWatchlist(){
         '<b class="tc-port-gl'+glCls+'" id="tc-port-gl-'+uid+'">'+tcPortGlTxt(n)+'</b>'+
       '</div>'+
       det +
-      '<div class="tc-port-sublabel">Watchlist</div>'+
-      '<div class="tc-port-grid">'+
-        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">High</span>'+
-          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitHigh?' hit-high':'')+'" placeholder="\u20b1 high" value="'+hVal+'" readonly></div>'+
-        '<div class="tp-watch-inbox"><span class="tp-watch-inlabel">Low</span>'+
-          '<input type="number" step="any" min="0" inputmode="decimal" class="tp-watch-input'+(hitLow?' hit-low':'')+'" placeholder="\u20b1 low" value="'+lVal+'" readonly></div>'+
-      '</div>'+
+      (status==='draft' ? wl : '') +
     '</div>';
   }).join('');
 }
