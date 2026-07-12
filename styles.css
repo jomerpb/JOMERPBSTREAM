@@ -1110,6 +1110,15 @@
 #trade-page .tc-port-detline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
 #trade-page .tc-port-detline b{font-size:12.5px;letter-spacing:0;text-transform:none;color:var(--text);font-weight:600;text-align:right;}
 #trade-page .tc-port-det .tc-port-sublabel{margin-top:4px;}
+/* ── SELL HISTORY — nested/indented one level under TRANSACTION DETAILS
+   (user 2026-07-12): a left border + margin gives the "still inside the
+   panel, but one step down" cue; entries render oldest-first / latest-last. */
+#trade-page .tc-port-histrow{flex:1 1 100%;margin-top:8px;margin-left:11px;}
+#trade-page .tc-port-histtag{display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:1px;padding:2px 7px;border-radius:9px;background:rgba(148,163,184,0.08);color:var(--muted);cursor:pointer;user-select:none;}
+#trade-page .tc-port-hist{flex:1 1 100%;display:flex;flex-direction:column;gap:4px;margin-top:6px;margin-left:11px;padding:8px 10px;border-left:2px solid var(--border);}
+#trade-page .tc-port-histhead{display:flex;justify-content:space-between;gap:8px;font-size:8.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);opacity:0.7;}
+#trade-page .tc-port-histline{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text);}
+#trade-page .tc-port-histline b{font-weight:600;}
 #trade-page .tc-funds{border-top:1px solid rgba(247,147,26,0.35);margin-top:14px;padding-top:12px;}   /* divider matches the crypto card border (user 2026-07-12) */
 #trade-page .tc-funds-label{font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
 #trade-page .tc-funds-grid{display:flex;gap:8px;align-items:flex-end;}

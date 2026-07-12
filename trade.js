@@ -3858,6 +3858,18 @@ function tcPortToggleDetails(uid){
   if(tag) tag.textContent = open ? 'TRANSACTION DETAILS \u25be' : 'TRANSACTION DETAILS \u25b8';
   tcPortDetOpen[uid] = open;
 }
+// ── SELL HISTORY toggle — nested one level under TRANSACTION DETAILS, same
+// caret pattern, own in-session open state (user 2026-07-12). ──
+var tcPortHistOpen = {};
+function tcPortToggleHist(uid){
+  var box = document.getElementById('tc-port-hist-'+uid);
+  var tag = document.getElementById('tc-port-histtag-'+uid);
+  if(!box) return;
+  var open = box.style.display === 'none';   // collapsed → open it
+  box.style.display = open ? '' : 'none';
+  if(tag) tag.textContent = open ? 'SELL HISTORY \u25be' : 'SELL HISTORY \u25b8';
+  tcPortHistOpen[uid] = open;
+}
 function tcPortMsg(uid, txt){
   var m = document.getElementById('tc-port-msg-'+uid);
   if(m) m.textContent = txt || '';
@@ -3931,6 +3943,11 @@ function tcPortSave(uid){
     var funds2 = tcGetFunds();
     funds2.power = +(funds2.power + fs2.total).toFixed(2);
     tcSaveFunds(funds2);
+    // SELL HISTORY — every sell that books here (partial OR the final close)
+    // gets a permanent, append-only entry; never rewritten or removed
+    // (user 2026-07-12).
+    if(!Array.isArray(w.sellHistory)) w.sellHistory = [];
+    w.sellHistory.push({shares: qty, price: q.price, total: fs2.total, at: Date.now()});
     if(qty >= held - 1e-9){
       w.status='sold'; w.side='sell'; w.entry=q.price;
       w.sellPrice=q.price; w.sellProceeds=fs2.total;
@@ -4046,7 +4063,10 @@ function tcSetPortField(uid, field, val){
 // Entry schema: {uid, sym, highPrice, lowPrice, side:'buy'|'sell', shares,
 //   entry, status?:'bought'|'sold', buyShares?, buyPrice?, buyTotal?, buyAt?,
 //   origShares?, origTotal? (frozen original-buy receipt for Transaction Details),
-//   sellPrice?, sellProceeds?, realizedGl?, sellAt?}.
+//   sellPrice?, sellProceeds?, realizedGl?, sellAt?,
+//   sellHistory? (append-only SELL HISTORY log — one {shares, price, total, at}
+//   entry per booked sell, partial or the final close; never rewritten or
+//   pruned, oldest first)}.
 // Rows are uid-keyed so the SAME coin can be held as multiple independent
 // positions (user 2026-07-12); legacy rows get a uid lazily in tcGetWatch.
 // No status key = draft: fully editable and removable. Price pre-fills at
@@ -4138,6 +4158,23 @@ function tcRenderWatchlist(){
       var feesD  = (oTotD!=null && grossD>0) ? (oTotD-grossD) : null;
       var pctD   = (feesD!=null && grossD>0) ? (feesD/grossD*100) : null;
       var detOpen = !!tcPortDetOpen[uid];
+      // SELL HISTORY — indented, nested collapsible under TRANSACTION DETAILS,
+      // right below the Watchlist High/Low block. Only appears once at least
+      // one sell (partial or the final close) has booked; entries render in
+      // array order, which is push order, so latest is always at the bottom
+      // (user 2026-07-12).
+      var histOpen = !!tcPortHistOpen[uid];
+      var histBlock = '';
+      if(w.sellHistory && w.sellHistory.length){
+        var histRows = w.sellHistory.map(function(s){
+          return '<div class="tc-port-histline"><span>'+s.shares+'</span><span>'+tcFmtPHP(s.price)+'</span><b>'+tcFmtPHPCash(s.total)+'</b></div>';
+        }).join('');
+        histBlock = '<div class="tc-port-histrow"><span class="tc-port-histtag" id="tc-port-histtag-'+uid+'" onclick="tcPortToggleHist(\''+uid+'\')">SELL HISTORY '+(histOpen?'\u25be':'\u25b8')+'</span></div>'+
+          '<div class="tc-port-hist" id="tc-port-hist-'+uid+'" style="display:'+(histOpen?'':'none')+'">'+
+            '<div class="tc-port-histhead"><span>Shares</span><span>Price</span><span>Total</span></div>'+
+            histRows +
+          '</div>';
+      }
       det = '<div class="tc-port-detrow"><span class="tc-port-dettag" id="tc-port-dettag-'+uid+'" onclick="tcPortToggleDetails(\''+uid+'\')">TRANSACTION DETAILS '+(detOpen?'\u25be':'\u25b8')+'</span></div>'+
         '<div class="tc-port-det" id="tc-port-det-'+uid+'" style="display:'+(detOpen?'':'none')+'">'+
           '<div class="tc-port-detline"><span>Bought on</span><b>'+tcFmtWhen(w.buyAt)+'</b></div>'+
@@ -4145,7 +4182,7 @@ function tcRenderWatchlist(){
           '<div class="tc-port-detline"><span>Bought at</span><b>'+(w.buyPrice==null?'\u2014':tcFmtPHP(w.buyPrice)+' / coin')+'</b></div>'+
           '<div class="tc-port-detline"><span>Fees &amp; tax</span><b>'+(feesD==null?'\u2014':tcFmtPHPCash(feesD)+' ('+pctD.toFixed(2)+'% of gross)')+'</b></div>'+
           '<div class="tc-port-detline"><span>Amount paid</span><b>'+(oTotD==null?'\u2014':tcFmtPHPCash(oTotD))+'</b></div>'+
-          wl +
+          wl + histBlock +
         '</div>';
     }
     return '<div class="tp-watch-row tc-port-row">'+
