@@ -3905,6 +3905,7 @@ function tcPortSave(uid){
     tcSaveFunds(funds);
     w.status='bought'; w.side='buy'; w.shares=sh; w.entry=en;
     w.buyShares=sh; w.buyPrice=en; w.buyTotal=fb.total; w.buyAt=Date.now();
+    w.origShares=sh; w.origTotal=fb.total;   // frozen Transaction Details receipt (user 2026-07-12)
     tcSaveWatch(list);
     tcRenderWatchlist();
     tcPortRecalc(uid);   // row bits refresh even if the focus guard skipped the rebuild
@@ -4044,6 +4045,7 @@ function tcSetPortField(uid, field, val){
 // ── Portfolios renderer (function name kept — 6 existing call sites) ──
 // Entry schema: {uid, sym, highPrice, lowPrice, side:'buy'|'sell', shares,
 //   entry, status?:'bought'|'sold', buyShares?, buyPrice?, buyTotal?, buyAt?,
+//   origShares?, origTotal? (frozen original-buy receipt for Transaction Details),
 //   sellPrice?, sellProceeds?, realizedGl?, sellAt?}.
 // Rows are uid-keyed so the SAME coin can be held as multiple independent
 // positions (user 2026-07-12); legacy rows get a uid lazily in tcGetWatch.
@@ -4112,9 +4114,12 @@ function tcRenderWatchlist(){
       : ' title="Remove"';
     var uid = w.uid;
     // TRANSACTION DETAILS — bought & sold rows only; a draft has no
-    // transaction yet. Fees are derived from the booked numbers
-    // (buyTotal − shares×price) so a post-partial remainder stays exactly
-    // consistent with its prorated Amount paid (user 2026-07-12). The
+    // transaction yet. The panel is a FROZEN receipt of the ORIGINAL buy
+    // (user 2026-07-12): it reads the origShares/origTotal snapshot taken
+    // at booking, so partial and full sells never change what it shows.
+    // Fees are derived from the frozen numbers (origTotal - origShares*price).
+    // Legacy rows saved before the snapshot existed fall back to
+    // buyShares/buyTotal. The
     // Watchlist High/Low block lives INSIDE the panel; drafts (no panel)
     // keep it standalone so the alert levels never disappear
     // (user 2026-07-12).
@@ -4127,16 +4132,19 @@ function tcRenderWatchlist(){
       '</div>';
     var det = '';
     if(status!=='draft'){
-      var grossD = (w.buyShares||0)*(w.buyPrice||0);
-      var feesD  = (w.buyTotal!=null && grossD>0) ? (w.buyTotal-grossD) : null;
+      var oShD  = (w.origShares!=null) ? w.origShares : w.buyShares;
+      var oTotD = (w.origTotal!=null)  ? w.origTotal  : w.buyTotal;
+      var grossD = (oShD||0)*(w.buyPrice||0);
+      var feesD  = (oTotD!=null && grossD>0) ? (oTotD-grossD) : null;
       var pctD   = (feesD!=null && grossD>0) ? (feesD/grossD*100) : null;
       var detOpen = !!tcPortDetOpen[uid];
       det = '<div class="tc-port-detrow"><span class="tc-port-dettag" id="tc-port-dettag-'+uid+'" onclick="tcPortToggleDetails(\''+uid+'\')">TRANSACTION DETAILS '+(detOpen?'\u25be':'\u25b8')+'</span></div>'+
         '<div class="tc-port-det" id="tc-port-det-'+uid+'" style="display:'+(detOpen?'':'none')+'">'+
           '<div class="tc-port-detline"><span>Bought on</span><b>'+tcFmtWhen(w.buyAt)+'</b></div>'+
+          '<div class="tc-port-detline"><span>Bought shares</span><b>'+(oShD==null?'\u2014':oShD)+'</b></div>'+
           '<div class="tc-port-detline"><span>Bought at</span><b>'+(w.buyPrice==null?'\u2014':tcFmtPHP(w.buyPrice)+' / coin')+'</b></div>'+
           '<div class="tc-port-detline"><span>Fees &amp; tax</span><b>'+(feesD==null?'\u2014':tcFmtPHPCash(feesD)+' ('+pctD.toFixed(2)+'% of gross)')+'</b></div>'+
-          '<div class="tc-port-detline"><span>Amount paid</span><b>'+(w.buyTotal==null?'\u2014':tcFmtPHPCash(w.buyTotal))+'</b></div>'+
+          '<div class="tc-port-detline"><span>Amount paid</span><b>'+(oTotD==null?'\u2014':tcFmtPHPCash(oTotD))+'</b></div>'+
           wl +
         '</div>';
     }

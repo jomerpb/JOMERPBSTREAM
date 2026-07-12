@@ -1110,7 +1110,7 @@
 #trade-page .tc-port-detline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
 #trade-page .tc-port-detline b{font-size:12.5px;letter-spacing:0;text-transform:none;color:var(--text);font-weight:600;text-align:right;}
 #trade-page .tc-port-det .tc-port-sublabel{margin-top:4px;}
-#trade-page .tc-funds{border-top:1px solid var(--border);margin-top:14px;padding-top:12px;}
+#trade-page .tc-funds{border-top:1px solid rgba(247,147,26,0.35);margin-top:14px;padding-top:12px;}   /* divider matches the crypto card border (user 2026-07-12) */
 #trade-page .tc-funds-label{font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
 #trade-page .tc-funds-grid{display:flex;gap:8px;align-items:flex-end;}
 #trade-page .tc-funds-grid + .tc-funds-grid{margin-top:10px;}
