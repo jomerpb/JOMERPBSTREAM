@@ -3806,9 +3806,12 @@ function tcPortNumbers(w, side, sh, en, cur){
   if(w && w.status === 'bought'){
     var out = {sellNow:null, sellNowFees:null, gl:null, glPct:null};
     if(side === 'sell'){
-      // Post-buy the sale executes at the LIVE price (user 2026-07-12), so
-      // the sell-side Total IS the if-sold-now number — they match exactly.
-      var fs = (cur!=null) ? tcTradeFees((w.buyShares||0)*cur, 'sell') : null;
+      // Post-buy the sale executes at the LIVE price (user 2026-07-12). The
+      // sell-side Total covers the QTY in the shares field (partial sells,
+      // user 2026-07-12) — with the whole position entered it equals the
+      // if-sold-now number exactly, as before.
+      var qty = (sh > 0) ? sh : (w.buyShares || 0);
+      var fs = (cur!=null) ? tcTradeFees(qty*cur, 'sell') : null;
       out.total = fs ? fs.total : null;
       out.feeTitle = fs ? tcPortFeeTitle(fs) : '';
     } else {
@@ -3838,8 +3841,11 @@ function tcPortMsg(uid, txt){
 // (user 2026-07-11). Buy: validates shares/price, blocks when Power can't
 // cover total incl. tax, then debits Power, snapshots the cost basis and
 // locks the position ('bought'). Sell: allowed only on a bought position,
-// credits Power with net proceeds (gross \u2212 sell fees \u2212 STT — realized G/L
-// included by construction), freezes the row ('sold') and unlocks Remove.
+// for the qty in the shares field — empty means the whole position. Full
+// qty credits Power with net proceeds (gross \u2212 sell fees \u2212 STT — realized
+// G/L included by construction), freezes the row ('sold') and unlocks
+// Remove; a partial qty (user 2026-07-12) credits the slice's proceeds,
+// strips its prorated cost basis, and leaves the row 'bought' with the rest.
 function tcPortSave(uid){
   var list = tcGetWatch();
   var w = list.find(function(x){return x.uid===uid;});
@@ -3870,19 +3876,38 @@ function tcPortSave(uid){
   } else {
     if(w.status !== 'bought'){ tcPortMsg(uid, 'Nothing to sell \u2014 confirm a Buy first.'); return; }
     // Sales execute at the LIVE quote — the locked price column is the live
-    // price, not an order ticket (user 2026-07-12).
+    // price, not an order ticket (user 2026-07-12). Qty comes from the
+    // shares field (editable in Sell mode); empty = whole position. A qty
+    // below the held amount is a PARTIAL sell (user 2026-07-12): proceeds
+    // go to Power, the sold slice's prorated cost basis leaves the row, and
+    // the row stays 'bought' with the remainder.
+    var held = w.buyShares || 0;
+    var qty = (sh > 0) ? sh : held;
+    if(!(qty > 0)){ tcPortMsg(uid, 'Enter how many shares to sell.'); return; }
+    if(qty > held + 1e-9){ tcPortMsg(uid, 'You only hold '+held+' \u2014 enter '+held+' or less.'); return; }
     var q = tcGetQuote(w.sym);
     if(!q || q.price == null){ tcPortMsg(uid, 'No live price to sell at \u2014 tap Fetch Live Data first.'); return; }
-    var fs2 = tcTradeFees((w.buyShares||0)*q.price, 'sell');
+    var fs2 = tcTradeFees(qty*q.price, 'sell');
     if(!fs2){ tcPortMsg(uid, 'No live price to sell at \u2014 tap Fetch Live Data first.'); return; }
     var funds2 = tcGetFunds();
     funds2.power = +(funds2.power + fs2.total).toFixed(2);
     tcSaveFunds(funds2);
-    w.status='sold'; w.side='sell'; w.entry=q.price;
-    w.sellPrice=q.price; w.sellProceeds=fs2.total;
-    w.realizedGl=+(fs2.total - (w.buyTotal||0)).toFixed(2); w.sellAt=Date.now();
-    tcSaveWatch(list);
-    tcRenderWatchlist();
+    if(qty >= held - 1e-9){
+      w.status='sold'; w.side='sell'; w.entry=q.price;
+      w.sellPrice=q.price; w.sellProceeds=fs2.total;
+      w.realizedGl=+(fs2.total - (w.buyTotal||0)).toFixed(2); w.sellAt=Date.now();
+      tcSaveWatch(list);
+      tcRenderWatchlist();
+    } else {
+      var slice = +((w.buyTotal||0) * qty / held).toFixed(2);
+      var sliceGl = +(fs2.total - slice).toFixed(2);
+      w.buyShares = +(held - qty).toFixed(8);
+      w.shares = w.buyShares;
+      w.buyTotal = +((w.buyTotal||0) - slice).toFixed(2);
+      tcSaveWatch(list);
+      tcRenderWatchlist();
+      tcPortMsg(uid, 'Sold '+qty+' of '+held+' at the live price \u2014 '+tcFmtPHPCash(fs2.total)+' added to Power ('+(sliceGl<0?'\u2212':'+')+tcFmtPHPCash(Math.abs(sliceGl))+' realized). '+w.buyShares+' left in the position.');
+    }
   }
 }
 // Recompute the row's live bits (current price, total, gain/loss, sell-now)
@@ -3904,6 +3929,14 @@ function tcPortRecalc(uid){
   }
   var sideEl = document.querySelector('input[name="tc-port-side-'+uid+'"]:checked');
   var side = sideEl ? sideEl.value : 'buy';
+  // The focus guard often skips the rebuild on radio flips, so the shares
+  // lock is mirrored here: bought rows unlock shares in Sell mode (partial
+  // sells, user 2026-07-12) and snap back to the held amount on Buy.
+  if(w.status === 'bought'){
+    var lockSh = side !== 'sell';
+    shEl.readOnly = lockSh;
+    if(lockSh && w.buyShares != null) shEl.value = w.buyShares;
+  }
   var sh = parseFloat(shEl.value), en = parseFloat(enEl.value);
   var n = tcPortNumbers(w, side, isNaN(sh)?null:sh, isNaN(en)?null:en, q?q.price:null);
   totEl.textContent = n.total==null ? '\u2014' : tcFmtPHP(n.total);
@@ -3924,15 +3957,18 @@ function tcPortRecalc(uid){
 }
 // Autosave for the row FIELDS (shares/price/side/alerts) — same pattern as
 // the High/Low alerts. Power, however, only moves on an explicit Save
-// (tcPortSave): typing here never books a trade. Locks: shares freeze once
-// bought (full-position sell only), everything freezes once sold.
+// (tcPortSave): typing here never books a trade. Locks: on bought rows only
+// the SIDE persists — a qty typed in Sell mode is a transient sell ticket
+// read straight from the field at Save time (partial sells, user
+// 2026-07-12); everything freezes once sold.
 function tcSetPortField(uid, field, val){
   var list = tcGetWatch();
   var w = list.find(function(x){return x.uid===uid;});
   if(!w) return;
   if(w.status === 'sold') return;
-  // Once bought, shares AND price are locked — the price column tracks the
-  // live quote and the sale executes at it (user 2026-07-12).
+  // Once bought, only SIDE persists here. Price stays live-driven, and a
+  // shares value typed in Sell mode is the sell qty for tcPortSave — kept
+  // in the DOM on purpose, never written to the row (user 2026-07-12).
   if(w.status === 'bought' && field !== 'side') return;
   if(field==='side'){ w.side = val==='sell' ? 'sell' : 'buy'; }
   else { var num = parseFloat(val); w[field] = isNaN(num) ? null : num; }
@@ -3950,9 +3986,11 @@ function tcSetPortField(uid, field, val){
 // the live quote and is editable ONLY until the buy is confirmed; after
 // that it tracks the live price and the sale executes at it. High/Low stay
 // read-only at the model's recommended levels.
-// Lifecycle (user 2026-07-11): draft → Save on Buy → 'bought' (shares+price
-// locked, Remove blocked, Power debited) → Save on Sell → 'sold' (row
-// frozen, Power credited with net proceeds, Remove unlocked).
+// Lifecycle (user 2026-07-11): draft → Save on Buy → 'bought' (price locked,
+// Remove blocked, Power debited; shares re-open in Sell mode as the sell
+// qty — a partial qty keeps the row 'bought' with the remainder, user
+// 2026-07-12) → Save on Sell of the full qty → 'sold' (row frozen, Power
+// credited, Remove unlocked).
 function tcRenderWatchlist(){
   tcRenderFunds();   // Funds block lives OUTSIDE the rebuilt list — always safe to refresh
   var listEl = document.getElementById('tc-watch-list');
@@ -3985,14 +4023,17 @@ function tcRenderWatchlist(){
     else                     enVal = w.entry==null ? '' : w.entry;
     var n = tcPortNumbers(w, side, w.shares!=null?w.shares:null, w.entry!=null?w.entry:null, last);
     var glCls = n.gl==null ? '' : (n.gl>=0 ? ' gain' : ' loss');
-    var shLock = status!=='draft';
+    // Shares: editable on drafts AND on bought rows in Sell mode — that's
+    // the sell qty, enabling partial sells (user 2026-07-12). Locked on
+    // bought+Buy and on sold rows.
+    var shLock = status==='sold' || (status==='bought' && side!=='sell');
     var enLock = status!=='draft';   // price locks at buy — live-driven from then on
     var radioLock = status==='sold' ? ' disabled' : '';
     var showEq = side==='sell' && status!=='sold';   // "If sold now" — Sell mode only
     var chip = status==='bought' ? '<span class="tc-port-chip bought">Bought</span>'
              : status==='sold'   ? '<span class="tc-port-chip sold">Sold</span>' : '';
     var saveBtn = status==='sold' ? ''
-      : '<button class="tc-port-save" onclick="tcPortSave(\''+w.sym+'\')" title="Confirm this '+(side==='sell'?'sale':'purchase')+' \u2014 updates your Power">Save</button>';
+      : '<button class="tc-port-save" onclick="tcPortSave(\''+w.uid+'\')" title="Confirm this '+(side==='sell'?'sale':'purchase')+' \u2014 updates your Power">Save</button>';
     var rmAttr = status==='bought'
       ? ' disabled title="Sell first \u2014 bought positions can\u2019t be removed"'
       : ' title="Remove"';
