@@ -3846,7 +3846,14 @@ function tcPortMsg(uid, txt){
 // G/L included by construction), freezes the row ('sold') and unlocks
 // Remove; a partial qty (user 2026-07-12) credits the slice's proceeds,
 // strips its prorated cost basis, and leaves the row 'bought' with the rest.
+// One tap = ONE booked trade (user 2026-07-12): duplicate fires of Save
+// (mobile ghost clicks / double taps on the just-re-rendered button) are
+// swallowed for 800 ms after a trade actually books. Validation failures
+// never arm the lock, so an instant correct-and-retry still works.
+var tcPortSaveAt = {};
 function tcPortSave(uid){
+  var nowTs = Date.now();
+  if(tcPortSaveAt[uid] && nowTs - tcPortSaveAt[uid] < 800) return;
   var list = tcGetWatch();
   var w = list.find(function(x){return x.uid===uid;});
   if(!w) return;
@@ -3867,6 +3874,7 @@ function tcPortSave(uid){
       tcPortMsg(uid, 'Not enough Power \u2014 this buy needs '+tcFmtPHPCash(fb.total)+', you have '+tcFmtPHPCash(funds.power)+'. Deposit to Funds below first.');
       return;
     }
+    tcPortSaveAt[uid] = nowTs;   // trade books — arm the duplicate-fire lock
     funds.power = +(funds.power - fb.total).toFixed(2);
     tcSaveFunds(funds);
     w.status='bought'; w.side='buy'; w.shares=sh; w.entry=en;
@@ -3890,6 +3898,7 @@ function tcPortSave(uid){
     if(!q || q.price == null){ tcPortMsg(uid, 'No live price to sell at \u2014 tap Fetch Live Data first.'); return; }
     var fs2 = tcTradeFees(qty*q.price, 'sell');
     if(!fs2){ tcPortMsg(uid, 'No live price to sell at \u2014 tap Fetch Live Data first.'); return; }
+    tcPortSaveAt[uid] = nowTs;   // trade books — arm the duplicate-fire lock
     var funds2 = tcGetFunds();
     funds2.power = +(funds2.power + fs2.total).toFixed(2);
     tcSaveFunds(funds2);
@@ -3906,11 +3915,18 @@ function tcPortSave(uid){
       w.buyShares = +(held - qty).toFixed(8);
       w.shares = w.buyShares;
       w.buyTotal = +((w.buyTotal||0) - slice).toFixed(2);
+      // Disarm after a partial (user 2026-07-12): the row snaps back to the
+      // Buy display so a stray extra fire is a harmless "Already bought"
+      // instead of a sale of the remainder. Selling more = tap Sell again
+      // (the qty prefills with what's left).
+      w.side = 'buy';
       tcSaveWatch(list);
       tcRenderWatchlist();
-      // If the focus guard skipped the rebuild, the qty field still shows
-      // the amount just sold — snap it to the remaining shares, then let
-      // recalc refresh totals and the (still locked) ✕ in place.
+      // If the focus guard skipped the rebuild, the DOM still shows the old
+      // armed state — force the Buy radio and snap the qty field to the
+      // remaining shares, then let recalc refresh totals, locks and the ✕.
+      var rbEl = document.querySelector('input[name="tc-port-side-'+uid+'"][value="buy"]');
+      if(rbEl) rbEl.checked = true;
       var shEl2 = document.getElementById('tc-port-shares-'+uid);
       if(shEl2) shEl2.value = w.buyShares;
       tcPortRecalc(uid);
