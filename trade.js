@@ -3621,7 +3621,12 @@ async function tcRunScalpScan(){
       var sig = tcSignal(c.sym);
       if(sig && sig.trend === 'BEAR') return null; // daily downtrend — skip before spending a call
       return {sym:c.sym, name:c.name, pct:q.change24hPct||0};
-    }).filter(Boolean).sort(function(a,b){ return b.pct-a.pct; }).slice(0, TC_SCALP_SHORTLIST_SIZE);
+    }).filter(Boolean).sort(function(a,b){ return Math.abs(b.pct)-Math.abs(a.pct); }).slice(0, TC_SCALP_SHORTLIST_SIZE);
+      // Ranked by |24h% change|, not signed — a scalp bounce is a volatility
+      // event, not a "green day" event. A coin down 6% on the day can still
+      // be a valid ranging-bounce candidate; sorting by signed pct hid these.
+      // Verified 2026-07-14: AAVE (-2.91% that day) ranked 54th/68 under the
+      // old signed sort but 15th/68 under abs — now inside the top 18.
 
     var results = [];
     for(var i=0;i<shortlist.length;i++){
