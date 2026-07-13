@@ -166,6 +166,22 @@
     .chips-row{display:flex;flex-wrap:wrap;gap:6px;}
     .chip{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:6px 11px;border-radius:20px;font-size:11px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
     .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+    /* Multi-select Tag picker: a chip-styled trigger that expands an inline
+       checkbox grid, so several tags (e.g. BL + Zombie + Isekai) can be
+       chosen at once instead of the old single-select chip row. */
+    .tag-picker-trigger{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:6px 11px;border-radius:20px;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;white-space:nowrap;}
+    .tag-picker-trigger.has-selection{background:var(--accent);border-color:var(--accent);color:#fff;}
+    .tag-picker-trigger .tpt-caret{font-size:9px;opacity:0.8;transition:transform 0.15s;}
+    .tag-picker.open .tag-picker-trigger .tpt-caret{transform:rotate(180deg);}
+    .tag-picker-panel{display:none;margin-top:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:10px;}
+    .tag-picker.open .tag-picker-panel{display:block;}
+    .tag-picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;}
+    .tag-picker-option{display:flex;align-items:center;gap:8px;padding:7px 4px;border-radius:6px;font-size:12px;color:var(--text);cursor:pointer;}
+    .tag-picker-option:active{background:rgba(255,255,255,0.06);}
+    .tag-picker-option input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;flex-shrink:0;cursor:pointer;}
+    .tag-picker-footer{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+    .tag-picker-footer button{background:none;border:none;color:var(--accent2);font-size:11px;cursor:pointer;padding:4px 8px;}
+    @media (max-width:360px){.tag-picker-grid{grid-template-columns:1fr;}}
     .apply-btn{width:100%;background:var(--accent);color:#fff;border:none;padding:12px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:16px;}
     .results-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
     .load-more-btn{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:11px;border-radius:10px;font-size:12px;cursor:pointer;margin-top:14px;}

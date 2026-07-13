@@ -1413,6 +1413,53 @@ function getChipVal(groupId) {
   return document.getElementById(groupId)?.querySelector('.chip.active')?.dataset.val || '';
 }
 
+// ── MULTI-SELECT TAG PICKER (Tag section only — Genre/Year/Rating/Country/Status stay single-select chips) ──
+function toggleTagPicker(groupId) {
+  const el = document.getElementById(groupId);
+  if (!el) return;
+  const willOpen = !el.classList.contains('open');
+  // Only one tag picker open at a time within the same filter panel
+  document.querySelectorAll('.tag-picker.open').forEach(p => p.classList.remove('open'));
+  if (willOpen) el.classList.add('open');
+}
+
+function clearTagPicker(groupId) {
+  const el = document.getElementById(groupId);
+  if (!el) return;
+  el.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+  onTagCheck(groupId);
+}
+
+function onTagCheck(groupId) {
+  const el = document.getElementById(groupId);
+  if (!el) return;
+  const checkedCount = el.querySelectorAll('input[type=checkbox]:checked').length;
+  const label = document.getElementById(groupId + '-label');
+  const trigger = el.querySelector('.tag-picker-trigger');
+  if (label) label.textContent = checkedCount ? `${checkedCount} Tag${checkedCount > 1 ? 's' : ''}` : 'All Tags';
+  if (trigger) trigger.classList.toggle('has-selection', checkedCount > 0);
+}
+
+// Returns the de-duplicated list of underlying values for all checked boxes in
+// a tag picker. A single checkbox's data-val may itself be a comma-separated
+// combo (e.g. "Bisexual,Gender Bending" for an LGBTQ+ chip that maps to more
+// than one underlying AniList tag / TMDB keyword term), so each is split and
+// flattened before de-duping.
+function getTagVals(groupId) {
+  const el = document.getElementById(groupId);
+  if (!el) return [];
+  const vals = [...el.querySelectorAll('input[type=checkbox]:checked')]
+    .flatMap(c => (c.dataset.val || '').split(',').map(s => s.trim()).filter(Boolean));
+  return [...new Set(vals)];
+}
+
+// Tapping outside an open tag picker collapses it back down
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.tag-picker')) {
+    document.querySelectorAll('.tag-picker.open').forEach(p => p.classList.remove('open'));
+  }
+});
+
 function getYearRange(val) {
   if (!val) return {};
   if (val.includes('s')) {
@@ -1424,10 +1471,11 @@ function getYearRange(val) {
 
 function resetPageFilter(page) {
   const prefix = page==='anime'?'af':page==='tv'?'tf':'mf';
-  ['genre','year','rating','country','status','tag'].forEach(g => {
+  ['genre','year','rating','country','status'].forEach(g => {
     const el = document.getElementById(`${prefix}-${g}`);
     if (el) el.querySelectorAll('.chip').forEach((c,i) => c.classList.toggle('active', i===0));
   });
+  clearTagPicker(`${prefix}-tag`);
   const matched = document.getElementById(`${prefix}-tag-matched`);
   if (matched) { matched.textContent = ''; matched.style.display = 'none'; }
 }
@@ -1462,7 +1510,7 @@ async function applyAnimeFilter(page=1) {
     document.getElementById('anime-more').style.display = 'none';
 
     const genre   = getChipVal('af-genre');
-    const tag     = getChipVal('af-tag');
+    const tags    = getTagVals('af-tag'); // multi-select — array of AniList tag names, OR-matched via tag_in
     const yearVal = getChipVal('af-year');
     const rating  = getChipVal('af-rating');
     const status  = getChipVal('af-status');
@@ -1471,15 +1519,15 @@ async function applyAnimeFilter(page=1) {
     const yGte = yr.gte ? parseInt(yr.gte.slice(0,4))*10000 : undefined;
     const yLte = yr.lte ? parseInt(yr.lte.slice(0,4))*10000+1231 : undefined;
 
-    animeFilterQ = `query($page:Int,$genre:String,$tag:String,$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$status:MediaStatus){
+    animeFilterQ = `query($page:Int,$genre:String,$tags:[String],$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$status:MediaStatus){
       Page(page:$page,perPage:24){
         pageInfo{hasNextPage}
-        media(type:ANIME,isAdult:false,genre:$genre,tag:$tag,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status:$status){
+        media(type:ANIME,isAdult:false,genre:$genre,tag_in:$tags,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status:$status){
           id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres
         }
       }
     }`;
-    animeFilterVars = { genre:genre||undefined, tag:tag||undefined, sort:['SCORE_DESC'], yGte, yLte, minScore, status:status||undefined };
+    animeFilterVars = { genre:genre||undefined, tags: tags.length?tags:undefined, sort:['SCORE_DESC'], yGte, yLte, minScore, status:status||undefined };
   }
 
   const data = await al(animeFilterQ, {...animeFilterVars, page});
@@ -1510,7 +1558,7 @@ async function applyTVFilter(page=1) {
     const yearVal = getChipVal('tf-year');
     const rating  = getChipVal('tf-rating');
     const status  = getChipVal('tf-status');
-    const tagVal  = getChipVal('tf-tag');
+    const tagVal  = getTagVals('tf-tag').join(','); // multi-select — resolveKeywordIds already OR-matches comma-separated terms
     const yr      = getYearRange(yearVal);
     tvFilterStatus = status;
 
@@ -1583,7 +1631,7 @@ async function applyMovieFilter(page=1) {
     const yearVal = getChipVal('mf-year');
     const rating  = getChipVal('mf-rating');
     const status  = getChipVal('mf-status');
-    const tagVal  = getChipVal('mf-tag');
+    const tagVal  = getTagVals('mf-tag').join(','); // multi-select — resolveKeywordIds already OR-matches comma-separated terms
     const yr      = getYearRange(yearVal);
 
     const url = new URL(`${TMDB_BASE}/discover/movie`);

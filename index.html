@@ -90,19 +90,27 @@
       </div>
       <div class="filter-section">
         <div class="filter-label">Tag</div>
-        <div class="chips-row" id="af-tag">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-tag')">All</div>
-          <div class="chip" data-val="Isekai" onclick="pickPageChip(this,'af-tag')">Isekai</div>
-          <div class="chip" data-val="Shounen" onclick="pickPageChip(this,'af-tag')">Shounen</div>
-          <div class="chip" data-val="Shoujo" onclick="pickPageChip(this,'af-tag')">Shoujo</div>
-          <div class="chip" data-val="Seinen" onclick="pickPageChip(this,'af-tag')">Seinen</div>
-          <div class="chip" data-val="Josei" onclick="pickPageChip(this,'af-tag')">Josei</div>
-          <div class="chip" data-val="Boys' Love" onclick="pickPageChip(this,'af-tag')">💙 Boys' Love (BL)</div>
-          <div class="chip" data-val="Girls' Love" onclick="pickPageChip(this,'af-tag')">💗 Girls' Love (GL)</div>
-          <div class="chip" data-val="Reincarnation" onclick="pickPageChip(this,'af-tag')">Reincarnation</div>
-          <div class="chip" data-val="Time Skip" onclick="pickPageChip(this,'af-tag')">Time Skip</div>
-          <div class="chip" data-val="Super Power" onclick="pickPageChip(this,'af-tag')">Super Power</div>
-          <div class="chip" data-val="Iyashikei" onclick="pickPageChip(this,'af-tag')">Iyashikei</div>
+        <div class="tag-picker" id="af-tag">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('af-tag')"><span id="af-tag-label">All Tags</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="Isekai" onchange="onTagCheck('af-tag')">Isekai</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Shounen" onchange="onTagCheck('af-tag')">Shounen</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Shoujo" onchange="onTagCheck('af-tag')">Shoujo</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Seinen" onchange="onTagCheck('af-tag')">Seinen</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Josei" onchange="onTagCheck('af-tag')">Josei</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Boys' Love" onchange="onTagCheck('af-tag')">BL (Boys' Love)</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Girls' Love" onchange="onTagCheck('af-tag')">GL (Girls' Love)</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Shounen Ai" onchange="onTagCheck('af-tag')">Gay Romance</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Bisexual,Gender Bending" onchange="onTagCheck('af-tag')">LGBTQ+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Reincarnation" onchange="onTagCheck('af-tag')">Reincarnation</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Time Skip" onchange="onTagCheck('af-tag')">Time Skip</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Super Power" onchange="onTagCheck('af-tag')">Super Power</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Iyashikei" onchange="onTagCheck('af-tag')">Iyashikei</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Iyashikei" onchange="onTagCheck('af-tag')">Countryside</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('af-tag')">Clear</button><button type="button" onclick="toggleTagPicker('af-tag')">Done</button></div>
+          </div>
         </div>
       </div>
       <div class="filter-section">
@@ -201,16 +209,25 @@
       </div>
       <div class="filter-section">
         <div class="filter-label">Tags</div>
-        <div class="chips-row" id="tf-tag">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-tag')">All</div>
-          <div class="chip" data-val="boys love" onclick="pickPageChip(this,'tf-tag')">💙 BL (Boys Love)</div>
-          <div class="chip" data-val="girls love" onclick="pickPageChip(this,'tf-tag')">💗 GL (Girls Love)</div>
-          <div class="chip" data-val="reverse harem" onclick="pickPageChip(this,'tf-tag')">Reverse Harem</div>
-          <div class="chip" data-val="isekai" onclick="pickPageChip(this,'tf-tag')">Isekai</div>
-          <div class="chip" data-val="time loop" onclick="pickPageChip(this,'tf-tag')">Time Loop</div>
-          <div class="chip" data-val="zombie" onclick="pickPageChip(this,'tf-tag')">Zombie</div>
-          <div class="chip" data-val="vampire" onclick="pickPageChip(this,'tf-tag')">Vampire</div>
-          <div class="chip" data-val="superhero" onclick="pickPageChip(this,'tf-tag')">Superhero</div>
+        <div class="tag-picker" id="tf-tag">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('tf-tag')"><span id="tf-tag-label">All Tags</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="boys love" onchange="onTagCheck('tf-tag')">BL (Boys Love)</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="girls love" onchange="onTagCheck('tf-tag')">GL (Girls Love)</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="lgbt" onchange="onTagCheck('tf-tag')">LGBT</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="gay romance" onchange="onTagCheck('tf-tag')">Gay Romance</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="reverse harem" onchange="onTagCheck('tf-tag')">Reverse Harem</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="isekai" onchange="onTagCheck('tf-tag')">Isekai</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="time loop" onchange="onTagCheck('tf-tag')">Time Loop</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="zombie" onchange="onTagCheck('tf-tag')">Zombie</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="vampire" onchange="onTagCheck('tf-tag')">Vampire</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="superhero" onchange="onTagCheck('tf-tag')">Superhero</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="miniseries" onchange="onTagCheck('tf-tag')">Miniseries</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="countryside" onchange="onTagCheck('tf-tag')">Countryside</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('tf-tag')">Clear</button><button type="button" onclick="toggleTagPicker('tf-tag')">Done</button></div>
+          </div>
         </div>
         <div id="tf-tag-matched" style="display:none;font-size:11px;color:var(--muted);margin-top:6px;"></div>
       </div>
@@ -309,16 +326,25 @@
       </div>
       <div class="filter-section">
         <div class="filter-label">Tags</div>
-        <div class="chips-row" id="mf-tag">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-tag')">All</div>
-          <div class="chip" data-val="boys love" onclick="pickPageChip(this,'mf-tag')">💙 BL (Boys Love)</div>
-          <div class="chip" data-val="girls love" onclick="pickPageChip(this,'mf-tag')">💗 GL (Girls Love)</div>
-          <div class="chip" data-val="reverse harem" onclick="pickPageChip(this,'mf-tag')">Reverse Harem</div>
-          <div class="chip" data-val="isekai" onclick="pickPageChip(this,'mf-tag')">Isekai</div>
-          <div class="chip" data-val="time loop" onclick="pickPageChip(this,'mf-tag')">Time Loop</div>
-          <div class="chip" data-val="zombie" onclick="pickPageChip(this,'mf-tag')">Zombie</div>
-          <div class="chip" data-val="vampire" onclick="pickPageChip(this,'mf-tag')">Vampire</div>
-          <div class="chip" data-val="superhero" onclick="pickPageChip(this,'mf-tag')">Superhero</div>
+        <div class="tag-picker" id="mf-tag">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('mf-tag')"><span id="mf-tag-label">All Tags</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="boys love" onchange="onTagCheck('mf-tag')">BL (Boys Love)</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="girls love" onchange="onTagCheck('mf-tag')">GL (Girls Love)</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="lgbt" onchange="onTagCheck('mf-tag')">LGBT</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="gay romance" onchange="onTagCheck('mf-tag')">Gay Romance</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="reverse harem" onchange="onTagCheck('mf-tag')">Reverse Harem</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="isekai" onchange="onTagCheck('mf-tag')">Isekai</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="time loop" onchange="onTagCheck('mf-tag')">Time Loop</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="zombie" onchange="onTagCheck('mf-tag')">Zombie</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="vampire" onchange="onTagCheck('mf-tag')">Vampire</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="superhero" onchange="onTagCheck('mf-tag')">Superhero</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="miniseries" onchange="onTagCheck('mf-tag')">Miniseries</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="countryside" onchange="onTagCheck('mf-tag')">Countryside</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('mf-tag')">Clear</button><button type="button" onclick="toggleTagPicker('mf-tag')">Done</button></div>
+          </div>
         </div>
         <div id="mf-tag-matched" style="display:none;font-size:11px;color:var(--muted);margin-top:6px;"></div>
       </div>
