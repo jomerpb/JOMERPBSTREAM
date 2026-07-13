@@ -900,9 +900,11 @@
         <span class="tp-card-chev" id="tp-chev-cgainers">▾</span>
         <div class="tp-gainers-title">Top Crypto Today</div>
       </div>
-      <div class="tp-gainers-toggle">
-        <button class="tp-gainers-tab active" data-mode="current" onclick="tcSetGainersMode('current')">Gainers</button>
-        <button class="tp-gainers-tab" data-mode="bullish" onclick="tcSetGainersMode('bullish')">Bullish</button>
+      <div class="tp-gainers-toggle" id="tc-gainers-toggle">
+        <div class="tp-gainers-slide" id="tc-gainers-slide"></div>
+        <button class="tp-gainers-tab active" data-mode="current" onclick="tcSetGainersMode('current',this)">Gainers</button>
+        <button class="tp-gainers-tab" data-mode="bullish" onclick="tcSetGainersMode('bullish',this)">Bullish</button>
+        <button class="tp-gainers-tab" data-mode="scalping" onclick="tcSetGainersMode('scalping',this)">Scalping</button>
       </div>
     </div>
     <div class="tp-card-body" id="tp-body-cgainers">

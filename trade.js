@@ -2919,8 +2919,10 @@ var tcCurrentTF = '1H'; // default chart view for crypto — user requested 1H i
 // reload — previously this always reset to 'current' on refresh, which is
 // why the Bullish filter kept silently reverting to Gainers.
 var tcGainersModeVal = (function(){
-  try { return localStorage.getItem('tc_gainers_mode') === 'bullish' ? 'bullish' : 'current'; }
-  catch(e){ return 'current'; }
+  try {
+    var m = localStorage.getItem('tc_gainers_mode');
+    return (m === 'bullish' || m === 'scalping') ? m : 'current';
+  } catch(e){ return 'current'; }
 })();
 var tcInited = false;
 
@@ -3507,13 +3509,35 @@ function tcTriggerLevels(sig){
 }
 
 // ── Top Crypto Today ──
-function tcSetGainersMode(mode){
+// Sliding pill indicator for the Gainers/Bullish/Scalping toggle — mirrors
+// the Stream tab's updateSegSlide, scoped to #tc-gainers-slide.
+function updateGainersSlide(el, instant){
+  var slide = document.getElementById('tc-gainers-slide');
+  if(!slide || !el) return;
+  if(instant){
+    var prevTransition = slide.style.transition;
+    slide.style.transition = 'none';
+    slide.style.width = el.offsetWidth + 'px';
+    slide.style.left = el.offsetLeft + 'px';
+    void slide.offsetWidth; // force reflow so 'none' commits before restoring
+    slide.style.transition = prevTransition;
+  } else {
+    slide.style.width = el.offsetWidth + 'px';
+    slide.style.left = el.offsetLeft + 'px';
+  }
+}
+window.addEventListener('resize', function(){
+  var active = document.querySelector('#tc-gainers-toggle .tp-gainers-tab.active');
+  if(active) updateGainersSlide(active, true);
+});
+function tcSetGainersMode(mode, el){
   if(tcGainersModeVal === mode) return;
   tcGainersModeVal = mode;
   try { localStorage.setItem('tc_gainers_mode', mode); } catch(e){}
   document.querySelectorAll('#tp-crypto-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-mode') === mode);
   });
+  updateGainersSlide(el || document.querySelector('#tc-gainers-toggle .tp-gainers-tab[data-mode="'+mode+'"]'));
   tcRenderTop();
 }
 function tcRenderTop(){
@@ -3536,6 +3560,19 @@ function tcRenderTop(){
               confidencePct: sig?sig.confidencePct:null};
     }).filter(function(r){ return r && r.trend === 'BULL'; })
       .sort(function(a,b){ return b.gap - a.gap; }).slice(0,10);
+  } else if(tcGainersModeVal === 'scalping'){
+    // TODO(scalping calc): replace this ranking with a short-timeframe,
+    // scalping-specific filter — e.g. fee-aware minimum move threshold
+    // (round-trip cost ~0.58-0.60%), fast RSI(5-9), 1m/5m ATR, VWAP
+    // deviation, volume-spike confirmation, and BTC-relative strength.
+    // For now this mirrors Gainers exactly so the tab/UI ships first.
+    rows = TC_COINS.map(function(c){
+      var q = tcGetQuote(c.sym); if(!q) return null;
+      var sig = tcSignal(c.sym);
+      return {sym:c.sym, name:c.name, price:q.price, pct:q.change24hPct||0,
+              signal: sig?sig.signal:null, trend: sig?sig.trend:'FLAT',
+              confidencePct: sig?sig.confidencePct:null};
+    }).filter(Boolean).sort(function(a,b){ return b.pct - a.pct; }).slice(0,10);
   } else {
     rows = TC_COINS.map(function(c){
       var q = tcGetQuote(c.sym); if(!q) return null;
@@ -3574,6 +3611,8 @@ function tcRenderTop(){
   if(noteEl){
     noteEl.textContent = tcGainersModeVal === 'bullish'
       ? 'Coins in a confirmed uptrend ranked by SMA20-vs-SMA50 gap \u2014 same trend engine as the detail card. The % shown is today\u2019s change; the ORDER is trend strength.'
+      : tcGainersModeVal === 'scalping'
+      ? 'Scalping calc coming soon \u2014 currently mirrors Gainers. Will rank by short-timeframe momentum, volume confirmation, and fee-aware minimum move.'
       : 'Live 24h change from the CoinGecko API. Tap a coin for the full signal breakdown.';
   }
 }
@@ -4877,6 +4916,8 @@ function tcInit(){
   document.querySelectorAll('#tp-crypto-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-mode') === tcGainersModeVal);
   });
+  var initActiveTab = document.querySelector('#tc-gainers-toggle .tp-gainers-tab.active');
+  if(initActiveTab) updateGainersSlide(initActiveTab, true);
   tcRenderDropdown('');
   tcRenderTop();
   tcRenderWatchlist();
