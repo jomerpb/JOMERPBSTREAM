@@ -3590,14 +3590,21 @@ function tcAnalyzeScalpSetup(bars){
 
   var isRanging = hiTouches>=TC_SCALP_MIN_TOUCHES && loTouches>=TC_SCALP_MIN_TOUCHES;
   var isBullishHour = hourReturnPct > 0;
-  var clearsFees = rangeWidthPct >= TC_SCALP_FEE_RT_PCT;
+  var clearsFees = rangeWidthPct >= TC_SCALP_FEE_RT_PCT; // informational only — NOT a filter
+                                                          // gate (see 2026-07-14 conversation):
+                                                          // pattern detection (is it bullish +
+                                                          // ranging) and trade profitability
+                                                          // (does the range clear fees) are
+                                                          // separate questions. This surfaces at
+                                                          // the buy/sell decision point instead —
+                                                          // see tcRenderAll's scalp fee-check note.
   var breakoutTolAbs = lo * (TC_SCALP_BREAKOUT_TOL_PCT/100);
   var insideBand = last <= hi+breakoutTolAbs && last >= lo-breakoutTolAbs;
 
   return {
     hourReturnPct:+hourReturnPct.toFixed(2), rangeWidthPct:+rangeWidthPct.toFixed(2),
-    rangeHigh:hi, rangeLow:lo, hiTouches:hiTouches, loTouches:loTouches,
-    qualifies: isBullishHour && isRanging && clearsFees && insideBand
+    rangeHigh:hi, rangeLow:lo, hiTouches:hiTouches, loTouches:loTouches, clearsFees:clearsFees,
+    qualifies: isBullishHour && isRanging && insideBand
   };
 }
 
@@ -3714,7 +3721,7 @@ function tcRenderTop(){
   }
   if(!rows.length){
     el.innerHTML = tcGainersModeVal === 'scalping'
-      ? '<div class="tp-gainer-empty">No real bounce setups right now \u2014 nothing is both bullish over the last hour AND ranging with room above the '+TC_SCALP_FEE_RT_PCT+'% fee. Rescans every '+(TC_SCALP_CACHE_MS/60000)+' min.</div>'
+      ? '<div class="tp-gainer-empty">No real bounce setups right now \u2014 nothing is both bullish over the last hour AND currently ranging inside a proven floor/ceiling. Rescans every '+(TC_SCALP_CACHE_MS/60000)+' min.</div>'
       : '<div class="tp-gainer-empty">No coins currently in a confirmed uptrend \u2014 no symbol has SMA20 above SMA50 by more than the '+TC_TREND_BUFFER_PCT+'% buffer.</div>';
     if(noteEl) noteEl.textContent = '';
     return;
@@ -3747,7 +3754,7 @@ function tcRenderTop(){
     noteEl.textContent = tcGainersModeVal === 'bullish'
       ? 'Coins in a confirmed uptrend ranked by SMA20-vs-SMA50 gap \u2014 same trend engine as the detail card. The % shown is today\u2019s change; the ORDER is trend strength.'
       : tcGainersModeVal === 'scalping'
-      ? 'Real 5-min CoinGecko data, not daily bars: net-positive over the last hour, now bouncing between a proven floor and ceiling with room above the '+TC_SCALP_FEE_RT_PCT+'% Maya round-trip fee. Rescans every '+(TC_SCALP_CACHE_MS/60000)+' min.'
+      ? 'Real 5-min CoinGecko data, not daily bars: net-positive over the last hour, now bouncing between a proven floor and ceiling. Tap a coin to see if this specific range clears Maya\u2019s round-trip fee. Rescans every '+(TC_SCALP_CACHE_MS/60000)+' min.'
       : 'Live 24h change from the CoinGecko API. Tap a coin for the full signal breakdown.';
   }
 }
@@ -4924,7 +4931,13 @@ function tcRenderNoneState(){
   var input = document.getElementById('tc-coin-search'); if(input) input.value='';
   tcUpdateWatchBtn();
 }
-function tcSelectCoin(sym){ tcRenderAll(sym); }
+var tcSelectedScalpSetup = null; // set by tcSelectCoin when tapped from the Scalping list;
+                                  // null otherwise so unrelated coins never show stale scalp data
+function tcSelectCoin(sym){
+  var scalpRow = tcScalpScanState.rows && tcScalpScanState.rows.find(function(r){ return r.sym === sym; });
+  tcSelectedScalpSetup = scalpRow ? scalpRow.scalp : null;
+  tcRenderAll(sym);
+}
 function tcRenderAll(sym){
   var c = tcFindCoin(sym);
   if(!c) return;
@@ -4987,7 +5000,17 @@ function tcRenderAll(sym){
   var opposed = (sig.signal==='BUY' && sig.trend==='BEAR') || (sig.signal==='SELL' && sig.trend==='BULL');
   var band = tcProjectedBand(sig);
   var sizingTxt = tcPositionPlan(sig, band, aligned, opposed);
-  recEl.innerHTML = tpBulletsHTML([verdictTxt + '<br><br>' + entryExitTxt].concat(sizingTxt ? [sizingTxt] : []));
+  // Fee-vs-range check lives HERE, not in the Scalping list filter — the
+  // list answers "is this bouncing," this answers "is trading the full
+  // swing worth the fees," and those are different questions (2026-07-14).
+  var scalpFeeNote = '';
+  if(tcSelectedScalpSetup && tcSelectedScalpSetup.rangeWidthPct != null){
+    var sw = tcSelectedScalpSetup;
+    scalpFeeNote = '<br><br><b>SCALP RANGE CHECK:</b> the current bounce is \u20b1'+sw.rangeLow.toFixed(4)+'\u2013\u20b1'+sw.rangeHigh.toFixed(4)+' ('+sw.rangeWidthPct+'% wide). Maya\u2019s round-trip cost (buy+sell) runs about '+TC_SCALP_FEE_RT_PCT+'%. '+(sw.clearsFees
+      ? 'This range clears that with room to spare \u2014 trading the full swing top-to-bottom is worth it.'
+      : 'This range is narrower than the round-trip cost \u2014 trading the full swing here loses money to fees alone before it even moves against you. Wait for it to widen, or skip this one.');
+  }
+  recEl.innerHTML = tpBulletsHTML([verdictTxt + '<br><br>' + entryExitTxt + scalpFeeNote].concat(sizingTxt ? [sizingTxt] : []));
   var recTag = document.getElementById('tc-summary-rec-tag');
   recTag.textContent = 'RECOMMENDATION';
   recTag.className = 'tp-summary-tag ' + sig.signal;
@@ -5052,7 +5075,19 @@ function tcInit(){
     b.classList.toggle('active', b.getAttribute('data-mode') === tcGainersModeVal);
   });
   var initActiveTab = document.querySelector('#tc-gainers-toggle .tp-gainers-tab.active');
-  if(initActiveTab) updateGainersSlide(initActiveTab, true);
+  if(initActiveTab){
+    // Deferred two frames: measuring offsetWidth/offsetLeft immediately at
+    // tcInit() time can catch the tab bar before its layout has actually
+    // painted (especially right after a market-view display toggle),
+    // silently returning a stale/zero position — the pill then sits at
+    // its CSS default (under Gainers) while the text color still switches
+    // to "active," making whichever tab restored from localStorage look
+    // washed out until the person taps any tab and re-triggers a real,
+    // guaranteed-post-layout measurement via the click handler.
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){ updateGainersSlide(initActiveTab, true); });
+    });
+  }
   tcRenderDropdown('');
   tcRenderTop();
   tcRenderWatchlist();
