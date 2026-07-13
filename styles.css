@@ -19,7 +19,10 @@
        padding keeps the LOGO/CONTENT clear of the notch while the
        colored background itself still paints all the way to the true
        edges on all three pages (Stream, Oracle, Trade) that use .topbar. */
-    .topbar{position:sticky;top:0;left:0;right:0;z-index:90;min-height:var(--top-h);display:flex;align-items:center;gap:10px;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) 0 env(safe-area-inset-left,0);background:rgba(7,9,15,0.6);-webkit-backdrop-filter:blur(16px) saturate(160%);backdrop-filter:blur(16px) saturate(160%);border-bottom:1px solid var(--border);box-sizing:border-box;}
+    .topbar{position:fixed;top:0;left:0;right:0;z-index:90;min-height:var(--top-h);display:flex;align-items:center;gap:10px;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) 0 env(safe-area-inset-left,0);background:rgba(7,9,15,0.6);-webkit-backdrop-filter:blur(16px) saturate(160%);backdrop-filter:blur(16px) saturate(160%);border-bottom:1px solid var(--border);box-sizing:border-box;}
+    /* Reserves the topbar's own height in normal document flow, since the
+       real .topbar above is now taken out of flow via position:fixed. */
+    .topbar-spacer{min-height:var(--top-h);padding-top:env(safe-area-inset-top,0);border-bottom:1px solid transparent;box-sizing:border-box;visibility:hidden;}
     .topbar-logo{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent);flex-shrink:0;cursor:pointer;}
     .topbar-logo span{color:var(--text);}
     .topbar-search{flex:1;display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 10px;gap:7px;height:34px;position:relative;}
