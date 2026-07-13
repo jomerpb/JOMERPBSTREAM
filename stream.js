@@ -26,6 +26,10 @@ let searchState     = {q:'', type:'all', page:1, hasMore:false};
 // Similar Movies (player page) state
 let similarMoviesState = {list:[], shown:0, forId:null};
 
+// Remembers how far each page was scrolled, so a back/swipe-back navigation
+// can restore that position instead of always snapping to the top.
+let scrollPositions = {};
+
 // ═══════════════════════════════════════════
 // API HELPERS
 // ═══════════════════════════════════════════
@@ -55,14 +59,21 @@ async function al(query, variables={}) {
 // ═══════════════════════════════════════════
 // NAV — Browser History API
 // ═══════════════════════════════════════════
-function showPage(id) {
+function showPage(id, restore) {
+  // Remember exactly where the page we're leaving was scrolled to.
+  const outgoing = document.querySelector('.page.active');
+  if (outgoing) scrollPositions[outgoing.id] = window.scrollY;
+
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   const isPlayer = id === 'player-page';
   document.querySelector('.bottom-nav').style.display = isPlayer ? 'none' : 'flex';
   // Remove bottom padding on player page so fullscreen button isn't blocked
   document.body.style.paddingBottom = isPlayer ? '0' : 'var(--nav-h)';
-  window.scrollTo(0, 0);
+  // Only restore a remembered scroll position on back/forward navigation
+  // (restore===true, set from the popstate handler). Fresh forward
+  // navigation (tapping a card/tab) always starts at the top, as expected.
+  window.scrollTo(0, restore ? (scrollPositions[id] || 0) : 0);
 }
 
 function goHome() {
@@ -146,12 +157,12 @@ window.addEventListener('popstate', async (e) => {
   const state = e.state;
   if (!state?.page) {
     var h=window.location.hash.replace('#','');
-    if(h==='oracle'){showPage('oracle-page');setNav('oracle');return;}
-    showPage('home-page'); setNav('home'); return;
+    if(h==='oracle'){showPage('oracle-page', true);setNav('oracle');return;}
+    showPage('home-page', true); setNav('home'); return;
   }
   const page = state.page;
   if (page !== 'player-page') document.getElementById('player-iframe').src = '';
-  showPage(page);
+  showPage(page, true);
   const navMap = {'home-page':'home','anime-page':'anime','tv-page':'tv','movies-page':'movies','search-page':'search','oracle-page':'oracle','trade-page':'trade'};
   if (navMap[page]) setNav(navMap[page]);
   if (page === 'detail-page' && state.item) await openDetail(state.item, true);
