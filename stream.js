@@ -30,6 +30,15 @@ let similarMoviesState = {list:[], shown:0, forId:null};
 // can restore that position instead of always snapping to the top.
 let scrollPositions = {};
 
+// Opt out of the browser's own automatic scroll restoration on history
+// navigation (back/forward/swipe-back). Left on 'auto' (the default), the
+// browser tries to restore scroll itself and can race with/override the
+// scrollTo() calls in showPage() below, especially on mobile edge-swipe
+// gestures. 'manual' makes scrollPositions the single source of truth.
+if ('scrollRestoration' in history) {
+  history.scrollRestoration = 'manual';
+}
+
 // ═══════════════════════════════════════════
 // API HELPERS
 // ═══════════════════════════════════════════
@@ -623,7 +632,7 @@ async function openDetail(item, restore=false) {
   if (!restore) {
     history.pushState({page:'detail-page', item}, '', `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`);
   }
-  showPage('detail-page');
+  showPage('detail-page', restore);
 
   // Skeleton
   document.getElementById('detail-backdrop-wrap').innerHTML = `<div class="sk" style="width:100%;height:100%;border-radius:0;"></div><div class="detail-backdrop-overlay"></div><div class="back-circle" onclick="goBack()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>`;
@@ -642,6 +651,14 @@ async function openDetail(item, restore=false) {
     await openTVDetail(item);
   } else {
     await openMovieDetail(item);
+  }
+
+  // The skeleton placeholder set above is shorter than the fully loaded
+  // content, so the scrollTo() inside showPage() can get clamped before
+  // this data finishes loading in. Re-apply it now that real content
+  // (poster, synopsis, episodes) has replaced the skeleton.
+  if (restore) {
+    requestAnimationFrame(() => window.scrollTo(0, scrollPositions['detail-page'] || 0));
   }
 }
 
