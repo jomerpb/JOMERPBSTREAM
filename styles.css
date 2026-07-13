@@ -210,7 +210,24 @@
     .player-top-info p{font-size:10px;color:var(--muted);margin-top:1px;}
     .player-frame{width:100%;padding-top:56.25%;position:relative;background:#000;}
     .player-frame iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none;display:block;}
-    .player-sticky-wrap{position:sticky;top:0;z-index:80;background:var(--bg);}
+    .player-sticky-wrap{background:var(--bg);}
+
+    /* PLAYER PAGE — fixed layout (2026-07-13): back/home buttons + video +
+       server dropdown + prev/next nav never move. #similar-movies-section
+       is the ONLY scrollable region on this page. */
+    #player-page.active{
+      display:flex;flex-direction:column;
+      position:fixed;top:0;left:0;right:0;bottom:0;
+      min-height:0;
+      height:100vh;height:100dvh;
+    }
+    #player-page .player-top,
+    #player-page .player-sticky-wrap{flex:0 0 auto;}
+    #player-page #similar-movies-section{
+      flex:1 1 auto;min-height:0;
+      overflow-y:auto;-webkit-overflow-scrolling:touch;
+      overscroll-behavior:contain;
+    }
     .player-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);}
     .server-label{font-size:10px;color:var(--muted);}
     .server-label b{color:var(--accent2);}
