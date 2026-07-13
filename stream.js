@@ -681,7 +681,8 @@ async function openAnimeDetail(item) {
 
   const full = {...fromAL(m), al_id:m.id, mal_id:m.idMal||item.mal_id};
   currentItem = full;
-  renderDetailTagsRow(matchAnimeTags(m.tags), true);
+  const animeTags = matchAnimeTags(m.tags);
+  renderDetailTagsRow(animeTags, true);
   renderCastProduction('anime', [], []); // no Cast & Production for anime — AniList has no reliable cast data
 
   // Seasons from relations
@@ -700,7 +701,7 @@ async function openAnimeDetail(item) {
   allSeasons = seasons;
 
   renderDetailBackdrop(full.banner||full.img, full.title);
-  renderDetailHero(full, 'anime');
+  renderDetailHero(full, 'anime', animeTags);
   document.getElementById('detail-lang').style.display = 'flex';
   renderSeasonTabs();
   selectSeason(allSeasons[0]);
@@ -716,11 +717,13 @@ async function openTVDetail(item) {
   full.tmdb_id = data.id;
   currentItem = full;
 
-  renderDetailBackdrop(full.banner, full.title);
-  renderDetailHero(full, 'tv');
-
   const keywordNames = (data.keywords?.results||[]).map(k=>k.name);
-  renderDetailTagsRow(matchTmdbTags(keywordNames), true);
+  const tvTags = matchTmdbTags(keywordNames);
+
+  renderDetailBackdrop(full.banner, full.title);
+  renderDetailHero(full, 'tv', tvTags);
+
+  renderDetailTagsRow(tvTags, true);
   const castNames = (data.credits?.cast||[]).slice(0,8).map(c=>c.name);
   const prodNames = [...new Set([...(data.networks||[]).map(n=>n.name), ...(data.production_companies||[]).map(p=>p.name)])];
   renderCastProduction('tv', castNames, prodNames);
@@ -753,13 +756,15 @@ async function openMovieDetail(item) {
   full.tmdb_id = (data||item).id;
   currentItem = full;
 
-  renderDetailBackdrop(full.banner, full.title);
-  renderDetailHero(full, 'movie');
-
-  // Movies have no episodes — just a Watch button. Tags row still shows
-  // (without the "EPISODES" text) if this title matches any known tag.
   const keywordNames = (data?.keywords?.keywords||[]).map(k=>k.name);
-  renderDetailTagsRow(matchTmdbTags(keywordNames), false);
+  const movieTags = matchTmdbTags(keywordNames);
+
+  renderDetailBackdrop(full.banner, full.title);
+  renderDetailHero(full, 'movie', movieTags);
+
+  // Movies have no episode grid, so the "EPISODES" heading stays hidden —
+  // the tag pills now live up in the hero row instead.
+  renderDetailTagsRow(movieTags, false);
   const castNames = (data?.credits?.cast||[]).slice(0,8).map(c=>c.name);
   const prodNames = (data?.production_companies||[]).map(p=>p.name);
   renderCastProduction('movie', castNames, prodNames);
@@ -778,7 +783,7 @@ function renderDetailBackdrop(img, title) {
     <div class="back-circle" onclick="goBack()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>`;
 }
 
-function renderDetailHero(item, type) {
+function renderDetailHero(item, type, extraTags=[]) {
   const typeClass = {anime:'anime',tv:'tv',movie:'movie'}[type];
   const typeLabel = {anime:'🎌 Anime',tv:'📺 TV Series',movie:'🎬 Movie'}[type];
 
@@ -789,6 +794,10 @@ function renderDetailHero(item, type) {
     {label: item.year||'', cls:''},
     {label: item.score?`⭐ ${item.score}`:'', cls:'accent'},
     {label: item.episodes?`${item.episodes} eps`:'', cls:''},
+    // Matched content tags (Miniseries, Isekai, etc.) now sit right next to
+    // the episode-count badge in this same row, instead of appearing lower
+    // down next to the "EPISODES" section heading.
+    ...(extraTags||[]).map(t => ({label: t, cls: 'accent'})),
   ].filter(p=>p.label);
 
   document.getElementById('detail-info').innerHTML = `
@@ -935,16 +944,18 @@ function matchTmdbTags(keywordNames) {
   return out;
 }
 
-// Renders this title's own matched tag pills next to "EPISODES". For movies
-// (showEpisodesText=false) the "EPISODES" word is hidden but the pills still
-// show in the same slot; the whole row hides if there's nothing to show.
+// Controls the "EPISODES" section heading above the episode grid. The
+// title's matched tag pills (Miniseries, Isekai, etc.) used to render here
+// too, but now show up in the hero pill row next to the episode count
+// instead (see renderDetailHero), so this just hides/shows the heading —
+// hidden entirely for movies, which have no episode grid.
 function renderDetailTagsRow(matchedTags, showEpisodesText) {
   const row = document.getElementById('eps-label-row');
   const label = document.getElementById('eps-label');
   const tagsEl = document.getElementById('detail-tags-row');
   label.style.display = showEpisodesText ? 'block' : 'none';
-  tagsEl.innerHTML = (matchedTags||[]).map(t => `<span class="dpill accent">${t}</span>`).join('');
-  row.style.display = (showEpisodesText || (matchedTags||[]).length) ? 'flex' : 'none';
+  tagsEl.innerHTML = '';
+  row.style.display = showEpisodesText ? 'flex' : 'none';
 }
 
 // Cast & Production is TV/Movie only — AniList has no reliable cast data for anime.
@@ -1540,7 +1551,23 @@ function toggleTagPicker(groupId) {
   const willOpen = !el.classList.contains('open');
   // Only one picker open at a time within the same filter panel
   document.querySelectorAll('.tag-picker.open').forEach(p => p.classList.remove('open'));
-  if (willOpen) el.classList.add('open');
+  if (willOpen) {
+    el.classList.add('open');
+    // The popover is left-anchored to its trigger by default; with filters
+    // now sitting side-by-side in a wrapping row, a trigger near the right
+    // edge would otherwise push the panel off-screen, so flip it to a
+    // right-anchor when that's about to happen.
+    const panel = el.querySelector('.tag-picker-panel');
+    if (panel) {
+      panel.style.left = '0';
+      panel.style.right = 'auto';
+      const rect = panel.getBoundingClientRect();
+      if (rect.right > window.innerWidth - 8) {
+        panel.style.left = 'auto';
+        panel.style.right = '0';
+      }
+    }
+  }
 }
 
 function clearTagPicker(groupId) {
@@ -1568,6 +1595,23 @@ function onTagCheck(groupId) {
   }
   if (trigger) trigger.classList.toggle('has-selection', checkedCount > 0);
   updateFilterSelectedDisplay(groupId);
+  scheduleAutoApply(groupId);
+}
+
+// ── AUTO-APPLY (no more manual Apply button) ──
+// Any checkbox change re-runs the matching page's filter automatically.
+// Debounced so rapidly checking several boxes in a row (or resetPageFilter
+// clearing 5-6 pickers at once) collapses into a single fetch instead of
+// firing one request per checkbox.
+let autoApplyTimer = null;
+function scheduleAutoApply(groupId) {
+  const prefix = groupId.slice(0, 2); // 'af' | 'tf' | 'mf'
+  clearTimeout(autoApplyTimer);
+  autoApplyTimer = setTimeout(() => {
+    if (prefix === 'af') applyAnimeFilter(1);
+    else if (prefix === 'tf') applyTVFilter(1);
+    else if (prefix === 'mf') applyMovieFilter(1);
+  }, 250);
 }
 
 // Selected-value summary row shown directly under each picker (requirement:
@@ -1674,7 +1718,6 @@ let animeFilterQ = null;
 
 async function applyAnimeFilter(page=1) {
   if (page === 1) {
-    document.getElementById('anime-filter').style.display = 'none';
     document.getElementById('anime-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
     document.getElementById('anime-more').style.display = 'none';
 
@@ -1717,7 +1760,6 @@ let tvFilterStatuses = [];
 
 async function applyTVFilter(page=1) {
   if (page === 1) {
-    document.getElementById('tv-filter').style.display = 'none';
     document.getElementById('tv-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
     document.getElementById('tv-more').style.display = 'none';
 
@@ -1793,7 +1835,6 @@ let movieFilterUrl = null;
 
 async function applyMovieFilter(page=1) {
   if (page === 1) {
-    document.getElementById('movie-filter').style.display = 'none';
     document.getElementById('movies-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
     document.getElementById('movies-more').style.display = 'none';
 

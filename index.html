@@ -65,7 +65,8 @@
       <div class="ctab" onclick="loadAnimeSub('fantasy',this)">Fantasy</div>
     </div>
     <!-- Anime Filter Panel -->
-    <div id="anime-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+    <div id="anime-filter" class="filter-panel" style="display:none;">
+      <div class="filter-row">
       <div class="filter-section">
         <div class="filter-label">Genre</div>
         <div class="tag-picker" id="af-genre" data-noun="Genre">
@@ -167,10 +168,8 @@
         </div>
         <div class="filter-selected-row" id="af-status-selected" style="display:none;"></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:4px;">
-        <button onclick="applyAnimeFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
-        <button onclick="resetPageFilter('anime')" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:10px 16px;border-radius:10px;font-size:12px;cursor:pointer;">Clear</button>
       </div>
+      <button class="filter-clear-btn" onclick="resetPageFilter('anime')">Clear</button>
     </div>
     <div class="results-grid" id="anime-grid"></div>
     <div id="anime-more" style="display:none;"><div id="anime-sentinel" data-page="anime" style="height:1px;"></div><div class="loader-more"><div class="spinner-sm"></div></div></div>
@@ -191,7 +190,8 @@
       <div class="ctab" onclick="loadTVSub('top_rated','',this)">Top Rated</div>
     </div>
     <!-- TV Filter Panel -->
-    <div id="tv-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+    <div id="tv-filter" class="filter-panel" style="display:none;">
+      <div class="filter-row">
       <div class="filter-section">
         <div class="filter-label">Country</div>
         <div class="tag-picker" id="tf-country" data-noun="Country">
@@ -313,10 +313,8 @@
         </div>
         <div class="filter-selected-row" id="tf-status-selected" style="display:none;"></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:4px;">
-        <button onclick="applyTVFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
-        <button onclick="resetPageFilter('tv')" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:10px 16px;border-radius:10px;font-size:12px;cursor:pointer;">Clear</button>
       </div>
+      <button class="filter-clear-btn" onclick="resetPageFilter('tv')">Clear</button>
     </div>
     <div class="results-grid" id="tv-grid"></div>
     <div id="tv-more" style="display:none;"><div id="tv-sentinel" data-page="tv" style="height:1px;"></div><div class="loader-more"><div class="spinner-sm"></div></div></div>
@@ -334,7 +332,8 @@
       <div class="ctab" onclick="loadMovieSub('upcoming',this)">Upcoming</div>
     </div>
     <!-- Movie Filter Panel -->
-    <div id="movie-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+    <div id="movie-filter" class="filter-panel" style="display:none;">
+      <div class="filter-row">
       <div class="filter-section">
         <div class="filter-label">Country</div>
         <div class="tag-picker" id="mf-country" data-noun="Country">
@@ -457,10 +456,8 @@
         </div>
         <div class="filter-selected-row" id="mf-status-selected" style="display:none;"></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:4px;">
-        <button onclick="applyMovieFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
-        <button onclick="resetPageFilter('movie')" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:10px 16px;border-radius:10px;font-size:12px;cursor:pointer;">Clear</button>
       </div>
+      <button class="filter-clear-btn" onclick="resetPageFilter('movie')">Clear</button>
     </div>
     <div class="results-grid" id="movies-grid"></div>
     <div id="movies-more" style="display:none;"><div id="movies-sentinel" data-page="movies" style="height:1px;"></div><div class="loader-more"><div class="spinner-sm"></div></div></div>

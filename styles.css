@@ -188,6 +188,20 @@
     .filter-selected-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
     .filter-selected-chip{background:rgba(230,57,70,0.12);border:1px solid var(--accent);color:var(--accent);padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:600;white-space:nowrap;}
     .apply-btn{width:100%;background:var(--accent);color:#fff;border:none;padding:12px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:16px;}
+    /* Filter panel shell (Anime/TV/Movie) — filters now lay out horizontally
+       and auto-apply on change, so there's no Apply button; extra bottom
+       padding reserves room for the Clear button pinned to the corner. */
+    .filter-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;padding-bottom:52px;margin-bottom:14px;position:relative;}
+    .filter-row{display:flex;flex-wrap:wrap;gap:16px 18px;}
+    .filter-row .filter-section{margin-bottom:0;flex:0 0 auto;}
+    .filter-clear-btn{position:absolute;right:14px;bottom:14px;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:8px 16px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;}
+    .filter-clear-btn:active{background:rgba(255,255,255,0.08);}
+    /* Each picker's checkbox grid now opens as a floating popover (position:
+       absolute) instead of pushing inline content down — needed because the
+       trigger pills sit side-by-side in a wrapping row, so the panel can no
+       longer just stretch to a full-width parent. */
+    .tag-picker{position:relative;}
+    .tag-picker-panel{position:absolute;top:calc(100% + 8px);left:0;margin-top:0;z-index:30;min-width:230px;max-width:min(280px,calc(100vw - 48px));background:var(--card);box-shadow:0 10px 28px rgba(0,0,0,0.45);}
     .results-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
     .load-more-btn{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:11px;border-radius:10px;font-size:12px;cursor:pointer;margin-top:14px;}
 
