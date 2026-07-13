@@ -182,6 +182,11 @@
     .tag-picker-footer{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
     .tag-picker-footer button{background:none;border:none;color:var(--accent2);font-size:11px;cursor:pointer;padding:4px 8px;}
     @media (max-width:360px){.tag-picker-grid{grid-template-columns:1fr;}}
+    /* Selected-value summary row, shown directly under any converted filter
+       (Genre/Country/Year/Rating/Status/Tags) once at least one box is
+       checked — read-only chips, not clickable. */
+    .filter-selected-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+    .filter-selected-chip{background:rgba(230,57,70,0.12);border:1px solid var(--accent);color:var(--accent);padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:600;white-space:nowrap;}
     .apply-btn{width:100%;background:var(--accent);color:#fff;border:none;padding:12px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:16px;}
     .results-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
     .load-more-btn{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:11px;border-radius:10px;font-size:12px;cursor:pointer;margin-top:14px;}
@@ -203,12 +208,35 @@
     .dpill.anime{background:rgba(139,92,246,0.15);border-color:var(--accent3);color:var(--accent3);}
     .dpill.tv{background:rgba(59,130,246,0.15);border-color:var(--accent2);color:var(--accent2);}
     .dpill.movie{background:rgba(230,57,70,0.15);border-color:var(--accent);color:var(--accent);}
-    .detail-synopsis{font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:14px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+    .detail-synopsis{font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+    .detail-synopsis.expanded{-webkit-line-clamp:unset;overflow:visible;}
+    .synopsis-toggle{display:none;font-size:11px;font-weight:700;color:var(--accent2);cursor:pointer;margin-bottom:14px;-webkit-tap-highlight-color:transparent;}
+    /* Tags this specific title matches (e.g. Isekai, Miniseries), shown
+       next to the EPISODES section label on the detail page. */
+    .eps-label-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 10px;margin-bottom:8px;}
+    .eps-label-row .sec-label{margin-bottom:0;}
+    .detail-tags-row{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;}
+    .detail-tags-row .dpill{font-size:9px;}
     .cta-row{display:flex;gap:8px;margin-bottom:18px;}
     .btn-play{flex:1;background:var(--accent);color:#fff;border:none;padding:11px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;}
     .lang-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
     .ltbtn{background:none;border:none;color:var(--muted);padding:11px 13px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px;}
     .ltbtn.active{background:var(--accent2);color:#fff;}
+
+    /* CAST & PRODUCTION (TV/Movie only) — same collapse pattern as the
+       Trade tab's card sections (chevron rotates, body display:none). */
+    .dc-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;}
+    .dc-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;font-size:12px;font-weight:700;color:var(--text);}
+    .dc-chev{display:inline-flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;transition:transform 0.2s;flex-shrink:0;}
+    .dc-chev.collapsed{transform:rotate(-90deg);}
+    .dc-body{margin-top:10px;}
+    .dc-body.collapsed{display:none;}
+    .dc-block{margin-bottom:10px;}
+    .dc-block:last-child{margin-bottom:0;}
+    .dc-block-label{font-size:9.5px;font-weight:700;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:5px;}
+    .dc-chiplist{display:flex;flex-wrap:wrap;gap:5px;}
+    .dc-chiplist span{background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text);font-size:10.5px;padding:3px 9px;border-radius:20px;}
+    .dc-empty{font-size:11px;color:var(--muted);}
 
     /* SEASONS / EPISODES */
     .sec-label{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;}

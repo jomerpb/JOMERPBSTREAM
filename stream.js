@@ -639,9 +639,18 @@ async function openDetail(item, restore=false) {
   document.getElementById('detail-poster').innerHTML = `<div class="sk" style="width:100%;height:100%;border-radius:7px;"></div>`;
   document.getElementById('detail-info').innerHTML = `<div class="sk" style="width:80%;height:16px;margin-bottom:8px;border-radius:4px;"></div><div class="sk" style="width:60%;height:10px;border-radius:4px;"></div>`;
   document.getElementById('detail-synopsis').textContent = '';
+  document.getElementById('detail-synopsis').classList.remove('expanded');
+  document.getElementById('synopsis-toggle').style.display = 'none';
+  document.getElementById('synopsis-toggle').textContent = 'Show more';
+  document.getElementById('detail-castprod').style.display = 'none';
+  document.getElementById('detail-castprod-body').innerHTML = '';
+  document.getElementById('detail-castprod-body').classList.add('collapsed');
+  document.getElementById('detail-castprod-chev').classList.add('collapsed');
   document.getElementById('detail-lang').style.display = 'none';
   document.getElementById('detail-seasons-wrap').style.display = 'none';
-  document.getElementById('eps-label').style.display = 'none';
+  document.getElementById('eps-label-row').style.display = 'none';
+  document.getElementById('eps-label').style.display = 'block';
+  document.getElementById('detail-tags-row').innerHTML = '';
   document.getElementById('eps-grid').innerHTML = '';
   document.getElementById('seasons-row').innerHTML = '';
 
@@ -664,7 +673,7 @@ async function openDetail(item, restore=false) {
 
 // ── ANIME DETAIL ──
 async function openAnimeDetail(item) {
-  const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:ANIME){id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description episodes averageScore status seasonYear format nextAiringEpisode{episode} genres relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres type nextAiringEpisode{episode}}}}}}`;
+  const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:ANIME){id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description episodes averageScore status seasonYear format nextAiringEpisode{episode} genres tags{name} relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres type nextAiringEpisode{episode}}}}}}`;
   const vars = item.al_id ? {alId:item.al_id} : {malId:item.mal_id};
   const r = await al(Q, vars);
   const m = r?.data?.Media;
@@ -672,6 +681,8 @@ async function openAnimeDetail(item) {
 
   const full = {...fromAL(m), al_id:m.id, mal_id:m.idMal||item.mal_id};
   currentItem = full;
+  renderDetailTagsRow(matchAnimeTags(m.tags), true);
+  renderCastProduction('anime', [], []); // no Cast & Production for anime — AniList has no reliable cast data
 
   // Seasons from relations
   const seasons = [{...full}];
@@ -698,7 +709,7 @@ async function openAnimeDetail(item) {
 
 // ── TV DETAIL ──
 async function openTVDetail(item) {
-  const data = await tmdb(`/tv/${item.tmdb_id||item.id}`);
+  const data = await tmdb(`/tv/${item.tmdb_id||item.id}`, {append_to_response:'keywords,credits'});
   if (!data) { renderSimpleDetail(item, 'tv'); return; }
 
   const full = fromTMDB(data, 'tv');
@@ -707,6 +718,12 @@ async function openTVDetail(item) {
 
   renderDetailBackdrop(full.banner, full.title);
   renderDetailHero(full, 'tv');
+
+  const keywordNames = (data.keywords?.results||[]).map(k=>k.name);
+  renderDetailTagsRow(matchTmdbTags(keywordNames), true);
+  const castNames = (data.credits?.cast||[]).slice(0,8).map(c=>c.name);
+  const prodNames = [...new Set([...(data.networks||[]).map(n=>n.name), ...(data.production_companies||[]).map(p=>p.name)])];
+  renderCastProduction('tv', castNames, prodNames);
 
   // TV seasons from TMDB
   const tvSeasons = (data.seasons||[]).filter(s=>s.season_number>0).map(s=>({
@@ -731,7 +748,7 @@ async function openTVDetail(item) {
 
 // ── MOVIE DETAIL ──
 async function openMovieDetail(item) {
-  const data = await tmdb(`/movie/${item.tmdb_id||item.id}`);
+  const data = await tmdb(`/movie/${item.tmdb_id||item.id}`, {append_to_response:'keywords,credits'});
   const full = data ? fromTMDB(data,'movie') : item;
   full.tmdb_id = (data||item).id;
   currentItem = full;
@@ -739,8 +756,13 @@ async function openMovieDetail(item) {
   renderDetailBackdrop(full.banner, full.title);
   renderDetailHero(full, 'movie');
 
-  // Movies have no episodes — just a Watch button
-  document.getElementById('eps-label').style.display = 'none';
+  // Movies have no episodes — just a Watch button. Tags row still shows
+  // (without the "EPISODES" text) if this title matches any known tag.
+  const keywordNames = (data?.keywords?.keywords||[]).map(k=>k.name);
+  renderDetailTagsRow(matchTmdbTags(keywordNames), false);
+  const castNames = (data?.credits?.cast||[]).slice(0,8).map(c=>c.name);
+  const prodNames = (data?.production_companies||[]).map(p=>p.name);
+  renderCastProduction('movie', castNames, prodNames);
   document.getElementById('detail-play-btn').onclick = () => openPlayer(1);
   document.getElementById('detail-play-btn').textContent = '▶ Watch Movie';
   allSeasons = [{...full, season_number:0}];
@@ -773,7 +795,15 @@ function renderDetailHero(item, type) {
     <div class="detail-title">${item.title}</div>
     <div class="detail-pills">${pills.map(p=>`<span class="dpill ${p.cls}">${p.label}</span>`).join('')}</div>`;
 
-  document.getElementById('detail-synopsis').textContent = item.synopsis || 'No synopsis available.';
+  const synEl = document.getElementById('detail-synopsis');
+  synEl.textContent = item.synopsis || 'No synopsis available.';
+  synEl.classList.remove('expanded');
+  const toggleBtn = document.getElementById('synopsis-toggle');
+  toggleBtn.textContent = 'Show more';
+  // Only offer the toggle if the text actually overflows the 4-line clamp —
+  // scrollHeight vs clientHeight is measured after the browser reflows the
+  // clamped box, so this reflects the real rendered overflow, not a guess.
+  toggleBtn.style.display = synEl.scrollHeight > synEl.clientHeight + 1 ? 'block' : 'none';
   document.getElementById('detail-play-btn').onclick = () => openPlayer(1);
   document.getElementById('detail-play-btn').textContent = '▶ Watch EP 1';
 }
@@ -848,10 +878,106 @@ function buildEpGrid(count, seasonNum) {
 function renderSimpleDetail(item, type) {
   renderDetailBackdrop(item.banner||item.img, item.title);
   renderDetailHero(item, type);
+  renderDetailTagsRow([], type !== 'movie');
+  renderCastProduction(type, [], []);
   allSeasons = [{...item, season_number: type==='movie'?0:1}];
   currentSeason = allSeasons[0];
   totalEps = item.episodes || (type==='movie'?1:20);
   if (type !== 'movie') buildEpGrid(totalEps, 1);
+}
+
+// ═══════════════════════════════════════════
+// DETAIL PAGE — tag pills (next to EPISODES) + Cast & Production (TV/Movie only)
+// ═══════════════════════════════════════════
+// Anime tag pickers use raw AniList tag names as their data-val, so matching
+// a title's own tags reuses those same values (keeps filter and display
+// consistent, including the pre-existing Countryside→Iyashikei mapping).
+const ANIME_TAG_DEFS = [
+  {label:'Isekai',      val:'Isekai'},
+  {label:'Shounen',     val:'Shounen'},
+  {label:'Shoujo',      val:'Shoujo'},
+  {label:'Seinen',      val:'Seinen'},
+  {label:'Josei',       val:'Josei'},
+  {label:'Reincarnation', val:'Reincarnation'},
+  {label:'Time Skip',   val:'Time Skip'},
+  {label:'Super Power', val:'Super Power'},
+  {label:'Iyashikei',   val:'Iyashikei'},
+  {label:'Countryside', val:'Iyashikei'},
+];
+// TV/Movie tag pickers resolve free-text terms into TMDB keyword IDs (see
+// resolveKeywordIds), so matching here checks a title's own TMDB keyword
+// names against those same underlying terms.
+const TV_MOVIE_TAG_DEFS = [
+  {label:'Coming of Age', terms:['boys love','girls love','lgbt','gay romance']},
+  {label:'Reverse Harem', terms:['reverse harem']},
+  {label:'Isekai',        terms:['isekai']},
+  {label:'Time Loop',     terms:['time loop']},
+  {label:'Zombie',        terms:['zombie']},
+  {label:'Vampire',       terms:['vampire']},
+  {label:'Superhero',     terms:['superhero']},
+  {label:'Miniseries',    terms:['miniseries']},
+  {label:'Countryside',   terms:['countryside']},
+];
+
+function matchAnimeTags(aniListTags) {
+  const names = (aniListTags||[]).map(t=>t.name);
+  const out = [];
+  ANIME_TAG_DEFS.forEach(d => { if (names.includes(d.val) && !out.includes(d.label)) out.push(d.label); });
+  return out;
+}
+
+function matchTmdbTags(keywordNames) {
+  const lower = (keywordNames||[]).map(k=>k.toLowerCase());
+  const out = [];
+  TV_MOVIE_TAG_DEFS.forEach(d => {
+    if (d.terms.some(term => lower.some(kn => kn.includes(term)))) out.push(d.label);
+  });
+  return out;
+}
+
+// Renders this title's own matched tag pills next to "EPISODES". For movies
+// (showEpisodesText=false) the "EPISODES" word is hidden but the pills still
+// show in the same slot; the whole row hides if there's nothing to show.
+function renderDetailTagsRow(matchedTags, showEpisodesText) {
+  const row = document.getElementById('eps-label-row');
+  const label = document.getElementById('eps-label');
+  const tagsEl = document.getElementById('detail-tags-row');
+  label.style.display = showEpisodesText ? 'block' : 'none';
+  tagsEl.innerHTML = (matchedTags||[]).map(t => `<span class="dpill accent">${t}</span>`).join('');
+  row.style.display = (showEpisodesText || (matchedTags||[]).length) ? 'flex' : 'none';
+}
+
+// Cast & Production is TV/Movie only — AniList has no reliable cast data for anime.
+function renderCastProduction(type, castNames, prodNames) {
+  const section = document.getElementById('detail-castprod');
+  const body = document.getElementById('detail-castprod-body');
+  if (type === 'anime') { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  const castHtml = (castNames||[]).length
+    ? `<div class="dc-chiplist">${castNames.map(n=>`<span>${escapeHtml(n)}</span>`).join('')}</div>`
+    : `<div class="dc-empty">No cast information available.</div>`;
+  const prodHtml = (prodNames||[]).length
+    ? `<div class="dc-chiplist">${prodNames.map(n=>`<span>${escapeHtml(n)}</span>`).join('')}</div>`
+    : `<div class="dc-empty">No production information available.</div>`;
+  body.innerHTML = `
+    <div class="dc-block"><div class="dc-block-label">Cast</div>${castHtml}</div>
+    <div class="dc-block"><div class="dc-block-label">Production</div>${prodHtml}</div>`;
+}
+
+function toggleDcSection() {
+  document.getElementById('detail-castprod-body').classList.toggle('collapsed');
+  document.getElementById('detail-castprod-chev').classList.toggle('collapsed');
+}
+
+function toggleSynopsis() {
+  const el = document.getElementById('detail-synopsis');
+  const btn = document.getElementById('synopsis-toggle');
+  const expanded = el.classList.toggle('expanded');
+  btn.textContent = expanded ? 'Show less' : 'Show more';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ═══════════════════════════════════════════
@@ -1403,22 +1529,16 @@ function togglePageFilter(id) {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-function pickPageChip(el, groupId) {
-  document.getElementById(groupId).querySelectorAll('.chip')
-    .forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-}
-
-function getChipVal(groupId) {
-  return document.getElementById(groupId)?.querySelector('.chip.active')?.dataset.val || '';
-}
-
-// ── MULTI-SELECT TAG PICKER (Tag section only — Genre/Year/Rating/Country/Status stay single-select chips) ──
+// ── MULTI-SELECT CHECKBOX PICKER — used for every filter (Genre, Country,
+// Year/Era, Min Rating, Status, Tags) across Anime/TV/Movies. All share one
+// trigger+panel+checkbox-grid structure so the same handful of functions
+// below drive all of them; the container's data-noun tells onTagCheck what
+// word to count ("3 Genres", "2 Countries", etc). ──
 function toggleTagPicker(groupId) {
   const el = document.getElementById(groupId);
   if (!el) return;
   const willOpen = !el.classList.contains('open');
-  // Only one tag picker open at a time within the same filter panel
+  // Only one picker open at a time within the same filter panel
   document.querySelectorAll('.tag-picker.open').forEach(p => p.classList.remove('open'));
   if (willOpen) el.classList.add('open');
 }
@@ -1430,21 +1550,48 @@ function clearTagPicker(groupId) {
   onTagCheck(groupId);
 }
 
+const FILTER_NOUN_PLURAL = {Genre:'Genres', Country:'Countries', Year:'Years', Rating:'Ratings', Status:'Statuses', Tag:'Tags'};
+
 function onTagCheck(groupId) {
   const el = document.getElementById(groupId);
   if (!el) return;
   const checkedCount = el.querySelectorAll('input[type=checkbox]:checked').length;
   const label = document.getElementById(groupId + '-label');
   const trigger = el.querySelector('.tag-picker-trigger');
-  if (label) label.textContent = checkedCount ? `${checkedCount} Tag${checkedCount > 1 ? 's' : ''}` : 'All Tags';
+  if (label) {
+    // Cache the author-written default text ("All Genres", "Any Rating"...)
+    // the first time this runs, so it can be restored when nothing's checked.
+    if (label.dataset.default === undefined) label.dataset.default = label.textContent;
+    const noun = el.dataset.noun || 'Tag';
+    const plural = FILTER_NOUN_PLURAL[noun] || (noun + 's');
+    label.textContent = checkedCount ? `${checkedCount} ${checkedCount > 1 ? plural : noun}` : label.dataset.default;
+  }
   if (trigger) trigger.classList.toggle('has-selection', checkedCount > 0);
+  updateFilterSelectedDisplay(groupId);
+}
+
+// Selected-value summary row shown directly under each picker (requirement:
+// the chosen values should appear right after the filter, not just inside
+// the collapsed panel).
+function updateFilterSelectedDisplay(groupId) {
+  const el = document.getElementById(groupId);
+  const disp = document.getElementById(groupId + '-selected');
+  if (!el || !disp) return;
+  const checked = [...el.querySelectorAll('input[type=checkbox]:checked')];
+  if (!checked.length) { disp.style.display = 'none'; disp.innerHTML = ''; return; }
+  disp.style.display = 'flex';
+  disp.innerHTML = checked.map(c => {
+    const lbl = c.closest('label');
+    const text = lbl ? lbl.textContent.trim() : (c.dataset.val || '');
+    return `<span class="filter-selected-chip">${escapeHtml(text)}</span>`;
+  }).join('');
 }
 
 // Returns the de-duplicated list of underlying values for all checked boxes in
-// a tag picker. A single checkbox's data-val may itself be a comma-separated
-// combo (e.g. "Bisexual,Gender Bending" for an LGBTQ+ chip that maps to more
-// than one underlying AniList tag / TMDB keyword term), so each is split and
-// flattened before de-duping.
+// a picker. A single checkbox's data-val may itself be a comma-separated
+// combo (e.g. "boys love,girls love,lgbt,gay romance" for the "Coming of
+// Age" chip, which maps to several underlying keyword terms), so each is
+// split and flattened before de-duping.
 function getTagVals(groupId) {
   const el = document.getElementById(groupId);
   if (!el) return [];
@@ -1453,7 +1600,7 @@ function getTagVals(groupId) {
   return [...new Set(vals)];
 }
 
-// Tapping outside an open tag picker collapses it back down
+// Tapping outside an open picker collapses it back down
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.tag-picker')) {
     document.querySelectorAll('.tag-picker.open').forEach(p => p.classList.remove('open'));
@@ -1469,13 +1616,35 @@ function getYearRange(val) {
   return { gte: `${val}-01-01`, lte: `${val}-12-31` };
 }
 
+// Year/Era is now multi-select. The underlying APIs only take one date
+// range, so multiple selections (e.g. 2010s + 2020s) are combined into the
+// min→max envelope across all chosen eras rather than queried separately.
+function getYearEnvelope(groupId) {
+  const vals = getTagVals(groupId);
+  if (!vals.length) return {};
+  let gte = null, lte = null;
+  vals.forEach(v => {
+    const r = getYearRange(v);
+    if (r.gte && (gte === null || r.gte < gte)) gte = r.gte;
+    if (r.lte && (lte === null || r.lte > lte)) lte = r.lte;
+  });
+  return { gte: gte || undefined, lte: lte || undefined };
+}
+
+// Min Rating is now multi-select too, but the values are nested thresholds
+// (9+ is a subset of 8+), so checking several just collapses to the lowest
+// one — that's the only floor that actually includes everything selected.
+function getMinRatingVal(groupId) {
+  const vals = getTagVals(groupId).map(Number).filter(n => !isNaN(n));
+  return vals.length ? Math.min(...vals) : undefined;
+}
+
 function resetPageFilter(page) {
   const prefix = page==='anime'?'af':page==='tv'?'tf':'mf';
-  ['genre','year','rating','country','status'].forEach(g => {
+  ['genre','year','rating','country','status','tag'].forEach(g => {
     const el = document.getElementById(`${prefix}-${g}`);
-    if (el) el.querySelectorAll('.chip').forEach((c,i) => c.classList.toggle('active', i===0));
+    if (el) clearTagPicker(`${prefix}-${g}`);
   });
-  clearTagPicker(`${prefix}-tag`);
   const matched = document.getElementById(`${prefix}-tag-matched`);
   if (matched) { matched.textContent = ''; matched.style.display = 'none'; }
 }
@@ -1509,25 +1678,24 @@ async function applyAnimeFilter(page=1) {
     document.getElementById('anime-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
     document.getElementById('anime-more').style.display = 'none';
 
-    const genre   = getChipVal('af-genre');
-    const tags    = getTagVals('af-tag'); // multi-select — array of AniList tag names, OR-matched via tag_in
-    const yearVal = getChipVal('af-year');
-    const rating  = getChipVal('af-rating');
-    const status  = getChipVal('af-status');
-    const yr      = getYearRange(yearVal);
-    const minScore = rating ? parseInt(rating) : undefined;
+    const genres  = getTagVals('af-genre'); // multi-select — OR'd via genre_in
+    const tags    = getTagVals('af-tag');   // multi-select — array of AniList tag names, OR-matched via tag_in
+    const rating  = getMinRatingVal('af-rating'); // multi-select collapses to lowest checked threshold
+    const statuses = getTagVals('af-status'); // multi-select — OR'd via status_in
+    const yr      = getYearEnvelope('af-year'); // multi-select — combined into one min→max range
+    const minScore = rating;
     const yGte = yr.gte ? parseInt(yr.gte.slice(0,4))*10000 : undefined;
     const yLte = yr.lte ? parseInt(yr.lte.slice(0,4))*10000+1231 : undefined;
 
-    animeFilterQ = `query($page:Int,$genre:String,$tags:[String],$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$status:MediaStatus){
+    animeFilterQ = `query($page:Int,$genres:[String],$tags:[String],$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$statuses:[MediaStatus]){
       Page(page:$page,perPage:24){
         pageInfo{hasNextPage}
-        media(type:ANIME,isAdult:false,genre:$genre,tag_in:$tags,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status:$status){
+        media(type:ANIME,isAdult:false,genre_in:$genres,tag_in:$tags,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status_in:$statuses){
           id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres
         }
       }
     }`;
-    animeFilterVars = { genre:genre||undefined, tags: tags.length?tags:undefined, sort:['SCORE_DESC'], yGte, yLte, minScore, status:status||undefined };
+    animeFilterVars = { genres: genres.length?genres:undefined, tags: tags.length?tags:undefined, sort:['SCORE_DESC'], yGte, yLte, minScore, statuses: statuses.length?statuses:undefined };
   }
 
   const data = await al(animeFilterQ, {...animeFilterVars, page});
@@ -1545,7 +1713,7 @@ async function applyAnimeFilter(page=1) {
 // ── TV FILTER ──
 // Store filter URL base for pagination
 let tvFilterUrl = null;
-let tvFilterStatus = '';
+let tvFilterStatuses = [];
 
 async function applyTVFilter(page=1) {
   if (page === 1) {
@@ -1553,31 +1721,35 @@ async function applyTVFilter(page=1) {
     document.getElementById('tv-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
     document.getElementById('tv-more').style.display = 'none';
 
-    const country = getChipVal('tf-country');
-    const genre   = getChipVal('tf-genre');
-    const yearVal = getChipVal('tf-year');
-    const rating  = getChipVal('tf-rating');
-    const status  = getChipVal('tf-status');
-    const tagVal  = getTagVals('tf-tag').join(','); // multi-select — resolveKeywordIds already OR-matches comma-separated terms
-    const yr      = getYearRange(yearVal);
-    tvFilterStatus = status;
+    const countries = getTagVals('tf-country'); // multi-select — OR'd via pipe
+    const genres    = getTagVals('tf-genre');    // multi-select — OR'd via pipe
+    const rating    = getMinRatingVal('tf-rating'); // multi-select collapses to lowest checked threshold
+    const statuses  = getTagVals('tf-status');   // multi-select — see note below
+    const tagVal    = getTagVals('tf-tag').join(','); // multi-select — resolveKeywordIds already OR-matches comma-separated terms
+    const yr        = getYearEnvelope('tf-year'); // multi-select — combined into one min→max range
+    tvFilterStatuses = statuses;
 
     const url = new URL(`${TMDB_BASE}/discover/tv`);
     url.searchParams.set('api_key', TMDB_KEY);
     url.searchParams.set('language', 'en-US');
-    if (country) {
+    if (countries.length) {
       url.searchParams.set('sort_by', 'popularity.desc');
       url.searchParams.set('vote_count.gte', '0');
     } else {
       url.searchParams.set('sort_by', 'vote_average.desc');
       url.searchParams.set('vote_count.gte', '50');
     }
-    if (country) url.searchParams.set('with_origin_country', country);
-    if (genre)   url.searchParams.set('with_genres', genre);
-    if (rating)  url.searchParams.set('vote_average.gte', rating);
+    if (countries.length) url.searchParams.set('with_origin_country', countries.join('|'));
+    if (genres.length)    url.searchParams.set('with_genres', genres.join('|'));
+    if (rating !== undefined) url.searchParams.set('vote_average.gte', rating);
     if (yr.gte)  url.searchParams.set('first_air_date.gte', yr.gte);
     if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
-    if (status)  url.searchParams.set('with_status', status);
+    // NOTE: TMDB's /discover/tv has no real "status" filter parameter — list
+    // results don't even carry the fields fromTMDB needs to compute status.
+    // So (same constraint as the old single-select version) we can only
+    // force-label results with a known status when exactly ONE is checked;
+    // with 0 or 2+ checked there's no reliable single label to apply, so
+    // status is left for fromTMDB to derive normally (may come back blank).
 
     const keywordIds = await resolveKeywordIds(tagVal);
     const matchedEl = document.getElementById('tf-tag-matched');
@@ -1593,7 +1765,7 @@ async function applyTVFilter(page=1) {
       matchedEl.style.display = tagVal ? 'block' : 'none';
     }
 
-    // Save base URL and status for pagination
+    // Save base URL and statuses for pagination
     tvFilterUrl = url.toString();
   }
 
@@ -1601,10 +1773,9 @@ async function applyTVFilter(page=1) {
     const r = await fetch(`${tvFilterUrl}&page=${page}`, {signal: AbortSignal.timeout(10000)});
     const d = await r.json();
     const statusMap = {'returning':'Ongoing','ended':'Completed','planned':'Upcoming','canceled':'Canceled'};
-    const knownStatus = statusMap[tvFilterStatus] || '';
+    const knownStatus = tvFilterStatuses.length === 1 ? (statusMap[tvFilterStatuses[0]] || '') : '';
     const items = (d?.results||[]).map(m => {
       const item = fromTMDB(m,'tv');
-      // Always override with known status from filter selection
       if (knownStatus) item.status = knownStatus;
       return item;
     });
@@ -1626,31 +1797,32 @@ async function applyMovieFilter(page=1) {
     document.getElementById('movies-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
     document.getElementById('movies-more').style.display = 'none';
 
-    const country = getChipVal('mf-country');
-    const genre   = getChipVal('mf-genre');
-    const yearVal = getChipVal('mf-year');
-    const rating  = getChipVal('mf-rating');
-    const status  = getChipVal('mf-status');
-    const tagVal  = getTagVals('mf-tag').join(','); // multi-select — resolveKeywordIds already OR-matches comma-separated terms
-    const yr      = getYearRange(yearVal);
+    const countries = getTagVals('mf-country'); // multi-select — OR'd via pipe
+    const genres    = getTagVals('mf-genre');    // multi-select — OR'd via pipe
+    const rating    = getMinRatingVal('mf-rating'); // multi-select collapses to lowest checked threshold
+    const statuses  = getTagVals('mf-status');   // multi-select — Released+Upcoming together (or neither) = no date filter
+    const tagVal    = getTagVals('mf-tag').join(','); // multi-select — resolveKeywordIds already OR-matches comma-separated terms
+    const yr        = getYearEnvelope('mf-year'); // multi-select — combined into one min→max range
 
     const url = new URL(`${TMDB_BASE}/discover/movie`);
     url.searchParams.set('api_key', TMDB_KEY);
     url.searchParams.set('language', 'en-US');
-    if (country) {
+    if (countries.length) {
       url.searchParams.set('sort_by', 'popularity.desc');
       url.searchParams.set('vote_count.gte', '0');
     } else {
       url.searchParams.set('sort_by', 'vote_average.desc');
       url.searchParams.set('vote_count.gte', '100');
     }
-    if (country) url.searchParams.set('with_origin_country', country);
-    if (genre)  url.searchParams.set('with_genres', genre);
-    if (rating) url.searchParams.set('vote_average.gte', rating);
+    if (countries.length) url.searchParams.set('with_origin_country', countries.join('|'));
+    if (genres.length) url.searchParams.set('with_genres', genres.join('|'));
+    if (rating !== undefined) url.searchParams.set('vote_average.gte', rating);
     if (yr.gte) url.searchParams.set('primary_release_date.gte', yr.gte);
     if (yr.lte) url.searchParams.set('primary_release_date.lte', yr.lte);
-    if (status === 'upcoming') url.searchParams.set('primary_release_date.gte', new Date().toISOString().slice(0,10));
-    else if (status === 'released') url.searchParams.set('primary_release_date.lte', new Date().toISOString().slice(0,10));
+    if (statuses.length === 1) {
+      if (statuses[0] === 'upcoming') url.searchParams.set('primary_release_date.gte', new Date().toISOString().slice(0,10));
+      else if (statuses[0] === 'released') url.searchParams.set('primary_release_date.lte', new Date().toISOString().slice(0,10));
+    }
 
     const keywordIds = await resolveKeywordIds(tagVal);
     const matchedElM = document.getElementById('mf-tag-matched');

@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#07090f"/>
   <title>JomerPB Stream</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="styles.css?v=20260713d"/>
+  <link rel="stylesheet" href="styles.css?v=20260714a"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png"/>
   <link rel="apple-touch-icon" href="icon-192.png"/>
-  <script defer src="stream.js?v=20260713b"></script>
+  <script defer src="stream.js?v=20260714a"></script>
   <script defer src="oracle.js?v=20260711"></script>
   <script defer src="trade.js?v=20260705"></script>
 </head>
@@ -68,25 +68,31 @@
     <div id="anime-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
       <div class="filter-section">
         <div class="filter-label">Genre</div>
-        <div class="chips-row" id="af-genre">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-genre')">All</div>
-          <div class="chip" data-val="Action" onclick="pickPageChip(this,'af-genre')">Action</div>
-          <div class="chip" data-val="Adventure" onclick="pickPageChip(this,'af-genre')">Adventure</div>
-          <div class="chip" data-val="Comedy" onclick="pickPageChip(this,'af-genre')">Comedy</div>
-          <div class="chip" data-val="Drama" onclick="pickPageChip(this,'af-genre')">Drama</div>
-          <div class="chip" data-val="Fantasy" onclick="pickPageChip(this,'af-genre')">Fantasy</div>
-          <div class="chip" data-val="Horror" onclick="pickPageChip(this,'af-genre')">Horror</div>
-          <div class="chip" data-val="Mystery" onclick="pickPageChip(this,'af-genre')">Mystery</div>
-          <div class="chip" data-val="Romance" onclick="pickPageChip(this,'af-genre')">Romance</div>
-          <div class="chip" data-val="Sci-Fi" onclick="pickPageChip(this,'af-genre')">Sci-Fi</div>
-          <div class="chip" data-val="Slice of Life" onclick="pickPageChip(this,'af-genre')">Slice of Life</div>
-          <div class="chip" data-val="Supernatural" onclick="pickPageChip(this,'af-genre')">Supernatural</div>
-          <div class="chip" data-val="Psychological" onclick="pickPageChip(this,'af-genre')">Psychological</div>
-          <div class="chip" data-val="Mecha" onclick="pickPageChip(this,'af-genre')">Mecha</div>
-          <div class="chip" data-val="Sports" onclick="pickPageChip(this,'af-genre')">Sports</div>
-          <div class="chip" data-val="Ecchi" onclick="pickPageChip(this,'af-genre')">Ecchi</div>
-          <div class="chip" data-val="Music" onclick="pickPageChip(this,'af-genre')">Music</div>
+        <div class="tag-picker" id="af-genre" data-noun="Genre">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('af-genre')"><span id="af-genre-label">All Genres</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="Action" onchange="onTagCheck('af-genre')">Action</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Adventure" onchange="onTagCheck('af-genre')">Adventure</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Comedy" onchange="onTagCheck('af-genre')">Comedy</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Drama" onchange="onTagCheck('af-genre')">Drama</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Fantasy" onchange="onTagCheck('af-genre')">Fantasy</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Horror" onchange="onTagCheck('af-genre')">Horror</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Mystery" onchange="onTagCheck('af-genre')">Mystery</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Romance" onchange="onTagCheck('af-genre')">Romance</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Sci-Fi" onchange="onTagCheck('af-genre')">Sci-Fi</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Slice of Life" onchange="onTagCheck('af-genre')">Slice of Life</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Supernatural" onchange="onTagCheck('af-genre')">Supernatural</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Psychological" onchange="onTagCheck('af-genre')">Psychological</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Mecha" onchange="onTagCheck('af-genre')">Mecha</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Sports" onchange="onTagCheck('af-genre')">Sports</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Ecchi" onchange="onTagCheck('af-genre')">Ecchi</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Music" onchange="onTagCheck('af-genre')">Music</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('af-genre')">Clear</button><button type="button" onclick="toggleTagPicker('af-genre')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="af-genre-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Tag</div>
@@ -99,10 +105,6 @@
               <label class="tag-picker-option"><input type="checkbox" data-val="Shoujo" onchange="onTagCheck('af-tag')">Shoujo</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="Seinen" onchange="onTagCheck('af-tag')">Seinen</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="Josei" onchange="onTagCheck('af-tag')">Josei</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="Boys' Love" onchange="onTagCheck('af-tag')">BL (Boys' Love)</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="Girls' Love" onchange="onTagCheck('af-tag')">GL (Girls' Love)</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="Shounen Ai" onchange="onTagCheck('af-tag')">Gay Romance</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="Bisexual,Gender Bending" onchange="onTagCheck('af-tag')">LGBTQ+</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="Reincarnation" onchange="onTagCheck('af-tag')">Reincarnation</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="Time Skip" onchange="onTagCheck('af-tag')">Time Skip</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="Super Power" onchange="onTagCheck('af-tag')">Super Power</label>
@@ -112,39 +114,58 @@
             <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('af-tag')">Clear</button><button type="button" onclick="toggleTagPicker('af-tag')">Done</button></div>
           </div>
         </div>
+        <div class="filter-selected-row" id="af-tag-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Year / Era</div>
-        <div class="chips-row" id="af-year">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-year')">All</div>
-          <div class="chip" data-val="2026" onclick="pickPageChip(this,'af-year')">2026</div>
-          <div class="chip" data-val="2025" onclick="pickPageChip(this,'af-year')">2025</div>
-          <div class="chip" data-val="2024" onclick="pickPageChip(this,'af-year')">2024</div>
-          <div class="chip" data-val="2020s" onclick="pickPageChip(this,'af-year')">2020s</div>
-          <div class="chip" data-val="2010s" onclick="pickPageChip(this,'af-year')">2010s</div>
-          <div class="chip" data-val="2000s" onclick="pickPageChip(this,'af-year')">2000s</div>
-          <div class="chip" data-val="1990s" onclick="pickPageChip(this,'af-year')">1990s</div>
-          <div class="chip" data-val="1980s" onclick="pickPageChip(this,'af-year')">1980s</div>
+        <div class="tag-picker" id="af-year" data-noun="Year">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('af-year')"><span id="af-year-label">All Years</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="2026" onchange="onTagCheck('af-year')">2026</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2025" onchange="onTagCheck('af-year')">2025</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2024" onchange="onTagCheck('af-year')">2024</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2020s" onchange="onTagCheck('af-year')">2020s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2010s" onchange="onTagCheck('af-year')">2010s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2000s" onchange="onTagCheck('af-year')">2000s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="1990s" onchange="onTagCheck('af-year')">1990s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="1980s" onchange="onTagCheck('af-year')">1980s</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('af-year')">Clear</button><button type="button" onclick="toggleTagPicker('af-year')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="af-year-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Min Rating</div>
-        <div class="chips-row" id="af-rating">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-rating')">Any</div>
-          <div class="chip" data-val="90" onclick="pickPageChip(this,'af-rating')">9+</div>
-          <div class="chip" data-val="80" onclick="pickPageChip(this,'af-rating')">8+</div>
-          <div class="chip" data-val="70" onclick="pickPageChip(this,'af-rating')">7+</div>
-          <div class="chip" data-val="60" onclick="pickPageChip(this,'af-rating')">6+</div>
+        <div class="tag-picker" id="af-rating" data-noun="Rating">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('af-rating')"><span id="af-rating-label">Any Rating</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="90" onchange="onTagCheck('af-rating')">9+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="80" onchange="onTagCheck('af-rating')">8+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="70" onchange="onTagCheck('af-rating')">7+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="60" onchange="onTagCheck('af-rating')">6+</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('af-rating')">Clear</button><button type="button" onclick="toggleTagPicker('af-rating')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="af-rating-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Status</div>
-        <div class="chips-row" id="af-status">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'af-status')">All</div>
-          <div class="chip" data-val="RELEASING" onclick="pickPageChip(this,'af-status')">Ongoing</div>
-          <div class="chip" data-val="FINISHED" onclick="pickPageChip(this,'af-status')">Completed</div>
-          <div class="chip" data-val="NOT_YET_RELEASED" onclick="pickPageChip(this,'af-status')">Upcoming</div>
+        <div class="tag-picker" id="af-status" data-noun="Status">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('af-status')"><span id="af-status-label">All Statuses</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="RELEASING" onchange="onTagCheck('af-status')">Ongoing</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="FINISHED" onchange="onTagCheck('af-status')">Completed</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="NOT_YET_RELEASED" onchange="onTagCheck('af-status')">Upcoming</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('af-status')">Clear</button><button type="button" onclick="toggleTagPicker('af-status')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="af-status-selected" style="display:none;"></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:4px;">
         <button onclick="applyAnimeFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
@@ -173,39 +194,51 @@
     <div id="tv-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
       <div class="filter-section">
         <div class="filter-label">Country</div>
-        <div class="chips-row" id="tf-country">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-country')">All</div>
-          <div class="chip" data-val="KR" onclick="pickPageChip(this,'tf-country')">🇰🇷 Korea</div>
-          <div class="chip" data-val="JP" onclick="pickPageChip(this,'tf-country')">🇯🇵 Japan</div>
-          <div class="chip" data-val="CN" onclick="pickPageChip(this,'tf-country')">🇨🇳 China</div>
-          <div class="chip" data-val="TH" onclick="pickPageChip(this,'tf-country')">🇹🇭 Thailand</div>
-          <div class="chip" data-val="PH" onclick="pickPageChip(this,'tf-country')">🇵🇭 Philippines</div>
-          <div class="chip" data-val="US" onclick="pickPageChip(this,'tf-country')">🇺🇸 USA</div>
-          <div class="chip" data-val="GB" onclick="pickPageChip(this,'tf-country')">🇬🇧 UK</div>
-          <div class="chip" data-val="IN" onclick="pickPageChip(this,'tf-country')">🇮🇳 India</div>
+        <div class="tag-picker" id="tf-country" data-noun="Country">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('tf-country')"><span id="tf-country-label">All Countries</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="KR" onchange="onTagCheck('tf-country')">🇰🇷 Korea</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="JP" onchange="onTagCheck('tf-country')">🇯🇵 Japan</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="CN" onchange="onTagCheck('tf-country')">🇨🇳 China</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="TH" onchange="onTagCheck('tf-country')">🇹🇭 Thailand</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="PH" onchange="onTagCheck('tf-country')">🇵🇭 Philippines</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="US" onchange="onTagCheck('tf-country')">🇺🇸 USA</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="GB" onchange="onTagCheck('tf-country')">🇬🇧 UK</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="IN" onchange="onTagCheck('tf-country')">🇮🇳 India</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('tf-country')">Clear</button><button type="button" onclick="toggleTagPicker('tf-country')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="tf-country-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Genre</div>
-        <div class="chips-row" id="tf-genre">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-genre')">All</div>
-          <div class="chip" data-val="18" onclick="pickPageChip(this,'tf-genre')">Drama</div>
-          <div class="chip" data-val="35" onclick="pickPageChip(this,'tf-genre')">Comedy</div>
-          <div class="chip" data-val="80" onclick="pickPageChip(this,'tf-genre')">Crime</div>
-          <div class="chip" data-val="10765" onclick="pickPageChip(this,'tf-genre')">Sci-Fi</div>
-          <div class="chip" data-val="10749" onclick="pickPageChip(this,'tf-genre')">Romance</div>
-          <div class="chip" data-val="28" onclick="pickPageChip(this,'tf-genre')">Action</div>
-          <div class="chip" data-val="9648" onclick="pickPageChip(this,'tf-genre')">Mystery</div>
-          <div class="chip" data-val="14" onclick="pickPageChip(this,'tf-genre')">Fantasy</div>
-          <div class="chip" data-val="27" onclick="pickPageChip(this,'tf-genre')">Horror</div>
-          <div class="chip" data-val="53" onclick="pickPageChip(this,'tf-genre')">Thriller</div>
-          <div class="chip" data-val="16" onclick="pickPageChip(this,'tf-genre')">Animation</div>
-          <div class="chip" data-val="99" onclick="pickPageChip(this,'tf-genre')">Documentary</div>
-          <div class="chip" data-val="10751" onclick="pickPageChip(this,'tf-genre')">Family</div>
-          <div class="chip" data-val="10762" onclick="pickPageChip(this,'tf-genre')">Kids</div>
-          <div class="chip" data-val="10768" onclick="pickPageChip(this,'tf-genre')">War & Politics</div>
-          <div class="chip" data-val="37" onclick="pickPageChip(this,'tf-genre')">Western</div>
+        <div class="tag-picker" id="tf-genre" data-noun="Genre">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('tf-genre')"><span id="tf-genre-label">All Genres</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="18" onchange="onTagCheck('tf-genre')">Drama</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="35" onchange="onTagCheck('tf-genre')">Comedy</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="80" onchange="onTagCheck('tf-genre')">Crime</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="10765" onchange="onTagCheck('tf-genre')">Sci-Fi</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="10749" onchange="onTagCheck('tf-genre')">Romance</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="28" onchange="onTagCheck('tf-genre')">Action</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="9648" onchange="onTagCheck('tf-genre')">Mystery</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="14" onchange="onTagCheck('tf-genre')">Fantasy</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="27" onchange="onTagCheck('tf-genre')">Horror</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="53" onchange="onTagCheck('tf-genre')">Thriller</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="16" onchange="onTagCheck('tf-genre')">Animation</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="99" onchange="onTagCheck('tf-genre')">Documentary</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="10751" onchange="onTagCheck('tf-genre')">Family</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="10762" onchange="onTagCheck('tf-genre')">Kids</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="10768" onchange="onTagCheck('tf-genre')">War & Politics</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="37" onchange="onTagCheck('tf-genre')">Western</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('tf-genre')">Clear</button><button type="button" onclick="toggleTagPicker('tf-genre')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="tf-genre-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Tags</div>
@@ -213,10 +246,7 @@
           <div class="tag-picker-trigger" onclick="toggleTagPicker('tf-tag')"><span id="tf-tag-label">All Tags</span><span class="tpt-caret">▾</span></div>
           <div class="tag-picker-panel">
             <div class="tag-picker-grid">
-              <label class="tag-picker-option"><input type="checkbox" data-val="boys love" onchange="onTagCheck('tf-tag')">BL (Boys Love)</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="girls love" onchange="onTagCheck('tf-tag')">GL (Girls Love)</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="lgbt" onchange="onTagCheck('tf-tag')">LGBT</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="gay romance" onchange="onTagCheck('tf-tag')">Gay Romance</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="boys love,girls love,lgbt,gay romance" onchange="onTagCheck('tf-tag')">Coming of Age</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="reverse harem" onchange="onTagCheck('tf-tag')">Reverse Harem</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="isekai" onchange="onTagCheck('tf-tag')">Isekai</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="time loop" onchange="onTagCheck('tf-tag')">Time Loop</label>
@@ -230,39 +260,58 @@
           </div>
         </div>
         <div id="tf-tag-matched" style="display:none;font-size:11px;color:var(--muted);margin-top:6px;"></div>
+        <div class="filter-selected-row" id="tf-tag-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Year / Era</div>
-        <div class="chips-row" id="tf-year">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-year')">All</div>
-          <div class="chip" data-val="2026" onclick="pickPageChip(this,'tf-year')">2026</div>
-          <div class="chip" data-val="2025" onclick="pickPageChip(this,'tf-year')">2025</div>
-          <div class="chip" data-val="2024" onclick="pickPageChip(this,'tf-year')">2024</div>
-          <div class="chip" data-val="2020s" onclick="pickPageChip(this,'tf-year')">2020s</div>
-          <div class="chip" data-val="2010s" onclick="pickPageChip(this,'tf-year')">2010s</div>
-          <div class="chip" data-val="2000s" onclick="pickPageChip(this,'tf-year')">2000s</div>
-          <div class="chip" data-val="1990s" onclick="pickPageChip(this,'tf-year')">1990s</div>
+        <div class="tag-picker" id="tf-year" data-noun="Year">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('tf-year')"><span id="tf-year-label">All Years</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="2026" onchange="onTagCheck('tf-year')">2026</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2025" onchange="onTagCheck('tf-year')">2025</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2024" onchange="onTagCheck('tf-year')">2024</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2020s" onchange="onTagCheck('tf-year')">2020s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2010s" onchange="onTagCheck('tf-year')">2010s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2000s" onchange="onTagCheck('tf-year')">2000s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="1990s" onchange="onTagCheck('tf-year')">1990s</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('tf-year')">Clear</button><button type="button" onclick="toggleTagPicker('tf-year')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="tf-year-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Min Rating</div>
-        <div class="chips-row" id="tf-rating">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-rating')">Any</div>
-          <div class="chip" data-val="9" onclick="pickPageChip(this,'tf-rating')">9+</div>
-          <div class="chip" data-val="8" onclick="pickPageChip(this,'tf-rating')">8+</div>
-          <div class="chip" data-val="7" onclick="pickPageChip(this,'tf-rating')">7+</div>
-          <div class="chip" data-val="6" onclick="pickPageChip(this,'tf-rating')">6+</div>
+        <div class="tag-picker" id="tf-rating" data-noun="Rating">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('tf-rating')"><span id="tf-rating-label">Any Rating</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="9" onchange="onTagCheck('tf-rating')">9+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="8" onchange="onTagCheck('tf-rating')">8+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="7" onchange="onTagCheck('tf-rating')">7+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="6" onchange="onTagCheck('tf-rating')">6+</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('tf-rating')">Clear</button><button type="button" onclick="toggleTagPicker('tf-rating')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="tf-rating-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Status</div>
-        <div class="chips-row" id="tf-status">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'tf-status')">All</div>
-          <div class="chip" data-val="returning" onclick="pickPageChip(this,'tf-status')">Ongoing</div>
-          <div class="chip" data-val="ended" onclick="pickPageChip(this,'tf-status')">Completed</div>
-          <div class="chip" data-val="planned" onclick="pickPageChip(this,'tf-status')">Upcoming</div>
-          <div class="chip" data-val="canceled" onclick="pickPageChip(this,'tf-status')">Canceled</div>
+        <div class="tag-picker" id="tf-status" data-noun="Status">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('tf-status')"><span id="tf-status-label">All Statuses</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="returning" onchange="onTagCheck('tf-status')">Ongoing</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="ended" onchange="onTagCheck('tf-status')">Completed</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="planned" onchange="onTagCheck('tf-status')">Upcoming</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="canceled" onchange="onTagCheck('tf-status')">Canceled</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('tf-status')">Clear</button><button type="button" onclick="toggleTagPicker('tf-status')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="tf-status-selected" style="display:none;"></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:4px;">
         <button onclick="applyTVFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
@@ -288,41 +337,53 @@
     <div id="movie-filter" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
       <div class="filter-section">
         <div class="filter-label">Country</div>
-        <div class="chips-row" id="mf-country">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-country')">All</div>
-          <div class="chip" data-val="KR" onclick="pickPageChip(this,'mf-country')">🇰🇷 Korea</div>
-          <div class="chip" data-val="JP" onclick="pickPageChip(this,'mf-country')">🇯🇵 Japan</div>
-          <div class="chip" data-val="CN" onclick="pickPageChip(this,'mf-country')">🇨🇳 China</div>
-          <div class="chip" data-val="TH" onclick="pickPageChip(this,'mf-country')">🇹🇭 Thailand</div>
-          <div class="chip" data-val="PH" onclick="pickPageChip(this,'mf-country')">🇵🇭 Philippines</div>
-          <div class="chip" data-val="US" onclick="pickPageChip(this,'mf-country')">🇺🇸 USA</div>
-          <div class="chip" data-val="GB" onclick="pickPageChip(this,'mf-country')">🇬🇧 UK</div>
-          <div class="chip" data-val="IN" onclick="pickPageChip(this,'mf-country')">🇮🇳 India</div>
+        <div class="tag-picker" id="mf-country" data-noun="Country">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('mf-country')"><span id="mf-country-label">All Countries</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="KR" onchange="onTagCheck('mf-country')">🇰🇷 Korea</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="JP" onchange="onTagCheck('mf-country')">🇯🇵 Japan</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="CN" onchange="onTagCheck('mf-country')">🇨🇳 China</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="TH" onchange="onTagCheck('mf-country')">🇹🇭 Thailand</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="PH" onchange="onTagCheck('mf-country')">🇵🇭 Philippines</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="US" onchange="onTagCheck('mf-country')">🇺🇸 USA</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="GB" onchange="onTagCheck('mf-country')">🇬🇧 UK</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="IN" onchange="onTagCheck('mf-country')">🇮🇳 India</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('mf-country')">Clear</button><button type="button" onclick="toggleTagPicker('mf-country')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="mf-country-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Genre</div>
-        <div class="chips-row" id="mf-genre">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-genre')">All</div>
-          <div class="chip" data-val="28" onclick="pickPageChip(this,'mf-genre')">Action</div>
-          <div class="chip" data-val="12" onclick="pickPageChip(this,'mf-genre')">Adventure</div>
-          <div class="chip" data-val="35" onclick="pickPageChip(this,'mf-genre')">Comedy</div>
-          <div class="chip" data-val="80" onclick="pickPageChip(this,'mf-genre')">Crime</div>
-          <div class="chip" data-val="99" onclick="pickPageChip(this,'mf-genre')">Documentary</div>
-          <div class="chip" data-val="18" onclick="pickPageChip(this,'mf-genre')">Drama</div>
-          <div class="chip" data-val="10751" onclick="pickPageChip(this,'mf-genre')">Family</div>
-          <div class="chip" data-val="14" onclick="pickPageChip(this,'mf-genre')">Fantasy</div>
-          <div class="chip" data-val="36" onclick="pickPageChip(this,'mf-genre')">History</div>
-          <div class="chip" data-val="27" onclick="pickPageChip(this,'mf-genre')">Horror</div>
-          <div class="chip" data-val="10402" onclick="pickPageChip(this,'mf-genre')">Music</div>
-          <div class="chip" data-val="9648" onclick="pickPageChip(this,'mf-genre')">Mystery</div>
-          <div class="chip" data-val="10749" onclick="pickPageChip(this,'mf-genre')">Romance</div>
-          <div class="chip" data-val="878" onclick="pickPageChip(this,'mf-genre')">Sci-Fi</div>
-          <div class="chip" data-val="53" onclick="pickPageChip(this,'mf-genre')">Thriller</div>
-          <div class="chip" data-val="10752" onclick="pickPageChip(this,'mf-genre')">War</div>
-          <div class="chip" data-val="37" onclick="pickPageChip(this,'mf-genre')">Western</div>
-          <div class="chip" data-val="16" onclick="pickPageChip(this,'mf-genre')">Animation</div>
+        <div class="tag-picker" id="mf-genre" data-noun="Genre">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('mf-genre')"><span id="mf-genre-label">All Genres</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="28" onchange="onTagCheck('mf-genre')">Action</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="12" onchange="onTagCheck('mf-genre')">Adventure</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="35" onchange="onTagCheck('mf-genre')">Comedy</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="80" onchange="onTagCheck('mf-genre')">Crime</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="99" onchange="onTagCheck('mf-genre')">Documentary</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="18" onchange="onTagCheck('mf-genre')">Drama</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="10751" onchange="onTagCheck('mf-genre')">Family</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="14" onchange="onTagCheck('mf-genre')">Fantasy</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="36" onchange="onTagCheck('mf-genre')">History</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="27" onchange="onTagCheck('mf-genre')">Horror</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="10402" onchange="onTagCheck('mf-genre')">Music</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="9648" onchange="onTagCheck('mf-genre')">Mystery</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="10749" onchange="onTagCheck('mf-genre')">Romance</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="878" onchange="onTagCheck('mf-genre')">Sci-Fi</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="53" onchange="onTagCheck('mf-genre')">Thriller</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="10752" onchange="onTagCheck('mf-genre')">War</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="37" onchange="onTagCheck('mf-genre')">Western</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="16" onchange="onTagCheck('mf-genre')">Animation</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('mf-genre')">Clear</button><button type="button" onclick="toggleTagPicker('mf-genre')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="mf-genre-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Tags</div>
@@ -330,10 +391,7 @@
           <div class="tag-picker-trigger" onclick="toggleTagPicker('mf-tag')"><span id="mf-tag-label">All Tags</span><span class="tpt-caret">▾</span></div>
           <div class="tag-picker-panel">
             <div class="tag-picker-grid">
-              <label class="tag-picker-option"><input type="checkbox" data-val="boys love" onchange="onTagCheck('mf-tag')">BL (Boys Love)</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="girls love" onchange="onTagCheck('mf-tag')">GL (Girls Love)</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="lgbt" onchange="onTagCheck('mf-tag')">LGBT</label>
-              <label class="tag-picker-option"><input type="checkbox" data-val="gay romance" onchange="onTagCheck('mf-tag')">Gay Romance</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="boys love,girls love,lgbt,gay romance" onchange="onTagCheck('mf-tag')">Coming of Age</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="reverse harem" onchange="onTagCheck('mf-tag')">Reverse Harem</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="isekai" onchange="onTagCheck('mf-tag')">Isekai</label>
               <label class="tag-picker-option"><input type="checkbox" data-val="time loop" onchange="onTagCheck('mf-tag')">Time Loop</label>
@@ -347,38 +405,57 @@
           </div>
         </div>
         <div id="mf-tag-matched" style="display:none;font-size:11px;color:var(--muted);margin-top:6px;"></div>
+        <div class="filter-selected-row" id="mf-tag-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Year / Era</div>
-        <div class="chips-row" id="mf-year">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-year')">All</div>
-          <div class="chip" data-val="2026" onclick="pickPageChip(this,'mf-year')">2026</div>
-          <div class="chip" data-val="2025" onclick="pickPageChip(this,'mf-year')">2025</div>
-          <div class="chip" data-val="2024" onclick="pickPageChip(this,'mf-year')">2024</div>
-          <div class="chip" data-val="2020s" onclick="pickPageChip(this,'mf-year')">2020s</div>
-          <div class="chip" data-val="2010s" onclick="pickPageChip(this,'mf-year')">2010s</div>
-          <div class="chip" data-val="2000s" onclick="pickPageChip(this,'mf-year')">2000s</div>
-          <div class="chip" data-val="1990s" onclick="pickPageChip(this,'mf-year')">1990s</div>
-          <div class="chip" data-val="1980s" onclick="pickPageChip(this,'mf-year')">1980s</div>
+        <div class="tag-picker" id="mf-year" data-noun="Year">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('mf-year')"><span id="mf-year-label">All Years</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="2026" onchange="onTagCheck('mf-year')">2026</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2025" onchange="onTagCheck('mf-year')">2025</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2024" onchange="onTagCheck('mf-year')">2024</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2020s" onchange="onTagCheck('mf-year')">2020s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2010s" onchange="onTagCheck('mf-year')">2010s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2000s" onchange="onTagCheck('mf-year')">2000s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="1990s" onchange="onTagCheck('mf-year')">1990s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="1980s" onchange="onTagCheck('mf-year')">1980s</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('mf-year')">Clear</button><button type="button" onclick="toggleTagPicker('mf-year')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="mf-year-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Min Rating</div>
-        <div class="chips-row" id="mf-rating">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-rating')">Any</div>
-          <div class="chip" data-val="9" onclick="pickPageChip(this,'mf-rating')">9+</div>
-          <div class="chip" data-val="8" onclick="pickPageChip(this,'mf-rating')">8+</div>
-          <div class="chip" data-val="7" onclick="pickPageChip(this,'mf-rating')">7+</div>
-          <div class="chip" data-val="6" onclick="pickPageChip(this,'mf-rating')">6+</div>
+        <div class="tag-picker" id="mf-rating" data-noun="Rating">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('mf-rating')"><span id="mf-rating-label">Any Rating</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="9" onchange="onTagCheck('mf-rating')">9+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="8" onchange="onTagCheck('mf-rating')">8+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="7" onchange="onTagCheck('mf-rating')">7+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="6" onchange="onTagCheck('mf-rating')">6+</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('mf-rating')">Clear</button><button type="button" onclick="toggleTagPicker('mf-rating')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="mf-rating-selected" style="display:none;"></div>
       </div>
       <div class="filter-section">
         <div class="filter-label">Status</div>
-        <div class="chips-row" id="mf-status">
-          <div class="chip active" data-val="" onclick="pickPageChip(this,'mf-status')">All</div>
-          <div class="chip" data-val="released" onclick="pickPageChip(this,'mf-status')">Released</div>
-          <div class="chip" data-val="upcoming" onclick="pickPageChip(this,'mf-status')">Upcoming</div>
+        <div class="tag-picker" id="mf-status" data-noun="Status">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('mf-status')"><span id="mf-status-label">All Statuses</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="released" onchange="onTagCheck('mf-status')">Released</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="upcoming" onchange="onTagCheck('mf-status')">Upcoming</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('mf-status')">Clear</button><button type="button" onclick="toggleTagPicker('mf-status')">Done</button></div>
+          </div>
         </div>
+        <div class="filter-selected-row" id="mf-status-selected" style="display:none;"></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:4px;">
         <button onclick="applyMovieFilter()" style="flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Apply</button>
@@ -439,6 +516,7 @@
       </div>
     </div>
     <div id="detail-synopsis" class="detail-synopsis"></div>
+    <div class="synopsis-toggle" id="synopsis-toggle" onclick="toggleSynopsis()">Show more</div>
     <div class="cta-row">
       <button class="btn-play" id="detail-play-btn">▶ Watch</button>
       <div class="lang-toggle" id="detail-lang" style="display:none;">
@@ -446,11 +524,20 @@
         <button class="ltbtn" id="det-dub" onclick="setLang('dub')">DUB</button>
       </div>
     </div>
+    <div class="dc-section" id="detail-castprod" style="display:none;">
+      <div class="dc-head" onclick="toggleDcSection()">
+        <span>Cast &amp; Production</span><span class="dc-chev collapsed" id="detail-castprod-chev">▾</span>
+      </div>
+      <div class="dc-body collapsed" id="detail-castprod-body"></div>
+    </div>
     <div id="detail-seasons-wrap" style="display:none;">
       <div class="sec-label">SEASONS</div>
       <div class="seasons-scroll" id="seasons-row"></div>
     </div>
-    <div class="sec-label" id="eps-label" style="display:none;">EPISODES</div>
+    <div class="eps-label-row" id="eps-label-row" style="display:none;">
+      <div class="sec-label" id="eps-label">EPISODES</div>
+      <div class="detail-tags-row" id="detail-tags-row"></div>
+    </div>
     <div class="eps-grid" id="eps-grid"></div>
 
     <!-- RECOMMENDATIONS -->
