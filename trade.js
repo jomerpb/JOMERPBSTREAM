@@ -3552,6 +3552,13 @@ var TC_SCALP_CALL_SPACING_MS = 350;      // ~3 req/sec, keyless CoinGecko tier
 
 var tcScalpIntradayCache = {};  // sym -> {bars:[{t,price}], fetchedAt}
 var tcScalpScanState = {loading:false, rows:null, scannedAt:null};
+var tcScalpAutoRescanTimer = null; // real recurring rescan while sitting on the Scalping
+                                    // tab — without this, "Rescans every 4 min" was just
+                                    // text: the scan only actually ran on tcSetGainersMode's
+                                    // tab-switch check, so leaving the tab open (or tapping
+                                    // an already-active Scalping tab, a no-op) left the list
+                                    // frozen at whatever it showed at last switch-in, no
+                                    // matter how much real market time passed. Fixed 2026-07-14.
 
 // Real 5-min price series for the trailing 24h, straight from CoinGecko,
 // same keyless-tier approach as tcRefreshLivePriceDirect above. Cached
@@ -3674,6 +3681,29 @@ async function tcRunScalpScan(){
   tcRenderTop();
 }
 
+// Real recurring rescan while the Scalping view is showing — same
+// backgrounded-tab-pause pattern as tcStartLivePriceAutoRefresh. Without
+// this, the list only ever updated on switching INTO the Scalping tab
+// (and re-tapping an already-active tab is a no-op in tcSetGainersMode),
+// so it could sit stale for however long someone left the tab open.
+function tcStartScalpAutoRescan(){
+  if(tcScalpAutoRescanTimer) clearInterval(tcScalpAutoRescanTimer);
+  tcScalpAutoRescanTimer = setInterval(function(){
+    if(document.hidden) return; // paused while backgrounded — saves quota
+    if(tcGainersModeVal !== 'scalping') return; // only rescan while actually showing
+    if(tcScalpScanState.scannedAt && (Date.now()-tcScalpScanState.scannedAt) < TC_SCALP_CACHE_MS) return;
+    tcRunScalpScan();
+  }, TC_SCALP_CACHE_MS);
+}
+document.addEventListener('visibilitychange', function(){
+  // Catch up immediately on returning to the tab rather than waiting up
+  // to 4 min for the next scheduled tick — mirrors the live-price listener.
+  if(!document.hidden && tcInited && tcGainersModeVal === 'scalping' &&
+     (!tcScalpScanState.scannedAt || Date.now()-tcScalpScanState.scannedAt > TC_SCALP_CACHE_MS)){
+    tcRunScalpScan();
+  }
+});
+
 // ── Top Crypto Today ──
 // Sliding pill indicator for the Gainers/Bullish/Scalping toggle — mirrors
 // the Stream tab's updateSegSlide, scoped to #tc-gainers-slide.
@@ -3697,7 +3727,15 @@ window.addEventListener('resize', function(){
   if(active) updateGainersSlide(active, true);
 });
 function tcSetGainersMode(mode, el){
-  if(tcGainersModeVal === mode) return;
+  if(tcGainersModeVal === mode){
+    // Previously a silent no-op even for Scalping — re-tapping an already-active
+    // tab did nothing, so it was the only other way (besides the new timer) to
+    // force a check while stuck looking at a stale empty result.
+    if(mode === 'scalping' && (!tcScalpScanState.scannedAt || Date.now()-tcScalpScanState.scannedAt > TC_SCALP_CACHE_MS)){
+      tcRunScalpScan();
+    }
+    return;
+  }
   tcGainersModeVal = mode;
   try { localStorage.setItem('tc_gainers_mode', mode); } catch(e){}
   document.querySelectorAll('#tp-crypto-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
@@ -4562,6 +4600,11 @@ async function tcVerifyFreshData(preGeneratedAt, verifyDeadline){
   var isFresh = tcLastHistoryGeneratedAt && tcLastHistoryGeneratedAt !== preGeneratedAt;
   if (isFresh) {
     tcFinishRefresh(null); // loadCryptoHistory() already called tcUpdateRefreshStatusDisplay() above with the correct split Price/Signals text
+    // Fresh daily SMA20/50 data can shift which coins are BEAR vs non-BEAR,
+    // changing shortlist eligibility \u2014 not just intraday prices. Rescan
+    // again now that it's actually landed (the immediate scan in
+    // tcTriggerRefresh ran against the PRE-refresh daily trend data).
+    if(tcGainersModeVal === 'scalping') tcRunScalpScan();
     return;
   }
   if (Date.now() > verifyDeadline) {
@@ -4600,6 +4643,15 @@ async function tcTriggerRefresh(){
   btn.disabled = true;
   btn.classList.add('tp-refresh-spinning');
   status.textContent = 'Triggering Crypto Live Data Scraper...';
+
+  // Scalping's own data (tcFetchIntraday5m) is a direct keyless CoinGecko
+  // call, same as tcRefreshLivePriceDirect \u2014 it doesn't need the PAT/
+  // workflow_dispatch round-trip below at all. Previously this button did
+  // nothing for the Scalping tab, even after the multi-minute GitHub Actions
+  // run finished \u2014 tcRunScalpScan() was never called anywhere in this
+  // flow. Fixed 2026-07-14: fire an immediate fresh scan right away (fast,
+  // visible feedback), independent of however long the dispatch below takes.
+  if(tcGainersModeVal === 'scalping') tcRunScalpScan();
 
   var ghHeaders = {'Accept':'application/vnd.github+json', 'Authorization':'Bearer '+token, 'X-GitHub-Api-Version':'2022-11-28'};
   var dispatchTime = Date.now();
@@ -5126,6 +5178,7 @@ function tcInit(){
   tcRenderWatchlist();
   tcRenderNoneState();   // default to NO coin selected — user picks from Select Coin
   tcStartLivePriceAutoRefresh();
+  tcStartScalpAutoRescan();
   if(tcGainersModeVal === 'scalping') tcRunScalpScan();
 }
 (function(){
