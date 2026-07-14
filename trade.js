@@ -2915,13 +2915,13 @@ var CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetc
 var tcSeriesCache = {};       // memoized merged-with-live series per symbol (invalidated on reload)
 var tcCurrentSym = null;
 var tcCurrentTF = '1H'; // default chart view for crypto — user requested 1H instead of 1D
-// Restored from localStorage so the Gainers/Bullish choice survives a page
+// Restored from localStorage so the Gainers/Scalping choice survives a page
 // reload — previously this always reset to 'current' on refresh, which is
-// why the Bullish filter kept silently reverting to Gainers.
+// why the filter kept silently reverting to Gainers.
 var tcGainersModeVal = (function(){
   try {
     var m = localStorage.getItem('tc_gainers_mode');
-    return (m === 'bullish' || m === 'scalping') ? m : 'current';
+    return (m === 'scalping') ? m : 'current';
   } catch(e){ return 'current'; }
 })();
 var tcInited = false;
@@ -3508,128 +3508,8 @@ function tcTriggerLevels(sig){
   return {sup:sup, res:res};
 }
 
-// ══════════════════════════════════════════════════════════════
-// SCALPING FILTER — detection logic reset 2026-07-14, rebuilding from
-// scratch. Everything below the constants (shortlist, intraday fetch,
-// cache, auto-rescan timer, manual re-tap-to-refresh, tab/UI rendering)
-// is the working data-refresh shell and stays as-is. tcAnalyzeScalpSetup
-// is now a stub that returns null for every coin — no pattern-matching,
-// no thresholds, no "qualifies" logic — until new detection rules are
-// written in from scratch.
-// ══════════════════════════════════════════════════════════════
-var TC_SCALP_SHORTLIST_SIZE = 18;        // only daily-non-bearish coins get an intraday fetch
-var TC_SCALP_CACHE_MS = 4*60*1000;       // refresh cadence (~4 min) — auto-rescan + manual re-tap
-var TC_SCALP_CALL_SPACING_MS = 350;      // ~3 req/sec, keyless CoinGecko tier
-
-var tcScalpIntradayCache = {};  // sym -> {bars:[{t,price}], fetchedAt}
-var tcScalpScanState = {loading:false, rows:null, scannedAt:null};
-var tcScalpAutoRescanTimer = null; // real recurring rescan while sitting on the Scalping
-                                    // tab — without this, "Rescans every 4 min" was just
-                                    // text: the scan only actually ran on tcSetGainersMode's
-                                    // tab-switch check, so leaving the tab open (or tapping
-                                    // an already-active Scalping tab, a no-op) left the list
-                                    // frozen at whatever it showed at last switch-in, no
-                                    // matter how much real market time passed. Fixed 2026-07-14.
-
-// Real 5-min price series for the trailing 24h, straight from CoinGecko,
-// same keyless-tier approach as tcRefreshLivePriceDirect above. Cached
-// per-coin so flipping tabs doesn't re-fetch within TC_SCALP_CACHE_MS.
-async function tcFetchIntraday5m(sym){
-  var cached = tcScalpIntradayCache[sym];
-  if(cached && (Date.now()-cached.fetchedAt) < TC_SCALP_CACHE_MS) return cached.bars;
-  var coin = tcFindCoin(sym);
-  if(!coin) return null;
-  try {
-    var url = 'https://api.coingecko.com/api/v3/coins/'+coin.id+'/market_chart?vs_currency=php&days=1';
-    var resp = await fetch(url);
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    var data = await resp.json();
-    if(!Array.isArray(data.prices) || !data.prices.length) throw new Error('no price series');
-    var bars = data.prices.map(function(p){ return {t:p[0], price:p[1]}; });
-    tcScalpIntradayCache[sym] = {bars:bars, fetchedAt:Date.now()};
-    return bars;
-  } catch(e){
-    console.warn('Scalp intraday fetch failed for '+sym+':', e.message);
-    return cached ? cached.bars : null; // stale cache beats nothing
-  }
-}
-
-// STUB — old pattern-detection logic removed 2026-07-14, rebuilding from
-// scratch. Takes the same (bars) input the refresh shell already fetches
-// per coin, returns null for now (no coin "qualifies" until new rules are
-// written here). Keep the same return shape in mind for downstream code
-// (tcRunScalpScan pushes {sym,name,price,pct,scalp}; tcRenderTop and
-// tcRenderAll's SCALP RANGE CHECK read fields off r.scalp) once real
-// logic replaces this stub.
-function tcAnalyzeScalpSetup(bars){
-  return null;
-}
-
-// Refresh shell kept as-is: Stage 1 shortlists candidates from data already
-// loaded (free, instant); Stage 2 spends real intraday API calls ONLY on
-// that shortlist, paced to stay well inside the keyless tier's limits.
-// Stage 3 (tcAnalyzeScalpSetup) is currently a stub returning null for
-// every coin, so `results` will always come back empty until new detection
-// logic is written — the fetch/cache/pacing pipeline itself still runs
-// each cycle so the refresh mechanism stays provably working.
-async function tcRunScalpScan(){
-  if(tcScalpScanState.loading) return;
-  tcScalpScanState.loading = true;
-  tcRenderTop();
-  try {
-    var shortlist = TC_COINS.map(function(c){
-      var q = tcGetQuote(c.sym); if(!q) return null;
-      var sig = tcSignal(c.sym);
-      if(sig && sig.trend === 'BEAR') return null; // daily downtrend — skip before spending a call
-      return {sym:c.sym, name:c.name, pct:q.change24hPct||0};
-    }).filter(Boolean).sort(function(a,b){ return Math.abs(b.pct)-Math.abs(a.pct); }).slice(0, TC_SCALP_SHORTLIST_SIZE);
-
-    var results = [];
-    for(var i=0;i<shortlist.length;i++){
-      var s = shortlist[i];
-      var bars = await tcFetchIntraday5m(s.sym);
-      if(bars){
-        var setup = tcAnalyzeScalpSetup(bars); // stub — always null for now
-        if(setup && setup.qualifies){
-          var q = tcGetQuote(s.sym);
-          results.push({sym:s.sym, name:s.name, price:q?q.price:null, pct:s.pct, scalp:setup});
-        }
-      }
-      if(i < shortlist.length-1) await new Promise(function(r){ setTimeout(r, TC_SCALP_CALL_SPACING_MS); });
-    }
-    tcScalpScanState = {loading:false, rows:results.slice(0,10), scannedAt:Date.now()};
-  } catch(e){
-    console.warn('Scalp scan failed:', e.message);
-    tcScalpScanState.loading = false;
-  }
-  tcRenderTop();
-}
-
-// Real recurring rescan while the Scalping view is showing — same
-// backgrounded-tab-pause pattern as tcStartLivePriceAutoRefresh. Without
-// this, the list only ever updated on switching INTO the Scalping tab
-// (and re-tapping an already-active tab is a no-op in tcSetGainersMode),
-// so it could sit stale for however long someone left the tab open.
-function tcStartScalpAutoRescan(){
-  if(tcScalpAutoRescanTimer) clearInterval(tcScalpAutoRescanTimer);
-  tcScalpAutoRescanTimer = setInterval(function(){
-    if(document.hidden) return; // paused while backgrounded — saves quota
-    if(tcGainersModeVal !== 'scalping') return; // only rescan while actually showing
-    if(tcScalpScanState.scannedAt && (Date.now()-tcScalpScanState.scannedAt) < TC_SCALP_CACHE_MS) return;
-    tcRunScalpScan();
-  }, TC_SCALP_CACHE_MS);
-}
-document.addEventListener('visibilitychange', function(){
-  // Catch up immediately on returning to the tab rather than waiting up
-  // to 4 min for the next scheduled tick — mirrors the live-price listener.
-  if(!document.hidden && tcInited && tcGainersModeVal === 'scalping' &&
-     (!tcScalpScanState.scannedAt || Date.now()-tcScalpScanState.scannedAt > TC_SCALP_CACHE_MS)){
-    tcRunScalpScan();
-  }
-});
-
 // ── Top Crypto Today ──
-// Sliding pill indicator for the Gainers/Bullish/Scalping toggle — mirrors
+// Sliding pill indicator for the Gainers/Scalping toggle — mirrors
 // the Stream tab's updateSegSlide, scoped to #tc-gainers-slide.
 function updateGainersSlide(el, instant){
   var slide = document.getElementById('tc-gainers-slide');
@@ -3651,26 +3531,14 @@ window.addEventListener('resize', function(){
   if(active) updateGainersSlide(active, true);
 });
 function tcSetGainersMode(mode, el){
-  if(tcGainersModeVal === mode){
-    // Previously a silent no-op even for Scalping — re-tapping an already-active
-    // tab did nothing, so it was the only other way (besides the new timer) to
-    // force a check while stuck looking at a stale empty result.
-    if(mode === 'scalping' && (!tcScalpScanState.scannedAt || Date.now()-tcScalpScanState.scannedAt > TC_SCALP_CACHE_MS)){
-      tcRunScalpScan();
-    }
-    return;
-  }
+  if(tcGainersModeVal === mode) return;
   tcGainersModeVal = mode;
   try { localStorage.setItem('tc_gainers_mode', mode); } catch(e){}
   document.querySelectorAll('#tp-crypto-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-mode') === mode);
   });
   updateGainersSlide(el || document.querySelector('#tc-gainers-toggle .tp-gainers-tab[data-mode="'+mode+'"]'));
-  if(mode === 'scalping' && (!tcScalpScanState.scannedAt || Date.now()-tcScalpScanState.scannedAt > TC_SCALP_CACHE_MS)){
-    tcRunScalpScan();
-  } else {
-    tcRenderTop();
-  }
+  tcRenderTop();
 }
 function tcRenderTop(){
   var el = document.getElementById('tc-gainers-list');
@@ -3683,7 +3551,7 @@ function tcRenderTop(){
     return;
   }
   var rows;
-  if(tcGainersModeVal === 'bullish'){
+  if(tcGainersModeVal === 'scalping'){
     rows = TC_COINS.map(function(c){
       var q = tcGetQuote(c.sym); if(!q) return null;
       var sig = tcSignal(c.sym);
@@ -3692,15 +3560,6 @@ function tcRenderTop(){
               confidencePct: sig?sig.confidencePct:null};
     }).filter(function(r){ return r && r.trend === 'BULL'; })
       .sort(function(a,b){ return b.gap - a.gap; }).slice(0,10);
-  } else if(tcGainersModeVal === 'scalping'){
-    if(tcScalpScanState.loading){
-      el.innerHTML = '<div class="tp-gainer-empty">Refreshing intraday data for '+TC_SCALP_SHORTLIST_SIZE+' coins \u2014 pulls live 5-min data per coin, ~'+Math.round(TC_SCALP_SHORTLIST_SIZE*TC_SCALP_CALL_SPACING_MS/1000)+'s.</div>';
-      if(noteEl) noteEl.textContent = '';
-      return;
-    }
-    rows = (tcScalpScanState.rows || []).map(function(r){
-      return {sym:r.sym, name:r.name, price:r.price, pct:r.pct, signal:null, trend:null, confidencePct:null, scalp:r.scalp};
-    });
   } else {
     rows = TC_COINS.map(function(c){
       var q = tcGetQuote(c.sym); if(!q) return null;
@@ -3711,9 +3570,7 @@ function tcRenderTop(){
     }).filter(Boolean).sort(function(a,b){ return b.pct - a.pct; }).slice(0,10);
   }
   if(!rows.length){
-    el.innerHTML = tcGainersModeVal === 'scalping'
-      ? '<div class="tp-gainer-empty">Scalping detection logic is being rebuilt from scratch \u2014 no criteria are applied yet, so no coins will show here. Data still refreshes every '+(TC_SCALP_CACHE_MS/60000)+' min.</div>'
-      : '<div class="tp-gainer-empty">No coins currently in a confirmed uptrend \u2014 no symbol has SMA20 above SMA50 by more than the '+TC_TREND_BUFFER_PCT+'% buffer.</div>';
+    el.innerHTML = '<div class="tp-gainer-empty">No coins currently in a confirmed uptrend \u2014 no symbol has SMA20 above SMA50 by more than the '+TC_TREND_BUFFER_PCT+'% buffer.</div>';
     if(noteEl) noteEl.textContent = '';
     return;
   }
@@ -3724,17 +3581,11 @@ function tcRenderTop(){
     // agreeing. BUY+FLAT, SELL+FLAT, HOLD, or the (currently impossible)
     // BUY+BEAR/SELL+BULL combos all show no badge, but the row still shows.
     var aligned = (g.signal==='BUY' && g.trend==='BULL') || (g.signal==='SELL' && g.trend==='BEAR');
-    var zoneTag = '';
-    if(g.scalp && g.scalp.zone === 'FLOOR') zoneTag = ' <span class="tp-gainer-tag BUY" style="'+tpTagStyle('BUY',70)+'">BUY ZONE</span>';
-    else if(g.scalp && g.scalp.zone === 'CEILING') zoneTag = ' <span class="tp-gainer-tag SELL" style="'+tpTagStyle('SELL',70)+'">SELL ZONE</span>';
     var badge = aligned
       ? ' <span class="tp-gainer-tag '+g.signal+'" style="'+tpTagStyle(g.signal, g.confidencePct)+'">'+g.signal+'</span>'+
         ' <span class="tp-gainer-tag '+g.trend+'" style="'+tpTagStyle(g.trend, g.confidencePct)+'">'+g.trend+'</span>'
-      : (g.scalp ? ' <span class="tp-gainer-tag BUY" style="'+tpTagStyle('BUY',80)+'">+'+g.scalp.windowReturnPct+'% 2H</span>'+zoneTag : '');
-    var subline = g.scalp
-      ? ('Ranging \u20b1'+g.scalp.rangeLow.toFixed(4)+'\u2013'+g.scalp.rangeHigh.toFixed(4)+' ('+g.scalp.hiTouches+'/'+g.scalp.loTouches+' touches)'+
-         (g.scalp.zone==='FLOOR' ? ' \u2014 near floor' : g.scalp.zone==='CEILING' ? ' \u2014 near ceiling' : ''))
-      : g.name;
+      : '';
+    var subline = g.name;
     return '<div class="tp-gainer-row" onmousedown="tcSelectCoin(\''+g.sym+'\')">'+
       '<span class="tp-gainer-rank">'+(i+1)+'</span>'+
       '<div class="tp-gainer-info">'+
@@ -3746,10 +3597,8 @@ function tcRenderTop(){
     '</div>';
   }).join('');
   if(noteEl){
-    noteEl.textContent = tcGainersModeVal === 'bullish'
+    noteEl.textContent = tcGainersModeVal === 'scalping'
       ? 'Coins in a confirmed uptrend ranked by SMA20-vs-SMA50 gap \u2014 same trend engine as the detail card. The % shown is today\u2019s change; the ORDER is trend strength.'
-      : tcGainersModeVal === 'scalping'
-      ? 'Detection logic reset \u2014 rebuilding from scratch. The refresh pipeline (real 5-min CoinGecko data, not daily bars) is still live and rescans every '+(TC_SCALP_CACHE_MS/60000)+' min; new setup criteria will show here once written.'
       : 'Live 24h change from the CoinGecko API. Tap a coin for the full signal breakdown.';
   }
 }
@@ -4524,11 +4373,6 @@ async function tcVerifyFreshData(preGeneratedAt, verifyDeadline){
   var isFresh = tcLastHistoryGeneratedAt && tcLastHistoryGeneratedAt !== preGeneratedAt;
   if (isFresh) {
     tcFinishRefresh(null); // loadCryptoHistory() already called tcUpdateRefreshStatusDisplay() above with the correct split Price/Signals text
-    // Fresh daily SMA20/50 data can shift which coins are BEAR vs non-BEAR,
-    // changing shortlist eligibility \u2014 not just intraday prices. Rescan
-    // again now that it's actually landed (the immediate scan in
-    // tcTriggerRefresh ran against the PRE-refresh daily trend data).
-    if(tcGainersModeVal === 'scalping') tcRunScalpScan();
     return;
   }
   if (Date.now() > verifyDeadline) {
@@ -4567,15 +4411,6 @@ async function tcTriggerRefresh(){
   btn.disabled = true;
   btn.classList.add('tp-refresh-spinning');
   status.textContent = 'Triggering Crypto Live Data Scraper...';
-
-  // Scalping's own data (tcFetchIntraday5m) is a direct keyless CoinGecko
-  // call, same as tcRefreshLivePriceDirect \u2014 it doesn't need the PAT/
-  // workflow_dispatch round-trip below at all. Previously this button did
-  // nothing for the Scalping tab, even after the multi-minute GitHub Actions
-  // run finished \u2014 tcRunScalpScan() was never called anywhere in this
-  // flow. Fixed 2026-07-14: fire an immediate fresh scan right away (fast,
-  // visible feedback), independent of however long the dispatch below takes.
-  if(tcGainersModeVal === 'scalping') tcRunScalpScan();
 
   var ghHeaders = {'Accept':'application/vnd.github+json', 'Authorization':'Bearer '+token, 'X-GitHub-Api-Version':'2022-11-28'};
   var dispatchTime = Date.now();
@@ -4940,11 +4775,7 @@ function tcRenderNoneState(){
   var input = document.getElementById('tc-coin-search'); if(input) input.value='';
   tcUpdateWatchBtn();
 }
-var tcSelectedScalpSetup = null; // set by tcSelectCoin when tapped from the Scalping list;
-                                  // null otherwise so unrelated coins never show stale scalp data
 function tcSelectCoin(sym){
-  var scalpRow = tcScalpScanState.rows && tcScalpScanState.rows.find(function(r){ return r.sym === sym; });
-  tcSelectedScalpSetup = scalpRow ? scalpRow.scalp : null;
   tcRenderAll(sym);
 }
 function tcRenderAll(sym){
@@ -5009,16 +4840,7 @@ function tcRenderAll(sym){
   var opposed = (sig.signal==='BUY' && sig.trend==='BEAR') || (sig.signal==='SELL' && sig.trend==='BULL');
   var band = tcProjectedBand(sig);
   var sizingTxt = tcPositionPlan(sig, band, aligned, opposed);
-  // SCALP RANGE CHECK — dormant until the new scalp calc (rebuilt from
-  // scratch) populates tcSelectedScalpSetup with real fields again.
-  // tcSelectedScalpSetup will stay null for now since tcAnalyzeScalpSetup
-  // is a stub, so this note simply won't appear.
-  var scalpFeeNote = '';
-  if(tcSelectedScalpSetup && tcSelectedScalpSetup.rangeWidthPct != null){
-    var sw = tcSelectedScalpSetup;
-    scalpFeeNote = '<br><br><b>SCALP RANGE CHECK:</b> the current bounce is \u20b1'+sw.rangeLow.toFixed(4)+'\u2013\u20b1'+sw.rangeHigh.toFixed(4)+' ('+sw.rangeWidthPct+'% wide).';
-  }
-  recEl.innerHTML = tpBulletsHTML([verdictTxt + '<br><br>' + entryExitTxt + scalpFeeNote].concat(sizingTxt ? [sizingTxt] : []));
+  recEl.innerHTML = tpBulletsHTML([verdictTxt + '<br><br>' + entryExitTxt].concat(sizingTxt ? [sizingTxt] : []));
   var recTag = document.getElementById('tc-summary-rec-tag');
   recTag.textContent = 'RECOMMENDATION';
   recTag.className = 'tp-summary-tag ' + sig.signal;
@@ -5076,9 +4898,9 @@ function tcRenderAll(sym){
 function tcInit(){
   if(tcInited) return;
   tcInited = true;
-  // Sync the Gainers/Bullish toggle buttons to whatever mode was restored
+  // Sync the Gainers/Scalping toggle buttons to whatever mode was restored
   // from localStorage — otherwise the buttons show "Gainers" active even
-  // when tcGainersModeVal actually restored as 'bullish'.
+  // when tcGainersModeVal actually restored as 'scalping'.
   document.querySelectorAll('#tp-crypto-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-mode') === tcGainersModeVal);
   });
@@ -5101,8 +4923,6 @@ function tcInit(){
   tcRenderWatchlist();
   tcRenderNoneState();   // default to NO coin selected — user picks from Select Coin
   tcStartLivePriceAutoRefresh();
-  tcStartScalpAutoRescan();
-  if(tcGainersModeVal === 'scalping') tcRunScalpScan();
 }
 (function(){
   var orig = tpSetMarket;
