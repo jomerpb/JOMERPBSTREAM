@@ -2915,13 +2915,13 @@ var CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetc
 var tcSeriesCache = {};       // memoized merged-with-live series per symbol (invalidated on reload)
 var tcCurrentSym = null;
 var tcCurrentTF = '1H'; // default chart view for crypto — user requested 1H instead of 1D
-// Restored from localStorage so the Gainers/Bullish choice survives a page
+// Restored from localStorage so the Gainers/Scalping choice survives a page
 // reload — previously this always reset to 'current' on refresh, which is
-// why the Bullish filter kept silently reverting to Gainers.
+// why the filter kept silently reverting to Gainers.
 var tcGainersModeVal = (function(){
   try {
     var m = localStorage.getItem('tc_gainers_mode');
-    return (m === 'bullish') ? m : 'current';
+    return (m === 'scalping') ? m : 'current';
   } catch(e){ return 'current'; }
 })();
 var tcInited = false;
@@ -3509,7 +3509,7 @@ function tcTriggerLevels(sig){
 }
 
 // ── Top Crypto Today ──
-// Sliding pill indicator for the Gainers/Bullish toggle — mirrors
+// Sliding pill indicator for the Gainers/Scalping toggle — mirrors
 // the Stream tab's updateSegSlide, scoped to #tc-gainers-slide.
 function updateGainersSlide(el, instant){
   var slide = document.getElementById('tc-gainers-slide');
@@ -3551,7 +3551,7 @@ function tcRenderTop(){
     return;
   }
   var rows;
-  if(tcGainersModeVal === 'bullish'){
+  if(tcGainersModeVal === 'scalping'){
     rows = TC_COINS.map(function(c){
       var q = tcGetQuote(c.sym); if(!q) return null;
       var sig = tcSignal(c.sym);
@@ -3597,7 +3597,7 @@ function tcRenderTop(){
     '</div>';
   }).join('');
   if(noteEl){
-    noteEl.textContent = tcGainersModeVal === 'bullish'
+    noteEl.textContent = tcGainersModeVal === 'scalping'
       ? 'Coins in a confirmed uptrend ranked by SMA20-vs-SMA50 gap \u2014 same trend engine as the detail card. The % shown is today\u2019s change; the ORDER is trend strength.'
       : 'Live 24h change from the CoinGecko API. Tap a coin for the full signal breakdown.';
   }
@@ -4898,9 +4898,9 @@ function tcRenderAll(sym){
 function tcInit(){
   if(tcInited) return;
   tcInited = true;
-  // Sync the Gainers/Bullish toggle buttons to whatever mode was restored
+  // Sync the Gainers/Scalping toggle buttons to whatever mode was restored
   // from localStorage — otherwise the buttons show "Gainers" active even
-  // when tcGainersModeVal actually restored as 'bullish'.
+  // when tcGainersModeVal actually restored as 'scalping'.
   document.querySelectorAll('#tp-crypto-view .tp-gainers-toggle .tp-gainers-tab').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-mode') === tcGainersModeVal);
   });
