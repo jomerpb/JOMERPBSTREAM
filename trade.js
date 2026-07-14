@@ -3525,6 +3525,12 @@ function tcTriggerLevels(sig){
 function updateGainersSlide(el, instant){
   var slide = document.getElementById('tc-gainers-slide');
   if(!slide || !el) return;
+  // Inside a display:none page (e.g. crypto restored at load while the
+  // Stream tab is still showing) offsetWidth/offsetLeft read as 0 —
+  // writing that pins the pill to an inline width:0 (invisible). Bail;
+  // the trade-page visibility observer below re-syncs the moment the
+  // toggle is actually laid out.
+  if(!el.offsetWidth) return;
   if(instant){
     var prevTransition = slide.style.transition;
     slide.style.transition = 'none';
@@ -3541,6 +3547,24 @@ window.addEventListener('resize', function(){
   var active = document.querySelector('#tc-gainers-toggle .tp-gainers-tab.active');
   if(active) updateGainersSlide(active, true);
 });
+// Re-position the pill whenever the Trade page actually becomes visible.
+// Covers the load path where tpMarketMode restored as 'crypto' while a
+// different tab (Stream/Oracle) was showing — tcInit's deferred
+// measurement ran inside display:none and was skipped by the guard in
+// updateGainersSlide above. Watching the class attribute catches both
+// navTo() and popstate navigation, since both go through showPage()
+// toggling .active on #trade-page. The observer fires as a microtask
+// before paint, so the pill is already in place when the page first
+// renders — no flicker.
+(function(){
+  var pg = document.getElementById('trade-page');
+  if(!pg || !window.MutationObserver) return;
+  new MutationObserver(function(){
+    if(!pg.classList.contains('active') || tpMarketMode !== 'crypto') return;
+    var a = document.querySelector('#tc-gainers-toggle .tp-gainers-tab.active');
+    if(a) updateGainersSlide(a, true);
+  }).observe(pg, {attributes:true, attributeFilter:['class']});
+})();
 function tcSetGainersMode(mode, el){
   if(tcGainersModeVal === mode) return;
   tcGainersModeVal = mode;
