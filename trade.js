@@ -2867,12 +2867,16 @@ const TC_COINS = [
   {sym:'LDO',  id:'lido-dao',                            name:'Lido DAO'},
   {sym:'HNT',  id:'helium',                              name:'Helium'},
   {sym:'XTZ',  id:'tezos',                               name:'Tezos'},
-  {sym:'SNX',  id:'synthetix-network-token',             name:'Synthetix'},
+  // ⚠ CoinGecko API ids ≠ coingecko.com URL slugs. The five below were
+  // verified against the live /coins/list registry on 2026-07-14 after
+  // they silently returned no data (68/73 coins loading). The website
+  // slug (e.g. /en/coins/stacks) is NOT the API id ("blockstack").
+  {sym:'SNX',  id:'havven',                              name:'Synthetix'},
   {sym:'CRV',  id:'curve-dao-token',                     name:'Curve DAO Token'},
   {sym:'XLM',  id:'stellar',                             name:'Stellar'},
-  {sym:'FET',  id:'artificial-superintelligence-alliance', name:'Artificial Superintelligence Alliance'},
-  {sym:'WIF',  id:'dogwifhat',                           name:'dogwifhat'},
-  {sym:'STX',  id:'stacks',                              name:'Stacks'},
+  {sym:'FET',  id:'fetch-ai', name:'Artificial Superintelligence Alliance'},
+  {sym:'WIF',  id:'dogwifcoin',                           name:'dogwifhat'},
+  {sym:'STX',  id:'blockstack',                              name:'Stacks'},
   {sym:'SUSHI', id:'sushi',                              name:'Sushi'},
   {sym:'APE',  id:'apecoin',                             name:'ApeCoin'},
   {sym:'IMX',  id:'immutable-x',                         name:'Immutable'},
@@ -2885,7 +2889,7 @@ const TC_COINS = [
   {sym:'ARB',  id:'arbitrum',                            name:'Arbitrum'},
   {sym:'ENA',  id:'ethena',                              name:'Ethena'},
   {sym:'MANA', id:'decentraland',                        name:'Decentraland'},
-  {sym:'CRO',  id:'cronos',                              name:'Cronos'},
+  {sym:'CRO',  id:'crypto-com-chain',                              name:'Cronos'},
   {sym:'SAND', id:'the-sandbox',                         name:'The Sandbox'},
   {sym:'MINA', id:'mina-protocol',                       name:'Mina Protocol'},
   {sym:'KAVA', id:'kava',                                name:'Kava'},
@@ -2906,8 +2910,13 @@ var tcLiveQuotes = {};        // sym -> {price, change24hPct, high24h, low24h, v
 // Kept separate from CRYPTO_HISTORY_STATUS's timestamp so the status line
 // can show price-freshness and signal-freshness as two distinct facts.
 var tcLastPriceRefreshAt = null;
-var TC_PRICE_REFRESH_MS = 5*60*1000; // 5 min — see quota math discussed with the user
-var tcPriceRefreshTimer = null;
+// Last error from tcRefreshLivePriceDirect — surfaced in the status line so
+// a permanently-failing keyless CoinGecko call (e.g. HTTP 429 on carrier
+// CGNAT, where thousands of users share one IP's keyless quota) no longer
+// LOOKS like "the dates are wrong". Before this, failures were console-only
+// and the Price label silently fell back to the pipeline file's old
+// generatedAt, which reads as a date bug rather than a blocked fetch.
+var tcLastPriceRefreshError = null;
 var tcLiveSeries = {};        // sym -> [{date,open,high,low,close,volume,real}, ...] ascending
 var CRYPTO_QUOTES_STATUS = {loaded:false, source:'no live data yet — tap Fetch Live Data', error:null};
 var CRYPTO_HISTORY_STATUS = {loaded:false, source:'no live data yet — tap Fetch Live Data', error:null};
@@ -2953,8 +2962,8 @@ function tcFindCoin(sym){ return TC_COINS.find(function(c){return c.sym===sym;})
 // placeholder text once real data (or a real error) comes back.
 // Now shows Price and Signals freshness as two distinct facts, since they
 // come from two different pipelines with different speeds: Price is the
-// direct CoinGecko refresh (tcRefreshLivePriceDirect, every 5 min / on tab
-// open); Signals still depend on the GitHub Actions history scraper. Before
+// direct CoinGecko refresh (tcRefreshLivePriceDirect, one-shot per page
+// load — reload to refresh); Signals still depend on the GitHub Actions history scraper. Before
 // this split, one combined timestamp made it look like the BUY/SELL/HOLD
 // badges were as fresh as the price, which isn't true — they're computed
 // from crypto-history.json, refreshed only when Fetch Live Data completes.
@@ -2972,6 +2981,11 @@ function tcUpdateRefreshStatusDisplay(){
     priceText = 'Price: unavailable';
   } else {
     priceText = 'Price: not loaded yet';
+  }
+  // No successful direct refresh yet + a recorded failure → the timestamp
+  // above is the pipeline file's age, not live. Say why, right in the UI.
+  if (!tcLastPriceRefreshAt && tcLastPriceRefreshError) {
+    priceText += ' \u00b7 live fetch failed (' + tcLastPriceRefreshError + ') \u2014 reload to retry';
   }
 
   var signalsText;
@@ -2993,9 +3007,10 @@ function tcUpdateRefreshStatusDisplay(){
 // no raw.githubusercontent CDN lag. Only touches price + 24h change —
 // history/signals (RSI, SMA, ATR) still come from loadCryptoHistory()
 // via the scraper, unaffected by this.
-// Uses the keyless public tier deliberately: at a 5-min interval this is
-// ~1 call/5min, far under even the 5-15 calls/min keyless limit, so no
-// API key needs to be exposed in client-side JS for this feature.
+// Uses the keyless public tier deliberately: exactly ONE call per page
+// load (polling removed 2026-07-14 — the chosen model is that reloading
+// the page IS the manual price refresh), so no API key needs to be
+// exposed in client-side JS for this feature.
 // ══════════════════════════════════════════════════════════════
 async function tcRefreshLivePriceDirect(){
   try {
@@ -3021,34 +3036,30 @@ async function tcRefreshLivePriceDirect(){
       };
     });
     tcLastPriceRefreshAt = Date.now();
-    // Without this, tcGetSeries() keeps returning the merged series from
-    // whenever the cache was last built (page load) — tcMergeLiveBar exists
-    // to fold the live quote in as the newest bar, but never got a chance
-    // to re-run on each 5-min tick. This is the fix for that.
+    tcLastPriceRefreshError = null;
+    // Without this, tcGetSeries() keeps returning the merged series built
+    // from the pipeline snapshot loaded a moment earlier — tcMergeLiveBar
+    // only folds this fresher quote in as the newest bar on a rebuild.
     tcSeriesCache = {};
     tcUpdateRefreshStatusDisplay();
     if (tcInited) { tcRenderTop(); tcRenderWatchlist(); if (tcCurrentSym) tcRenderAll(tcCurrentSym); }
   } catch(e) {
-    // Silent failure by design — this is a background convenience refresh.
-    // The GitHub-Actions-backed "Fetch Live Data" button remains the
-    // reliable, user-visible path if this quietly fails (offline, CoinGecko
-    // hiccup, etc.), so we don't want an error banner every 5 minutes.
-    console.warn('Direct live price refresh failed (will retry next interval):', e.message);
+    // One-shot load fetch — there is no retry loop anymore, so the reason
+    // is surfaced in the status line rather than buried in the console;
+    // reloading the page is the retry. The GitHub-Actions-backed "Fetch
+    // Live Data" button remains the separate path for history/signals.
+    console.warn('Live price fetch failed (reload the page to retry):', e.message);
+    tcLastPriceRefreshError = e.message;
+    tcUpdateRefreshStatusDisplay(); // show the failure instead of a misleading old timestamp
   }
 }
-function tcStartLivePriceAutoRefresh(){
-  tcRefreshLivePriceDirect(); // immediate fetch the moment the Crypto tab opens / page loads
-  if (tcPriceRefreshTimer) clearInterval(tcPriceRefreshTimer);
-  tcPriceRefreshTimer = setInterval(function(){
-    if (document.hidden) return; // paused while tab is backgrounded — saves quota
-    tcRefreshLivePriceDirect();
-  }, TC_PRICE_REFRESH_MS);
-}
-document.addEventListener('visibilitychange', function(){
-  // Catch up immediately when the person comes back, rather than waiting
-  // up to 5 min for the next scheduled tick.
-  if (!document.hidden && tcInited) tcRefreshLivePriceDirect();
-});
+// MANUAL-REFRESH MODEL (user request, 2026-07-14): the 5-min setInterval
+// poller and the visibilitychange catch-up fetch that used to live here
+// were removed. tcRefreshLivePriceDirect() now runs exactly once, from
+// tcInit(), the first time the Crypto tab opens in a page's lifetime —
+// so a page load (or pull-to-refresh) always shows current CoinGecko
+// prices, and nothing touches the API again until the next reload.
+// Returning from a backgrounded app shows the load-time price by design.
 async function loadCryptoLiveQuotes(){
   var RAW_URL = 'crypto-live-quotes.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   try {
@@ -3180,7 +3191,7 @@ var TC_TF_BARS = {'1H':1,'1D':2,'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365,'2Y':36
 // UNLIKE 1D (which fully reseeds/rebuilds on every render), 1H is a
 // PERSISTENT ROLLING WINDOW: tcHourlyCache keeps each symbol's last-built
 // 60 bars in memory, and each time a fresh quote comes in (tcRefreshLivePriceDirect,
-// every 5 min / on tab-visible) we just APPEND however many minutes have
+// one per page load under the manual-refresh model) we just APPEND however many minutes have
 // elapsed and drop the same number off the front — old bars are never
 // rewritten or rescaled, so the chart extends smoothly instead of jumping
 // to a brand-new random pattern every refresh. Only the newest bar is
@@ -3871,7 +3882,7 @@ function tcFmtWhen(ts){
 }
 // ── TRANSACTION DETAILS toggle on portfolio rows — same caret pattern as the reasoning
 // card's MORE DETAILS (tpToggleMoreDetails), but per-row via uid, with the
-// open state remembered in-session so the 5-min live-price rebuild doesn't
+// open state remembered in-session so a live-price rebuild doesn't
 // snap an open panel shut (user 2026-07-12). ──
 var tcPortDetOpen = {};
 function tcPortToggleDetails(uid){
@@ -4111,8 +4122,8 @@ function tcRenderWatchlist(){
   var listEl = document.getElementById('tc-watch-list');
   var emptyEl = document.getElementById('tc-watch-empty');
   if(!listEl) return;
-  // Don't rebuild while the user is typing in the card — the 5-min live
-  // price refresh calls this and would otherwise wipe unsaved edits.
+  // Don't rebuild while the user is typing in the card — the on-load live
+  // price fetch (and pipeline JSON loads) call this and would otherwise wipe unsaved edits.
   var ae = document.activeElement;
   if(ae && ae.tagName==='INPUT' && listEl.contains(ae)) return;
   var list = tcGetWatch();
@@ -4922,7 +4933,7 @@ function tcInit(){
   tcRenderTop();
   tcRenderWatchlist();
   tcRenderNoneState();   // default to NO coin selected — user picks from Select Coin
-  tcStartLivePriceAutoRefresh();
+  tcRefreshLivePriceDirect(); // one-shot — see MANUAL-REFRESH MODEL note above loadCryptoLiveQuotes()
 }
 (function(){
   var orig = tpSetMarket;
