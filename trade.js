@@ -3510,7 +3510,7 @@ function tcTriggerLevels(sig){
 
 // ══════════════════════════════════════════════════════════════
 // SCALPING FILTER — real setup detector. Looks for: net-bullish over
-// the trailing ~1h, now bouncing inside an established floor/ceiling
+// the trailing ~2h, now bouncing inside an established floor/ceiling
 // instead of still trending — the "pop then range" scalp entry.
 // crypto-history.json is daily bars only, so this fetches CoinGecko's
 // /market_chart?days=1 directly (real 5-min data for the trailing 24h,
@@ -3522,10 +3522,28 @@ function tcTriggerLevels(sig){
 // before shipping — see 2026-07-14 conversation.
 // ══════════════════════════════════════════════════════════════
 var TC_SCALP_FEE_RT_PCT = 0.60;
-var TC_SCALP_TREND_LOOKBACK_BARS = 12;   // 12 x 5-min = 60 min — "bullish in the last hour"
+var TC_SCALP_TREND_LOOKBACK_BARS = 24;   // 24 x 5-min = 120 min — "bullish over the trailing 2 hours"
+                                          // (changed from 12/1hr on 2026-07-14: 1hr window let
+                                          // noise-level ticks (e.g. PYTH +0.15%) pass as "bullish"
+                                          // while masking real 2hr downtrends, and missed slow-build
+                                          // bounces (e.g. PENDLE) still negative at the 1hr mark but
+                                          // net-positive by 2hr — see that day's conversation.
 var TC_SCALP_RANGE_LOOKBACK_BARS = 8;    // 8 x 5-min = 40 min — shorter/more-recent than the
                                           // trend window so a straight pump isn't mistaken for a range
-var TC_SCALP_TOUCH_TOL_PCT = 0.15;
+var TC_SCALP_ZONE_PCT = 20;              // touch + buy/sell zone tolerance, as % of the range's
+                                          // OWN width (hi-lo) rather than a fixed % of price —
+                                          // scales with each coin's volatility instead of using
+                                          // one absolute number for all. Also defines the "near
+                                          // floor" (bottom 20%, buy zone) / "near ceiling" (top
+                                          // 20%, sell zone) labels shown on qualifying coins.
+                                          // TRADEOFF (accepted 2026-07-14, scalping-only, does not
+                                          // touch any other calculation in this file): a slow
+                                          // "creeping" trend whose final tick doesn't clearly break
+                                          // out past the established band can still slip through as
+                                          // falsely "ranging." Obvious pumps are still excluded by
+                                          // insideBand (the last tick breaks past the range + the
+                                          // separate fixed breakout tolerance). Chosen deliberately
+                                          // to reduce how often the scalping list comes up empty.
 var TC_SCALP_MIN_TOUCHES = 2;
 var TC_SCALP_BREAKOUT_TOL_PCT = 0.25;
 var TC_SCALP_SHORTLIST_SIZE = 18;        // only daily-non-bearish coins get an intraday fetch
@@ -3558,18 +3576,19 @@ async function tcFetchIntraday5m(sym){
   }
 }
 
-// Detects the exact setup requested: net-bullish over the trailing hour,
-// now oscillating inside a proven floor/ceiling instead of still trending.
+// Detects the exact setup requested: net-bullish over the trailing window
+// (2h — see TC_SCALP_TREND_LOOKBACK_BARS), now oscillating inside a proven
+// floor/ceiling instead of still trending.
 function tcAnalyzeScalpSetup(bars){
   var need = Math.max(TC_SCALP_TREND_LOOKBACK_BARS, TC_SCALP_RANGE_LOOKBACK_BARS) + 2;
   if(!Array.isArray(bars) || bars.length < need) return null;
   var n = bars.length;
   var last = bars[n-1].price;
 
-  var hourAgoIdx = Math.max(0, n-1-TC_SCALP_TREND_LOOKBACK_BARS);
-  var hourAgoPrice = bars[hourAgoIdx].price;
-  if(!(hourAgoPrice > 0)) return null;
-  var hourReturnPct = (last-hourAgoPrice)/hourAgoPrice*100;
+  var windowAgoIdx = Math.max(0, n-1-TC_SCALP_TREND_LOOKBACK_BARS);
+  var windowAgoPrice = bars[windowAgoIdx].price;
+  if(!(windowAgoPrice > 0)) return null;
+  var windowReturnPct = (last-windowAgoPrice)/windowAgoPrice*100;
 
   var rangeBars = bars.slice(Math.max(0, n-TC_SCALP_RANGE_LOOKBACK_BARS));
   // Band is established from history EXCLUDING the very latest bar —
@@ -3581,7 +3600,8 @@ function tcAnalyzeScalpSetup(bars){
   if(!isFinite(hi) || !isFinite(lo) || lo<=0) return null;
   var rangeWidthPct = (hi-lo)/lo*100;
 
-  var tolAbs = lo * (TC_SCALP_TOUCH_TOL_PCT/100);
+  var rangeWidthAbs = hi-lo;
+  var tolAbs = rangeWidthAbs * (TC_SCALP_ZONE_PCT/100);
   var hiTouches=0, loTouches=0;
   rangeBars.forEach(function(b){
     if(Math.abs(b.price-hi)<=tolAbs) hiTouches++;
@@ -3589,7 +3609,11 @@ function tcAnalyzeScalpSetup(bars){
   });
 
   var isRanging = hiTouches>=TC_SCALP_MIN_TOUCHES && loTouches>=TC_SCALP_MIN_TOUCHES;
-  var isBullishHour = hourReturnPct > 0;
+  var isBullishWindow = windowReturnPct > 0;
+  // Buy/sell zone: same tolAbs as touch detection, applied to the CURRENT
+  // price instead of history — bottom 20% of the range = near floor = buy
+  // zone, top 20% = near ceiling = sell zone, middle 60% = no edge either way.
+  var zone = (last <= lo+tolAbs) ? 'FLOOR' : (last >= hi-tolAbs) ? 'CEILING' : 'MID';
   var clearsFees = rangeWidthPct >= TC_SCALP_FEE_RT_PCT; // informational only — NOT a filter
                                                           // gate (see 2026-07-14 conversation):
                                                           // pattern detection (is it bullish +
@@ -3602,9 +3626,9 @@ function tcAnalyzeScalpSetup(bars){
   var insideBand = last <= hi+breakoutTolAbs && last >= lo-breakoutTolAbs;
 
   return {
-    hourReturnPct:+hourReturnPct.toFixed(2), rangeWidthPct:+rangeWidthPct.toFixed(2),
+    windowReturnPct:+windowReturnPct.toFixed(2), rangeWidthPct:+rangeWidthPct.toFixed(2),
     rangeHigh:hi, rangeLow:lo, hiTouches:hiTouches, loTouches:loTouches, clearsFees:clearsFees,
-    qualifies: isBullishHour && isRanging && insideBand
+    zone:zone, qualifies: isBullishWindow && isRanging && insideBand
   };
 }
 
@@ -3641,7 +3665,7 @@ async function tcRunScalpScan(){
       }
       if(i < shortlist.length-1) await new Promise(function(r){ setTimeout(r, TC_SCALP_CALL_SPACING_MS); });
     }
-    results.sort(function(a,b){ return b.scalp.hourReturnPct - a.scalp.hourReturnPct; });
+    results.sort(function(a,b){ return b.scalp.windowReturnPct - a.scalp.windowReturnPct; });
     tcScalpScanState = {loading:false, rows:results.slice(0,10), scannedAt:Date.now()};
   } catch(e){
     console.warn('Scalp scan failed:', e.message);
@@ -3708,7 +3732,7 @@ function tcRenderTop(){
       .sort(function(a,b){ return b.gap - a.gap; }).slice(0,10);
   } else if(tcGainersModeVal === 'scalping'){
     if(tcScalpScanState.loading){
-      el.innerHTML = '<div class="tp-gainer-empty">Scanning '+TC_SCALP_SHORTLIST_SIZE+' coins for real bounce setups (bullish in the last hour, now ranging) \u2014 pulls live 5-min data per coin, ~'+Math.round(TC_SCALP_SHORTLIST_SIZE*TC_SCALP_CALL_SPACING_MS/1000)+'s.</div>';
+      el.innerHTML = '<div class="tp-gainer-empty">Scanning '+TC_SCALP_SHORTLIST_SIZE+' coins for real bounce setups (bullish over the last 2 hours, now ranging) \u2014 pulls live 5-min data per coin, ~'+Math.round(TC_SCALP_SHORTLIST_SIZE*TC_SCALP_CALL_SPACING_MS/1000)+'s.</div>';
       if(noteEl) noteEl.textContent = '';
       return;
     }
@@ -3726,7 +3750,7 @@ function tcRenderTop(){
   }
   if(!rows.length){
     el.innerHTML = tcGainersModeVal === 'scalping'
-      ? '<div class="tp-gainer-empty">No real bounce setups right now \u2014 nothing is both bullish over the last hour AND currently ranging inside a proven floor/ceiling. Rescans every '+(TC_SCALP_CACHE_MS/60000)+' min.</div>'
+      ? '<div class="tp-gainer-empty">No real bounce setups right now \u2014 nothing is both bullish over the last 2 hours AND currently ranging inside a proven floor/ceiling. Rescans every '+(TC_SCALP_CACHE_MS/60000)+' min.</div>'
       : '<div class="tp-gainer-empty">No coins currently in a confirmed uptrend \u2014 no symbol has SMA20 above SMA50 by more than the '+TC_TREND_BUFFER_PCT+'% buffer.</div>';
     if(noteEl) noteEl.textContent = '';
     return;
@@ -3738,12 +3762,16 @@ function tcRenderTop(){
     // agreeing. BUY+FLAT, SELL+FLAT, HOLD, or the (currently impossible)
     // BUY+BEAR/SELL+BULL combos all show no badge, but the row still shows.
     var aligned = (g.signal==='BUY' && g.trend==='BULL') || (g.signal==='SELL' && g.trend==='BEAR');
+    var zoneTag = '';
+    if(g.scalp && g.scalp.zone === 'FLOOR') zoneTag = ' <span class="tp-gainer-tag BUY" style="'+tpTagStyle('BUY',70)+'">BUY ZONE</span>';
+    else if(g.scalp && g.scalp.zone === 'CEILING') zoneTag = ' <span class="tp-gainer-tag SELL" style="'+tpTagStyle('SELL',70)+'">SELL ZONE</span>';
     var badge = aligned
       ? ' <span class="tp-gainer-tag '+g.signal+'" style="'+tpTagStyle(g.signal, g.confidencePct)+'">'+g.signal+'</span>'+
         ' <span class="tp-gainer-tag '+g.trend+'" style="'+tpTagStyle(g.trend, g.confidencePct)+'">'+g.trend+'</span>'
-      : (g.scalp ? ' <span class="tp-gainer-tag BUY" style="'+tpTagStyle('BUY',80)+'">+'+g.scalp.hourReturnPct+'% 1H</span>' : '');
+      : (g.scalp ? ' <span class="tp-gainer-tag BUY" style="'+tpTagStyle('BUY',80)+'">+'+g.scalp.windowReturnPct+'% 2H</span>'+zoneTag : '');
     var subline = g.scalp
-      ? ('Ranging \u20b1'+g.scalp.rangeLow.toFixed(4)+'\u2013'+g.scalp.rangeHigh.toFixed(4)+' ('+g.scalp.hiTouches+'/'+g.scalp.loTouches+' touches)')
+      ? ('Ranging \u20b1'+g.scalp.rangeLow.toFixed(4)+'\u2013'+g.scalp.rangeHigh.toFixed(4)+' ('+g.scalp.hiTouches+'/'+g.scalp.loTouches+' touches)'+
+         (g.scalp.zone==='FLOOR' ? ' \u2014 near floor' : g.scalp.zone==='CEILING' ? ' \u2014 near ceiling' : ''))
       : g.name;
     return '<div class="tp-gainer-row" onmousedown="tcSelectCoin(\''+g.sym+'\')">'+
       '<span class="tp-gainer-rank">'+(i+1)+'</span>'+
@@ -3759,7 +3787,7 @@ function tcRenderTop(){
     noteEl.textContent = tcGainersModeVal === 'bullish'
       ? 'Coins in a confirmed uptrend ranked by SMA20-vs-SMA50 gap \u2014 same trend engine as the detail card. The % shown is today\u2019s change; the ORDER is trend strength.'
       : tcGainersModeVal === 'scalping'
-      ? 'Real 5-min CoinGecko data, not daily bars: net-positive over the last hour, now bouncing between a proven floor and ceiling. Tap a coin to see if this specific range clears Maya\u2019s round-trip fee. Rescans every '+(TC_SCALP_CACHE_MS/60000)+' min.'
+      ? 'Real 5-min CoinGecko data, not daily bars: net-positive over the last 2 hours, now bouncing between a proven floor and ceiling. BUY ZONE / SELL ZONE tags mean price is currently in the bottom/top 20% of that range. Tap a coin to see if this specific range clears Maya\u2019s round-trip fee. Rescans every '+(TC_SCALP_CACHE_MS/60000)+' min.'
       : 'Live 24h change from the CoinGecko API. Tap a coin for the full signal breakdown.';
   }
 }
