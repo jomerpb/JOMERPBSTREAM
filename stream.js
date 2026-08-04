@@ -1221,7 +1221,9 @@ const SERVER_LIST = [
   { key:'vixsrc',     label:'Vixsrc' },
   { key:'2embed',     label:'2embed' },
   { key:'peachify',   label:'Peachify' },
-  { key:'cinezo',     label:'Cinezo' }
+  { key:'cinezo',     label:'Cinezo' },
+  { key:'moviesapi',  label:'MoviesAPI' },
+  { key:'vidfast',    label:'VidFast' }
 ];
 let currentServer = 'vidlink';
 let triedServers = new Set();
@@ -1269,6 +1271,14 @@ function buildUrl(server) {
       return isMovie
         ? `https://player.cinezo.live/embed/movie/${tmdbId}`
         : `https://player.cinezo.live/embed/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case 'moviesapi':
+      return isMovie
+        ? `https://moviesapi.to/movie/${tmdbId}`
+        : `https://moviesapi.to/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    case 'vidfast':
+      return isMovie
+        ? `https://vidfast.vc/movie/${tmdbId}`
+        : `https://vidfast.vc/tv/${tmdbId}/${seasonNum}/${currentEp}`;
     default:
       return '';
   }
