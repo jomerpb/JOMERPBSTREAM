@@ -1,0 +1,37 @@
+name: Oracle Report Card (Backtest & Simulation)
+
+# Manual-only, matching the repo's other workflows. Dispatched either
+# from the GitHub Actions tab or by the "Report Card" button on the
+# Oracle tab (same token flow as pse-backtest.yml's Report Card).
+#
+# READ-ONLY with respect to the data pipeline: this job only reads
+# oracle.js / pcso-history.json and writes oracle-backtest.json. It
+# never touches the scrapers, oracle-snapshot.yml, or their outputs.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Oracle backtest
+        run: node backtest_oracle.mjs
+
+      - name: Commit report card
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add oracle-backtest.json
+          git diff --cached --quiet && echo "No changes to commit" || git commit -m "Update Oracle backtest report card"
+          git push
