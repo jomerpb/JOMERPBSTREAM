@@ -667,24 +667,34 @@ function layerFengshui(){
   if(_M===1||(_M===2&&_fsSunLon<315)) fsYear=_Y-1;
 
   // Period 9 (2024-2043) — fixed
-  // Annual star: Period 9, year within period
-  // Annual base: 2024=9,2025=8,2026=7... wait — annual star goes DOWN from 9
-  // 2024=9,2025=8,2026=7,2027=6...
+  // Annual star: 2024=9,2025=8,2026=7... counting down, wrapping 1→9.
   var annualStar=9-((fsYear-2024)%9);
   if(annualStar<=0)annualStar+=9;
 
-  // Monthly star: depends on annual star and month
-  // Monthly stars count DOWN from annual star at start of solar year
-  // Month 1(Feb)=annual-1, Month 2(Mar)=annual-2... cycling
-  // For yang years (odd annual star): Jan star = annual+1, counting down
-  // Simplified: monthly star for month M
-  // Standard: if annual is odd, February star = 8; if even, February star = 5
-  // Then count down each month
-  var febStar=(annualStar%2!==0)?8:5;
+  // Monthly star starting value (the "正月" / first-solar-month center
+  // number that subsequent months count down from) — classical rule keys
+  // this off the YEAR'S EARTHLY BRANCH GROUP, not annual-star parity:
+  //   子午卯酉 (Zi/Wu/Mao/You years) → 8
+  //   辰戌丑未 (Chen/Xu/Chou/Wei years) → 5
+  //   寅申巳亥 (Yin/Shen/Si/Hai years)  → 2
+  // Source: 月紫白星起例歌诀 "子午卯酉八白起，寅申巳亥二黑求，辰戌丑未五黄中".
+  // Verified against a concrete published example: 2025 (乙巳, a 巳/Si
+  // year) is on record as having month-1 (寅月) center star = 2 — matches
+  // this rule (Si→group 寅申巳亥→2) and does NOT match the previous
+  // two-case "odd annual star→8, even→5" shortcut this code used to run
+  // (annualStar(2025)=8, which is even, so the old rule wrongly gave 5).
+  // The three branch groups above are exactly the earthly-branch index
+  // mod 3 (Zi=0,Mao=3,Wu=6,You=9 → %3=0; Chou=1,Chen=4,Wei=7,Xu=10 →
+  // %3=1; Yin=2,Si=5,Shen=8,Hai=11 → %3=2), so no separate branch lookup
+  // is needed beyond the same (year-4)%12 formula layerBazi() already
+  // uses for yBranch — duplicated here (self-contained per layer, same
+  // pattern as the shared Lichun year-cutover logic above).
+  var fsYBranch=(fsYear-4)%12; if(fsYBranch<0)fsYBranch+=12;
+  var monthOneStar=[8,5,2][fsYBranch%3];
   // Months since Lichun (0=Yin/first solar month), from true solar-term
   // boundaries rather than the 1st of the Gregorian month.
   var monthOffset=Math.floor(astroNorm360(_fsSunLon-315)/30);
-  var monthlyStar=((febStar-monthOffset-1+90)%9)+1;
+  var monthlyStar=((monthOneStar-monthOffset-1+90)%9)+1;
 
   // Lo Shu grid: place monthly star in center, arrange others
   var loShuOrder=[5,1,6,7,3,8,4,9,2]; // center,N,NW,W,SW,S,SE,E,NE for star 5
@@ -709,23 +719,83 @@ function layerFengshui(){
   };
 }
 
+// Trigram bit patterns, bottom-to-top (1=yang/solid, 0=yin/broken), Xian
+// Tian (Fu Xi) numbering Qian1..Kun8 — verified against the standard
+// "sons have one yang line (Zhen=bottom, Kan=middle, Gen=top), daughters
+// have one yin line (Xun=bottom, Li=middle, Dui=top)" rule.
+var ICHING_TRIGRAM_LINES={1:[1,1,1],2:[1,1,0],3:[1,0,1],4:[1,0,0],5:[0,1,1],6:[0,1,0],7:[0,0,1],8:[0,0,0]};
+var ICHING_TRIGRAM_REV=(function(){
+  var m={};
+  for(var k in ICHING_TRIGRAM_LINES) m[ICHING_TRIGRAM_LINES[k].join('')]=parseInt(k);
+  return m;
+})();
+function ichingTriFromLines(a,b,c){ return ICHING_TRIGRAM_REV[''+a+b+c]; }
+// King Wen hexagram number by [lower trigram][upper trigram], 1-indexed
+// trigram args (Qian1..Kun8). Rebuilt from the verified King Wen
+// upper/lower trigram list (Wikipedia "List of hexagrams of the I Ching")
+// and independently cross-checked two ways: (1) all eight "doubled"
+// hexagrams land on their well-known numbers (Qian²=1, Dui²=58, Li²=30,
+// Zhen²=51, Xun²=57, Kan²=29, Gen²=52, Kun²=2); (2) Tai (11, lower=Qian
+// upper=Kun) and Pi (12, lower=Kun upper=Qian) — the two hexagrams whose
+// composition is common knowledge — land correctly. The PREVIOUS table
+// here failed both checks (e.g. it put lower=Qian/upper=Kun at 43, not
+// 11) — this replaces a table that was simply wrong, not a stylistic
+// rewrite.
+var ICHING_HEX_TABLE=[
+  [1,43,14,34,9,5,26,11],
+  [10,58,38,54,61,60,41,19],
+  [13,49,30,55,37,63,22,36],
+  [25,17,21,51,42,3,27,24],
+  [44,28,50,32,57,48,18,46],
+  [6,47,64,40,59,29,4,7],
+  [33,31,56,62,53,39,52,15],
+  [12,45,35,16,20,8,23,2]
+];
+function ichingHexNumOf(lowerTri,upperTri){ return ICHING_HEX_TABLE[lowerTri-1][upperTri-1]; }
+
 function layerIChing(drawHour){
-  var h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
-  var yRed=reduce(_Y);
-  var dRed=reduce(_D);
-  var lower=(_D+_M+yRed)%8||8;
-  var upper=(h+dRed+_M)%8||8;
+  // Authentic Mei Hua Yi Shu (梅花易数) time-based casting — 年月日时起卦法,
+  // Shao Yong's classical method, not a Western-numerology substitute:
+  //   上卦(upper) = (年支数+月+日) mod 8      [no hour]
+  //   下卦(lower) = (年支数+月+日+时支数) mod 8
+  //   动爻(moving line) = (年支数+月+日+时支数) mod 6
+  // 年支数 (year number) = the year's EARTHLY BRANCH index 1-12 (Zi=1..
+  // Hai=12) — NOT the Gregorian year and NOT a Pythagorean-reduced digit
+  // (the previous code used reduce(_Y), mixing Western numerology into a
+  // Chinese casting formula). 时支数 (hour number) = the same 2-hour
+  // earthly-branch index used by layerBazi()'s hour pillar (Wei=8→2PM,
+  // You=10→5PM, Hai=12→9PM branches, 1-indexed here vs BaZi's 0-indexed).
+  // Formula verified against a published worked example: 辰年十二月十七日申时
+  // → upper=(5+12+17)%8=2(Dui), lower=(34+9)%8=3(Li), moving=(43)%6=1.
+  // Month/day use the solar (Gregorian) calendar rather than converting to
+  // the lunar calendar the classical method originally assumed — a
+  // disclosed practical simplification (lunar-calendar conversion needs
+  // real new-moon astronomy, out of scope here), consistent with how
+  // layerBazi()/layerFengshui() already run on solar dates.
+  var _icD=astroDayNumber(_Y,_M,_D,12);
+  var _icSunLon=astroSunPos(_icD).lonsun;
+  var icYear=_Y;
+  if(_M===1||(_M===2&&_icSunLon<315)) icYear=_Y-1; // same Lichun-based solar year as BaZi/Feng Shui
+  var icYBranch=(icYear-4)%12; if(icYBranch<0)icYBranch+=12;
+  var yearNum=icYBranch+1; // 1-12, Zi=1
+  var hBranchMap={'2PM':7,'5PM':9,'9PM':11}; // same 0-indexed branches as layerBazi()'s hour pillar
+  var hourNum=(hBranchMap[drawHour]!==undefined?hBranchMap[drawHour]:11)+1; // 1-12, Zi=1
+
+  var upper=(yearNum+_M+_D)%8||8;
+  var lower=(yearNum+_M+_D+hourNum)%8||8;
+  var changingLine=(yearNum+_M+_D+hourNum)%6||6;
 
   var triNames=['','Qian','Dui','Li','Zhen','Xun','Kan','Gen','Kun'];
   var triSym=['','☰','☱','☲','☳','☴','☵','☶','☷'];
-  var triEl=['','Metal','Metal','Fire','Thunder','Wood','Water','Earth','Earth'];
-  var elNums={'Metal':[6,7],'Fire':[2,7],'Thunder':[3,8],'Wood':[3,8],'Water':[1,6],'Earth':[2,5,8]};
+  // Wu Xing element per trigram (Qian/Dui=Metal, Li=Fire, Zhen/Xun=Wood,
+  // Kan=Water, Gen/Kun=Earth). Index4 (Zhen) previously said "Thunder" —
+  // that's the trigram's natural-phenomenon association, not its Wu Xing
+  // element, so it's corrected to "Wood" here (Wood/Thunder happened to
+  // share the same digit set below, so this was cosmetic, not a scoring bug).
+  var triEl=['','Metal','Metal','Fire','Wood','Wood','Water','Earth','Earth'];
+  var elNums={'Metal':[6,7],'Fire':[2,7],'Wood':[3,8],'Water':[1,6],'Earth':[2,5,8]};
 
-  // Hex number from King Wen sequence (lower=row, upper=col)
-  var hexTable=[[1,34,5,26,11,9,14,43],[25,51,3,27,24,42,21,17],[6,40,29,4,7,59,64,47],
-    [33,62,39,52,15,53,56,31],[12,16,8,23,2,20,35,45],[44,32,48,18,46,57,50,28],
-    [13,55,63,22,36,37,30,49],[10,54,60,41,19,61,38,58]];
-  var hexNum=hexTable[lower-1][upper-1];
+  var hexNum=ichingHexNumOf(lower,upper);
 
   // Hexagram database
   var hexDB={1:{name:"Qian",english:"The Creative",gambling:"Strong favorable energy · act decisively"},
@@ -792,14 +862,31 @@ function layerIChing(drawHour){
     62:{name:"Xiao Guo",english:"Small Exceeding",gambling:"Small steps · modesty wins"},
     63:{name:"Ji Ji",english:"After Completion",gambling:"Peak · maintain discipline"},
     64:{name:"Wei Ji",english:"Before Completion",gambling:"Almost there · final push"}};
-  var nuclearMap={1:1,2:2,3:23,4:24,5:38,6:37,7:24,8:23,9:37,10:38,11:54,12:53,13:44,14:43,15:52,16:51,17:53,18:54,19:24,20:23,21:27,22:28,23:2,24:2,25:53,26:54,27:2,28:1,29:27,30:28,31:44,32:43,33:44,34:43,35:27,36:28,37:63,38:64,39:64,40:63,41:23,42:24,43:1,44:1,45:53,46:54,47:28,48:27,49:63,50:64,51:39,52:40,53:37,54:38,55:28,56:27,57:57,58:58,59:27,60:27,61:27,62:27,63:63,64:64};
-
   var hexInfo=hexDB[hexNum]||{name:'Hex '+hexNum,english:'Active energy',gambling:'Moderate fortune'};
-  var nucNum=nuclearMap[hexNum]||1;
+
+  // Nuclear hexagram (互卦) — lines 2,3,4 become the new lower trigram,
+  // lines 3,4,5 become the new upper trigram. Derived programmatically
+  // from the verified trigram bit patterns rather than a second hardcoded
+  // 64-entry table, so it can't drift out of sync with ICHING_HEX_TABLE.
+  // Cross-checked: nuclear of Tai (11) computes to 54 (Gui Mei), the
+  // commonly-cited textbook example.
+  var lines6=ICHING_TRIGRAM_LINES[lower].concat(ICHING_TRIGRAM_LINES[upper]); // bottom(line1)..top(line6)
+  var nucLowerTri=ichingTriFromLines(lines6[1],lines6[2],lines6[3]);
+  var nucUpperTri=ichingTriFromLines(lines6[2],lines6[3],lines6[4]);
+  var nucNum=ichingHexNumOf(nucLowerTri,nucUpperTri);
   var nucInfo=hexDB[nucNum]||{name:'Hex '+nucNum,english:'Inner energy',gambling:''};
 
-  // Changing line: (day+month+hour)%6+1
-  var changingLine=((_D+_M+h)%6)+1;
+  // Changed hexagram (变卦/之卦) — flip the moving line's yin/yang and
+  // re-derive the resulting hexagram. This is the classical "where the
+  // situation is heading" reading that the old code never actually
+  // computed (it only described the moving line in prose).
+  var changedLines=lines6.slice();
+  changedLines[changingLine-1]=changedLines[changingLine-1]?0:1;
+  var chgLowerTri=ichingTriFromLines(changedLines[0],changedLines[1],changedLines[2]);
+  var chgUpperTri=ichingTriFromLines(changedLines[3],changedLines[4],changedLines[5]);
+  var chgNum=ichingHexNumOf(chgLowerTri,chgUpperTri);
+  var chgInfo=hexDB[chgNum]||{name:'Hex '+chgNum,english:'Resulting energy',gambling:''};
+
   var lineTexts=['Initial','Second','Third','Fourth','Fifth','Top'];
   var changingDesc=lineTexts[changingLine-1]+' line changing · energy in transition';
 
@@ -817,15 +904,17 @@ function layerIChing(drawHour){
       changingLine:changingDesc,
       upper:{sym:triSym[upper],name:triNames[upper]},
       lower:{sym:triSym[lower],name:triNames[lower]},
-      nuclear:{num:nucNum,name:nucInfo.name}
+      nuclear:{num:nucNum,name:nucInfo.name},
+      changed:{num:chgNum,name:chgInfo.name}
     },
     pofNums:[reduce(lower),reduce(upper),reduce(lower+upper)],
     steps:[
-      `<b>Lower Trigram:</b> (${_D}+${_M}+${yRed})%8 = ${lower} = ${triSym[lower]} ${triNames[lower]} (${lEl})`,
-      `<b>Upper Trigram:</b> (${h}+${dRed}+${_M})%8 = ${upper} = ${triSym[upper]} ${triNames[upper]} (${uEl})`,
+      `<b>Upper Trigram:</b> (year${yearNum}+month${_M}+day${_D})%8 = ${upper} = ${triSym[upper]} ${triNames[upper]} (${uEl})`,
+      `<b>Lower Trigram:</b> (year${yearNum}+month${_M}+day${_D}+hour${hourNum})%8 = ${lower} = ${triSym[lower]} ${triNames[lower]} (${lEl})`,
       `<b>Hexagram ${hexNum} — ${hexInfo.name}</b> · ${hexInfo.english}`,
       `<b>Nuclear Hex ${nucNum} — ${nucInfo.name}</b> · inner energy`,
       `<b>Changing Line ${changingLine}</b> · ${changingDesc}`,
+      `<b>Changed Hex ${chgNum} — ${chgInfo.name}</b> · where it's heading`,
       `<b>For speculation:</b> ${hexInfo.gambling}`,
     ]
   };
@@ -1103,6 +1192,7 @@ function convergence(layers,gameKey){
   var hexRaw=layers.iching&&layers.iching.hex;
   var hexN=hexRaw?(typeof hexRaw==='object'?hexRaw.num:hexRaw):null;
   var nucN=(hexRaw&&typeof hexRaw==='object'&&hexRaw.nuclear&&typeof hexRaw.nuclear.num==='number')?hexRaw.nuclear.num:null;
+  var chgN=(hexRaw&&typeof hexRaw==='object'&&hexRaw.changed&&typeof hexRaw.changed.num==='number')?hexRaw.changed.num:null;
   var angelFull=[];
   if(layers.angel&&Array.isArray(layers.angel.nums)){
     layers.angel.nums.forEach(function(dg){
@@ -1120,6 +1210,7 @@ function convergence(layers,gameKey){
     if(dateSumN!==null&&dateSumN>=1&&dateSumN<=game.max&&n===dateSumN) b+=10;
     if(hexN&&hexN>=1&&hexN<=game.max&&n===hexN) b+=10;
     if(nucN&&nucN>=1&&nucN<=game.max&&n===nucN) b+=10;
+    if(chgN&&chgN>=1&&chgN<=game.max&&n===chgN) b+=10;
     if(angelFull.indexOf(n)>=0) b+=10;
     return b;
   }
@@ -1460,7 +1551,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
         <div class="imsg">Lower</div>
       </div>
     </div>
-    <div class="ichange"><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}</div>`;
+    <div class="ichange"><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}<br><b>Changed hex ${layers.iching.hex.changed.num}:</b> ${layers.iching.hex.changed.name} · where it's heading</div>`;
 
   // Stats panel
   var maxF=Math.max(...Object.values(layers.stats.freq))||1;
@@ -1543,7 +1634,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     </div>
 
     <div class="disc">
-      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (${TODAY_PH} planetary positions via a published low-precision ephemeris algorithm, accurate to roughly 1-2 arcminutes), Horary chart (Equal House system, strictures checked: radicality, void-of-course Moon, Via Combusta), Part of Fortune (day/night-aware formula), exact BaZi four pillars (dynamic daily pillars, true solar-term month/year boundaries) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (cast from today's date) with nuclear and changing line, Element Energy flow (BaZi + planetary + Flying Star synthesis, Lo Shu number map), Tarot (Major Arcana card of the day), Angel Numbers (repeating-digit resonance scan), and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
+      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (${TODAY_PH} planetary positions via a published low-precision ephemeris algorithm, accurate to roughly 1-2 arcminutes), Horary chart (Equal House system, strictures checked: radicality, void-of-course Moon, Via Combusta), Part of Fortune (day/night-aware formula), exact BaZi four pillars (dynamic daily pillars, true solar-term month/year boundaries) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (authentic Mei Hua Yi Shu time-based casting) with nuclear, changing line, and changed hexagram, Element Energy flow (BaZi + planetary + Flying Star synthesis, Lo Shu number map), Tarot (Major Arcana card of the day), Angel Numbers (repeating-digit resonance scan), and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
     </div>
   `;
 }
