@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-10T10:18:29.114Z",
-  "engineSha": "local",
+  "generatedAt": "2026-08-10T10:27:38.911Z",
+  "engineSha": "6da8ef1",
   "minPriorDraws": 15,
   "simsPerDraw": 2000,
   "method": "walk-forward (computeOracleAsOf sees only draws strictly before the graded date) + Monte Carlo random-pick baseline + exact hypergeometric theoretical baseline",
