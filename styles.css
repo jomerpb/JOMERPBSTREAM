@@ -1076,6 +1076,26 @@
 #trade-page .tp-summary-bullets{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:7px;list-style:disc;}
 #trade-page .tp-summary-bullets li{color:var(--text);font-size:12.5px;line-height:1.55;}
 #trade-page .tp-summary-bullets li::marker{color:var(--accent2);}
+/* Oracle tab's Report Card — reuses the Trade tab's .tp-summary-card /
+   .tp-refresh-btn / .tp-summary-bullets component styling (shared visual
+   language across tabs, see styles.css file-level comment) since those
+   rules are scoped to #trade-page; this just extends the same selectors
+   to #oracle-page rather than duplicating the declarations. */
+#oracle-page .tp-summary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+#oracle-page .tp-summary-row{padding:8px 0;}
+#oracle-page .tp-summary-row-bottomline{border-bottom:none;}
+#oracle-page .tp-summary-row .tp-summary-tag{display:inline-block;margin-bottom:6px;font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;padding:2px 8px;border-radius:10px;}
+#oracle-page .tp-summary-row .tp-summary-tag.REPORT{background:rgba(20,184,166,0.15);color:#2dd4bf;}
+#oracle-page .tp-summary-row .tp-summary-text{color:var(--text);font-size:12.5px;line-height:1.5;display:block;}
+#oracle-page .tp-backtest-status{font-size:10.5px;color:var(--muted);line-height:1.4;margin-bottom:8px;min-height:0;}
+#oracle-page .tp-backtest-status:empty{display:none;}
+#oracle-page .tp-refresh-btn{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:9px;font-size:11.5px;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;flex-shrink:0;white-space:nowrap;}
+#oracle-page .tp-refresh-btn:active{background:var(--card);}
+#oracle-page .tp-refresh-btn:disabled{opacity:0.55;cursor:default;}
+#oracle-page .tp-refresh-btn svg{width:13px;height:13px;flex-shrink:0;color:var(--accent2);}
+#oracle-page .tp-summary-bullets{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:7px;list-style:disc;}
+#oracle-page .tp-summary-bullets li{color:var(--text);font-size:12.5px;line-height:1.55;}
+#oracle-page .tp-summary-bullets li::marker{color:var(--accent2);}
 /* Watchlist add button (left of stock name) */
 #trade-page .tp-price-name-row{display:flex;align-items:center;gap:8px;}
 #trade-page .tp-watch-add{width:24px;height:24px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--accent2);background:rgba(59,130,246,0.12);color:var(--accent2);font-size:16px;line-height:1;cursor:pointer;padding:0;transition:all 0.15s;}

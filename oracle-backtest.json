@@ -1,0 +1,379 @@
+{
+  "generatedAt": "2026-08-10T10:18:29.114Z",
+  "engineSha": "local",
+  "minPriorDraws": 15,
+  "simsPerDraw": 2000,
+  "method": "walk-forward (computeOracleAsOf sees only draws strictly before the graded date) + Monte Carlo random-pick baseline + exact hypergeometric theoretical baseline",
+  "sixBall": {
+    "642": {
+      "gameKey": "642",
+      "max": 42,
+      "needed": 6,
+      "n": 163,
+      "skippedErrors": 0,
+      "dateRange": {
+        "from": "2025-06-19",
+        "to": "2026-08-04"
+      },
+      "oracle": {
+        "avgMatches": 0.908,
+        "matchDist": [
+          0.3252,
+          0.4601,
+          0.1963,
+          0.0184,
+          0,
+          0,
+          0
+        ]
+      },
+      "monteCarlo": {
+        "avgMatches": 0.8578,
+        "matchDist": [
+          0.3709,
+          0.4319,
+          0.1677,
+          0.0275,
+          0.0019,
+          0.0001,
+          0
+        ],
+        "simsPerDraw": 2000,
+        "trials": 326000
+      },
+      "theoretical": {
+        "avgMatches": 0.8571,
+        "matchDist": [
+          0.3713,
+          0.4312,
+          0.1684,
+          0.0272,
+          0.0018,
+          0,
+          0
+        ]
+      },
+      "mcVsTheoreticalDeltaCheck": 0.0006,
+      "edge": 0.0508,
+      "edgeStdError": 0.0629,
+      "edgeWithinNoise": true
+    },
+    "645": {
+      "gameKey": "645",
+      "max": 45,
+      "needed": 6,
+      "n": 163,
+      "skippedErrors": 0,
+      "dateRange": {
+        "from": "2025-06-20",
+        "to": "2026-08-05"
+      },
+      "oracle": {
+        "avgMatches": 0.7362,
+        "matchDist": [
+          0.411,
+          0.454,
+          0.1227,
+          0.0123,
+          0,
+          0,
+          0
+        ]
+      },
+      "monteCarlo": {
+        "avgMatches": 0.8,
+        "matchDist": [
+          0.4005,
+          0.4243,
+          0.1512,
+          0.0225,
+          0.0014,
+          0,
+          0
+        ],
+        "simsPerDraw": 2000,
+        "trials": 326000
+      },
+      "theoretical": {
+        "avgMatches": 0.8,
+        "matchDist": [
+          0.4006,
+          0.4241,
+          0.1515,
+          0.0224,
+          0.0014,
+          0,
+          0
+        ]
+      },
+      "mcVsTheoreticalDeltaCheck": 0,
+      "edge": -0.0638,
+      "edgeStdError": 0.0614,
+      "edgeWithinNoise": true
+    },
+    "649": {
+      "gameKey": "649",
+      "max": 49,
+      "needed": 6,
+      "n": 164,
+      "skippedErrors": 0,
+      "dateRange": {
+        "from": "2025-06-19",
+        "to": "2026-08-04"
+      },
+      "oracle": {
+        "avgMatches": 0.7317,
+        "matchDist": [
+          0.4634,
+          0.378,
+          0.128,
+          0.0244,
+          0.0061,
+          0,
+          0
+        ]
+      },
+      "monteCarlo": {
+        "avgMatches": 0.7328,
+        "matchDist": [
+          0.4368,
+          0.413,
+          0.1317,
+          0.0175,
+          0.001,
+          0,
+          0
+        ],
+        "simsPerDraw": 2000,
+        "trials": 328000
+      },
+      "theoretical": {
+        "avgMatches": 0.7347,
+        "matchDist": [
+          0.436,
+          0.413,
+          0.1324,
+          0.0177,
+          0.001,
+          0,
+          0
+        ]
+      },
+      "mcVsTheoreticalDeltaCheck": -0.0019,
+      "edge": -0.003,
+      "edgeStdError": 0.0593,
+      "edgeWithinNoise": true
+    },
+    "655": {
+      "gameKey": "655",
+      "max": 55,
+      "needed": 6,
+      "n": 167,
+      "skippedErrors": 0,
+      "dateRange": {
+        "from": "2025-06-18",
+        "to": "2026-08-05"
+      },
+      "oracle": {
+        "avgMatches": 0.6527,
+        "matchDist": [
+          0.4731,
+          0.4072,
+          0.1138,
+          0.006,
+          0,
+          0,
+          0
+        ]
+      },
+      "monteCarlo": {
+        "avgMatches": 0.6534,
+        "matchDist": [
+          0.4828,
+          0.3949,
+          0.109,
+          0.0127,
+          0.0006,
+          0,
+          0
+        ],
+        "simsPerDraw": 2000,
+        "trials": 334000
+      },
+      "theoretical": {
+        "avgMatches": 0.6545,
+        "matchDist": [
+          0.4824,
+          0.3947,
+          0.1096,
+          0.0127,
+          0.0006,
+          0,
+          0
+        ]
+      },
+      "mcVsTheoreticalDeltaCheck": -0.0012,
+      "edge": -0.0019,
+      "edgeStdError": 0.0563,
+      "edgeWithinNoise": true
+    },
+    "658": {
+      "gameKey": "658",
+      "max": 58,
+      "needed": 6,
+      "n": 162,
+      "skippedErrors": 0,
+      "dateRange": {
+        "from": "2025-06-20",
+        "to": "2026-08-04"
+      },
+      "oracle": {
+        "avgMatches": 0.6296,
+        "matchDist": [
+          0.4506,
+          0.4691,
+          0.0802,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "monteCarlo": {
+        "avgMatches": 0.6215,
+        "matchDist": [
+          0.5033,
+          0.3838,
+          0.1013,
+          0.011,
+          0.0005,
+          0,
+          0
+        ],
+        "simsPerDraw": 2000,
+        "trials": 324000
+      },
+      "theoretical": {
+        "avgMatches": 0.6207,
+        "matchDist": [
+          0.503,
+          0.3853,
+          0.1003,
+          0.0109,
+          0.0005,
+          0,
+          0
+        ]
+      },
+      "mcVsTheoreticalDeltaCheck": 0.0008,
+      "edge": 0.0089,
+      "edgeStdError": 0.056,
+      "edgeWithinNoise": true
+    }
+  },
+  "ez2": {
+    "max": 31,
+    "needed": 2,
+    "hours": {
+      "2PM": {
+        "n": 403,
+        "skippedErrors": 0,
+        "dateRange": {
+          "from": "2025-05-28",
+          "to": "2026-08-06"
+        },
+        "oracle": {
+          "avgMatches": 0.1315,
+          "matchDist": [
+            0.8685,
+            0.1315,
+            0
+          ]
+        },
+        "monteCarlo": {
+          "avgMatches": 0.127,
+          "matchDist": [
+            0.8751,
+            0.1227,
+            0.0021
+          ],
+          "simsPerDraw": 2000,
+          "trials": 806000
+        },
+        "theoretical": {
+          "avgMatches": 0.127
+        },
+        "mcVsTheoreticalDeltaCheck": 0,
+        "edge": 0.0046,
+        "edgeStdError": 0.0169,
+        "edgeWithinNoise": true
+      },
+      "5PM": {
+        "n": 402,
+        "skippedErrors": 0,
+        "dateRange": {
+          "from": "2025-05-28",
+          "to": "2026-08-05"
+        },
+        "oracle": {
+          "avgMatches": 0.1095,
+          "matchDist": [
+            0.893,
+            0.1045,
+            0.0025
+          ]
+        },
+        "monteCarlo": {
+          "avgMatches": 0.1278,
+          "matchDist": [
+            0.8743,
+            0.1237,
+            0.002
+          ],
+          "simsPerDraw": 2000,
+          "trials": 804000
+        },
+        "theoretical": {
+          "avgMatches": 0.1274
+        },
+        "mcVsTheoreticalDeltaCheck": 0.0003,
+        "edge": -0.018,
+        "edgeStdError": 0.0169,
+        "edgeWithinNoise": true
+      },
+      "9PM": {
+        "n": 401,
+        "skippedErrors": 0,
+        "dateRange": {
+          "from": "2025-05-28",
+          "to": "2026-08-05"
+        },
+        "oracle": {
+          "avgMatches": 0.1122,
+          "matchDist": [
+            0.8928,
+            0.1022,
+            0.005
+          ]
+        },
+        "monteCarlo": {
+          "avgMatches": 0.1276,
+          "matchDist": [
+            0.8745,
+            0.1235,
+            0.0021
+          ],
+          "simsPerDraw": 2000,
+          "trials": 802000
+        },
+        "theoretical": {
+          "avgMatches": 0.1277
+        },
+        "mcVsTheoreticalDeltaCheck": -0.0001,
+        "edge": -0.0155,
+        "edgeStdError": 0.017,
+        "edgeWithinNoise": true
+      }
+    }
+  }
+}
