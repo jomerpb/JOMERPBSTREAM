@@ -696,9 +696,18 @@ function layerFengshui(){
   var monthOffset=Math.floor(astroNorm360(_fsSunLon-315)/30);
   var monthlyStar=((monthOneStar-monthOffset-1+90)%9)+1;
 
-  // Lo Shu grid: place monthly star in center, arrange others
-  var loShuOrder=[5,1,6,7,3,8,4,9,2]; // center,N,NW,W,SW,S,SE,E,NE for star 5
-  // Offset based on monthly star
+  // Lo Shu grid: place monthly star in center, "fly" the rest outward.
+  // The base order (star 5 in center) below is the actual Lo Shu magic
+  // square — sum of every row/column/diagonal = 15 — cross-checked
+  // against the standard trigram-direction correspondence (Kan1=N,
+  // Kun2=SW, Zhen3=E, Xun4=SE, Qian6=NW, Dui7=W, Gen8=NE, Li9=S).
+  // The PREVIOUS array here ([5,1,6,7,3,8,4,9,2]) was not a valid magic
+  // square at all (its W+C+E row summed to 21, not 15) — a hard,
+  // source-independent proof it was wrong, not just a different
+  // convention. Adding a constant offset (mod 9) to every cell and
+  // wrapping is a standard, valid way to "fly" the whole square to any
+  // other center number, but only if this base array is the true one.
+  var loShuOrder=[5,1,6,7,2,9,4,3,8]; // center,N,NW,W,SW,S,SE,E,NE for star 5
   var offset=monthlyStar-5;
   var grid={};
   var dirs=['C','N','NW','W','SW','S','SE','E','NE'];
@@ -706,6 +715,14 @@ function layerFengshui(){
     grid[d]=((loShuOrder[i]+offset-1+9)%9)+1;
   });
 
+  // NOTE ON "WEALTH DIRECTION": genuine Flying Star wealth-direction
+  // determination needs the building's facing direction and construction
+  // year (the "sitting/facing star" natal chart) — inputs this app does
+  // not collect. The center+East pair below is real flying-star math (now
+  // correctly computed), but calling it "wealth stars" overclaimed what
+  // it can actually determine without that data. Labeled honestly as a
+  // sector reading, not a wealth claim — same policy this file already
+  // applies elsewhere (see the astrology layer's Equal House comment).
   var nums=[...new Set([annualStar,monthlyStar,grid.C,grid.E])];
 
   return {
@@ -714,7 +731,7 @@ function layerFengshui(){
       `<b>Period 9 (2024-2043)</b> · ruling star = 9 · active: <b>2,7,9</b>`,
       `<b>Annual Flying Star ${_Y} = #${annualStar}</b>`,
       `<b>Monthly Star (Month ${_M}) = #${monthlyStar}</b> in center`,
-      `<b>Wealth stars:</b> #${monthlyStar} (center) + #${grid.E} (East) → digits: <b>${nums.join(',')}</b>`,
+      `<b>Center + East sector stars:</b> #${monthlyStar} (center) + #${grid.E} (East) → digits: <b>${nums.join(',')}</b>`,
     ]
   };
 }
