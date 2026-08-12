@@ -1,6 +1,22 @@
 name: PCSO History Append (Daily)
 
+# Scheduled daily at 23:00 Asia/Manila, after that day's 9PM draws have been
+# posted by the source site. This is a deliberate exception to the repo's
+# manual-only workflow convention (see CLAUDE.md): pcso-history.json feeds the
+# Oracle tab's "Look Up Past Result" panel, and while it was dispatch-only it
+# routinely ran 2-4 days behind pcso-results.json (which powers the "Today's
+# Results" widget), so the two panels disagreed about the same draw.
+#
+# Ordering note: this runs BEFORE oracle-snapshot.yml (05:16 UTC = 00:05
+# Manila the next day), so that day's draws are already appended when the
+# snapshot computes the next day's pick under the engine freeze.
+#
+# Still safe to run manually at any time — the script is append-only and
+# never overwrites verified entries, so a scheduled run and a Fetch Live
+# dispatch landing together cannot corrupt the file.
 on:
+  schedule:
+    - cron: '0 15 * * *'   # 23:00 Asia/Manila (UTC+8) — after the 9PM draws are posted
   workflow_dispatch:
 
 jobs:
