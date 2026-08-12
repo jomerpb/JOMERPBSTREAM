@@ -448,11 +448,32 @@ function layerNumerology(drawHour){
 
   var pyNums=[...new Set([ud,h,combined,saturn,monthYear,dayRed])];
 
-  // Chaldean — static word values (PCSO, LOTTO, PHILIPPINES never change)
-  var pcso=reduce(8+3+3+7);   // 21→3
-  var lotto=reduce(3+7+4+4+7); // 25→7
-  var phils=reduce(8+5+1+3+1+8+8+1+5+5+3); // 48→3
-  var chNums=[...new Set([pcso,lotto,phils])];
+  // ── Chaldean ──
+  // The three fixed words below (PCSO / LOTTO / PHILIPPINES) never change,
+  // so this half of the layer used to emit [3,7] on EVERY draw of every
+  // day — verified constant across 4,032 date/hour combinations spanning
+  // 2024-2027. That made "Ch" a dead input: convergence() counted it as an
+  // independent source confirming digits 3 and 7, permanently, regardless
+  // of the date. The game-identity words are kept (they are what the
+  // reading is *about*), but the Chaldean values of the DATE — weekday and
+  // month name — are now included too, so the source actually varies with
+  // the day it is read for, which is the whole premise of a daily reading.
+  var CHALDEAN={A:1,B:2,C:3,D:4,E:5,F:8,G:3,H:5,I:1,J:1,K:2,L:3,M:4,N:5,O:7,
+                P:8,Q:1,R:2,S:3,T:4,U:6,V:6,W:6,X:5,Y:1,Z:7};
+  function chaldeanWord(w){
+    var s=0;
+    for(var i=0;i<w.length;i++){ var v=CHALDEAN[w.charAt(i)]; if(v) s+=v; }
+    return reduce(s);
+  }
+  var pcso=chaldeanWord('PCSO');    // 8+3+3+7 = 21 → 3
+  var lotto=chaldeanWord('LOTTO');  // 3+7+4+4+7 = 25 → 7
+  var phils=chaldeanWord('PHILIPPINES'); // 48 → 3
+  var DAYNAMES=['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+  var MONTHNAMES=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY',
+                  'AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+  var chDay=chaldeanWord(DAYNAMES[_DOW]||'SUNDAY');
+  var chMonth=chaldeanWord(MONTHNAMES[_M-1]||'JANUARY');
+  var chNums=[...new Set([pcso,lotto,phils,chDay,chMonth])];
 
   var allNums=[...new Set([...pyNums,...chNums])];
   return {
@@ -466,6 +487,8 @@ function layerNumerology(drawHour){
       `<b>Chaldean — "PCSO":</b> P(8)+C(3)+S(3)+O(7)=21 → <b>${pcso}</b>`,
       `<b>Chaldean — "LOTTO":</b> L(3)+O(7)+T(4)+T(4)+O(7)=25 → <b>${lotto}</b>`,
       `<b>Chaldean — "PHILIPPINES":</b> =48→12 → <b>${phils}</b>`,
+      `<b>Chaldean — weekday "${DAYNAMES[_DOW]}":</b> → <b>${chDay}</b>`,
+      `<b>Chaldean — month "${MONTHNAMES[_M-1]}":</b> → <b>${chMonth}</b>`,
     ]
   };
 }
@@ -1059,19 +1082,100 @@ function layerStats(gameKey,drawHour){
   var expGap=isEZ2?(game.max/2):(game.max/6);
   var overdueAt=Math.ceil(expGap*2);
 
-  var digitWeight={};
-  for(var d=1;d<=9;d++) digitWeight[d]=0;
-  for(var n=1;n<=game.max;n++){
-    var d=digitOf(n);
-    var w=(freq30[n]||0)*4;
-    if(hotNums.includes(n)) w+=6;
-    var gap=lastSeen[n]??draws.length;
-    if(gap>=overdueAt) w+=5; // overdue
-    digitWeight[d]=(digitWeight[d]||0)+w;
+  // ══════════════════════════
+  // SCORING — rebuilt. The previous formula was
+  //     w = freq30[n]*4 + (hot ? 6 : 0) + (overdue ? 5 : 0)
+  //   summed into digit families. Three defects, all fixed below:
+  //
+  //   (1) DOUBLE COUNT. hotNums is defined (in the history loader) as
+  //       "top-6 by frequency in the most recent 30 draws" — the exact
+  //       same window and computation as freq30. A hot number therefore
+  //       scored freq30*4 AND +6 for one and the same property, silently
+  //       inflating recency by ~19%. Now there is ONE recency signal.
+  //   (2) FAMILY-SIZE BIAS. Weights were SUMMED per digit family, but the
+  //       families are unequal: digital-root families 1-4 hold 7 members
+  //       in 6/58 while 5-9 hold 6 (and 6/42 splits 5 vs 4). That handed
+  //       digits 1-4 a structural +17%..+25% head start before any draw
+  //       data was considered. Now the family score is the MEAN of its
+  //       members, so family size cancels out.
+  //   (3) CONTRADICTION. "+6 because it keeps coming up" and "+5 because
+  //       it hasn't come up" are opposite claims, and the engine paid
+  //       both. They are now explicit, separately-weighted terms summing
+  //       to 1, so the balance between them is a stated choice instead of
+  //       two rival superstitions firing at once.
+  //
+  // Both signals are standardised (z-scores) against what a fair draw
+  // would produce, so they share one scale and need no magic multipliers.
+  var picksPerDraw=isEZ2?2:6;
+
+  // ── recency: exponentially-decayed appearance count ──
+  // Replaces freq30 + the hot bonus. A half-life is a smooth version of
+  // the old hard 30-draw cutoff (a draw 15 back counts half as much as
+  // yesterday's) and removes the cliff where draw 30 mattered fully and
+  // draw 31 not at all.
+  var HALF_LIFE=15;
+  var recW={},totalW=0;
+  for(var i=1;i<=game.max;i++) recW[i]=0;
+  for(var i=0;i<draws.length;i++){
+    var dw=Math.pow(0.5,i/HALF_LIFE); // i=0 is the most recent draw
+    totalW+=dw;
+    draws[i].forEach(function(n){ if(n>=1&&n<=game.max) recW[n]+=dw; });
   }
+  // Under a fair draw each number's share of the weighted mass is
+  // picksPerDraw/max, with binomial spread — so deviation in SDs is
+  // directly interpretable and comparable across games.
+  var share=picksPerDraw/game.max;
+  var expW=totalW*share;
+  var sdW=Math.sqrt(totalW*share*(1-share))||1;
+  var recZ={};
+  for(var n=1;n<=game.max;n++) recZ[n]=(recW[n]-expW)/sdW;
+
+  // ── overdue: gap measured against its own expectation ──
+  // Expected gap between appearances is max/picksPerDraw draws; the
+  // gap distribution is ~geometric, whose SD is close to its mean, so
+  // dividing the excess by expGap gives a comparable z-like figure.
+  var gapZ={};
+  for(var n=1;n<=game.max;n++){
+    var gp=(n in lastSeen)?lastSeen[n]:draws.length;
+    gapZ[n]=(gp-expGap)/expGap;
+  }
+
+  // ── explicit blend (stated choice, not a hidden accident) ──
+  var W_RECENCY=0.65, W_OVERDUE=0.35;
+  var numScore={};
+  for(var n=1;n<=game.max;n++) numScore[n]=W_RECENCY*recZ[n]+W_OVERDUE*gapZ[n];
+
+  // ── family score = MEAN of members (size bias cancels) ──
+  var famSum={},famCount={};
+  for(var d=1;d<=9;d++){ famSum[d]=0; famCount[d]=0; }
+  for(var n=1;n<=game.max;n++){ var d=digitOf(n); famSum[d]+=numScore[n]; famCount[d]++; }
+  var famMean={};
+  for(var d=1;d<=9;d++) famMean[d]=famCount[d]?famSum[d]/famCount[d]:0;
+
+  // convergence() consumes digitWeight as a non-negative magnitude
+  // (statFrac = w/maxW), so rescale the means to 0..100 preserving order.
+  var mnF=Math.min(...Object.values(famMean)), mxF=Math.max(...Object.values(famMean));
+  var spanF=(mxF-mnF)||1;
+  var digitWeight={};
+  for(var d=1;d<=9;d++) digitWeight[d]=(famMean[d]-mnF)/spanF*100;
+
   var topDigits=Object.entries(digitWeight).sort((a,b)=>b[1]-a[1]).map(e=>parseInt(e[0]));
 
-  return {freq,freq30,lastSeen,digitWeight,topDigits,nums:topDigits.slice(0,5),hotNums,draws,overdueAt};
+  // numScore is also exposed non-negative for within-family ordering in
+  // convergence(), replacing the freq30*4 + hot*6 pair there. Scaled to
+  // 0..38 deliberately: the OLD within-family score topped out around
+  // freq30(8)*4 + hot(6) = 38, and metaNumBonus adds +10 per date-varying
+  // full-number match. Keeping the same ceiling preserves the existing
+  // balance between the stats signal and the metaphysical bonuses, so
+  // this fix changes the stats math without silently re-tuning how much
+  // say Tarot/I-Ching/Angel numbers have.
+  var mnN=Math.min(...Object.values(numScore)), mxN=Math.max(...Object.values(numScore));
+  var spanN=(mxN-mnN)||1;
+  var numScoreNorm={};
+  for(var n=1;n<=game.max;n++) numScoreNorm[n]=(numScore[n]-mnN)/spanN*38;
+
+  return {freq,freq30,lastSeen,digitWeight,topDigits,nums:topDigits.slice(0,5),hotNums,draws,overdueAt,
+          numScore:numScoreNorm,recZ,gapZ,halfLife:HALF_LIFE,wRecency:W_RECENCY,wOverdue:W_OVERDUE};
 }
 
 // ══════════════════════════
@@ -1231,11 +1335,20 @@ function convergence(layers,gameKey){
     if(angelFull.indexOf(n)>=0) b+=10;
     return b;
   }
+  // Within-family ordering now uses layerStats' single standardised
+  // numScore (recency + overdue, already blended and de-duplicated) in
+  // place of the old freq30*4 + hot*6 pair, which double-counted the same
+  // 30-draw window twice — see the SCORING comment in layerStats. Falls
+  // back to the legacy expression if numScore is unavailable, so an older
+  // cached engine can't produce an unordered pick.
+  var numSc=layers.stats.numScore;
   function bestNums(digit){
     return (digitToNums[digit]||[]).sort((a,b)=>{
-      var sA=(selFreq[a]||0)*4+(hotNums.includes(a)?6:0)+metaNumBonus(a);
-      var sB=(selFreq[b]||0)*4+(hotNums.includes(b)?6:0)+metaNumBonus(b);
-      return sB-sA;
+      var sA,sB;
+      if(numSc){ sA=(numSc[a]||0)+metaNumBonus(a); sB=(numSc[b]||0)+metaNumBonus(b); }
+      else { sA=(selFreq[a]||0)*4+(hotNums.includes(a)?6:0)+metaNumBonus(a);
+             sB=(selFreq[b]||0)*4+(hotNums.includes(b)?6:0)+metaNumBonus(b); }
+      return (sB-sA)||(a-b);
     });
   }
 
