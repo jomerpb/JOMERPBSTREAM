@@ -1,5 +1,11 @@
 {
   "updated": "2026-08-13T17:06:27.845Z",
+  "notes": [
+    {
+      "date": "2026-08-14",
+      "note": "pcso-history.json gained backfilled draws on this date, once lottopcso.com was added as a second source: 6/55 and 6/45 for 2026-07-20 (a gap older than businesslist's ~30-draw history table, which therefore could never self-heal), plus same-day entries businesslist had not yet published. computeOracleAsOf() rebuilds its stats window from whatever pcso-history.json contains, so snapshots recorded BEFORE this date were computed without those draws and will NOT reproduce if re-run with FORCE_OVERWRITE=1. That is expected, not a bug. The picks stored here remain the authoritative record of what the Oracle actually output on each day."
+    }
+  ],
   "entries": [
     {
       "date": "2026-08-14",
