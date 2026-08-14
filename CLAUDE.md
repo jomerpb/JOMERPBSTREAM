@@ -34,6 +34,58 @@ The append job's schedule is a deliberate exception: `pcso-history.json` feeds t
 
 Crypto tab follows the same shape (`crypto-live-scraper.yml` → `crypto-scraper/scrape_crypto_live.py` → `crypto-history.json`/`crypto-live-quotes.json`; `crypto-backtest.yml` read-only) but coins are a fixed curated list of 8 (`COINS` in the scraper) — that one's an intentional exception, not a hardcoding bug.
 
+## Rule: the Oracle tab is STATISTICS, not prediction
+
+**Standing instruction from the repo owner — do not re-litigate this in future sessions.**
+
+The Oracle tab is a statistics exercise. Its calculations exist to be **run against
+historical draws and checked for matching winning numbers** — measuring how a given
+configuration scored against draws that already happened. It is **not** a prediction
+tool and is not to be presented, tuned, or defended as one.
+
+What this means in practice:
+
+- **Judge the layers on correctness, not on hit rate.** A formula is "good" when it
+  faithfully implements what it claims (real Mei Hua Yi Shu casting, the true King Wen
+  hexagram table, the classical Flying Star month rule, a coherent statistical score) —
+  not when it produces more matches. Fix bugs because they are bugs.
+- **Match counts are a function of search effort, not engine quality.** Measured this
+  repo, walk-forward, on its own `pcso-history.json`: every configuration lands at the
+  chance baseline of **~0.73 average matches per 6-ball draw**. An exhaustive sweep of
+  all 256 layer subsets (~212,000 graded picks) produced **zero 6/6**. A later sweep of
+  ~22,000 scoring configurations produced 629 5/6 results and still zero 6/6 — and a
+  split-sample test settled it: the best configuration found on the oldest 414 draws
+  scored **0.860 in training and 0.728 on 415 unseen draws**, i.e. it collapsed to
+  chance. Any "winning" configuration found by searching is overfitting, by
+  construction.
+- **Never present a dredged hit as validation.** When asked to hunt for 5/6 or 6/6,
+  it is fine to run the search and report what turns up, but report the distinct-result
+  count alongside the raw count — e.g. one run hit a target of 100 5/6 results that
+  turned out to be **only 2 distinct picks**, repeated across configs that produce
+  identical output.
+- Lottery draws are independent random events. No layer here — metaphysical or
+  statistical ("hot", "overdue", frequency) — carries information about the next draw.
+  Say so plainly if the question comes up; don't hedge and don't oversell.
+
+## Oracle scoring internals (rebuilt — see git history for the audit)
+
+`layerStats` no longer uses the original `freq30*4 + hot*6 + overdue*5` summed per
+digit family. That formula had three defects: `hotNums` and `freq30` were the *same*
+30-draw computation scored twice; weights were summed over unequal digital-root
+families (digits 1-4 carried a structural +17%..+25% edge); and "hot" and "overdue"
+are contradictory rules that were both paid. It now uses one exponentially-decayed
+recency signal (half-life 15 draws) plus a gap signal, both standardised as z-scores
+against a fair draw, blended at an explicit 0.65/0.35, and **averaged** per family so
+size cancels. `convergence()`'s `bestNums()` consumes the resulting `numScore`
+(scaled 0..38 to preserve the metaphysical `+10` bonuses' relative weight) instead of
+re-applying `freq30*4 + hot*6`.
+
+`layerNumerology`'s Chaldean half previously scored three fixed words and therefore
+emitted `[3,7]` on **every** date (verified constant across 4,032 date/hour
+combinations) — a dead input that `convergence()` counted as an independent source
+forever. It now also includes the Chaldean values of the weekday and month names, so
+it varies with the date being read.
+
 ## Rule: never hardcode ticker symbols / IDs
 
 For PSE, ticker symbols and PSE's internal `cmpy_id`/`security_id` are **always resolved live** by paging PSE's company directory (`resolveAllIds()` in `pse-scraper-full/scrape_pse_full.js`, reused verbatim in `scrape_pse_live.js`) — never maintained as a static list in scraper code. Same principle for stream.js: TMDB/AniList IDs are always looked up via their search/detail APIs, never hardcoded per title.
