@@ -187,7 +187,7 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
       // The "Oracle Pick For Any Date" panel renders once at init off the
       // fallback GAMES data — redo it now that the real history is in.
       if(typeof oraclePickRender==='function'&&document.getElementById('oracle-pick-result')){
-        try{ oraclePickFilterGames(); oraclePickRender(); }catch(e2){ console.error('oraclePickRender:',e2); }
+        try{ oraclePickRender(); }catch(e2){ console.error('oraclePickRender:',e2); }
       }
     }
   }catch(e){
@@ -232,23 +232,15 @@ var ORACLE_HISTORY_READY=(async function loadOracleHistory(){
 // returns {picks, source:'recorded'|'recomputed'} or null.
 // 'recorded'   → taken verbatim from oracle-history.json (immutable audit log)
 // 'recomputed' → computeOracleAsOf() fallback for dates the log doesn't cover
-// Log-only half of the lookup: returns the picks recorded in
-// oracle-history.json for this date, or null if the log doesn't cover it.
-// Never recomputes — callers that want a fallback use oracleHistLookup().
-function oracleRecordedLookup(gameKey,dateStr){
+function oracleHistLookup(gameKey,dateStr){
   if(ORACLE_HISTORY&&Array.isArray(ORACLE_HISTORY.entries)){
     for(var i=0;i<ORACLE_HISTORY.entries.length;i++){
       var en=ORACLE_HISTORY.entries[i];
       if(en&&en.date===dateStr&&en.picks&&en.picks[gameKey]){
-        return en.picks[gameKey];
+        return {picks:en.picks[gameKey],source:'recorded'};
       }
     }
   }
-  return null;
-}
-function oracleHistLookup(gameKey,dateStr){
-  var rec=oracleRecordedLookup(gameKey,dateStr);
-  if(rec) return {picks:rec,source:'recorded'};
   var rc=null;
   try{ rc=computeOracleAsOf(gameKey,dateStr); }catch(e){ console.error('computeOracleAsOf '+gameKey+':',e); }
   if(!rc) return null;
@@ -2067,12 +2059,7 @@ function pcsoHistDateChanged(){
 // the Stats layer never sees data it couldn't have known about yet). Swaps
 // the module-level date globals (_D/_M/_Y/_DOW) for the duration of the calc,
 // runs the existing layer functions unchanged, then restores everything.
-// opts.withAlt — return {picks, alt} per draw instead of a bare picks array,
-// so a caller can show the alternate set too without running the 12 layers a
-// second time. Default (no opts) shape is unchanged: snapshot_oracle.mjs and
-// the Look Up panel still get plain arrays.
-function computeOracleAsOf(gameKey,dateStr,opts){
-  var withAlt=!!(opts&&opts.withAlt);
+function computeOracleAsOf(gameKey,dateStr){
   var g=GAMES[gameKey];
   var saved={_D:_D,_M:_M,_Y:_Y,_DOW:_DOW};
   var parts=dateStr.split('-');
@@ -2092,8 +2079,7 @@ function computeOracleAsOf(gameKey,dateStr,opts){
     try{stats=layerStats(gk,drawHour);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},topNums:[],freq:{},freq30:{},hotNums:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy=null;}
     layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
-    try{conv=convergence(layers,gk);}catch(e){conv={picks:[],altPicks:[]};}
-    if(withAlt) return {picks:conv.picks||[],alt:conv.altPicks||[]};
+    try{conv=convergence(layers,gk);}catch(e){conv={picks:[]};}
     return conv.picks;
   }
 
@@ -2228,11 +2214,16 @@ function pcsoHistRender(){
 // ORACLE PICK FOR ANY DATE
 // A second, independent date picker. The "Look Up Past Result" panel above is
 // anchored on a DRAW: it renders nothing unless PCSO_HISTORY holds an entry for
-// the chosen date, and its input is capped at today. This panel is anchored on
-// the DATE instead — it runs the same computeOracleAsOf() engine for any date
-// the games are scheduled on, past or future, so "what does the Oracle read for
-// Dec 1 2026?" has an answer. When the date is in the past and the result is on
-// file, the actual winning numbers are shown underneath with matches in gold.
+// the chosen date, its input is capped at today, and it compares one game's
+// pick against the numbers that actually came out. This panel is anchored on
+// the DATE instead — pick a day and it lists EVERY game drawn that day with the
+// numbers the Oracle reads for each, past or future. No game selector: the
+// weekday schedule already decides what is on (Sun → 6/49, 6/58, EZ2), so
+// choosing one would only hide the rest.
+//
+// Picks only, by design. Actual winning numbers and match scoring live in the
+// Look Up panel above; duplicating them here just split the same comparison
+// across two cards.
 //
 // Future dates: every date-derived layer (numerology, astrology, BaZi, Flying
 // Star, I Ching, Tarot, Angel) is computed for that exact date, but the stats
@@ -2261,125 +2252,68 @@ function oraclePickDayDiff(fromStr,toStr){
   return Math.round((tb-ta)/86400000);
 }
 
-function oraclePickFilterGames(){
-  var dateInp=document.getElementById('oracle-pick-date');
-  var gameSel=document.getElementById('oracle-pick-game');
-  if(!dateInp||!gameSel) return;
-  var validKeys=oracleGamesOnDate(dateInp.value);
-  if(!validKeys.length){ gameSel.innerHTML=''; return; }
-  var prevVal=gameSel.value;
-  gameSel.innerHTML=validKeys.map(function(k){
-    return '<option value="'+k+'">'+PCSO_GAME_LABELS[k]+'</option>';
-  }).join('');
-  gameSel.value=validKeys.indexOf(prevVal)>=0?prevVal:validKeys[0];
-}
-
-function oraclePickDateChanged(){
-  oraclePickFilterGames();
-  oraclePickRender();
-}
-
-function oraclePickBalls(nums,cls,winning,extraCls){
+function oraclePickBalls(nums,cls){
   return (nums||[]).map(function(n){
-    var hit=winning&&winning.indexOf(n)>=0;
-    return '<span class="pnum '+cls+(extraCls?' '+extraCls:'')+(hit?' pnum-gold':'')+'">'+p2(n)+'</span>';
+    return '<span class="pnum '+cls+'">'+p2(n)+'</span>';
   }).join('');
 }
 
-// The real draw on file for this date, or null if there is none (future date,
-// or a day the scrapers haven't reached yet).
-function oraclePickActual(gameKey,dateStr){
-  var list=PCSO_HISTORY[gameKey]||[];
-  for(var i=0;i<list.length;i++){ if(list[i].date===dateStr) return list[i]; }
-  return null;
+// One block per game: label + source tag on the left, the picked numbers under
+// it. EZ2 fans out into its three draw times.
+function oraclePickGameHTML(gameKey,dateStr){
+  var look=null;
+  try{ look=oracleHistLookup(gameKey,dateStr); }
+  catch(e){ console.error('oraclePickGameHTML '+gameKey+' '+dateStr+':',e); }
+  var name='<div class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
+    +(look?oracleSrcTag(look.source,false):'')+'</div>';
+  if(!look||!look.picks){
+    return '<div class="oracle-pick-game-row">'+name
+      +'<span class="pcso-hist-none">Could not compute a pick for this draw.</span></div>';
+  }
+  if(gameKey==='ez2'){
+    var cols=['2PM','5PM','9PM'].map(function(t){
+      var nums=look.picks[t]||[];
+      return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'
+        +'<div class="pcso-hist-row">'+oraclePickBalls(nums,'ez')+'</div></div>';
+    }).join('');
+    return '<div class="oracle-pick-game-row">'+name+'<div class="oracle-pick-cols">'+cols+'</div></div>';
+  }
+  return '<div class="oracle-pick-game-row">'+name
+    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks,'six')+'</div></div>';
 }
 
 function oraclePickRender(){
   var dateInp=document.getElementById('oracle-pick-date');
-  var gameSel=document.getElementById('oracle-pick-game');
   var out=document.getElementById('oracle-pick-result');
   var noteEl=document.getElementById('oracle-pick-note');
-  if(!dateInp||!gameSel||!out) return;
+  if(!dateInp||!out) return;
   if(noteEl) noteEl.innerHTML='';
   var dateVal=dateInp.value;
   if(!dateVal){
     out.innerHTML='<span class="pcso-hist-none">Pick a date to read its Oracle numbers.</span>';
     return;
   }
-  var scheduled=oracleGamesOnDate(dateVal);
+  // 6-ball games first in ascending order, EZ2 last — it is three rows tall and
+  // reads better as the tail of the card.
+  var scheduled=oracleGamesOnDate(dateVal).sort(function(a,b){
+    if(a==='ez2') return 1;
+    if(b==='ez2') return -1;
+    return parseInt(a)-parseInt(b);
+  });
   if(!scheduled.length){
     out.innerHTML='<span class="pcso-hist-none">No PCSO draw is scheduled on '+oraclePickFmtDate(dateVal)+'.</span>';
     return;
   }
-  var game=gameSel.value;
-  if(scheduled.indexOf(game)<0){ game=scheduled[0]; oraclePickFilterGames(); gameSel.value=game; }
-
-  var full=null;
-  try{
-    full=computeOracleAsOf(game,dateVal,{withAlt:true});
-  }catch(e){
-    console.error('oraclePickRender computeOracleAsOf('+game+','+dateVal+'):',e);
-    out.innerHTML='<span class="pcso-hist-none" style="color:var(--accent)">⚠️ Could not compute a pick for this date ('+(e&&e.message?e.message:'error')+').</span>';
-    return;
-  }
-  // The daily snapshot log is the immutable record of what the engine said on
-  // a past date, so it outranks a live recompute for the headline pick.
-  var recorded=oracleRecordedLookup(game,dateVal);
-  var actual=oraclePickActual(game,dateVal);
-  var head='<div class="oracle-pick-head">'+PCSO_GAME_LABELS[game]+' · '+oraclePickFmtDate(dateVal)+'</div>';
-  var html;
-
-  if(game==='ez2'){
-    var order=['2PM','5PM','9PM'];
-    var ezHits=0,ezTotal=0;
-    var cols=order.map(function(t){
-      var slot=(full&&full[t])||{picks:[],alt:[]};
-      var recSlot=(recorded&&Array.isArray(recorded[t])&&recorded[t].length)?recorded[t]:null;
-      var best=recSlot||slot.picks;
-      var win=(actual&&actual.draws&&actual.draws[t])||[];
-      var body='<div class="pcso-hist-row">'+oraclePickBalls(best,'ez',win)+'</div>';
-      if(slot.alt&&slot.alt.length){
-        body+='<div class="oracle-pick-alt-lbl">alt</div><div class="pcso-hist-row">'+oraclePickBalls(slot.alt,'ez',win,'pnum-alt')+'</div>';
-      }
-      if(win.length){
-        body+='<div class="oracle-pick-alt-lbl">drawn</div><div class="pcso-hist-row">'+oraclePickBalls(win,'ez')+'</div>';
-        ezTotal+=best.length;
-        ezHits+=best.filter(function(n){return win.indexOf(n)>=0;}).length;
-      }
-      return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'+body+'</div>';
-    }).join('');
-    html=head+'<div class="oracle-pick-label">Oracle’s Pick'+oracleSrcTag(recorded?'recorded':'recomputed',false)+'</div><div class="oracle-pick-cols">'+cols+'</div>';
-    if(ezTotal) html+='<div class="oracle-pick-score">'+ezHits+' of '+ezTotal+' matched across the day’s draws</div>';
-  } else {
-    var best6=(recorded&&Array.isArray(recorded)&&recorded.length)?recorded:((full&&full.picks)||[]);
-    var alt6=(full&&full.alt)||[];
-    var win6=(actual&&Array.isArray(actual.nums))?actual.nums:[];
-    html=head
-      +'<div class="oracle-pick-label">Best Pick'+oracleSrcTag(recorded?'recorded':'recomputed',true)+'</div>'
-      +'<div class="pcso-hist-row">'+oraclePickBalls(best6,'six',win6)+'</div>';
-    if(alt6.length){
-      html+='<div class="oracle-pick-label">Alternate Set'+oracleSrcTag('recomputed',false)+'</div>'
-        +'<div class="pcso-hist-row">'+oraclePickBalls(alt6,'six',win6,'pnum-alt')+'</div>';
-    }
-    if(win6.length){
-      var hits=best6.filter(function(n){return win6.indexOf(n)>=0;}).length;
-      html+='<div class="oracle-pick-label">Actual Winning Numbers</div>'
-        +'<div class="pcso-hist-row">'+oraclePickBalls(win6,'six')+'</div>'
-        +'<div class="oracle-pick-score">'+hits+' of '+best6.length+' matched</div>';
-    }
-  }
-  out.innerHTML=html;
+  out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
+    +'<div class="oracle-pick-sub">'+scheduled.length+' draw'+(scheduled.length===1?'':'s')+' this day</div>'
+    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal); }).join('');
 
   if(noteEl){
     var todayStr=oraclePickTodayStr();
     var notes=[];
     if(dateVal>todayStr){
       var ahead=oraclePickDayDiff(todayStr,dateVal);
-      notes.push('Read '+ahead+' day'+(ahead===1?'':'s')+' ahead. The date layers (numerology, astrology, BaZi, Flying Star, I Ching, Tarot, Angel) are computed for '+oraclePickFmtDate(dateVal)+' exactly; the statistics layer can only use draws that exist today, so this pick can still shift as results land between now and then.');
-    } else if(!actual){
-      notes.push(dateVal===todayStr
-        ? 'Today’s draw hasn’t been posted yet — the winning numbers will appear here once the scraper picks them up.'
-        : 'No official result on file for this date yet.');
+      notes.push('Read '+ahead+' day'+(ahead===1?'':'s')+' ahead. The date layers (numerology, astrology, BaZi, Flying Star, I Ching, Tarot, Angel) are computed for '+oraclePickFmtDate(dateVal)+' exactly; the statistics layer can only use draws that exist today, so these picks can still shift as results land between now and then.');
     }
     notes.push('⚠️ For entertainment only. Lottery draws are independent random events — no layer here can know the next one. Play responsibly.');
     noteEl.innerHTML=notes.map(function(t){return '<div>'+t+'</div>';}).join('');
@@ -2395,7 +2329,6 @@ function oraclePickRender(){
   dateInp.min='2020-01-01';
   dateInp.max=maxD.getFullYear()+'-'+String(maxD.getMonth()+1).padStart(2,'0')+'-'+String(maxD.getDate()).padStart(2,'0');
   if(!dateInp.value) dateInp.value=todayStr;
-  oraclePickFilterGames();
   oraclePickRender();
 })();
 
