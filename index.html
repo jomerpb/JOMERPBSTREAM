@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#07090f"/>
   <title>JomerPB Stream</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="styles.css?v=20260815g"/>
+  <link rel="stylesheet" href="styles.css?v=20260815h"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png"/>
   <link rel="apple-touch-icon" href="icon-192.png"/>
   <script defer src="stream.js?v=20260714a"></script>
-  <script defer src="oracle.js?v=20260815g"></script>
+  <script defer src="oracle.js?v=20260815h"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
 <body>
@@ -661,8 +661,20 @@
 <!-- ORACLE PICK FOR ANY DATE -->
 <div class="pcso-history">
   <div class="pcso-history-eyebrow">▸ Oracle Pick For Any Date</div>
+  <!-- In-page calendar rather than <input type="date">: the native mobile
+       dialog forces a Clear/Cancel/Set confirmation step that a page cannot
+       remove. Tapping a day here commits immediately. The hidden input keeps
+       holding the value, so every reader of #oracle-pick-date is unchanged. -->
   <div class="pcso-hist-controls">
-    <input type="date" class="pcso-hist-date" id="oracle-pick-date" onchange="oraclePickRender()">
+    <div class="opick-field" id="oracle-pick-field">
+      <input type="hidden" id="oracle-pick-date">
+      <button type="button" class="opick-trigger" id="oracle-pick-trigger"
+              onclick="oraclePickToggleCal(event)" aria-haspopup="dialog" aria-expanded="false">
+        <span id="oracle-pick-label">Select a date</span>
+        <span class="opick-chev" aria-hidden="true">▾</span>
+      </button>
+      <div class="opick-cal" id="oracle-pick-cal" role="dialog" aria-label="Choose a date"></div>
+    </div>
   </div>
   <div class="pcso-hist-result" id="oracle-pick-result">
     <span class="pcso-hist-none">Pick a date to read its Oracle numbers.</span>
