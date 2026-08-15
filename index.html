@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#07090f"/>
   <title>JomerPB Stream</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="styles.css?v=20260815h"/>
+  <link rel="stylesheet" href="styles.css?v=20260815i"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png"/>
   <link rel="apple-touch-icon" href="icon-192.png"/>
   <script defer src="stream.js?v=20260714a"></script>
-  <script defer src="oracle.js?v=20260815h"></script>
+  <script defer src="oracle.js?v=20260815i"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
 <body>
@@ -644,8 +644,18 @@
 <!-- PCSO HISTORY LOOKUP -->
 <div class="pcso-history">
   <div class="pcso-history-eyebrow">▸ Look Up Past Result</div>
+  <!-- Same in-page calendar as the panel below — one tap commits, no OS
+       Clear/Cancel/Set dialog. The hidden input still holds the value. -->
   <div class="pcso-hist-controls">
-    <input type="date" class="pcso-hist-date" id="pcso-hist-date" onchange="pcsoHistDateChanged()">
+    <div class="opick-field" id="pcso-hist-field">
+      <input type="hidden" id="pcso-hist-date">
+      <button type="button" class="opick-trigger" id="pcso-hist-trigger"
+              onclick="oracleCalToggle('pcso-hist',event)" aria-haspopup="dialog" aria-expanded="false">
+        <span id="pcso-hist-label">Select a date</span>
+        <span class="opick-chev" aria-hidden="true">▾</span>
+      </button>
+      <div class="opick-cal" id="pcso-hist-cal" role="dialog" aria-label="Choose a date"></div>
+    </div>
     <select class="pcso-hist-select" id="pcso-hist-game" onchange="pcsoHistRender()">
       <option value="ez2">EZ2</option>
       <option value="642">6/42</option>
@@ -669,7 +679,7 @@
     <div class="opick-field" id="oracle-pick-field">
       <input type="hidden" id="oracle-pick-date">
       <button type="button" class="opick-trigger" id="oracle-pick-trigger"
-              onclick="oraclePickToggleCal(event)" aria-haspopup="dialog" aria-expanded="false">
+              onclick="oracleCalToggle('oracle-pick',event)" aria-haspopup="dialog" aria-expanded="false">
         <span id="oracle-pick-label">Select a date</span>
         <span class="opick-chev" aria-hidden="true">▾</span>
       </button>

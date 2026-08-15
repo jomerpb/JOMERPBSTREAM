@@ -932,11 +932,11 @@
 #oracle-page .pcso-history{padding:14px 0 0;margin:0 auto}
 #oracle-page .pcso-history-eyebrow{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.2em;color:var(--muted2);margin-bottom:8px}
 #oracle-page .pcso-hist-controls{display:flex;gap:8px;margin-bottom:8px}
-#oracle-page .pcso-hist-select,#oracle-page .pcso-hist-date{
+#oracle-page .pcso-hist-select{
   background:var(--card);border:1px solid var(--border);border-radius:8px;
   color:var(--text);font-family:var(--inter);font-size:12px;padding:8px 10px;flex:1;
 }
-#oracle-page .pcso-hist-select:focus,#oracle-page .pcso-hist-date:focus{outline:none;border-color:var(--accent)}
+#oracle-page .pcso-hist-select:focus{outline:none;border-color:var(--accent)}
 #oracle-page .pcso-hist-result{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 13px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90px;text-align:center}
 #oracle-page .pcso-hist-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 #oracle-page .pcso-hist-none{font-size:11px;color:var(--muted);font-style:italic}
