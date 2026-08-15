@@ -900,9 +900,22 @@
 #oracle-page .pcso-game{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.05em;color:var(--muted2);width:54px;flex-shrink:0}
 #oracle-page .pcso-draw{font-size:10px;color:var(--muted);width:30px;flex-shrink:0;text-align:center}
 #oracle-page .pcso-nums{display:flex;gap:5px;flex-wrap:wrap;flex:1;min-width:0}
+/* Number chips are coloured by ROLE, not by game — the same rule on all three
+   PCSO panels, so a glance tells you what you're looking at without a legend:
+   TEAL = a number the Oracle picked, GOLD = a number that was actually drawn.
+   (Previously chips were coloured per game — EZ2 gold, 6-ball teal — which made
+   an EZ2 pick look identical to a winning number. The teal is kept as the pick
+   colour and now applies to every game, including EZ2.) */
 #oracle-page .pnum{font-family:'Bebas Neue',sans-serif;font-size:18px;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.2);border-radius:6px;padding:4px 10px;color:var(--accent2)}
-#oracle-page .pnum.ez{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.25);color:var(--gold)}
-#oracle-page .pnum.six{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.2);color:#4cc8fc}
+#oracle-page .pnum.pick{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.22);color:var(--teal)}
+/* Full-strength gold, matching the treatment the old match-highlight used:
+   solid fill, solid gold border and a soft glow, so a drawn number carries
+   real weight against the flatter teal picks. */
+#oracle-page .pnum.win{background:rgba(245,200,66,.22);border-color:var(--gold);color:var(--gold);box-shadow:0 0 8px rgba(245,200,66,.30)}
+/* A pick that matched the draw goes fully gold — the long-standing behaviour,
+   deliberately kept: only the colours changed here, not which numbers are
+   emphasised or how. Same values the old .pnum-gold rule used. */
+#oracle-page .pnum.pick.hit{background:rgba(245,200,66,.25);border-color:var(--gold);color:var(--gold);box-shadow:0 0 8px rgba(245,200,66,.35)}
 #oracle-page .pcso-pending{font-size:11px;color:var(--muted);font-style:italic}
 #oracle-page .pcso-src{font-size:9px;color:var(--muted);text-align:right;margin-top:3px;padding:0 2px 10px}
 #oracle-page .pcso-fetch-status{font-size:9.5px;color:var(--muted);text-align:right;padding:0 2px 8px;line-height:1.5;min-height:0;}
@@ -924,7 +937,6 @@
 #oracle-page .pcso-hist-none{font-size:11px;color:var(--muted);font-style:italic}
 #oracle-page .pcso-hist-jackpot{font-size:11px;color:#4cfc9a;font-weight:700;margin-top:8px;text-align:center}
 #oracle-page .pcso-hist-oracle-label{font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:.15em;color:var(--muted2);margin-top:12px;margin-bottom:6px;text-align:center}
-#oracle-page .pnum-gold{background:rgba(245,200,66,.25)!important;border-color:var(--gold)!important;color:var(--gold)!important;box-shadow:0 0 8px rgba(245,200,66,.35)}
 
 /* ── ORACLE PICK FOR ANY DATE ── */
 #oracle-page .oracle-pick-head{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:var(--text)}

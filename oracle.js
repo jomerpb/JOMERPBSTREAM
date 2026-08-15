@@ -1929,7 +1929,7 @@ function pcsoRender(){
     var drawDone=e.nums.length>0||(phHour>=(e.cutoff+0.1));
     var n;
     if(e.nums.length>0){
-      n=e.nums.map(function(x){return '<span class="pnum ez">'+p2(x)+'</span>';}).join('');
+      n=e.nums.map(function(x){return '<span class="pnum win">'+p2(x)+'</span>';}).join('');
     } else if(drawDone){
       n='<span class="pcso-pending" style="color:var(--muted2)">Result not yet recorded</span>';
     } else {
@@ -1938,7 +1938,7 @@ function pcsoRender(){
     h+='<div class="pcso-row"><span class="pcso-game">EZ2</span><span class="pcso-draw">'+e.draw+'</span><div class="pcso-nums">'+n+'</div></div>';
   });
   d.balls.forEach(function(g){
-    var n=g.done?g.nums.map(function(x){return '<span class="pnum six">'+p2(x)+'</span>';}).join(''):'<span class="pcso-pending">'+(g.note||'Pending…')+'</span>';
+    var n=g.done?g.nums.map(function(x){return '<span class="pnum win">'+p2(x)+'</span>';}).join(''):'<span class="pcso-pending">'+(g.note||'Pending…')+'</span>';
     var meta='';
     if(g.jackpot!==undefined){
       var wLabel=g.winners===0?'No winner — jackpot rolls!':g.winners===1?'1 winner':g.winners+' winners';
@@ -2153,13 +2153,13 @@ function pcsoHistRender(){
     if(_oh){ oraclePicks=_oh.picks; oracleSrc=_oh.source; }
     var cols=order.map(function(t){
       var nums=(entry.draws&&entry.draws[t])||[];
-      var inner=nums.length?nums.map(function(x){return '<span class="pnum ez">'+p2(x)+'</span>';}).join(''):'<span class="pcso-hist-none">Pending…</span>';
+      var inner=nums.length?nums.map(function(x){return '<span class="pnum win">'+p2(x)+'</span>';}).join(''):'<span class="pcso-hist-none">Pending…</span>';
       var oracleRow='';
       if(oraclePicks&&oraclePicks[t]&&oraclePicks[t].length){
         var op=oraclePicks[t];
         var opInner=op.map(function(x){
           var isMatch=nums.indexOf(x)>=0;
-          return '<span class="pnum ez'+(isMatch?' pnum-gold':'')+'">'+p2(x)+'</span>';
+          return '<span class="pnum pick'+(isMatch?' hit':'')+'">'+p2(x)+'</span>';
         }).join('');
         oracleRow='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick'+oracleSrcTag(oracleSrc,false)+'</div><div style="display:flex;gap:4px">'+opInner+'</div>';
       }
@@ -2168,8 +2168,7 @@ function pcsoHistRender(){
     out.innerHTML='<div style="display:flex;justify-content:center;gap:18px;flex-wrap:wrap;width:100%">'+cols+'</div>';
     return;
   }
-  var cls='six';
-  var numsHtml=entry.nums.map(function(x){return '<span class="pnum '+cls+'">'+p2(x)+'</span>';}).join('');
+  var numsHtml=entry.nums.map(function(x){return '<span class="pnum win">'+p2(x)+'</span>';}).join('');
   var jp=entry.jackpot;
   var jpDisplay=jp;
   if(typeof jp==='number'||(typeof jp==='string'&&/^[\d.]+$/.test(jp))){
@@ -2183,7 +2182,7 @@ function pcsoHistRender(){
     if(_oh2&&_oh2.picks&&_oh2.picks.length){
       var opHtml=_oh2.picks.map(function(x){
         var isMatch=entry.nums.indexOf(x)>=0;
-        return '<span class="pnum '+cls+(isMatch?' pnum-gold':'')+'">'+p2(x)+'</span>';
+        return '<span class="pnum pick'+(isMatch?' hit':'')+'">'+p2(x)+'</span>';
       }).join('');
       oracleHtml='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick'+oracleSrcTag(_oh2.source,true)+'</div><div class="pcso-hist-row">'+opHtml+'</div>';
     }
@@ -2252,9 +2251,9 @@ function oraclePickDayDiff(fromStr,toStr){
   return Math.round((tb-ta)/86400000);
 }
 
-function oraclePickBalls(nums,cls){
+function oraclePickBalls(nums){
   return (nums||[]).map(function(n){
-    return '<span class="pnum '+cls+'">'+p2(n)+'</span>';
+    return '<span class="pnum pick">'+p2(n)+'</span>';
   }).join('');
 }
 
@@ -2274,12 +2273,12 @@ function oraclePickGameHTML(gameKey,dateStr){
     var cols=['2PM','5PM','9PM'].map(function(t){
       var nums=look.picks[t]||[];
       return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'
-        +'<div class="pcso-hist-row">'+oraclePickBalls(nums,'ez')+'</div></div>';
+        +'<div class="pcso-hist-row">'+oraclePickBalls(nums)+'</div></div>';
     }).join('');
     return '<div class="oracle-pick-game-row">'+name+'<div class="oracle-pick-cols">'+cols+'</div></div>';
   }
   return '<div class="oracle-pick-game-row">'+name
-    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks,'six')+'</div></div>';
+    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks)+'</div></div>';
 }
 
 function oraclePickRender(){
