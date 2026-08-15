@@ -182,7 +182,7 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
         }
       }
       if(typeof pcsoHistRender==='function'&&document.getElementById('pcso-hist-result')){
-        pcsoHistFilterGames(); pcsoHistRender();
+        pcsoHistRender();
       }
       // The "Oracle Pick For Any Date" panel renders once at init off the
       // fallback GAMES data — redo it now that the real history is in.
@@ -2034,22 +2034,7 @@ function oracleGamesOnDate(dateStr){
   return Object.keys(PCSO_GAME_SCHED).filter(function(k){ return PCSO_GAME_SCHED[k].indexOf(dow)>=0; });
 }
 
-function pcsoHistFilterGames(){
-  var dateInp=document.getElementById('pcso-hist-date');
-  var gameSel=document.getElementById('pcso-hist-game');
-  if(!dateInp||!gameSel||!dateInp.value) return;
-  var prevVal=gameSel.value;
-  var validKeys=oracleGamesOnDate(dateInp.value);
-  if(!validKeys.length) return;
-  gameSel.innerHTML=validKeys.map(function(k){
-    return '<option value="'+k+'">'+PCSO_GAME_LABELS[k]+'</option>';
-  }).join('');
-  if(validKeys.indexOf(prevVal)>=0){ gameSel.value=prevVal; }
-  else { gameSel.value=validKeys[0]; }
-}
-
 function pcsoHistDateChanged(){
-  pcsoHistFilterGames();
   pcsoHistRender();
 }
 
@@ -2127,67 +2112,101 @@ function computeOracleAsOf(gameKey,dateStr){
   return result;
 }
 
+// The draw on file for this game/date, or null.
+function pcsoHistEntry(gameKey,dateStr){
+  var list=PCSO_HISTORY[gameKey]||[];
+  for(var i=0;i<list.length;i++){ if(list[i].date===dateStr) return list[i]; }
+  return null;
+}
+
+function pcsoHistWinBalls(nums){
+  return (nums||[]).map(function(x){ return '<span class="pnum win">'+p2(x)+'</span>'; }).join('');
+}
+// Picks are teal; one that came out goes fully gold.
+function pcsoHistPickBalls(picks,winning){
+  return (picks||[]).map(function(x){
+    var hit=winning&&winning.indexOf(x)>=0;
+    return '<span class="pnum pick'+(hit?' hit':'')+'">'+p2(x)+'</span>';
+  }).join('');
+}
+
+function pcsoHistJackpotHTML(entry){
+  var jp=entry&&entry.jackpot;
+  if(!jp) return '';
+  var disp=jp;
+  if(typeof jp==='number'||(typeof jp==='string'&&/^[\d.]+$/.test(jp))){
+    var n=parseFloat(jp);
+    disp='\u20b1'+(n>=1000000?(n/1000000).toFixed(1)+'M':n.toLocaleString());
+  }
+  return '<div class="pcso-hist-jackpot">'+disp+' jackpot</div>';
+}
+
+// One block per game drawn that day: what came out, then what the Oracle had.
+function pcsoHistGameHTML(gameKey,dateStr){
+  var entry=pcsoHistEntry(gameKey,dateStr);
+  var look=null;
+  try{ look=oracleHistLookup(gameKey,dateStr); }
+  catch(e){ console.error('oracleHistLookup '+gameKey+' '+dateStr+':',e); }
+  var name='<div class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
+    +(look?oracleSrcTag(look.source,false):'')+'</div>';
+
+  if(gameKey==='ez2'){
+    var cols=['2PM','5PM','9PM'].map(function(t){
+      var win=(entry&&entry.draws&&entry.draws[t])||[];
+      var picks=(look&&look.picks&&look.picks[t])||[];
+      var body=win.length
+        ? '<div class="pcso-hist-row">'+pcsoHistWinBalls(win)+'</div>'
+        : '<div class="pcso-hist-row"><span class="pcso-hist-none">Pending\u2026</span></div>';
+      if(picks.length){
+        body+='<div class="pcso-hist-sublbl">pick</div><div class="pcso-hist-row">'+pcsoHistPickBalls(picks,win)+'</div>';
+      }
+      return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'+body+'</div>';
+    }).join('');
+    return '<div class="oracle-pick-game-row">'+name+'<div class="oracle-pick-cols">'+cols+'</div></div>';
+  }
+
+  var win6=(entry&&Array.isArray(entry.nums))?entry.nums:[];
+  var body6=win6.length
+    ? '<div class="pcso-hist-row">'+pcsoHistWinBalls(win6)+'</div>'+pcsoHistJackpotHTML(entry)
+    : '<div class="pcso-hist-row"><span class="pcso-hist-none">No result on file.</span></div>';
+  if(look&&Array.isArray(look.picks)&&look.picks.length){
+    var hits=look.picks.filter(function(n){ return win6.indexOf(n)>=0; }).length;
+    body6+='<div class="pcso-hist-sublbl">Oracle\u2019s Pick</div>'
+      +'<div class="pcso-hist-row">'+pcsoHistPickBalls(look.picks,win6)+'</div>';
+    if(win6.length) body6+='<div class="pcso-hist-score">'+hits+' of 6 matched</div>';
+  }
+  return '<div class="oracle-pick-game-row">'+name+body6+'</div>';
+}
+
 function pcsoHistRender(){
-  var gameSel=document.getElementById('pcso-hist-game');
   var dateInp=document.getElementById('pcso-hist-date');
   var out=document.getElementById('pcso-hist-result');
-  if(!gameSel||!dateInp||!out) return;
-  var game=gameSel.value;
+  if(!dateInp||!out) return;
   var dateVal=dateInp.value;
-  var list=PCSO_HISTORY[game]||[];
-  var entry=null;
-  for(var i=0;i<list.length;i++){ if(list[i].date===dateVal){ entry=list[i]; break; } }
-  if(!entry){
-    if(typeof PCSO_HISTORY_LOAD_FAILED!=='undefined'&&PCSO_HISTORY_LOAD_FAILED){
-      var reasonTxt=(typeof PCSO_HISTORY_STATUS!=='undefined'&&PCSO_HISTORY_STATUS.error)?PCSO_HISTORY_STATUS.error:'network error';
-      out.innerHTML='<span class="pcso-hist-none" style="color:var(--accent)">⚠️ Historical data failed to load ('+reasonTxt+'). Showing limited offline data only — reload the page to retry.</span>';
-    } else {
-      out.innerHTML='<span class="pcso-hist-none">No result on file for this date.</span>';
-    }
+  if(!dateVal){
+    out.innerHTML='<span class="pcso-hist-none">Pick a date to see that day\u2019s results.</span>';
     return;
   }
-  if(game==='ez2'){
-    var order=['2PM','5PM','9PM'];
-    var oraclePicks=null,oracleSrc=null;
-    var _oh=oracleHistLookup('ez2',dateVal);
-    if(_oh){ oraclePicks=_oh.picks; oracleSrc=_oh.source; }
-    var cols=order.map(function(t){
-      var nums=(entry.draws&&entry.draws[t])||[];
-      var inner=nums.length?nums.map(function(x){return '<span class="pnum win">'+p2(x)+'</span>';}).join(''):'<span class="pcso-hist-none">Pending…</span>';
-      var oracleRow='';
-      if(oraclePicks&&oraclePicks[t]&&oraclePicks[t].length){
-        var op=oraclePicks[t];
-        var opInner=op.map(function(x){
-          var isMatch=nums.indexOf(x)>=0;
-          return '<span class="pnum pick'+(isMatch?' hit':'')+'">'+p2(x)+'</span>';
-        }).join('');
-        oracleRow='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick'+oracleSrcTag(oracleSrc,false)+'</div><div style="display:flex;gap:4px">'+opInner+'</div>';
-      }
-      return '<div style="display:flex;flex-direction:column;align-items:center;gap:5px"><span style="font-size:9px;color:var(--muted)">'+t+'</span><div style="display:flex;gap:4px">'+inner+'</div>'+oracleRow+'</div>';
-    }).join('');
-    out.innerHTML='<div style="display:flex;justify-content:center;gap:18px;flex-wrap:wrap;width:100%">'+cols+'</div>';
+  // Same ordering as the panel below: 6-ball ascending, EZ2 last.
+  var scheduled=oracleGamesOnDate(dateVal).sort(function(a,b){
+    if(a==='ez2') return 1;
+    if(b==='ez2') return -1;
+    return parseInt(a)-parseInt(b);
+  });
+  if(!scheduled.length){
+    out.innerHTML='<span class="pcso-hist-none">No PCSO draw is scheduled on '+oraclePickFmtDate(dateVal)+'.</span>';
     return;
   }
-  var numsHtml=entry.nums.map(function(x){return '<span class="pnum win">'+p2(x)+'</span>';}).join('');
-  var jp=entry.jackpot;
-  var jpDisplay=jp;
-  if(typeof jp==='number'||(typeof jp==='string'&&/^[\d.]+$/.test(jp))){
-    var jpNum=parseFloat(jp);
-    jpDisplay='₱'+(jpNum>=1000000?(jpNum/1000000).toFixed(1)+'M':jpNum.toLocaleString());
+  var anyOnFile=scheduled.some(function(gk){ return !!pcsoHistEntry(gk,dateVal); });
+  var warn='';
+  if(!anyOnFile&&typeof PCSO_HISTORY_LOAD_FAILED!=='undefined'&&PCSO_HISTORY_LOAD_FAILED){
+    var reasonTxt=(typeof PCSO_HISTORY_STATUS!=='undefined'&&PCSO_HISTORY_STATUS.error)?PCSO_HISTORY_STATUS.error:'network error';
+    warn='<div class="pcso-hist-none" style="color:var(--accent);margin-top:8px">\u26a0\ufe0f Historical data failed to load ('+reasonTxt+'). Showing limited offline data only \u2014 reload the page to retry.</div>';
   }
-  var jackpotHtml=jp?('<div class="pcso-hist-jackpot">'+jpDisplay+' jackpot</div>'):'';
-  var oracleHtml='';
-  try{
-    var _oh2=oracleHistLookup(game,dateVal);
-    if(_oh2&&_oh2.picks&&_oh2.picks.length){
-      var opHtml=_oh2.picks.map(function(x){
-        var isMatch=entry.nums.indexOf(x)>=0;
-        return '<span class="pnum pick'+(isMatch?' hit':'')+'">'+p2(x)+'</span>';
-      }).join('');
-      oracleHtml='<div class="pcso-hist-oracle-label">Oracle\u2019s Pick'+oracleSrcTag(_oh2.source,true)+'</div><div class="pcso-hist-row">'+opHtml+'</div>';
-    }
-  }catch(e){ console.error('oracleHistLookup:',e); }
-  out.innerHTML='<div class="pcso-hist-row">'+numsHtml+'</div>'+jackpotHtml+oracleHtml;
+  out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
+    +'<div class="oracle-pick-sub">'+scheduled.length+' draw'+(scheduled.length===1?'':'s')+' this day</div>'
+    +warn
+    +scheduled.map(function(gk){ return pcsoHistGameHTML(gk,dateVal); }).join('');
 }
 
 // ══════════════════════════
@@ -2339,7 +2358,6 @@ function oraclePickSetDate(dateStr,doRender){ oracleCalSetDate('oracle-pick',dat
   dateInp.setAttribute('max',fmt(maxD));
   dateInp.setAttribute('min',fmt(minD));
   oracleCalSetDate('pcso-hist',fmt(defaultD),false);
-  pcsoHistFilterGames();
   pcsoHistRender();
 })();
 
