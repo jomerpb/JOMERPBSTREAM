@@ -2,12 +2,56 @@
 
 Single static site (`index.html` shell) with three unrelated tabs sharing one page. No build step — plain JS/CSS served as-is (e.g. via GitHub Pages).
 
+## Rule: run three simulations before giving a final answer or code
+
+**Standing instruction from the repo owner — applies to every session and every
+task. Do not skip it because a change "looks trivial"; the changes that shipped
+broken this repo all looked trivial.**
+
+Nothing is presented as finished — no "done", no "verified", no final code —
+until it has been exercised **three independent ways**. One passing check is a
+guess with extra steps. The three lanes catch different classes of failure, so
+run all three, not the same one three times:
+
+1. **Logic — headless engine run.** Load the real file in a Node `vm` sandbox
+   with a stubbed DOM (the pattern in `snapshot_oracle.mjs` / a scratch harness)
+   and assert on actual output values. Confirms the code computes what it claims
+   in isolation. This lane cannot see markup, CSS, or how the page loads.
+2. **Reality — the real page in a real browser.** Serve the repo
+   (`python3 -m http.server`) and drive it with Playwright + the pre-installed
+   Chromium (`executablePath: '/opt/pw-browsers/chromium-*/chrome-linux/chrome'`).
+   Click and type as a user does, screenshot it, and **read the screenshot**.
+   Assert zero `pageerror`/console errors and no horizontal overflow at 320px.
+   This is the lane that catches dead controls, unstyled markup, empty
+   dropdowns, and stale-asset problems — the ones a unit test will never see.
+3. **Regression — everything else still works.** Run
+   `node .github/scripts/tests/test_oracle_layers.mjs`, and for any change under
+   the Oracle engine re-run `snapshot_oracle.mjs` with `FORCE_OVERWRITE=1`
+   against a *copy* of the repo, diffing its picks against the committed
+   `oracle-history.json`. Identical output proves the daily pipeline is
+   unaffected. Never point this lane at the real `oracle-history.json`.
+
+Then, before claiming it is live: **verify the deployed state, not the intent.**
+Confirm the commits are actually on `main` (`git fetch` first — a merged PR only
+carries the commits that existed when it was merged) and, when it matters,
+`curl` the published page and check the asset versions it really serves.
+
+Report what each lane did and what it returned. If a lane genuinely cannot run,
+say which one and why — do not quietly drop it to two.
+
 ## File split
 
 - **stream.js** — Anime/TV/Movie streaming tab. TMDB + AniList API client-side. IDs (movie/show/episode) always resolved live from those APIs, never hardcoded.
-- **oracle.js** — PCSO lottery "prediction" tab. Numerology/astrology/BaZi/feng-shui/I-Ching/tarot/stats layers converge into number picks (`convergence()`). `GAMES` object at top has hardcoded historical draws as a **fallback only** — overwritten at load by a live fetch of `pcso-history.json` (see `loadPcsoHistoryIntoGames`). `computeOracleAsOf(gameKey, dateStr[, opts])` recomputes any date's pick — past or future — from only the draws dated strictly before it; used by `snapshot_oracle.mjs` and by both Oracle date pickers. Passing `{withAlt:true}` returns `{picks, alt}` per draw instead of a bare picks array; the default shape is what the snapshot script logs, so don't change it.
+- **oracle.js** — PCSO lottery "prediction" tab. Numerology/astrology/BaZi/feng-shui/I-Ching/tarot/stats layers converge into number picks (`convergence()`). `GAMES` object at top has hardcoded historical draws as a **fallback only** — overwritten at load by a live fetch of `pcso-history.json` (see `loadPcsoHistoryIntoGames`). `computeOracleAsOf(gameKey, dateStr)` recomputes any date's pick — past or future — from only the draws dated strictly before it; used by `snapshot_oracle.mjs` and by both Oracle date pickers. Its return shape (bare picks array; `{'2PM':[],'5PM':[],'9PM':[]}` for EZ2) is what the snapshot script logs, so don't change it.
 
-The Oracle tab has **two** date pickers, deliberately distinct: "Look Up Past Result" is anchored on a *draw* (capped at today, renders nothing unless `PCSO_HISTORY` has that date), while "Oracle Pick For Any Date" (`oraclePickRender`) is anchored on the *date* and answers for any scheduled draw day out to +2 years. Both prefer the immutable `oracle-history.json` entry over a live recompute, tagged 📌 recorded vs ↻ recomputed.
+The Oracle tab has **two** date pickers, deliberately distinct, and the split is the point — don't merge them or duplicate one into the other:
+
+- **"Look Up Past Result"** is anchored on a *draw*: capped at today, renders nothing unless `PCSO_HISTORY` has that date, one game at a time, and it's the only place that shows actual winning numbers, gold match highlighting and match counts.
+- **"Oracle Pick For Any Date"** (`oraclePickRender`) is anchored on the *date*: no game selector at all — it lists **every** game scheduled that weekday (`oracleGamesOnDate`, 6-ball ascending then EZ2 last) with just its picked numbers, for any date out to +2 years.
+
+Both prefer the immutable `oracle-history.json` entry over a live recompute, tagged 📌 recorded vs ↻ recomputed.
+
+**`index.html` cache-busts its assets by query string** (`oracle.js?v=…`, `styles.css?v=…`). Bump the version whenever you change those files — `index.html` itself is unversioned, so shipping new markup against a stale cached script silently produces dead controls.
 - **trade.js** — PSE stock trading/signals tab. `PSE_ALL_STOCKS` near the top is mock/display seed data only (same fallback pattern as oracle.js's `GAMES`); real data comes from `pse-*.json` files written by the scraper pipelines below.
 - **styles.css** — shared styles for all three tabs (not split per-tab).
 
