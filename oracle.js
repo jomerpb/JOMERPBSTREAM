@@ -2044,7 +2044,12 @@ function pcsoHistDateChanged(){
 // the Stats layer never sees data it couldn't have known about yet). Swaps
 // the module-level date globals (_D/_M/_Y/_DOW) for the duration of the calc,
 // runs the existing layer functions unchanged, then restores everything.
-function computeOracleAsOf(gameKey,dateStr){
+// opts.withDetail — return {picks, sorted} per draw instead of a bare picks
+// array, so the reading panel can show which digit families led and which
+// layers hit them. Default (no opts) shape is unchanged: snapshot_oracle.mjs
+// and the Look Up panel still get plain arrays.
+function computeOracleAsOf(gameKey,dateStr,opts){
+  var withDetail=!!(opts&&opts.withDetail);
   var g=GAMES[gameKey];
   var saved={_D:_D,_M:_M,_Y:_Y,_DOW:_DOW};
   var parts=dateStr.split('-');
@@ -2064,7 +2069,8 @@ function computeOracleAsOf(gameKey,dateStr){
     try{stats=layerStats(gk,drawHour);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},topNums:[],freq:{},freq30:{},hotNums:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy=null;}
     layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
-    try{conv=convergence(layers,gk);}catch(e){conv={picks:[]};}
+    try{conv=convergence(layers,gk);}catch(e){conv={picks:[],sorted:[],LABELS:[]};}
+    if(withDetail) return {picks:conv.picks||[],sorted:conv.sorted||[],LABELS:conv.LABELS||[]};
     return conv.picks;
   }
 
@@ -2403,15 +2409,91 @@ function oraclePickDayDiff(fromStr,toStr){
   return Math.round((tb-ta)/86400000);
 }
 
-function oraclePickBalls(nums){
+
+// ══════════════════════════
+// THE DAY'S READING
+// The seven date-derived layers each compute a real, dated result — the Mei Hua
+// Yi Shu hexagram cast for that date and hour, the BaZi four pillars, the Tarot
+// card, the Flying Star, the horary chart. The pick panel used to discard all of
+// it and print six numbers. This returns it for display, plus `meaning`: the map
+// of full numbers that carry a named significance for the date, which is exactly
+// the set convergence()'s metaNumBonus pays +10 for. So a number annotated here
+// is not decoration — it is the reason that number was promoted.
+//
+// Swaps the module-level date globals for the duration and restores them, the
+// same discipline computeOracleAsOf uses.
+// ══════════════════════════
+function oracleDateReading(dateStr,drawHour){
+  var saved={_D:_D,_M:_M,_Y:_Y,_DOW:_DOW};
+  var p=String(dateStr||'').split('-');
+  if(p.length!==3) return null;
+  var y=parseInt(p[0]),m=parseInt(p[1]),d=parseInt(p[2]);
+  _D=d; _M=m; _Y=y; _DOW=new Date(y,m-1,d).getDay();
+  var out=null;
+  try{
+    var hour=drawHour||'9PM';
+    var ic=null,bz=null,ta=null,fs=null,as=null,nu=null,an=null;
+    try{ic=layerIChing(hour);}catch(e){}
+    try{bz=layerBazi(hour);}catch(e){}
+    try{ta=layerTarot(hour);}catch(e){}
+    try{fs=layerFengshui();}catch(e){}
+    try{as=layerAstrology(hour);}catch(e){}
+    try{nu=layerNumerology(hour);}catch(e){}
+    try{an=layerAngelNumbers(hour);}catch(e){}
+
+    // full numbers the engine actually rewards, and what each one means
+    var meaning={};
+    function mark(n,label){
+      if(typeof n!=='number'||!isFinite(n)||n<1) return;
+      if(!meaning[n]) meaning[n]=[];
+      if(meaning[n].indexOf(label)<0) meaning[n].push(label);
+    }
+    var hex=ic&&ic.hex;
+    if(hex){
+      mark(hex.num,'I Ching hexagram '+hex.num+(hex.name?' \u00b7 '+hex.name:''));
+      if(hex.nuclear) mark(hex.nuclear.num,'nuclear hexagram '+hex.nuclear.num);
+      if(hex.changed) mark(hex.changed.num,'changed hexagram '+hex.changed.num);
+    }
+    if(ta){
+      mark(ta.cardNum,'Tarot \u00b7 '+(ta.cardName||('card '+ta.cardNum)));
+      mark(ta.rawSum,'date number ('+ta.rawSum+')');
+    }
+    if(an&&Array.isArray(an.nums)) an.nums.forEach(function(dg){ mark(dg*11,'angel number '+(dg*11)); });
+
+    out={
+      iching:hex?{num:hex.num,name:hex.name,english:hex.english,gambling:hex.gambling,
+                  changingLine:hex.changingLine,
+                  nuclear:hex.nuclear?hex.nuclear.num+' \u00b7 '+hex.nuclear.name:null,
+                  changed:hex.changed?hex.changed.num+' \u00b7 '+hex.changed.name:null}:null,
+      bazi:bz?['year','month','day','hour'].map(function(k){
+        var pl=bz[k]; return pl?{role:k,stem:pl.stem,branch:pl.branch,el:pl.stemEl+'/'+pl.branchEl}:null;
+      }).filter(Boolean):[],
+      tarot:ta?{num:ta.cardNum,name:ta.cardName,gambling:ta.gambling}:null,
+      fengshui:(fs&&fs.loShu)?{centre:fs.loShu.C}:null,
+      astro:as?{asc:as.horaryASC,h5:as.h5sign,h5ruler:as.h5ruler,
+                pof:as.pofDeg+' '+as.pofSign,day:as.isDayChart,moonVoid:as.moonVoid}:null,
+      numerology:nu?{py:(nu.pyNums||[]).join(', '),ch:(nu.chNums||[]).join(', ')}:null,
+      meaning:meaning
+    };
+  } finally {
+    _D=saved._D; _M=saved._M; _Y=saved._Y; _DOW=saved._DOW;
+  }
+  return out;
+}
+
+// A number carrying a named meaning for the date gets a marker; that meaning is
+// literally why convergence() promoted it (+10 via metaNumBonus), so the marker
+// points at real mechanism, not decoration.
+function oraclePickBalls(nums,meaning){
   return (nums||[]).map(function(n){
-    return '<span class="pnum pick">'+p2(n)+'</span>';
+    var m=meaning&&meaning[n];
+    return '<span class="pnum pick'+(m?' pnum-meant':'')+'"'+(m?' title="'+m.join(' \u00b7 ')+'"':'')+'>'+p2(n)+'</span>';
   }).join('');
 }
 
-// One block per game: label + source tag on the left, the picked numbers under
-// it. EZ2 fans out into its three draw times.
-function oraclePickGameHTML(gameKey,dateStr){
+// One block per game: label + source tag, the picked numbers, and the digit
+// families that carried them. EZ2 fans out into its three draw times.
+function oraclePickGameHTML(gameKey,dateStr,meaning){
   var look=null;
   try{ look=oracleHistLookup(gameKey,dateStr); }
   catch(e){ console.error('oraclePickGameHTML '+gameKey+' '+dateStr+':',e); }
@@ -2421,16 +2503,71 @@ function oraclePickGameHTML(gameKey,dateStr){
     return '<div class="oracle-pick-game-row">'+name
       +'<span class="pcso-hist-none">Could not compute a pick for this draw.</span></div>';
   }
+  // Which digit families led, and how many of the 12 sources hit each.
+  var famLine='';
+  try{
+    var det=computeOracleAsOf(gameKey,dateStr,{withDetail:true});
+    var sorted=(gameKey==='ez2')?(det&&det['9PM']&&det['9PM'].sorted):(det&&det.sorted);
+    var labels=(gameKey==='ez2')?(det&&det['9PM']&&det['9PM'].LABELS):(det&&det.LABELS);
+    if(sorted&&sorted.length){
+      famLine='<div class="oracle-pick-fam">'+sorted.slice(0,3).map(function(f){
+        var srcs=(f.layers||[]).map(function(i){ return labels[i]; }).filter(Boolean).join(' ');
+        return '<span class="ofam"><b>'+f.digit+'</b> '+f.count+'/12'
+          +(srcs?'<span class="ofam-src">'+srcs+'</span>':'')+'</span>';
+      }).join('')+'</div>';
+    }
+  }catch(e){ console.error('digit detail '+gameKey+':',e); }
+
   if(gameKey==='ez2'){
     var cols=['2PM','5PM','9PM'].map(function(t){
       var nums=look.picks[t]||[];
       return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'
-        +'<div class="pcso-hist-row">'+oraclePickBalls(nums)+'</div></div>';
+        +'<div class="pcso-hist-row">'+oraclePickBalls(nums,meaning)+'</div></div>';
     }).join('');
-    return '<div class="oracle-pick-game-row">'+name+'<div class="oracle-pick-cols">'+cols+'</div></div>';
+    return '<div class="oracle-pick-game-row">'+name+'<div class="oracle-pick-cols">'+cols+'</div>'+famLine+'</div>';
   }
   return '<div class="oracle-pick-game-row">'+name
-    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks)+'</div></div>';
+    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning)+'</div>'+famLine+'</div>';
+}
+
+// The date's reading, rendered once above the games — it is the same reading for
+// every 6-ball draw that day (all are 9PM).
+function oracleReadingHTML(rd){
+  if(!rd) return '';
+  var rows=[];
+  if(rd.iching) rows.push(['I Ching',
+    '<b>'+rd.iching.num+' \u00b7 '+rd.iching.name+'</b> ('+rd.iching.english+')'
+    +(rd.iching.gambling?'<span class="ord-note">'+rd.iching.gambling+'</span>':'')
+    +'<span class="ord-note">nuclear '+(rd.iching.nuclear||'\u2014')+' \u00b7 changed '+(rd.iching.changed||'\u2014')+'</span>']);
+  if(rd.bazi&&rd.bazi.length) rows.push(['BaZi',
+    rd.bazi.map(function(p){ return p.stem+p.branch; }).join(' \u00b7 ')
+    +'<span class="ord-note">'+rd.bazi.map(function(p){ return p.role+': '+p.el; }).join(' \u00b7 ')+'</span>']);
+  if(rd.tarot) rows.push(['Tarot',
+    '<b>'+rd.tarot.name+'</b> ('+rd.tarot.num+')'
+    +(rd.tarot.gambling?'<span class="ord-note">'+rd.tarot.gambling+'</span>':'')]);
+  if(rd.fengshui) rows.push(['Flying Star','<b>'+rd.fengshui.centre+'</b> in the centre palace']);
+  if(rd.astro) rows.push(['Horary',
+    rd.astro.asc+' rising'
+    +'<span class="ord-note">5th house '+rd.astro.h5+' (ruler '+rd.astro.h5ruler+') \u00b7 Part of Fortune '+rd.astro.pof
+    +' \u00b7 '+(rd.astro.day?'day':'night')+' chart'+(rd.astro.moonVoid?' \u00b7 Moon void of course':'')+'</span>']);
+  if(rd.numerology) rows.push(['Numerology','Pythagorean '+rd.numerology.py+'<span class="ord-note">Chaldean '+rd.numerology.ch+'</span>']);
+
+  var meantKeys=Object.keys(rd.meaning||{}).map(Number).sort(function(a,b){return a-b;});
+  var meantHTML='';
+  if(meantKeys.length){
+    meantHTML='<div class="ord-meant"><div class="ord-meant-h">Numbers carrying a meaning today</div>'
+      +meantKeys.map(function(n){
+        return '<div class="ord-meant-row"><span class="pnum pick pnum-meant">'+p2(n)+'</span>'
+          +'<span>'+rd.meaning[n].join(' \u00b7 ')+'</span></div>';
+      }).join('')
+      +'<div class="ord-note" style="margin-top:6px">These are the full-number matches the engine rewards (+10 each) when choosing within a digit family.</div></div>';
+  }
+
+  return '<details class="oracle-reading"><summary>\u25b8 The day\u2019s reading</summary>'
+    +'<div class="ord-body">'
+    +rows.map(function(r){ return '<div class="ord-row"><span class="ord-k">'+r[0]+'</span><span class="ord-v">'+r[1]+'</span></div>'; }).join('')
+    +meantHTML
+    +'</div></details>';
 }
 
 function oraclePickRender(){
@@ -2455,9 +2592,13 @@ function oraclePickRender(){
     out.innerHTML='<span class="pcso-hist-none">No PCSO draw is scheduled on '+oraclePickFmtDate(dateVal)+'.</span>';
     return;
   }
+  var reading=null;
+  try{ reading=oracleDateReading(dateVal,'9PM'); }catch(e){ console.error('oracleDateReading:',e); }
+  var meaning=(reading&&reading.meaning)||{};
   out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
     +'<div class="oracle-pick-sub">'+scheduled.length+' draw'+(scheduled.length===1?'':'s')+' this day</div>'
-    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal); }).join('');
+    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal,meaning); }).join('')
+    +oracleReadingHTML(reading);
 
   if(noteEl){
     var todayStr=oraclePickTodayStr();
