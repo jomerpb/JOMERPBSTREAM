@@ -2251,6 +2251,117 @@ function oraclePickDayDiff(fromStr,toStr){
   return Math.round((tb-ta)/86400000);
 }
 
+// ── IN-PAGE CALENDAR ──
+// <input type="date"> hands mobile users the OS dialog, which always carries a
+// Clear/Cancel/Set row — a page cannot remove that confirmation step. This is a
+// plain HTML calendar instead: one tap on a day commits and re-renders, no Set.
+// The value still lives on the hidden #oracle-pick-date input (with its min/max
+// attributes), so oraclePickRender() and the history-load hooks are unchanged.
+var ORACLE_PICK_CAL_MONTH=null; // {y,m} month currently on screen (m is 1-12)
+var _oPickMonthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function oraclePickInput(){ return document.getElementById('oracle-pick-date'); }
+
+function oraclePickSetDate(dateStr,doRender){
+  var inp=oraclePickInput();
+  if(!inp) return;
+  inp.value=dateStr||'';
+  var lbl=document.getElementById('oracle-pick-label');
+  if(lbl) lbl.textContent=dateStr?oraclePickFmtDate(dateStr):'Select a date';
+  if(doRender!==false) oraclePickRender();
+}
+
+function oraclePickCloseCal(){
+  var cal=document.getElementById('oracle-pick-cal');
+  if(cal&&cal.classList) cal.classList.remove('open');
+  var trig=document.getElementById('oracle-pick-trigger');
+  if(trig&&trig.setAttribute) trig.setAttribute('aria-expanded','false');
+}
+
+function oraclePickToggleCal(ev){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  var cal=document.getElementById('oracle-pick-cal');
+  if(!cal||!cal.classList) return;
+  if(cal.classList.contains('open')){ oraclePickCloseCal(); return; }
+  var inp=oraclePickInput();
+  var base=(inp&&inp.value)||oraclePickTodayStr();
+  var p=base.split('-');
+  ORACLE_PICK_CAL_MONTH={y:parseInt(p[0]),m:parseInt(p[1])};
+  oraclePickCalRender();
+  cal.classList.add('open');
+  var trig=document.getElementById('oracle-pick-trigger');
+  if(trig&&trig.setAttribute) trig.setAttribute('aria-expanded','true');
+}
+
+function oraclePickCalNav(delta,ev){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  if(!ORACLE_PICK_CAL_MONTH) return;
+  var y=ORACLE_PICK_CAL_MONTH.y,m=ORACLE_PICK_CAL_MONTH.m+delta;
+  while(m<1){ m+=12; y--; }
+  while(m>12){ m-=12; y++; }
+  ORACLE_PICK_CAL_MONTH={y:y,m:m};
+  oraclePickCalRender();
+}
+
+// The whole point: one tap commits. No confirm button.
+function oraclePickPickDay(dateStr,ev){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  oraclePickSetDate(dateStr,true);
+  oraclePickCloseCal();
+}
+
+function oraclePickCalRender(){
+  var cal=document.getElementById('oracle-pick-cal');
+  if(!cal||!ORACLE_PICK_CAL_MONTH) return;
+  var inp=oraclePickInput();
+  var minStr=(inp&&inp.getAttribute&&inp.getAttribute('min'))||'2020-01-01';
+  var maxStr=(inp&&inp.getAttribute&&inp.getAttribute('max'))||'2099-12-31';
+  var sel=(inp&&inp.value)||'';
+  var today=oraclePickTodayStr();
+  var y=ORACLE_PICK_CAL_MONTH.y,m=ORACLE_PICK_CAL_MONTH.m;
+  function p2s(n){ return String(n).padStart(2,'0'); }
+  var startDow=new Date(y,m-1,1).getDay();
+  var daysInMonth=new Date(y,m,0).getDate();
+
+  var cells='';
+  for(var i=0;i<startDow;i++) cells+='<span class="opick-day opick-blank"></span>';
+  for(var d=1;d<=daysInMonth;d++){
+    var ds=y+'-'+p2s(m)+'-'+p2s(d);
+    var off=(ds<minStr||ds>maxStr);
+    var cls='opick-day'+(off?' opick-off':'')+(ds===sel?' opick-sel':'')+(ds===today?' opick-today':'');
+    cells+=off
+      ? '<span class="'+cls+'">'+d+'</span>'
+      : '<button type="button" class="'+cls+'" onclick="oraclePickPickDay(\''+ds+'\',event)">'+d+'</button>';
+  }
+  // Arrows are disabled only when the whole neighbouring month is out of range.
+  var prevLast=new Date(y,m-1,0);
+  var prevOff=(prevLast.getFullYear()+'-'+p2s(prevLast.getMonth()+1)+'-'+p2s(prevLast.getDate()))<minStr;
+  var nextFirst=y+'-'+p2s(m===12?1:m+1)+'-01';
+  if(m===12) nextFirst=(y+1)+'-01-01';
+  var nextOff=nextFirst>maxStr;
+
+  cal.innerHTML=
+     '<div class="opick-cal-head">'
+    +  '<button type="button" class="opick-nav'+(prevOff?' opick-off':'')+'"'+(prevOff?' disabled':'')+' onclick="oraclePickCalNav(-1,event)" aria-label="Previous month">‹</button>'
+    +  '<span class="opick-cal-title">'+_oPickMonthNames[m-1]+' '+y+'</span>'
+    +  '<button type="button" class="opick-nav'+(nextOff?' opick-off':'')+'"'+(nextOff?' disabled':'')+' onclick="oraclePickCalNav(1,event)" aria-label="Next month">›</button>'
+    +'</div>'
+    +'<div class="opick-dow">'+['S','M','T','W','T','F','S'].map(function(x){return '<span>'+x+'</span>';}).join('')+'</div>'
+    +'<div class="opick-grid">'+cells+'</div>';
+}
+
+// Tap anywhere outside the field closes the calendar.
+(function oraclePickOutsideClose(){
+  if(typeof document==='undefined'||!document.addEventListener) return;
+  document.addEventListener('click',function(e){
+    var cal=document.getElementById('oracle-pick-cal');
+    if(!cal||!cal.classList||!cal.classList.contains('open')) return;
+    var field=document.getElementById('oracle-pick-field');
+    if(field&&field.contains&&e&&e.target&&field.contains(e.target)) return;
+    oraclePickCloseCal();
+  });
+})();
+
 function oraclePickBalls(nums){
   return (nums||[]).map(function(n){
     return '<span class="pnum pick">'+p2(n)+'</span>';
@@ -2324,10 +2435,12 @@ function oraclePickRender(){
   if(!dateInp){ setTimeout(initOraclePick,200); return; }
   var todayStr=oraclePickTodayStr();
   var p=todayStr.split('-');
-  var maxD=new Date(parseInt(p[0])+2,parseInt(p[1])-1,parseInt(p[2])); // 2 years out — far enough for any planning, keeps the native picker usable
-  dateInp.min='2020-01-01';
-  dateInp.max=maxD.getFullYear()+'-'+String(maxD.getMonth()+1).padStart(2,'0')+'-'+String(maxD.getDate()).padStart(2,'0');
-  if(!dateInp.value) dateInp.value=todayStr;
+  var maxD=new Date(parseInt(p[0])+2,parseInt(p[1])-1,parseInt(p[2])); // 2 years out — far enough for any planning, keeps the month grid navigable
+  // setAttribute, not the .min/.max properties: the input is type=hidden now and
+  // the calendar reads these back with getAttribute.
+  dateInp.setAttribute('min','2020-01-01');
+  dateInp.setAttribute('max',maxD.getFullYear()+'-'+String(maxD.getMonth()+1).padStart(2,'0')+'-'+String(maxD.getDate()).padStart(2,'0'));
+  oraclePickSetDate(dateInp.value||todayStr,false);
   oraclePickRender();
 })();
 

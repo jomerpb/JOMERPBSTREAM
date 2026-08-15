@@ -943,6 +943,46 @@
 #oracle-page .pcso-hist-jackpot{font-size:11px;color:#4cfc9a;font-weight:700;margin-top:8px;text-align:center}
 #oracle-page .pcso-hist-oracle-label{font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:.15em;color:var(--muted2);margin-top:12px;margin-bottom:6px;text-align:center}
 
+/* ── IN-PAGE CALENDAR (Oracle Pick For Any Date) ──
+   Replaces <input type="date"> so a tap on a day commits straight away; the
+   native mobile dialog always carries a Clear/Cancel/Set row that a page has
+   no way to suppress. */
+#oracle-page .opick-field{position:relative;flex:1;min-width:0}
+#oracle-page .opick-trigger{
+  width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--card);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-family:var(--inter,'Inter',sans-serif);font-size:12px;padding:9px 11px;
+  cursor:pointer;text-align:left;
+}
+#oracle-page .opick-trigger:focus-visible{outline:none;border-color:var(--accent)}
+#oracle-page .opick-chev{color:var(--muted);font-size:10px;flex-shrink:0}
+#oracle-page .opick-cal{
+  display:none;position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;
+  background:var(--card2);border:1px solid var(--border2);border-radius:12px;
+  padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.55);
+}
+#oracle-page .opick-cal.open{display:block}
+#oracle-page .opick-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+#oracle-page .opick-cal-title{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.12em;color:var(--text)}
+#oracle-page .opick-nav{
+  background:none;border:1px solid var(--border);border-radius:7px;color:var(--accent2);
+  font-size:15px;line-height:1;width:28px;height:28px;cursor:pointer;flex-shrink:0;
+}
+#oracle-page .opick-nav.opick-off{color:var(--muted);opacity:.4;cursor:default}
+#oracle-page .opick-dow,#oracle-page .opick-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+#oracle-page .opick-dow{margin-bottom:3px}
+#oracle-page .opick-dow span{text-align:center;font-size:9px;color:var(--muted);padding:2px 0}
+#oracle-page .opick-day{
+  background:none;border:1px solid transparent;border-radius:7px;color:var(--text);
+  font-family:var(--inter,'Inter',sans-serif);font-size:12.5px;padding:0;height:32px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+#oracle-page .opick-day:active{background:rgba(124,92,252,.25)}
+#oracle-page .opick-blank{visibility:hidden;cursor:default}
+#oracle-page .opick-day.opick-off{color:var(--muted);opacity:.35;cursor:default}
+#oracle-page .opick-day.opick-today{border-color:var(--border2);color:var(--teal)}
+#oracle-page .opick-day.opick-sel{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+
 /* ── ORACLE PICK FOR ANY DATE ── */
 #oracle-page .oracle-pick-head{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:var(--text)}
 #oracle-page .oracle-pick-sub{font-size:10px;color:var(--muted);margin-top:2px}
