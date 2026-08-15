@@ -912,10 +912,10 @@
    solid fill, solid gold border and a soft glow, so a drawn number carries
    real weight against the flatter teal picks. */
 #oracle-page .pnum.win{background:rgba(245,200,66,.22);border-color:var(--gold);color:var(--gold);box-shadow:0 0 8px rgba(245,200,66,.30)}
-/* A pick that matched the draw keeps its teal fill — it is still a pick — and
-   gains a gold ring, so a hit reads at a glance without turning into a chip
-   that looks like a winning number. */
-#oracle-page .pnum.pick.hit{border-color:var(--gold);box-shadow:0 0 9px rgba(245,200,66,.4)}
+/* A pick that matched the draw goes fully gold — the long-standing behaviour,
+   deliberately kept: only the colours changed here, not which numbers are
+   emphasised or how. Same values the old .pnum-gold rule used. */
+#oracle-page .pnum.pick.hit{background:rgba(245,200,66,.25);border-color:var(--gold);color:var(--gold);box-shadow:0 0 8px rgba(245,200,66,.35)}
 #oracle-page .pcso-pending{font-size:11px;color:var(--muted);font-style:italic}
 #oracle-page .pcso-src{font-size:9px;color:var(--muted);text-align:right;margin-top:3px;padding:0 2px 10px}
 #oracle-page .pcso-fetch-status{font-size:9.5px;color:var(--muted);text-align:right;padding:0 2px 8px;line-height:1.5;min-height:0;}
