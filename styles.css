@@ -902,13 +902,14 @@
 #oracle-page .pcso-nums{display:flex;gap:5px;flex-wrap:wrap;flex:1;min-width:0}
 /* Number chips are coloured by ROLE, not by game — the same rule on all three
    PCSO panels, so a glance tells you what you're looking at without a legend:
-   GREEN = a number the Oracle picked, GOLD = a number that was actually drawn.
-   (Previously chips were coloured per game — EZ2 gold, 6-ball blue — which made
-   an EZ2 pick look identical to a winning number.) */
+   TEAL = a number the Oracle picked, GOLD = a number that was actually drawn.
+   (Previously chips were coloured per game — EZ2 gold, 6-ball teal — which made
+   an EZ2 pick look identical to a winning number. The teal is kept as the pick
+   colour and now applies to every game, including EZ2.) */
 #oracle-page .pnum{font-family:'Bebas Neue',sans-serif;font-size:18px;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.2);border-radius:6px;padding:4px 10px;color:var(--accent2)}
-#oracle-page .pnum.pick{background:rgba(76,252,154,.10);border-color:rgba(76,252,154,.30);color:var(--green)}
+#oracle-page .pnum.pick{background:rgba(76,200,252,.08);border-color:rgba(76,200,252,.22);color:var(--teal)}
 #oracle-page .pnum.win{background:rgba(245,200,66,.10);border-color:rgba(245,200,66,.30);color:var(--gold)}
-/* A pick that matched the draw keeps its green fill — it is still a pick — and
+/* A pick that matched the draw keeps its teal fill — it is still a pick — and
    gains a gold ring, so a hit reads at a glance without turning into a chip
    that looks like a winning number. */
 #oracle-page .pnum.pick.hit{border-color:var(--gold);box-shadow:0 0 9px rgba(245,200,66,.4)}
