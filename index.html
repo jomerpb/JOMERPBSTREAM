@@ -658,6 +658,19 @@
   <div class="pcso-hist-result" id="pcso-hist-result"></div>
 </div>
 
+<!-- ORACLE PICK FOR ANY DATE -->
+<div class="pcso-history">
+  <div class="pcso-history-eyebrow">▸ Oracle Pick For Any Date</div>
+  <div class="pcso-hist-controls">
+    <input type="date" class="pcso-hist-date" id="oracle-pick-date" onchange="oraclePickDateChanged()">
+    <select class="pcso-hist-select" id="oracle-pick-game" onchange="oraclePickRender()"></select>
+  </div>
+  <div class="pcso-hist-result" id="oracle-pick-result">
+    <span class="pcso-hist-none">Pick a date to read its Oracle numbers.</span>
+  </div>
+  <div class="oracle-pick-note" id="oracle-pick-note"></div>
+</div>
+
 <!-- GAME SELECTOR -->
 <div class="game-wrap page">
   <div class="game-eyebrow">▸ Select Game</div>
