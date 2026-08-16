@@ -987,29 +987,52 @@
 #oracle-page .oracle-pick-game-row{width:100%;display:flex;flex-direction:column;align-items:center;padding:13px 0 2px;margin-top:11px;border-top:1px solid var(--border)}
 /* the reading now lives inside each game block */
 #oracle-page .oracle-pick-game-row .oracle-reading{margin:2px 0 10px}
-#oracle-page .oracle-pick-gname{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.15em;color:var(--muted2);margin-bottom:8px}
+/* The game name now sits inline at the head of the pick row, before the caret,
+   so it carries no bottom margin. Only the two fallback paths (no pick, no
+   reading) still stack it above the spheres, via -gname-block. */
+#oracle-page .oracle-pick-gname{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.15em;color:var(--muted2);white-space:nowrap}
+#oracle-page .oracle-pick-gname-block{margin-bottom:8px}
 /* Gap must equal .pcso-hist-row's 8px so EZ2's three 2-chip columns line up
    column-for-column with the 6-chip rows above: both then measure
    6 chips + 5 gaps (EZ2 = 3 intra-column gaps + 2 between columns). */
 #oracle-page .oracle-pick-cols{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;width:100%}
-/* On the narrowest phones a 6-chip row is ~4px too wide and wraps to two
-   lines. Trim both gaps together — they must stay equal or the rows stop
-   lining up — which buys back 10px and keeps every block on one row. */
-@media (max-width:340px){
+/* On narrow phones a 6-chip row wraps to two lines — and it wraps sooner now
+   that the game name shares the line with the spheres. Trim both gaps
+   together; they must stay equal or the rows stop lining up. */
+@media (max-width:380px){
   #oracle-page .pcso-hist-row,#oracle-page .oracle-pick-cols{gap:6px}
+}
+@media (max-width:340px){
+  #oracle-page .pcso-hist-row,#oracle-page .oracle-pick-cols{gap:5px}
 }
 #oracle-page .oracle-pick-col{display:flex;flex-direction:column;align-items:center}
 #oracle-page .oracle-pick-slot{font-size:9px;color:var(--muted);margin-bottom:5px}
 /* The pick panel uses Run Expert's gradient spheres (.ball + b1..b6, defined
    above) rather than flat chips. Only the sizing is overridden here: six across
    has to fit a phone, where Run Expert only ever shows six on a wider card.
-   6 x 46 + 5 x 8 = 316 fits the 386px content box at 412px. */
+   Since the game name moved onto this line, the six spheres no longer own the
+   full content box — every step below is (content box) - (lead + its gap), and
+   each was measured in the browser, not estimated. The row must stay on ONE
+   line: two lines here is the bug this ladder exists to prevent. */
 #oracle-page .oracle-pick-game-row .ball{width:46px;height:46px;font-size:18px;margin:0}
 #oracle-page .oracle-pick-game-row .ball .btag{font-size:6.5px;bottom:-1px}
-@media (max-width:360px){
-  /* 6 x 40 + 5 x 6 = 270, inside the 294px content box at 320px */
+@media (max-width:429px){
+  /* content box 401px at 429px; lead 52 + 6 gap leaves 343 for 6x42 + 5x8 = 292 */
+  #oracle-page .oracle-pick-game-row .ball{width:42px;height:42px;font-size:16px}
+}
+@media (max-width:380px){
+  /* content box 352px at 380px; lead 52 + 6 leaves 294 for 6x40 + 5x6 = 270 */
   #oracle-page .oracle-pick-game-row .ball{width:40px;height:40px;font-size:15px}
   #oracle-page .oracle-pick-game-row .ball .btag{font-size:6px}
+}
+@media (max-width:360px){
+  /* content box 332px; lead 47 + 4 leaves 281 for 6x38 + 5x6 = 258 */
+  #oracle-page .oracle-pick-game-row .ball{width:38px;height:38px;font-size:14px}
+}
+@media (max-width:340px){
+  /* content box 292px at 320px; lead 47 + 4 leaves 241 for 6x34 + 5x5 = 229 */
+  #oracle-page .oracle-pick-game-row .ball{width:34px;height:34px;font-size:13px}
+  #oracle-page .oracle-pick-game-row .ball .btag{font-size:5.5px}
 }
 /* .ball-meant carries no styling on purpose — it is kept only as the hook for
    the title tooltip naming why that number was promoted. The reading's
@@ -1036,17 +1059,34 @@
 
 /* The day's reading */
 #oracle-page .oracle-reading{width:100%;margin:4px 0 2px;padding-bottom:10px}
-/* The summary IS the pick row: a caret followed by that game's spheres, so the
-   whole row is the toggle and the reading opens underneath it. */
+/* The summary IS the pick row: the game name, then the caret, then that game's
+   spheres — so the whole row is the toggle and the reading opens underneath. */
 #oracle-page .oracle-reading summary{cursor:pointer;list-style:none}
 #oracle-page .oracle-reading summary::-webkit-details-marker{display:none}
-#oracle-page .opick-sum{display:flex;align-items:center;justify-content:center;gap:6px}
+#oracle-page .opick-sum{display:flex;align-items:center;justify-content:center;gap:8px}
 /* EZ2's column block is width:100% in the game row, which would strand the
-   caret at the far left of the summary — shrink it to its content here. */
+   lead at the far left of the summary — shrink it to its content here. */
 #oracle-page .opick-sum .oracle-pick-cols{width:auto}
+/* The lead mirrors .oracle-pick-col: an optional slot-label row on top, then
+   the content. For EZ2 that blank label matches the real 2PM/5PM/9PM one, so
+   the name and caret sit on the spheres' centre line instead of the taller
+   block's. A 6-ball row has no label, so the lead has none either. */
+#oracle-page .opick-lead{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+#oracle-page .opick-lead-main{display:flex;align-items:center;gap:6px}
 #oracle-page .opick-caret{color:var(--muted2);font-size:12px;line-height:1;flex-shrink:0;transition:transform .15s}
 #oracle-page .oracle-reading[open] .opick-caret{transform:rotate(90deg)}
-@media (max-width:360px){ #oracle-page .opick-sum{gap:4px} #oracle-page .opick-caret{font-size:10px} }
+/* The inline name eats horizontal room the spheres used to have. Tighten the
+   gaps and the name before shrinking the spheres themselves. */
+@media (max-width:429px){
+  #oracle-page .opick-sum{gap:6px}
+  #oracle-page .opick-lead-main{gap:4px}
+  #oracle-page .oracle-pick-gname{font-size:12px;letter-spacing:.08em}
+}
+@media (max-width:360px){
+  #oracle-page .opick-sum{gap:4px}
+  #oracle-page .opick-caret{font-size:10px}
+  #oracle-page .oracle-pick-gname{font-size:11px;letter-spacing:.04em}
+}
 #oracle-page .oracle-reading[open] summary{margin-bottom:11px}
 #oracle-page .ord-body{text-align:left}
 #oracle-page .ord-note{display:block;font-size:10px;color:var(--muted);margin-top:2px;line-height:1.5}

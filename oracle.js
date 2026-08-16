@@ -2253,8 +2253,11 @@ function pcsoHistGameHTML(gameKey,dateStr){
   var look=null;
   try{ look=oracleHistLookup(gameKey,dateStr); }
   catch(e){ console.error('oracleHistLookup '+gameKey+' '+dateStr+':',e); }
-  var name='<div class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
-    +(look?oracleSrcTag(look.source,false):'')+'</div>';
+  // Look Up keeps its name stacked ABOVE the numbers — unlike the Oracle Pick
+  // panel, where the name moved onto the pick row. -gname-block carries the
+  // bottom margin that .oracle-pick-gname no longer has of its own.
+  var name='<div class="oracle-pick-gname-block"><span class="oracle-pick-gname">'
+    +PCSO_GAME_LABELS[gameKey]+(look?oracleSrcTag(look.source,false):'')+'</span></div>';
 
   if(gameKey==='ez2'){
     var cols=['2PM','5PM','9PM'].map(function(t){
@@ -2593,10 +2596,10 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
   var counts={};
   if(slice&&slice.sorted) slice.sorted.forEach(function(f){ counts[f.digit]=f.count; });
 
-  var name='<div class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
-    +(look?oracleSrcTag(look.source,false):'')+'</div>';
+  var name='<span class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
+    +(look?oracleSrcTag(look.source,false):'')+'</span>';
   if(!look||!look.picks){
-    return '<div class="oracle-pick-game-row">'+name
+    return '<div class="oracle-pick-game-row"><div class="oracle-pick-gname-block">'+name+'</div>'
       +'<span class="pcso-hist-none">Could not compute a pick for this draw.</span></div>';
   }
 
@@ -2622,15 +2625,25 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
     ballsHTML='<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts)+'</div>';
   }
 
-  // order within a line: game, its reading (which holds the alignment card),
-  // then the numbers — the reading sits BEFORE the picks it explains
-  // the collapsible IS the pick row: a caret, then the spheres. Clicking
-  // anywhere on the row opens that game's reading underneath.
+  // The whole line IS the toggle, read left to right: game name + source tag,
+  // then the caret, then that game's spheres. Clicking anywhere on it opens
+  // the reading underneath, which sits BEFORE the picks it explains.
+  // EZ2's spheres carry a 2PM/5PM/9PM label above them, which makes its column
+  // block taller than a 6-ball row and puts the flex centre line above the
+  // spheres. The lead gets an empty label of the SAME class, so both sides have
+  // the same header row and the name and caret land on the spheres' centre --
+  // rather than nudging it with a magic margin that would drift the next time
+  // .oracle-pick-slot changes.
+  var lead='<span class="opick-lead">'
+    +((gameKey==='ez2')?'<span class="oracle-pick-slot" aria-hidden="true">&nbsp;</span>':'')
+    +'<span class="opick-lead-main">'+name
+    +'<span class="opick-caret" aria-hidden="true">\u25b8</span></span></span>';
+
   var body=oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr,breakdown);
-  if(!body) return '<div class="oracle-pick-game-row">'+name+ballsHTML+'</div>';
-  return '<div class="oracle-pick-game-row">'+name
+  if(!body) return '<div class="oracle-pick-game-row"><div class="oracle-pick-gname-block">'+name+'</div>'+ballsHTML+'</div>';
+  return '<div class="oracle-pick-game-row">'
     +'<details class="oracle-reading"><summary class="opick-sum">'
-    +'<span class="opick-caret" aria-hidden="true">\u25b8</span>'+ballsHTML+'</summary>'
+    +lead+ballsHTML+'</summary>'
     +'<div class="ord-body">'+body+'</div></details></div>';
 }
 
