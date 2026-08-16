@@ -39,6 +39,28 @@ carries the commits that existed when it was merged) and, when it matters,
 Report what each lane did and what it returned. If a lane genuinely cannot run,
 say which one and why — do not quietly drop it to two.
 
+## Rule: always close with an explicit status
+
+**Standing instruction from the repo owner.** Every reply that finishes a piece
+of work ends by saying, in plain words, which of exactly two states it is in.
+Never leave it implicit, and never let a wall of verification results stand in
+for the answer.
+
+- **DONE** — merged and confirmed live. Only say this after checking the
+  *deployed* page (`curl` the site, read the asset version, grep the served file
+  for the new code). Pushing is not done. Opening a PR is not done. A green test
+  run is not done.
+- **NEEDS A PR / NEEDS YOUR MERGE** — the work is finished, verified and pushed,
+  but it is now waiting on a decision only the repo owner can make. Say so
+  outright and name the PR number, e.g. "Needs your merge: PR #20."
+
+Anything else — a question, a blocked step, a choice to make — is stated the
+same way: name what is needed and from whom.
+
+The reason this rule exists: work was repeatedly reported as complete when it
+was only pushed, and the owner went looking at a live site that had not changed.
+When in doubt, check the deployment and say which of the two states it is in.
+
 ## File split
 
 - **stream.js** — Anime/TV/Movie streaming tab. TMDB + AniList API client-side. IDs (movie/show/episode) always resolved live from those APIs, never hardcoded.
