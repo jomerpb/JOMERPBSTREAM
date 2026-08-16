@@ -1,21 +1,15 @@
 {
-  "updated": "2026-08-15T17:21:21.532253+08:00",
-  "date": "August 15, 2026",
+  "updated": "2026-08-16T13:26:45.455478+08:00",
+  "date": "August 16, 2026",
   "ez2": [
     {
       "draw": "2PM",
-      "nums": [
-        30,
-        9
-      ],
+      "nums": [],
       "cutoff": 14
     },
     {
       "draw": "5PM",
-      "nums": [
-        15,
-        1
-      ],
+      "nums": [],
       "cutoff": 17
     },
     {
@@ -48,16 +42,16 @@
     {
       "game": "6/55",
       "nums": [
-        53,
-        36,
-        21,
-        8,
-        46,
-        43
+        31,
+        13,
+        26,
+        22,
+        39,
+        47
       ],
       "done": true,
-      "jackpot": "₱128.4M",
-      "draw_date": "August 12, 2026",
+      "jackpot": "₱133.7M",
+      "draw_date": "August 15, 2026",
       "winners": 0,
       "days": [
         1,
@@ -108,17 +102,17 @@
     {
       "game": "6/42",
       "nums": [
-        20,
-        21,
-        14,
-        41,
-        6,
-        12
+        12,
+        8,
+        15,
+        26,
+        28,
+        37
       ],
       "done": true,
-      "jackpot": "₱31.9M",
-      "draw_date": "August 13, 2026",
-      "winners": 1,
+      "jackpot": "₱10.0M",
+      "draw_date": "August 15, 2026",
+      "winners": 0,
       "days": [
         2,
         4,
