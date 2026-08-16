@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#07090f"/>
   <title>JomerPB Stream</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="styles.css?v=20260816n"/>
+  <link rel="stylesheet" href="styles.css?v=20260816o"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png"/>
   <link rel="apple-touch-icon" href="icon-192.png"/>
   <script defer src="stream.js?v=20260714a"></script>
-  <script defer src="oracle.js?v=20260816n"></script>
+  <script defer src="oracle.js?v=20260816o"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
 <body>
@@ -623,27 +623,20 @@
   <div class="topbar-logo">JOMERPB <span>- LOTTO ORACLE</span></div>
 </div>
 
-<!-- PCSO RESULTS WIDGET -->
-<div class="pcso-widget">
-  <div class="pcso-header">
-    <div style="display:flex;align-items:center;gap:8px">
-      <div class="pcso-live"></div>
-      <span class="pcso-title">TODAY'S PCSO RESULTS</span>
-    </div>
+<!-- The TODAY'S PCSO RESULTS card is gone; Look Up Past Result covers the same
+     draws and more. Its Updated-time label and Fetch Live button moved into the
+     Look Up header below, and #pcso-fetch-status went with them so the button
+     still has somewhere to report to. -->
+
+<!-- PCSO HISTORY LOOKUP -->
+<div class="pcso-history">
+  <div class="pcso-history-head">
+    <div class="pcso-history-eyebrow"><span class="pcso-live" aria-hidden="true"></span>Look Up Past Result</div>
     <div class="pcso-meta">
       <span class="pcso-date-lbl" id="pcso-date-lbl"></span>
       <button class="pcso-refresh" onclick="pcsoAIFetch()" id="pcso-ai-btn">&#9889; Fetch Live</button>
     </div>
   </div>
-  <div id="pcso-grid" class="pcso-grid">
-    <div class="pcso-row"><span class="pcso-pending">Loading results…</span></div>
-  </div>
-  <div class="pcso-fetch-status" id="pcso-fetch-status"></div>
-</div>
-
-<!-- PCSO HISTORY LOOKUP -->
-<div class="pcso-history">
-  <div class="pcso-history-eyebrow">▸ Look Up Past Result</div>
   <!-- Same in-page calendar as the panel below — one tap commits, no OS
        Clear/Cancel/Set dialog. The hidden input still holds the value. -->
   <div class="pcso-hist-controls">
@@ -658,11 +651,12 @@
     </div>
   </div>
   <div class="pcso-hist-result" id="pcso-hist-result"></div>
+  <div class="pcso-fetch-status" id="pcso-fetch-status"></div>
 </div>
 
 <!-- ORACLE PICK FOR ANY DATE -->
 <div class="pcso-history">
-  <div class="pcso-history-eyebrow">▸ Oracle Pick For Any Date</div>
+  <div class="pcso-history-eyebrow"><span class="pcso-live dot-red" aria-hidden="true"></span>Oracle Pick For Any Date</div>
   <!-- In-page calendar rather than <input type="date">: the native mobile
        dialog forces a Clear/Cancel/Set confirmation step that a page cannot
        remove. Tapping a day here commits immediately. The hidden input keeps
@@ -691,8 +685,7 @@
      page opens on the two date panels alone. -->
 <details class="pcso-history personal-card" id="personal-card">
   <summary class="personal-card-sum">
-    <span class="opick-caret" aria-hidden="true">&#9656;</span>
-    <span class="pcso-history-eyebrow">Analyze My Own Personal Numbers</span>
+    <span class="pcso-history-eyebrow"><span class="pcso-live dot-orange" aria-hidden="true"></span>Analyze My Own Personal Numbers</span>
   </summary>
 
 <!-- GAME SELECTOR -->

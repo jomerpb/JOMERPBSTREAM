@@ -889,8 +889,15 @@
 #oracle-page .pcso-widget{padding:14px 0 0;margin:0 auto}
 #oracle-page .pcso-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 #oracle-page .pcso-title{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.2em;color:var(--muted2)}
-#oracle-page .pcso-live{width:7px;height:7px;border-radius:50%;background:#4cfc9a;animation:pcso-pulse 2s infinite;flex-shrink:0}
+/* The blinking dot the removed Today's Results card used. It now heads each of
+   the three panels, one colour apiece, in place of the ▸ they used to carry. */
+#oracle-page .pcso-live{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pcso-pulse 2s infinite;flex-shrink:0;display:inline-block}
+#oracle-page .pcso-live.dot-red{background:var(--red)}
+#oracle-page .pcso-live.dot-orange{background:var(--orange)}
 @keyframes pcso-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* Someone who asked the OS not to animate should get a steady dot, not a
+   flashing one — the colour still carries the meaning. */
+@media (prefers-reduced-motion:reduce){ #oracle-page .pcso-live{animation:none} }
 #oracle-page .pcso-meta{display:flex;align-items:center;gap:8px}
 #oracle-page .pcso-date-lbl{font-size:10px;color:var(--muted)}
 #oracle-page .pcso-refresh{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:10px;padding:3px 9px;cursor:pointer;font-weight:600;font-family:var(--inter)}
@@ -930,7 +937,11 @@
 
 /* ── PCSO HISTORY LOOKUP ── */
 #oracle-page .pcso-history{padding:14px 0 0;margin:0 auto}
-#oracle-page .pcso-history-eyebrow{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.2em;color:var(--muted2);margin-bottom:8px}
+#oracle-page .pcso-history-eyebrow{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.2em;color:var(--muted2);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+/* Look Up's heading shares its line with the Updated label and Fetch Live,
+   which moved here when the Today's Results card was removed. */
+#oracle-page .pcso-history-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+#oracle-page .pcso-history-head .pcso-history-eyebrow{margin-bottom:8px}
 #oracle-page .pcso-hist-controls{display:flex;gap:8px;margin-bottom:8px}
 #oracle-page .pcso-hist-result{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 13px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90px;text-align:center}
 #oracle-page .pcso-hist-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
@@ -984,7 +995,11 @@
 /* ── ORACLE PICK FOR ANY DATE ── */
 #oracle-page .oracle-pick-head{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:var(--text)}
 #oracle-page .oracle-pick-sub{font-size:10px;color:var(--muted);margin-top:2px}
-#oracle-page .oracle-pick-game-row{width:100%;display:flex;flex-direction:column;align-items:center;padding:13px 0 2px;margin-top:11px;border-top:1px solid var(--border)}
+/* --row-pad-top is a variable because the Look Up lead is positioned against
+   this row's PADDING box: an absolute top:0 lands above the padding, putting
+   the name exactly this far above the numbers. The lead reads the same value,
+   so the two cannot drift apart. */
+#oracle-page .oracle-pick-game-row{--row-pad-top:13px;width:100%;display:flex;flex-direction:column;align-items:center;padding:var(--row-pad-top) 0 2px;margin-top:11px;border-top:1px solid var(--border)}
 /* the reading now lives inside each game block */
 #oracle-page .oracle-pick-game-row .oracle-reading{margin:2px 0 10px}
 /* The game name now sits inline at the head of the pick row, before the caret,
@@ -1002,24 +1017,27 @@
 /* Look Up Past Result: same lead, but no caret and the row is top-aligned, so
    the name sits on the winning-numbers line rather than on the middle of a
    block that also carries the jackpot line, the Oracle's pick and the score. */
-#oracle-page .oracle-pick-game-row.lookup-row{flex-direction:row;align-items:flex-start;justify-content:center;gap:8px}
-#oracle-page .lookup-body{display:flex;flex-direction:column;align-items:center;min-width:0}
-/* Height of one .pnum chip, so the name centres on the winning row. */
-#oracle-page .lookup-row .opick-lead-main{min-height:31px}
-#oracle-page .lookup-row .opick-lead{align-items:flex-end}
+#oracle-page .oracle-pick-game-row.lookup-row{position:relative;flex-direction:row;align-items:flex-start;justify-content:center}
+#oracle-page .lookup-body{display:flex;flex-direction:column;align-items:center;min-width:0;width:100%}
+/* Same out-of-flow lead as the pick rows, but pinned to the TOP rather than
+   stretched: the block below the winning row holds the jackpot line, the
+   Oracle's pick and the score, and the name belongs on the winning row alone.
+   min-height is one .pnum chip, so it centres there — keep the two in step. */
+#oracle-page .lookup-row .opick-lead{top:var(--row-pad-top);bottom:auto;align-items:flex-end}
+#oracle-page .lookup-row .opick-lead-main{flex:none;min-height:31px}
 #oracle-page .pcso-hist-winners{color:var(--muted)}
 #oracle-page .pcso-hist-winners.won{color:var(--gold)}
-/* The inline name takes room the six chips used to own, so they shrink on the
-   same schedule the Oracle Pick spheres do. Scoped to .lookup-row so the .pnum
-   chips inside a reading body keep their full size. Every step measured. */
-@media (max-width:380px){
-  #oracle-page .lookup-row .pnum{min-width:38px;padding:4px 7px;font-size:16px}
+/* The inline name takes room the six chips used to own, and centring them in
+   the full row costs that room TWICE — the numbers have to clear the lead on
+   the left and stay centred, so the usable width is (row - 2x lead). Scoped to
+   .lookup-row so the .pnum chips inside a reading body keep their full size.
+   Every step measured in the browser; the lane asserts a positive clearance. */
+#oracle-page .lookup-row .pnum{min-width:38px;padding:4px 7px;font-size:16px}
+#oracle-page .lookup-row .opick-lead-main{min-height:28px}
+@media (max-width:400px){
+  #oracle-page .lookup-row .pnum{min-width:33px;padding:3px 5px;font-size:15px}
   /* keep in step with the chip height on the line above, or the name drifts
      off the winning row — the browser lane asserts this to within 1px */
-  #oracle-page .lookup-row .opick-lead-main{min-height:28px}
-}
-@media (max-width:340px){
-  #oracle-page .lookup-row .pnum{min-width:34px;padding:3px 5px;font-size:15px}
   #oracle-page .lookup-row .opick-lead-main{min-height:25px}
 }
 /* Gap must equal .pcso-hist-row's 8px so EZ2's three 2-chip columns line up
@@ -1040,28 +1058,20 @@
 /* The pick panel uses Run Expert's gradient spheres (.ball + b1..b6, defined
    above) rather than flat chips. Only the sizing is overridden here: six across
    has to fit a phone, where Run Expert only ever shows six on a wider card.
-   Since the game name moved onto this line, the six spheres no longer own the
-   full content box — every step below is (content box) - (lead + its gap), and
-   each was measured in the browser, not estimated. The row must stay on ONE
-   line: two lines here is the bug this ladder exists to prevent. */
-#oracle-page .oracle-pick-game-row .ball{width:46px;height:46px;font-size:18px;margin:0}
+   Since the game name moved onto this line AND the spheres are centred in the
+   full row, the usable width is (content box) - 2 x lead: the lead is out of
+   flow at the left edge, so the spheres must clear it and still stay centred.
+   Every step below was measured in the browser, not estimated. The row must
+   stay on ONE line, and the spheres must not run under the name — the browser
+   lane asserts both, at every width. */
+#oracle-page .oracle-pick-game-row .ball{width:36px;height:36px;font-size:15px;margin:0}
 #oracle-page .oracle-pick-game-row .ball .btag{font-size:6.5px;bottom:-1px}
 @media (max-width:429px){
-  /* content box 401px at 429px; lead 52 + 6 gap leaves 343 for 6x42 + 5x8 = 292 */
-  #oracle-page .oracle-pick-game-row .ball{width:42px;height:42px;font-size:16px}
-}
-@media (max-width:380px){
-  /* content box 352px at 380px; lead 52 + 6 leaves 294 for 6x40 + 5x6 = 270 */
-  #oracle-page .oracle-pick-game-row .ball{width:40px;height:40px;font-size:15px}
+  #oracle-page .oracle-pick-game-row .ball{width:33px;height:33px;font-size:13px}
   #oracle-page .oracle-pick-game-row .ball .btag{font-size:6px}
 }
-@media (max-width:360px){
-  /* content box 332px; lead 47 + 4 leaves 281 for 6x38 + 5x6 = 258 */
-  #oracle-page .oracle-pick-game-row .ball{width:38px;height:38px;font-size:14px}
-}
-@media (max-width:340px){
-  /* content box 292px at 320px; lead 47 + 4 leaves 241 for 6x34 + 5x5 = 229 */
-  #oracle-page .oracle-pick-game-row .ball{width:34px;height:34px;font-size:13px}
+@media (max-width:400px){
+  #oracle-page .oracle-pick-game-row .ball{width:30px;height:30px;font-size:12px}
   #oracle-page .oracle-pick-game-row .ball .btag{font-size:5.5px}
 }
 /* .ball-meant carries no styling on purpose — it is kept only as the hook for
@@ -1076,13 +1086,12 @@
 
 /* ── ANALYZE MY OWN PERSONAL NUMBERS (collapsible card) ──
    Wraps the game selector, EZ2 draw time, the six inputs, the button and the
-   reading it renders. Same eyebrow type as the two date panels above it, with
-   the caret from the per-line readings so the toggle reads the same way. */
+   reading it renders. Same eyebrow type as the two date panels above it, and
+   the same blinking dot — its caret is gone with them. */
 #oracle-page .personal-card{padding:14px 0 0;margin:0 auto}
 #oracle-page .personal-card-sum{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px}
 #oracle-page .personal-card-sum::-webkit-details-marker{display:none}
 #oracle-page .personal-card-sum .pcso-history-eyebrow{margin-bottom:0}
-#oracle-page .personal-card[open] .personal-card-sum .opick-caret{transform:rotate(90deg)}
 /* The wrap's own 20px top padding doubles the card's when nested. */
 #oracle-page .personal-card .game-wrap{padding:12px 0 0}
 #oracle-page .personal-card #personal-wrap{padding-top:0}
@@ -1093,16 +1102,20 @@
    spheres — so the whole row is the toggle and the reading opens underneath. */
 #oracle-page .oracle-reading summary{cursor:pointer;list-style:none}
 #oracle-page .oracle-reading summary::-webkit-details-marker{display:none}
-#oracle-page .opick-sum{display:flex;align-items:center;justify-content:center;gap:8px}
+#oracle-page .opick-sum{position:relative;display:flex;align-items:center;justify-content:center}
 /* EZ2's column block is width:100% in the game row, which would strand the
    lead at the far left of the summary — shrink it to its content here. */
 #oracle-page .opick-sum .oracle-pick-cols{width:auto}
-/* The lead mirrors .oracle-pick-col: an optional slot-label row on top, then
-   the content. For EZ2 that blank label matches the real 2PM/5PM/9PM one, so
-   the name and caret sit on the spheres' centre line instead of the taller
-   block's. A 6-ball row has no label, so the lead has none either. */
-#oracle-page .opick-lead{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
-#oracle-page .opick-lead-main{display:flex;align-items:center;gap:6px}
+/* The lead is taken OUT of flow. In flow it pushed the numbers right of centre
+   by half its width, so a row read as sitting off to the right of its card;
+   absolutely placed at the left edge, the numbers centre in the full row. The
+   size ladders below keep the numbers narrow enough that they never reach it.
+   The lead still mirrors .oracle-pick-col vertically: an optional slot-label
+   row on top, then the content. For EZ2 that blank label matches the real
+   2PM/5PM/9PM one, so the name and caret land on the spheres' centre line
+   rather than the taller block's; a 6-ball row has no label and needs none. */
+#oracle-page .opick-lead{position:absolute;left:0;top:0;bottom:0;display:flex;flex-direction:column;align-items:center}
+#oracle-page .opick-lead-main{flex:1;display:flex;align-items:center;gap:6px}
 #oracle-page .opick-caret{color:var(--muted2);font-size:12px;line-height:1;flex-shrink:0;transition:transform .15s}
 #oracle-page .oracle-reading[open] .opick-caret{transform:rotate(90deg)}
 /* The inline name eats horizontal room the spheres used to have. Tighten the
@@ -1116,6 +1129,22 @@
   #oracle-page .opick-sum{gap:4px}
   #oracle-page .opick-caret{font-size:10px}
   #oracle-page .oracle-pick-gname{font-size:11px;letter-spacing:.04em}
+}
+/* Below 360px the sums stop working: centring the numbers in the full row
+   leaves them under 25px across, smaller than the digits need. So the
+   narrowest phones keep the older layout — the lead back IN FLOW and the whole
+   row centred as a group — and get readable numbers instead of perfectly
+   centred tiny ones. This block must stay AFTER the position:absolute rule
+   above: same specificity, so source order is what decides it. */
+@media (max-width:359px){
+  #oracle-page .opick-lead{position:static;flex-shrink:0}
+  #oracle-page .opick-lead-main{flex:none}
+  #oracle-page .lookup-row{gap:8px}
+  #oracle-page .lookup-body{width:auto}
+  #oracle-page .oracle-pick-game-row .ball{width:34px;height:34px;font-size:13px}
+  #oracle-page .oracle-pick-game-row .ball .btag{font-size:5.5px}
+  #oracle-page .lookup-row .pnum{min-width:34px;padding:3px 5px;font-size:15px}
+  #oracle-page .lookup-row .opick-lead-main{min-height:25px}
 }
 #oracle-page .oracle-reading[open] summary{margin-bottom:11px}
 #oracle-page .ord-body{text-align:left}

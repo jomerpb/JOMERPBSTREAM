@@ -2066,9 +2066,13 @@ function pcsoRender(){
   if(grid) grid.innerHTML=h;
 }
 
+// Waits on #pcso-date-lbl, not the deleted #pcso-grid: the Today's Results card
+// is gone but its Updated label and Fetch Live button live in the Look Up
+// header now, and this is still what populates them. Polling for an element
+// that no longer exists would have silently never fetched at all.
 (function tryPcso(){
-  var g=document.getElementById('pcso-grid');
-  if(g){pcsoRender();pcsoRefreshFromRaw();}
+  var el=document.getElementById('pcso-date-lbl');
+  if(el){pcsoRender();pcsoRefreshFromRaw();}
   else{setTimeout(tryPcso,200);}
 })();
 
