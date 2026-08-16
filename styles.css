@@ -990,8 +990,38 @@
 /* The game name now sits inline at the head of the pick row, before the caret,
    so it carries no bottom margin. Only the two fallback paths (no pick, no
    reading) still stack it above the spheres, via -gname-block. */
-#oracle-page .oracle-pick-gname{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.15em;color:var(--muted2);white-space:nowrap}
+/* min-width reserves the same lead on every row so the numbers start at the
+   same x in all of them — without it "EZ2" is narrower than "6/49" and its row
+   sits a couple of px further left, which reads as EZ2 being a different size.
+   It is in em of the name's own font-size, so it tracks the size steps below
+   and does not assume a particular face: Bebas Neue is condensed and renders
+   narrower than the fallback these values were measured against, so the
+   reserve is conservative either way. The browser lane asserts the equality. */
+#oracle-page .oracle-pick-gname{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.15em;color:var(--muted2);white-space:nowrap;display:inline-block;min-width:4.2em;text-align:right}
 #oracle-page .oracle-pick-gname-block{margin-bottom:8px}
+/* Look Up Past Result: same lead, but no caret and the row is top-aligned, so
+   the name sits on the winning-numbers line rather than on the middle of a
+   block that also carries the jackpot line, the Oracle's pick and the score. */
+#oracle-page .oracle-pick-game-row.lookup-row{flex-direction:row;align-items:flex-start;justify-content:center;gap:8px}
+#oracle-page .lookup-body{display:flex;flex-direction:column;align-items:center;min-width:0}
+/* Height of one .pnum chip, so the name centres on the winning row. */
+#oracle-page .lookup-row .opick-lead-main{min-height:31px}
+#oracle-page .lookup-row .opick-lead{align-items:flex-end}
+#oracle-page .pcso-hist-winners{color:var(--muted)}
+#oracle-page .pcso-hist-winners.won{color:var(--gold)}
+/* The inline name takes room the six chips used to own, so they shrink on the
+   same schedule the Oracle Pick spheres do. Scoped to .lookup-row so the .pnum
+   chips inside a reading body keep their full size. Every step measured. */
+@media (max-width:380px){
+  #oracle-page .lookup-row .pnum{min-width:38px;padding:4px 7px;font-size:16px}
+  /* keep in step with the chip height on the line above, or the name drifts
+     off the winning row — the browser lane asserts this to within 1px */
+  #oracle-page .lookup-row .opick-lead-main{min-height:28px}
+}
+@media (max-width:340px){
+  #oracle-page .lookup-row .pnum{min-width:34px;padding:3px 5px;font-size:15px}
+  #oracle-page .lookup-row .opick-lead-main{min-height:25px}
+}
 /* Gap must equal .pcso-hist-row's 8px so EZ2's three 2-chip columns line up
    column-for-column with the 6-chip rows above: both then measure
    6 chips + 5 gaps (EZ2 = 3 intra-column gaps + 2 between columns). */
