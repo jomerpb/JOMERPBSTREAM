@@ -163,7 +163,9 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
       var gk2=slashToKey[slashKey2];
       var entries2=data[slashKey2];
       if(Array.isArray(entries2)){
-        lookup[gk2]=entries2.map(function(e){return{date:e.date,nums:e.nums,jackpot:e.jackpot};});
+        // winners rides along because the Look Up panel prints it next to the
+        // jackpot; leaving it out here silently rendered the amount alone.
+        lookup[gk2]=entries2.map(function(e){return{date:e.date,nums:e.nums,jackpot:e.jackpot,winners:e.winners};});
       }
     }
     if(Array.isArray(data.ez2)){
@@ -2244,7 +2246,17 @@ function pcsoHistJackpotHTML(entry){
     var n=parseFloat(jp);
     disp='\u20b1'+(n>=1000000?(n/1000000).toFixed(1)+'M':n.toLocaleString());
   }
-  return '<div class="pcso-hist-jackpot">'+disp+' jackpot</div>';
+  // Whether the jackpot was actually won, in the same words the Today's Results
+  // widget uses. Only shown when the field is really there — a missing count is
+  // not evidence of "no winner", so an entry without it just says the amount.
+  var wtxt='';
+  if(entry&&typeof entry.winners==='number'&&isFinite(entry.winners)){
+    wtxt=' · <span class="pcso-hist-winners'+(entry.winners>0?' won':'')+'">'
+      +(entry.winners===0?'No winner — jackpot rolls!'
+        :entry.winners===1?'1 winner'
+        :entry.winners.toLocaleString()+' winners')+'</span>';
+  }
+  return '<div class="pcso-hist-jackpot">'+disp+' jackpot'+wtxt+'</div>';
 }
 
 // One block per game drawn that day: what came out, then what the Oracle had.
@@ -2253,11 +2265,16 @@ function pcsoHistGameHTML(gameKey,dateStr){
   var look=null;
   try{ look=oracleHistLookup(gameKey,dateStr); }
   catch(e){ console.error('oracleHistLookup '+gameKey+' '+dateStr+':',e); }
-  // Look Up keeps its name stacked ABOVE the numbers — unlike the Oracle Pick
-  // panel, where the name moved onto the pick row. -gname-block carries the
-  // bottom margin that .oracle-pick-gname no longer has of its own.
-  var name='<div class="oracle-pick-gname-block"><span class="oracle-pick-gname">'
-    +PCSO_GAME_LABELS[gameKey]+(look?oracleSrcTag(look.source,false):'')+'</span></div>';
+  // Same lead as the Oracle Pick panel: the game name and its source tag sit at
+  // the head of the row, ahead of the winning numbers. There is no caret here —
+  // Look Up is not collapsible. The row is top-aligned rather than centred, so
+  // the name lands on the WINNING row specifically, not on the middle of a
+  // block that also holds the jackpot line, the Oracle's pick and the score.
+  var name='<span class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
+    +(look?oracleSrcTag(look.source,false):'')+'</span>';
+  var lead='<div class="opick-lead">'
+    +((gameKey==='ez2')?'<span class="oracle-pick-slot" aria-hidden="true">&nbsp;</span>':'')
+    +'<span class="opick-lead-main">'+name+'</span></div>';
 
   if(gameKey==='ez2'){
     var cols=['2PM','5PM','9PM'].map(function(t){
@@ -2271,7 +2288,8 @@ function pcsoHistGameHTML(gameKey,dateStr){
       }
       return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'+body+'</div>';
     }).join('');
-    return '<div class="oracle-pick-game-row">'+name+'<div class="oracle-pick-cols">'+cols+'</div></div>';
+    return '<div class="oracle-pick-game-row lookup-row">'+lead
+      +'<div class="lookup-body"><div class="oracle-pick-cols">'+cols+'</div></div></div>';
   }
 
   var win6=(entry&&Array.isArray(entry.nums))?entry.nums:[];
@@ -2284,7 +2302,8 @@ function pcsoHistGameHTML(gameKey,dateStr){
       +'<div class="pcso-hist-row">'+pcsoHistPickBalls(look.picks,win6)+'</div>';
     if(win6.length) body6+='<div class="pcso-hist-score">'+hits+' of 6 matched</div>';
   }
-  return '<div class="oracle-pick-game-row">'+name+body6+'</div>';
+  return '<div class="oracle-pick-game-row lookup-row">'+lead
+    +'<div class="lookup-body">'+body6+'</div></div>';
 }
 
 function pcsoHistRender(){
