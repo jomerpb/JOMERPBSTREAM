@@ -998,8 +998,20 @@
 }
 #oracle-page .oracle-pick-col{display:flex;flex-direction:column;align-items:center}
 #oracle-page .oracle-pick-slot{font-size:9px;color:var(--muted);margin-bottom:5px}
+/* The pick panel uses Run Expert's gradient spheres (.ball + b1..b6, defined
+   above) rather than flat chips. Only the sizing is overridden here: six across
+   has to fit a phone, where Run Expert only ever shows six on a wider card.
+   6 x 46 + 5 x 8 = 316 fits the 386px content box at 412px. */
+#oracle-page .oracle-pick-game-row .ball{width:46px;height:46px;font-size:18px;margin:0}
+#oracle-page .oracle-pick-game-row .ball .btag{font-size:6.5px;bottom:-1px}
+@media (max-width:360px){
+  /* 6 x 40 + 5 x 6 = 270, inside the 294px content box at 320px */
+  #oracle-page .oracle-pick-game-row .ball{width:40px;height:40px;font-size:15px}
+  #oracle-page .oracle-pick-game-row .ball .btag{font-size:6px}
+}
 /* A picked number that carries a named meaning for the date — the same set
    convergence() pays +10 for. Marked, not recoloured: it is still a pick. */
+#oracle-page .ball-meant{box-shadow:0 0 0 2px var(--accent2),0 0 10px rgba(155,127,255,.5)}
 #oracle-page .pnum-meant{position:relative;border-color:var(--accent2)}
 #oracle-page .pnum-meant::after{content:'\25c6';position:absolute;top:-5px;right:-3px;font-size:7px;color:var(--accent2)}
 

@@ -1729,8 +1729,8 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       <div class="balls-eyebrow">Primary Pick — 12-Layer Expert Oracle</div>
       <div class="balls-row">${ballsHTML}</div>
       <div class="balls-note">
-        Ball tag = digit (d) + convergence score out of 12 sources<br>
-        Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · Ho=Horary · En=Energy · St=Stats
+        Ball tag = digit (d) + convergence score out of 11 sources<br>
+        Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · Ho=Horary · En=Energy
       </div>
     </div>
     <div class="alt-card" style="margin-bottom:14px;text-align:center;">
@@ -1745,7 +1745,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
 
     <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
     <div class="eflow">
-      <div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>
+      <div class="eflow-title">⚡ Elemental Energy Balance — All 11 Layers</div>
       ${energyHTML}
     </div>
 
@@ -1873,10 +1873,10 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   var horaryHTML=conv._horaryHTML||''; var baziHTML=conv._baziHTML||''; var ichingHTML=conv._ichingHTML||'';
   document.getElementById('results').innerHTML=`
     <div class="slabel">✦ Personal Number Analysis · ${game.name}</div>
-    <div class="balls-card"><div class="balls-eyebrow">Your Numbers — Oracle Convergence Check</div><div class="balls-row">${ballsHTML}</div><div class="balls-note">Ball tag = digit (d) + convergence score out of 12 sources<br>Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · Ho=Horary · En=Energy · St=Stats</div></div>
+    <div class="balls-card"><div class="balls-eyebrow">Your Numbers — Oracle Convergence Check</div><div class="balls-row">${ballsHTML}</div><div class="balls-note">Ball tag = digit (d) + convergence score out of 11 sources<br>Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · Ho=Horary · En=Energy</div></div>
     <div class="alt-card" style="margin-bottom:14px;text-align:center;"><div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div><div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div><div style="font-size:13px;color:var(--muted2)">${al}</div>${collisionHTML}${backtestHTML}${sourceHTML}</div>
     <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
-    <div class="eflow"><div class="eflow-title">⚡ Elemental Energy Balance — All 12 Layers</div>${energyHTML}</div>
+    <div class="eflow"><div class="eflow-title">⚡ Elemental Energy Balance — All 11 Layers</div>${energyHTML}</div>
     <div class="slabel">Step 1 — Digit Convergence · Your Numbers</div>
     <div class="legend"><span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span><span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF · Tarot · Angel · Horary · Energy</span><span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span><span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span></div>
     <div class="dgrid">${digitCardsHTML}</div>
@@ -2502,19 +2502,25 @@ function oracleDateReading(dateStr,drawHour){
   return out;
 }
 
-// A number carrying a named meaning for the date gets a marker; that meaning is
-// literally why convergence() promoted it (+10 via metaNumBonus), so the marker
-// points at real mechanism, not decoration.
-function oraclePickBalls(nums,meaning){
-  return (nums||[]).map(function(n){
+// Rendered as the same gradient spheres Run Expert uses — .ball plus the b1..b6
+// tier classes, in ascending order exactly as renderResults does it — with the
+// same d<digit>·<count>/11 tag underneath. A number carrying a named meaning for
+// the date gets a marker; that meaning is literally why convergence() promoted
+// it (+10 via metaNumBonus), so the marker points at real mechanism.
+function oraclePickBalls(nums,meaning,counts){
+  return (nums||[]).map(function(n,i){
+    var d=digitOf(n);
     var m=meaning&&meaning[n];
-    return '<span class="pnum pick'+(m?' pnum-meant':'')+'"'+(m?' title="'+m.join(' \u00b7 ')+'"':'')+'>'+p2(n)+'</span>';
+    var c=(counts&&typeof counts[d]==='number')?counts[d]:null;
+    return '<div class="ball '+BTIERS[Math.min(i,5)]+(m?' ball-meant':'')+'"'
+      +(m?' title="'+m.join(' \u00b7 ')+'"':'')+'>'+pad(n)
+      +'<span class="btag">d'+d+(c!==null?'\u00b7'+c+'/11':'')+'</span></div>';
   }).join('');
 }
 
 // One block per game: label + source tag, the picked numbers, and the digit
 // families that carried them. EZ2 fans out into its three draw times.
-function oraclePickGameHTML(gameKey,dateStr,meaning){
+function oraclePickGameHTML(gameKey,dateStr,meaning,counts){
   var look=null;
   try{ look=oracleHistLookup(gameKey,dateStr); }
   catch(e){ console.error('oraclePickGameHTML '+gameKey+' '+dateStr+':',e); }
@@ -2528,12 +2534,12 @@ function oraclePickGameHTML(gameKey,dateStr,meaning){
     var cols=['2PM','5PM','9PM'].map(function(t){
       var nums=look.picks[t]||[];
       return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'
-        +'<div class="pcso-hist-row">'+oraclePickBalls(nums,meaning)+'</div></div>';
+        +'<div class="pcso-hist-row">'+oraclePickBalls(nums,meaning,counts)+'</div></div>';
     }).join('');
     return '<div class="oracle-pick-game-row">'+name+'<div class="oracle-pick-cols">'+cols+'</div></div>';
   }
   return '<div class="oracle-pick-game-row">'+name
-    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning)+'</div></div>';
+    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts)+'</div></div>';
 }
 
 // The date's reading, rendered once above the games — it is the same reading for
@@ -2616,9 +2622,11 @@ function oraclePickRender(){
     var det=computeOracleAsOf(probe,dateVal,{withDetail:true});
     digits=(probe==='ez2')?(det&&det['9PM']):det;
   }catch(e){ console.error('digit detail:',e); }
+  var counts={};
+  if(digits&&digits.sorted) digits.sorted.forEach(function(f){ counts[f.digit]=f.count; });
   out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
     +'<div class="oracle-pick-sub">'+scheduled.length+' draw'+(scheduled.length===1?'':'s')+' this day</div>'
-    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal,meaning); }).join('')
+    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal,meaning,counts); }).join('')
     +oracleReadingHTML(reading,digits);
 
   if(noteEl){
