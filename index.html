@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#07090f"/>
   <title>JomerPB Stream</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="styles.css?v=20260816o"/>
+  <link rel="stylesheet" href="styles.css?v=20260816p"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png"/>
   <link rel="apple-touch-icon" href="icon-192.png"/>
   <script defer src="stream.js?v=20260714a"></script>
-  <script defer src="oracle.js?v=20260816o"></script>
+  <script defer src="oracle.js?v=20260816p"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
 <body>
@@ -623,38 +623,12 @@
   <div class="topbar-logo">JOMERPB <span>- LOTTO ORACLE</span></div>
 </div>
 
-<!-- The TODAY'S PCSO RESULTS card is gone; Look Up Past Result covers the same
-     draws and more. Its Updated-time label and Fetch Live button moved into the
-     Look Up header below, and #pcso-fetch-status went with them so the button
-     still has somewhere to report to. -->
+<!-- The TODAY'S PCSO RESULTS card is gone; Look Up Result covers the same draws
+     and more. Its Fetch Live button moved into the Look Up header below, and
+     #pcso-date-lbl there is now the only fetch-status surface — the separate
+     "Data Updated …" line under the card is gone. -->
 
-<!-- PCSO HISTORY LOOKUP -->
-<div class="pcso-history">
-  <div class="pcso-history-head">
-    <div class="pcso-history-eyebrow"><span class="pcso-live" aria-hidden="true"></span>Look Up Past Result</div>
-    <div class="pcso-meta">
-      <span class="pcso-date-lbl" id="pcso-date-lbl"></span>
-      <button class="pcso-refresh" onclick="pcsoAIFetch()" id="pcso-ai-btn">&#9889; Fetch Live</button>
-    </div>
-  </div>
-  <!-- Same in-page calendar as the panel below — one tap commits, no OS
-       Clear/Cancel/Set dialog. The hidden input still holds the value. -->
-  <div class="pcso-hist-controls">
-    <div class="opick-field" id="pcso-hist-field">
-      <input type="hidden" id="pcso-hist-date">
-      <button type="button" class="opick-trigger" id="pcso-hist-trigger"
-              onclick="oracleCalToggle('pcso-hist',event)" aria-haspopup="dialog" aria-expanded="false">
-        <span id="pcso-hist-label">Select a date</span>
-        <span class="opick-chev" aria-hidden="true">▾</span>
-      </button>
-      <div class="opick-cal" id="pcso-hist-cal" role="dialog" aria-label="Choose a date"></div>
-    </div>
-  </div>
-  <div class="pcso-hist-result" id="pcso-hist-result"></div>
-  <div class="pcso-fetch-status" id="pcso-fetch-status"></div>
-</div>
-
-<!-- ORACLE PICK FOR ANY DATE -->
+<!-- ORACLE PICK FOR ANY DATE — first: the forward-looking panel leads the page -->
 <div class="pcso-history">
   <div class="pcso-history-eyebrow"><span class="pcso-live dot-red" aria-hidden="true"></span>Oracle Pick For Any Date</div>
   <!-- In-page calendar rather than <input type="date">: the native mobile
@@ -676,6 +650,31 @@
     <span class="pcso-hist-none">Pick a date to read its Oracle numbers.</span>
   </div>
   <div class="oracle-pick-note" id="oracle-pick-note"></div>
+</div>
+
+<!-- PCSO HISTORY LOOKUP — second -->
+<div class="pcso-history">
+  <div class="pcso-history-head">
+    <div class="pcso-history-eyebrow"><span class="pcso-live" aria-hidden="true"></span>Look Up Result</div>
+    <div class="pcso-meta">
+      <span class="pcso-date-lbl" id="pcso-date-lbl"></span>
+      <button class="pcso-refresh" onclick="pcsoAIFetch()" id="pcso-ai-btn">&#9889; Fetch Live</button>
+    </div>
+  </div>
+  <!-- Same in-page calendar as the panel above — one tap commits, no OS
+       Clear/Cancel/Set dialog. The hidden input still holds the value. -->
+  <div class="pcso-hist-controls">
+    <div class="opick-field" id="pcso-hist-field">
+      <input type="hidden" id="pcso-hist-date">
+      <button type="button" class="opick-trigger" id="pcso-hist-trigger"
+              onclick="oracleCalToggle('pcso-hist',event)" aria-haspopup="dialog" aria-expanded="false">
+        <span id="pcso-hist-label">Select a date</span>
+        <span class="opick-chev" aria-hidden="true">▾</span>
+      </button>
+      <div class="opick-cal" id="pcso-hist-cal" role="dialog" aria-label="Choose a date"></div>
+    </div>
+  </div>
+  <div class="pcso-hist-result" id="pcso-hist-result"></div>
 </div>
 
 <!-- ANALYZE MY OWN PERSONAL NUMBERS

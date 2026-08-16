@@ -2031,8 +2031,8 @@ function p2(n){return String(n).padStart(2,'0');}
 
 function pcsoRender(){
   var d=PCSO_DATA;
-  var lbl=document.getElementById('pcso-date-lbl');
-  if(lbl) lbl.textContent=d.date;
+  // The label is the fetch status surface now, and pcsoRefreshFromRaw owns it.
+  // Writing the seed date here would flash a stale value over a live message.
   var h='';
   var phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
   // EZ2 rows removed from this widget on request; EZ2 results are still
@@ -2870,6 +2870,12 @@ async function pcsoFetchWithTimeout(url, timeoutMs){
   }
 }
 
+// The Look Up header's label is the ONLY status surface now — the separate
+// "Data Updated …" line under the card is gone. Progress messages land here
+// while a fetch is running and are replaced by the data timestamp when it
+// finishes, so the same spot always answers "how fresh is this?".
+function pcsoStatusEl(){ return document.getElementById('pcso-date-lbl'); }
+
 async function pcsoRefreshFromRaw(){
   var grid=document.getElementById('pcso-grid');
   if(grid){grid.innerHTML='<div class="pcso-row"><span class="pcso-pending">Loading latest results…</span></div>';}
@@ -2878,7 +2884,7 @@ async function pcsoRefreshFromRaw(){
   var TIMEOUT_MS=8000;
   var BACKOFF_MS=[0,800,1600];
   var BACKOFF_429_MS=[0,3000,6000]; // GitHub rate-limit needs real wait time, not a quick retry
-  var fetchStatusEl=document.getElementById('pcso-fetch-status');
+  var fetchStatusEl=pcsoStatusEl();
   var lastErr=null;
   var lastWas429=false;
 
@@ -2911,10 +2917,10 @@ async function pcsoRefreshFromRaw(){
       }
       if(data.date) PCSO_DATA.date=data.date;
       pcsoRender();
+      // One surface, one message: the full timestamp that used to sit on its
+      // own line under the card now replaces the running status in the header.
       if(data.updated){
         var upd=new Date(data.updated);
-        var lbl=document.getElementById('pcso-date-lbl');
-        if(lbl) lbl.textContent='Updated '+upd.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'});
         if(fetchStatusEl) fetchStatusEl.textContent='Data Updated '+upd.toLocaleString('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' PH';
       } else if(fetchStatusEl){
         fetchStatusEl.textContent='Data timestamp unavailable';
@@ -2927,7 +2933,7 @@ async function pcsoRefreshFromRaw(){
   }
 
   pcsoRender();
-  var fetchStatusElErr=document.getElementById('pcso-fetch-status');
+  var fetchStatusElErr=pcsoStatusEl();
   if(fetchStatusElErr){
     fetchStatusElErr.textContent=lastWas429
       ? 'Rate limited by GitHub ❌ — please wait a minute and tap Fetch Live again (HTTP 429 after '+MAX_ATTEMPTS+' attempts)'
@@ -2938,7 +2944,7 @@ async function pcsoRefreshFromRaw(){
 
 async function pcsoAIFetch(){
   var btn=document.getElementById('pcso-ai-btn');
-  var statusEl=document.getElementById('pcso-fetch-status');
+  var statusEl=pcsoStatusEl();
   var token=tpGetGithubToken();
   if (!token) { if(statusEl) statusEl.textContent='Cancelled — no token entered.'; return; }
 
