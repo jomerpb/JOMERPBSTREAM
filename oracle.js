@@ -2109,7 +2109,9 @@ function computeOracleAsOf(gameKey,dateStr,opts){
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy=null;}
     layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
     try{conv=convergence(layers,gk);}catch(e){conv={picks:[],sorted:[],LABELS:[]};}
-    if(withDetail) return {picks:conv.picks||[],sorted:conv.sorted||[],LABELS:conv.LABELS||[]};
+    if(withDetail) return {picks:conv.picks||[],sorted:conv.sorted||[],LABELS:conv.LABELS||[],
+      digitScores:conv.digitScores||{},needed:conv.needed,
+      energy:energy,statsDraws:(stats&&stats.draws)||[]};
     return conv.picks;
   }
 
@@ -2517,45 +2519,127 @@ function oraclePickBalls(nums,meaning,counts){
   }).join('');
 }
 
-// One block per game: label + source tag, the picked numbers, and the digit
-// families that carried them. EZ2 fans out into its three draw times.
-function oraclePickGameHTML(gameKey,dateStr,meaning,counts){
+// Elemental energy bars, rendered at final width (renderResults animates them
+// from 0 via animateBars(); this panel has no such hook, so paint them filled).
+function oraclePickEnergyHTML(energy){
+  if(!energy) return '';
+  var order=['Fire','Water','Wood','Metal','Earth'];
+  var cls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
+  var emo={'Fire':'\uD83D\uDD25','Water':'\uD83D\uDCA7','Wood':'\uD83C\uDF3F','Metal':'\u2699\uFE0F','Earth':'\uD83D\uDFE4'};
+  return order.map(function(e){
+    var pct=(energy[e]&&energy[e].pct)||0;
+    return '<div class="erow"><span class="elabel">'+emo[e]+' '+e+'</span>'
+      +'<div class="ebar-wrap"><div class="ebar '+cls[e]+'" style="width:'+pct+'%"></div></div>'
+      +'<span class="epct" style="color:'+(pct>=28?'var(--gold)':'var(--muted2)')+'">'+pct+'%</span></div>';
+  }).join('');
+}
+
+// One block per game. Each line is self-contained: its own alignment score —
+// which genuinely differs per game, since it is the sum of the picked digits'
+// scores — its spheres, and its own collapsible reading. The reading repeats
+// the date-level cards under every game on purpose, so a line can be read on
+// its own without scrolling back to a shared block.
+function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
   var look=null;
   try{ look=oracleHistLookup(gameKey,dateStr); }
   catch(e){ console.error('oraclePickGameHTML '+gameKey+' '+dateStr+':',e); }
+  var det=null;
+  try{ det=computeOracleAsOf(gameKey,dateStr,{withDetail:true}); }
+  catch(e){ console.error('detail '+gameKey+':',e); }
+  var slice=(gameKey==='ez2')?(det&&det['9PM']):det;
+
+  var counts={};
+  if(slice&&slice.sorted) slice.sorted.forEach(function(f){ counts[f.digit]=f.count; });
+
   var name='<div class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
     +(look?oracleSrcTag(look.source,false):'')+'</div>';
   if(!look||!look.picks){
     return '<div class="oracle-pick-game-row">'+name
       +'<span class="pcso-hist-none">Could not compute a pick for this draw.</span></div>';
   }
+
+  // ── alignment, per game ──
+  // Same arithmetic renderResults uses: the summed digit score of the picks
+  // over their maximum. EZ2 is scored on its 9PM set, the one the detail run
+  // returns.
+  var scored=(gameKey==='ez2')?(look.picks['9PM']||[]):look.picks;
+  var ds=(slice&&slice.digitScores)||{};
+  var totalScore=scored.reduce(function(a,n){ var d=digitOf(n); return a+(ds[d]?ds[d].score:0); },0);
+  var pct=scored.length?Math.round(totalScore/(scored.length*10)*100):0;
+
+  var ballsHTML;
   if(gameKey==='ez2'){
-    var cols=['2PM','5PM','9PM'].map(function(t){
-      var nums=look.picks[t]||[];
+    ballsHTML='<div class="oracle-pick-cols">'+['2PM','5PM','9PM'].map(function(t){
       return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'
-        +'<div class="pcso-hist-row">'+oraclePickBalls(nums,meaning,counts)+'</div></div>';
-    }).join('');
-    return '<div class="oracle-pick-game-row">'+name+'<div class="oracle-pick-cols">'+cols+'</div></div>';
+        +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks[t]||[],meaning,counts)+'</div></div>';
+    }).join('')+'</div>';
+  } else {
+    ballsHTML='<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts)+'</div>';
   }
+
+  // order within a line: game, its reading (which holds the alignment card),
+  // then the numbers — the reading sits BEFORE the picks it explains
+  // the collapsible IS the pick row: a caret, then the spheres. Clicking
+  // anywhere on the row opens that game's reading underneath.
+  var body=oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr);
+  if(!body) return '<div class="oracle-pick-game-row">'+name+ballsHTML+'</div>';
   return '<div class="oracle-pick-game-row">'+name
-    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts)+'</div></div>';
+    +'<details class="oracle-reading"><summary class="opick-sum">'
+    +'<span class="opick-caret" aria-hidden="true">\u25b8</span>'+ballsHTML+'</summary>'
+    +'<div class="ord-body">'+body+'</div></details></div>';
 }
 
-// The date's reading, rendered once above the games. Built from the SAME
-// helpers Run Expert uses — the dcard convergence grid and lcard() with the
-// horary / BaZi / I Ching panels — so the two views are one design, not two.
-function oracleReadingHTML(rd,digits){
-  if(!rd||!rd.layers) return '';
-  var L=rd.layers;
-  var html='';
 
-  if(digits&&digits.sorted&&digits.sorted.length){
-    html+='<div class="ord-step">Step 1 — Digit Convergence · 11 Sources</div>'
-      +'<div class="dgrid">'+digits.sorted.slice(0,6).map(function(sc){
+// The reading for one game line. Built from the SAME helpers Run Expert uses —
+// the alignment notes, the energy bars, the dcard convergence grid and lcard()
+// with the horary / BaZi / I Ching panels — so the two views are one design.
+function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr){
+  if(!rd||!rd.layers) return '';
+  var L=rd.layers, html='';
+  var when=oraclePickFmtDate(dateStr);
+
+  // ── Overall Alignment — the identical .alt-card Run Expert renders ──
+  var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
+  var al=pct>=70?'\uD83D\uDFE2 Strong Alignment':pct>=45?'\uD83D\uDFE1 Moderate Alignment':'\uD83D\uDD34 Weak Alignment';
+  var modeHTML='<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: \u26a1\uD83C\uDF10 Hybrid \u2014 strongest digit energies, max '
+    +((gameKey==='ez2')?'one number':'two numbers')+' per digit family</div>';
+  var cnt={};
+  (scored||[]).forEach(function(n){ var d=digitOf(n); cnt[d]=(cnt[d]||0)+1; });
+  var coll=Object.keys(cnt).filter(function(d){ return cnt[d]>1; });
+  var collisionHTML=coll.length
+    ? '<div style="font-size:11px;color:var(--muted);margin-top:8px;">\u2139 '+coll.map(function(d){ return cnt[d]+' picks ride digit '+d; }).join(', ')+' \u2014 concentrated on the strongest digit score by design</div>'
+    : '<div style="font-size:11px;color:var(--muted);margin-top:8px;">\u2713 Picks draw on distinct digit scores</div>';
+  var draws=(slice&&slice.statsDraws)||[];
+  var backtestHTML='';
+  if(draws.length){
+    var pd=[]; (scored||[]).forEach(function(n){ var d=digitOf(n); if(pd.indexOf(d)<0) pd.push(d); });
+    var hit=draws.filter(function(dr){ return dr.some(function(n){ return pd.indexOf(digitOf(n))>=0; }); }).length;
+    backtestHTML='<div style="font-size:11px;color:var(--muted2);margin-top:4px;">\uD83D\uDCCA Historical check: '
+      +Math.round(hit/draws.length*100)+'% of last '+draws.length
+      +' draws had at least one number matching these digits (real data, not the formula)</div>';
+  }
+  var sourceHTML='<div style="font-size:10px;color:'+(PCSO_HISTORY_STATUS.loaded?'var(--muted)':'#ff6b6b')
+    +';margin-top:4px;">'+(PCSO_HISTORY_STATUS.loaded?'\u2713':'\u26a0')+' Data source: '+PCSO_HISTORY_STATUS.source+'</div>';
+
+  html+='<div class="alt-card" style="margin-bottom:14px;text-align:center;">'
+    +'<div class="alt-label" style="margin-bottom:10px;">Overall Alignment \u00b7 '+when+'</div>'
+    +'<div style="font-size:36px;font-weight:800;color:'+ac+';margin-bottom:4px;">'+pct+'%</div>'
+    +'<div style="font-size:13px;color:var(--muted2)">'+al+'</div>'
+    +modeHTML+collisionHTML+backtestHTML+sourceHTML+'</div>';
+
+  if(slice&&slice.energy){
+    html+='<div class="slabel">Current Energy Flow \u00b7 '+when+' \u00b7 '+((gameKey==='ez2')?'9PM':'9PM')+'</div>'
+      +'<div class="eflow"><div class="eflow-title">\u26a1 Elemental Energy Balance \u2014 All 11 Layers</div>'
+      +oraclePickEnergyHTML(slice.energy)+'</div>';
+  }
+
+  if(slice&&slice.sorted&&slice.sorted.length){
+    html+='<div class="ord-step">Step 1 \u2014 Digit Convergence \u00b7 11 Sources</div>'
+      +'<div class="dgrid">'+slice.sorted.slice(0,6).map(function(sc){
         return '<div class="dcard '+dCls(sc.count)+'">'
           +'<div class="dnum">'+sc.digit+'</div>'
-          +'<div class="dscore">'+sc.count+'/'+digits.LABELS.length+' layers</div>'
-          +'<div class="ddots">'+dotHTML(sc.layers,digits.LABELS)+'</div></div>';
+          +'<div class="dscore">'+sc.count+'/'+slice.LABELS.length+' layers</div>'
+          +'<div class="ddots">'+dotHTML(sc.layers,slice.LABELS)+'</div></div>';
       }).join('')+'</div>';
   }
 
@@ -2566,22 +2650,21 @@ function oracleReadingHTML(rd,digits){
         return '<div class="ord-meant-row"><span class="pnum pick">'+p2(n)+'</span>'
           +'<span>'+rd.meaning[n].join(' \u00b7 ')+'</span></div>';
       }).join('')
-      +'<div class="ord-note">These are the full-number matches the engine rewards (+10 each) when choosing within a digit family.</div></div>';
+      +'<div class="ord-note">Full-number matches the engine rewards (+10 each) when choosing within a digit family.</div></div>';
   }
 
   html+='<div class="ord-step">Full 11-Layer Breakdown</div>';
   try{
-    if(L.num)    html+=lcard('\uD83D\uDD22','Numerology — Pythagorean + Chaldean',L.num.nums,L.num.steps);
-    if(L.astro)  html+=lcard('\uD83E\uDE90','Astrology — Dignities + Aspects + Horary',L.astro.nums.slice(0,7),L.astro.steps,oracleHoraryHTML(L),true);
-    if(L.bazi)   html+=lcard('\u262F\uFE0F','BaZi — Exact Pillars + Clashes + Hidden Stems',L.bazi.nums,L.bazi.steps,oracleBaziHTML(L),true);
-    if(L.fs)     html+=lcard('\uD83C\uDFEE','Feng Shui — Flying Star + Lo Shu + Fixed Stars',L.fs.nums,L.fs.steps,'',false);
-    if(L.iching) html+=lcard('\u262F','I Ching — Hexagram + Nuclear + Changing Line',L.iching.nums,L.iching.steps,oracleIChingHTML(L),true);
-    if(L.tarot)  html+=lcard('\uD83C\uDCCF','Tarot — Major Arcana Card of the Day',L.tarot.nums,L.tarot.steps,'',true);
-    if(L.angel)  html+=lcard('\uD83D\uDE07','Angel Numbers — Repeating-Digit Resonance',L.angel.nums.length?L.angel.nums:['\u2014'],L.angel.steps,'',true);
+    if(L.num)    html+=lcard('\uD83D\uDD22','Numerology \u2014 Pythagorean + Chaldean',L.num.nums,L.num.steps);
+    if(L.astro)  html+=lcard('\uD83E\uDE90','Astrology \u2014 Dignities + Aspects + Horary',L.astro.nums.slice(0,7),L.astro.steps,oracleHoraryHTML(L),true);
+    if(L.bazi)   html+=lcard('\u262F\uFE0F','BaZi \u2014 Exact Pillars + Clashes + Hidden Stems',L.bazi.nums,L.bazi.steps,oracleBaziHTML(L),true);
+    if(L.fs)     html+=lcard('\uD83C\uDFEE','Feng Shui \u2014 Flying Star + Lo Shu + Fixed Stars',L.fs.nums,L.fs.steps,'',false);
+    if(L.iching) html+=lcard('\u262F','I Ching \u2014 Hexagram + Nuclear + Changing Line',L.iching.nums,L.iching.steps,oracleIChingHTML(L),true);
+    if(L.tarot)  html+=lcard('\uD83C\uDCCF','Tarot \u2014 Major Arcana Card of the Day',L.tarot.nums,L.tarot.steps,'',true);
+    if(L.angel)  html+=lcard('\uD83D\uDE07','Angel Numbers \u2014 Repeating-Digit Resonance',L.angel.nums.length?L.angel.nums:['\u2014'],L.angel.steps,'',true);
   }catch(e){ console.error('reading cards:',e); }
 
-  return '<details class="oracle-reading"><summary>\u25b8 The day\u2019s reading</summary>'
-    +'<div class="ord-body">'+html+'</div></details>';
+  return html;
 }
 
 function oraclePickRender(){
@@ -2609,19 +2692,9 @@ function oraclePickRender(){
   var reading=null;
   try{ reading=oracleDateReading(dateVal,'9PM'); }catch(e){ console.error('oracleDateReading:',e); }
   var meaning=(reading&&reading.meaning)||{};
-  // one detail run for the day — the digit ranking no longer varies by game
-  var digits=null;
-  try{
-    var probe=scheduled.filter(function(g){return g!=='ez2';})[0]||scheduled[0];
-    var det=computeOracleAsOf(probe,dateVal,{withDetail:true});
-    digits=(probe==='ez2')?(det&&det['9PM']):det;
-  }catch(e){ console.error('digit detail:',e); }
-  var counts={};
-  if(digits&&digits.sorted) digits.sorted.forEach(function(f){ counts[f.digit]=f.count; });
   out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
     +'<div class="oracle-pick-sub">'+scheduled.length+' draw'+(scheduled.length===1?'':'s')+' this day</div>'
-    +oracleReadingHTML(reading,digits)
-    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal,meaning,counts); }).join('');
+    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal,meaning,reading); }).join('');
 
   if(noteEl){
     var todayStr=oraclePickTodayStr();
