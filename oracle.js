@@ -1249,7 +1249,7 @@ function energyDigits(energy){
 }
 
 // ══════════════════════════
-// MASTER CONVERGENCE — 12 digit sources
+// MASTER CONVERGENCE — 11 digit sources
 // ══════════════════════════
 function convergence(layers,gameKey){
   var game=GAMES[gameKey];
@@ -1516,8 +1516,8 @@ async function generate(){
     `🔮 I Ching · hexagram from today's energy field…`,
     `🃏 Tarot · Major Arcana card of the day…`,
     `😇 Angel Numbers · scanning for repeating-digit resonance…`,
-    `📊 PCSO ${game.short} historical data · freq+hot+overdue…`,
-    `🎯 12-source digit convergence · mapping to 1–${game.max}…`,
+    `📊 PCSO ${game.short} historical data · reference only, not in the pick…`,
+    `🎯 11-source digit convergence · mapping to 1–${game.max}…`,
   ];
   var si=0;
   var el=document.getElementById('lsteps');
@@ -1810,7 +1810,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
 
   document.getElementById('results').innerHTML=`<div class="slabel">${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
     <div class="balls-card">
-      <div class="balls-eyebrow">Primary Pick — 12-Layer Expert Oracle</div>
+      <div class="balls-eyebrow">Primary Pick — 11-Layer Expert Oracle</div>
       <div class="balls-row">${ballsHTML}</div>
       <div class="balls-note">
         Ball tag = digit (d) + convergence score out of 11 sources<br>
@@ -1833,11 +1833,11 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       ${energyHTML}
     </div>
 
-    <div class="slabel">Step 1 — Digit Convergence · 12 Sources</div>
+    <div class="slabel">Step 1 — Digit Convergence · 11 Sources</div>
     <div class="legend">
       <span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span>
       <span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF · Tarot · Angel · Horary · Energy</span>
-      <span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span>
+      <span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean</span>
       <span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span>
     </div>
     <div class="dgrid">${digitCardsHTML}</div>
@@ -1849,7 +1849,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       </div>${mapHTML}
     </div>
 
-    <div class="slabel">Full 12-Layer Breakdown</div>
+    <div class="slabel">Full 11-Layer Breakdown</div>
     ${lcard('🔢','Numerology — Pythagorean + Chaldean',layers.num.nums,layers.num.steps)}
     ${lcard('🪐','Astrology — Dignities + Aspects + Horary',layers.astro.nums.slice(0,7),layers.astro.steps,horaryHTML,true)}
     ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
