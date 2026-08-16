@@ -1566,6 +1566,71 @@ function lcard(icon,name,nums,steps,extra='',isNew=false){
   return `<div class="lcard"><div class="lhead"><div class="licon">${icon}</div><div><div class="lname">${name}${isNew?'<span class="lnew">★ Expert</span>':''}</div><div class="lpills">${nums.map(n=>`<span class="pill">${n}</span>`).join('')}</div></div></div><div class="lsteps">${steps.map(s=>`• ${s}`).join('<br>')}</div>${extra}</div>`;
 }
 // ══════════════════════════
+// SHARED ALIGNMENT SCORING
+// Used by BOTH the Oracle Pick panel and Analyze My Numbers, so the two can
+// never drift apart — they previously did: the pick panel blended digit
+// convergence with meaning capture while the personal view still reported the
+// digit half alone, so the same six numbers scored 54% in one place and 67% in
+// the other.
+// ══════════════════════════
+
+// The full numbers that carry a named meaning for the date these layers were
+// cast for — exactly the set convergence()'s metaNumBonus pays +10 for.
+function oracleMeaningFromLayers(L){
+  var meaning={};
+  function mark(n,label){
+    if(typeof n!=='number'||!isFinite(n)||n<1) return;
+    if(!meaning[n]) meaning[n]=[];
+    if(meaning[n].indexOf(label)<0) meaning[n].push(label);
+  }
+  var hex=L&&L.iching&&L.iching.hex;
+  if(hex){
+    mark(hex.num,'I Ching hexagram '+hex.num+(hex.name?' \u00b7 '+hex.name:''));
+    if(hex.nuclear) mark(hex.nuclear.num,'nuclear hexagram '+hex.nuclear.num);
+    if(hex.changed) mark(hex.changed.num,'changed hexagram '+hex.changed.num);
+  }
+  if(L&&L.tarot){
+    mark(L.tarot.cardNum,'Tarot \u00b7 '+(L.tarot.cardName||('card '+L.tarot.cardNum)));
+    mark(L.tarot.rawSum,'date number ('+L.tarot.rawSum+')');
+  }
+  if(L&&L.angel&&Array.isArray(L.angel.nums))
+    L.angel.nums.forEach(function(dg){ mark(dg*11,'angel number '+(dg*11)); });
+  return meaning;
+}
+
+// Blend of the two halves. digit convergence is game-blind (the eleven layers
+// take no game input); meaning capture is the per-game half, since the pool
+// decides which meaningful numbers are even reachable. 70/30 is a stated
+// choice — never tune either weight for hit rate.
+function oracleAlignment(nums,digitScores,meaning,poolMax){
+  var W_DIGIT=0.70, W_CAPTURE=0.30;
+  nums=nums||[]; digitScores=digitScores||{};
+  var total=nums.reduce(function(a,n){ var d=digitOf(n); return a+(digitScores[d]?digitScores[d].score:0); },0);
+  var digitPct=nums.length?Math.round(total/(nums.length*10)*100):0;
+  var meantAll=Object.keys(meaning||{}).map(Number);
+  var reachable=meantAll.filter(function(n){ return n>=1&&n<=(poolMax||58); });
+  var captured=nums.filter(function(n){ return meantAll.indexOf(n)>=0; });
+  var capMax=Math.min(nums.length,reachable.length);
+  var capPct=capMax?Math.round(captured.length/capMax*100):null;
+  var pct=(capPct===null)?digitPct:Math.round(W_DIGIT*digitPct+W_CAPTURE*capPct);
+  return {pct:pct,digitPct:digitPct,capPct:capPct,captured:captured,reachable:reachable,
+          capMax:capMax,wDigit:W_DIGIT,wCapture:W_CAPTURE};
+}
+
+// The "digit convergence X% x0.7 · meaning capture Y% x0.3" line.
+function oracleAlignSplitHTML(bd,poolMax){
+  if(!bd) return '';
+  return '<div style="font-size:11px;color:var(--muted);margin-top:6px;">'
+    +'Digit convergence <b>'+bd.digitPct+'%</b> \u00d7'+bd.wDigit
+    +(bd.capPct===null
+      ? ' \u2014 no meaningful number is reachable in 1\u2013'+(poolMax||'')+' today, so the score is the digit half alone'
+      : '  \u00b7  meaning capture <b>'+bd.capPct+'%</b> \u00d7'+bd.wCapture
+        +'<br>captured '+(bd.captured.length?bd.captured.map(function(n){return p2(n);}).join(', '):'none')
+        +' of '+bd.capMax+' reachable ('+bd.reachable.map(function(n){return p2(n);}).join(', ')+')')
+    +'</div>';
+}
+
+// ══════════════════════════
 // SHARED LAYER PANELS
 // The horary grid, BaZi pillars and I Ching trigrams were built inline inside
 // renderResults. They are lifted out so the Oracle Pick panel's reading can
@@ -1867,8 +1932,13 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   var elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
   var energyHTML=elOrder.map(e=>`<div class="erow"><span class="elabel">${elEmoji[e]} ${e}</span><div class="ebar-wrap"><div class="ebar ${elCls[e]}" style="width:0%" data-w="${energy[e].pct}%"></div></div><span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span></div>`).join('');
   var ballsHTML=userNums.map((n,i)=>{ var d=digitOf(n); var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="ball ${BTIERS[Math.min(i,5)]}">${pad(n)}<span class="btag">d${d}·${ds.count}/11</span></div>`; }).join('');
-  var totalScore=userNums.reduce((s,n)=>{ var d=digitOf(n); return s+(conv.digitScores&&conv.digitScores[d]?conv.digitScores[d].score:0); },0);
-  var pct=Math.round(totalScore/(userNums.length*10)*100);
+  // Same scorer the Oracle Pick panel uses — digit convergence blended with
+  // meaning capture. This used to be the digit half alone, so the very same six
+  // numbers reported a different percentage here than on the pick card.
+  var pmeaning=oracleMeaningFromLayers(layers);
+  var bd=oracleAlignment(userNums,conv.digitScores,pmeaning,game.max);
+  var pct=bd.pct;
+  var splitHTML=oracleAlignSplitHTML(bd,game.max);
   var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
   var al=pct>=70?'🟢 Strong Alignment':pct>=45?'🟡 Moderate Alignment':'🔴 Weak Alignment';
   var pickDigitCounts={}; userNums.forEach(n=>{ var d=digitOf(n); pickDigitCounts[d]=(pickDigitCounts[d]||0)+1; });
@@ -1892,17 +1962,17 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   document.getElementById('results').innerHTML=`
     <div class="slabel">✦ Personal Number Analysis · ${game.name}</div>
     <div class="balls-card"><div class="balls-eyebrow">Your Numbers — Oracle Convergence Check</div><div class="balls-row">${ballsHTML}</div><div class="balls-note">Ball tag = digit (d) + convergence score out of 11 sources<br>Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · Ho=Horary · En=Energy</div></div>
-    <div class="alt-card" style="margin-bottom:14px;text-align:center;"><div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div><div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div><div style="font-size:13px;color:var(--muted2)">${al}</div>${collisionHTML}${backtestHTML}${sourceHTML}</div>
+    <div class="alt-card" style="margin-bottom:14px;text-align:center;"><div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div><div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div><div style="font-size:13px;color:var(--muted2)">${al}</div>${splitHTML}${collisionHTML}${backtestHTML}${sourceHTML}</div>
     <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
     <div class="eflow"><div class="eflow-title">⚡ Elemental Energy Balance — All 11 Layers</div>${energyHTML}</div>
     <div class="slabel">Step 1 — Digit Convergence · Your Numbers</div>
-    <div class="legend"><span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span><span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF · Tarot · Angel · Horary · Energy</span><span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean · Stats</span><span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span></div>
+    <div class="legend"><span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span><span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF · Tarot · Angel · Horary · Energy</span><span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean</span><span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span></div>
     <div class="dgrid">${digitCardsHTML}</div>
     <div class="slabel">Step 2 — Your Numbers vs Oracle Map · 1–${game.max}</div>
     <div class="lcard"><div class="lsteps" style="border:none;padding:0;margin-bottom:10px">🔥 Gold = Hot number &nbsp; 💜 Purple = 2+ recent &nbsp; Gray = Cold</div>${mapHTML}</div>
     <div class="slabel">Step 3 — Frequency in Last ${layers.stats.draws?layers.stats.draws.length:16} Draws</div>
     <div class="lcard"><div class="lsteps" style="border:none;padding:0">${freqBarsHTML}</div></div>
-    <div class="slabel">Full 12-Layer Breakdown</div>
+    <div class="slabel">Full 11-Layer Breakdown</div>
     ${lcard('🔢','Numerology — Pythagorean + Chaldean',layers.num.nums,layers.num.steps)}
     ${lcard('🪐','Astrology — Dignities + Aspects + Horary',layers.astro.nums.slice(0,7),layers.astro.steps,horaryHTML,true)}
     ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
@@ -2471,24 +2541,7 @@ function oracleDateReading(dateStr,drawHour){
     try{L.tarot=layerTarot(hour);}catch(e){}
     try{L.angel=layerAngelNumbers(hour);}catch(e){}
 
-    // full numbers the engine actually rewards, and what each one means
-    var meaning={};
-    function mark(n,label){
-      if(typeof n!=='number'||!isFinite(n)||n<1) return;
-      if(!meaning[n]) meaning[n]=[];
-      if(meaning[n].indexOf(label)<0) meaning[n].push(label);
-    }
-    var hex=L.iching&&L.iching.hex;
-    if(hex){
-      mark(hex.num,'I Ching hexagram '+hex.num+(hex.name?' \u00b7 '+hex.name:''));
-      if(hex.nuclear) mark(hex.nuclear.num,'nuclear hexagram '+hex.nuclear.num);
-      if(hex.changed) mark(hex.changed.num,'changed hexagram '+hex.changed.num);
-    }
-    if(L.tarot){
-      mark(L.tarot.cardNum,'Tarot \u00b7 '+(L.tarot.cardName||('card '+L.tarot.cardNum)));
-      mark(L.tarot.rawSum,'date number ('+L.tarot.rawSum+')');
-    }
-    if(L.angel&&Array.isArray(L.angel.nums)) L.angel.nums.forEach(function(dg){ mark(dg*11,'angel number '+(dg*11)); });
+    var meaning=oracleMeaningFromLayers(L);
 
     out={layers:L,meaning:meaning};
   } finally {
@@ -2553,38 +2606,11 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
   // returns.
   var scored=(gameKey==='ez2')?(look.picks['9PM']||[]):look.picks;
   var ds=(slice&&slice.digitScores)||{};
-  var totalScore=scored.reduce(function(a,n){ var d=digitOf(n); return a+(ds[d]?ds[d].score:0); },0);
-  var digitPct=scored.length?Math.round(totalScore/(scored.length*10)*100):0;
-
-  // ── MEANING CAPTURE — the only genuinely per-game half of the score ──
-  // Digit convergence is computed from the eleven date layers, which take no
-  // game input, and the capped filler always takes two from each of the top
-  // three families — so the digit half is arithmetically identical for every
-  // 6-ball game on a date. Measured: same digitScores, same digit multiset,
-  // therefore the same percentage every time.
-  //
-  // What does differ is the day's meaningful FULL numbers. They are absolute,
-  // so the pool decides which are even reachable — on 2026-08-16 the changed
-  // hexagram 52 is in play for 6/58 and out of range for 6/49 — and the
-  // family rotation decides which of the reachable ones the pick actually
-  // takes. So the score blends the two.
-  //
-  // 70/30 is a stated choice, not a tuned one: digit convergence is the
-  // reading's backbone and stays dominant, while capture is a sharper but
-  // much smaller signal (a handful of numbers a day). Never tune either
-  // weight for hit rate.
-  var W_DIGIT=0.70, W_CAPTURE=0.30;
+  // ── alignment: digit convergence + the per-game meaning capture ──
+  // See oracleAlignment(); Analyze My Numbers uses the identical function.
   var pool=(GAMES[gameKey]&&GAMES[gameKey].max)||58;
-  var meantAll=Object.keys(meaning||{}).map(Number);
-  var reachable=meantAll.filter(function(n){ return n>=1&&n<=pool; });
-  var captured=scored.filter(function(n){ return meantAll.indexOf(n)>=0; });
-  var capMax=Math.min(scored.length,reachable.length);
-  var capPct=capMax?Math.round(captured.length/capMax*100):null;
-  // No meaningful number is reachable today — nothing to capture, so the
-  // score is the digit half alone rather than a penalty for the impossible.
-  var pct=(capPct===null)?digitPct:Math.round(W_DIGIT*digitPct+W_CAPTURE*capPct);
-  var breakdown={digitPct:digitPct,capPct:capPct,captured:captured,reachable:reachable,
-                 capMax:capMax,wDigit:W_DIGIT,wCapture:W_CAPTURE};
+  var breakdown=oracleAlignment(scored,ds,meaning,pool);
+  var pct=breakdown.pct;
 
   var ballsHTML;
   if(gameKey==='ez2'){
@@ -2622,34 +2648,24 @@ function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr,bd){
   var al=pct>=70?'\uD83D\uDFE2 Strong Alignment':pct>=45?'\uD83D\uDFE1 Moderate Alignment':'\uD83D\uDD34 Weak Alignment';
   var modeHTML='<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: \u26a1\uD83C\uDF10 Hybrid \u2014 strongest digit energies, max '
     +((gameKey==='ez2')?'one number':'two numbers')+' per digit family</div>';
-  var splitHTML='';
-  if(bd){
-    splitHTML='<div style="font-size:11px;color:var(--muted);margin-top:6px;">'
-      +'Digit convergence <b>'+bd.digitPct+'%</b> \u00d7'+bd.wDigit
-      +(bd.capPct===null
-        ? ' \u2014 no meaningful number is reachable in 1\u2013'+((GAMES[gameKey]&&GAMES[gameKey].max)||'')+' today, so the score is the digit half alone'
-        : '  \u00b7  meaning capture <b>'+bd.capPct+'%</b> \u00d7'+bd.wCapture
-          +'<br>captured '+(bd.captured.length?bd.captured.map(function(n){return p2(n);}).join(', '):'none')
-          +' of '+bd.capMax+' reachable ('+bd.reachable.map(function(n){return p2(n);}).join(', ')+')')
-      +'</div>';
-  }
+  var splitHTML=oracleAlignSplitHTML(bd,(GAMES[gameKey]&&GAMES[gameKey].max));
   var cnt={};
   (scored||[]).forEach(function(n){ var d=digitOf(n); cnt[d]=(cnt[d]||0)+1; });
   var coll=Object.keys(cnt).filter(function(d){ return cnt[d]>1; });
   var collisionHTML=coll.length
-    ? '<div style="font-size:11px;color:var(--muted);margin-top:8px;">\u2139 '+coll.map(function(d){ return cnt[d]+' picks ride digit '+d; }).join(', ')+' \u2014 concentrated on the strongest digit score by design</div>'
-    : '<div style="font-size:11px;color:var(--muted);margin-top:8px;">\u2713 Picks draw on distinct digit scores</div>';
+    ? '<div style="font-size:11px;color:var(--muted);margin-top:8px;">ℹ '+coll.map(function(d){ return cnt[d]+' picks ride digit '+d; }).join(', ')+' — concentrated on the strongest digit score by design</div>'
+    : '<div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ Picks draw on distinct digit scores</div>';
   var draws=(slice&&slice.statsDraws)||[];
   var backtestHTML='';
   if(draws.length){
     var pd=[]; (scored||[]).forEach(function(n){ var d=digitOf(n); if(pd.indexOf(d)<0) pd.push(d); });
     var hit=draws.filter(function(dr){ return dr.some(function(n){ return pd.indexOf(digitOf(n))>=0; }); }).length;
-    backtestHTML='<div style="font-size:11px;color:var(--muted2);margin-top:4px;">\uD83D\uDCCA Historical check: '
+    backtestHTML='<div style="font-size:11px;color:var(--muted2);margin-top:4px;">📊 Historical check: '
       +Math.round(hit/draws.length*100)+'% of last '+draws.length
       +' draws had at least one number matching these digits (real data, not the formula)</div>';
   }
   var sourceHTML='<div style="font-size:10px;color:'+(PCSO_HISTORY_STATUS.loaded?'var(--muted)':'#ff6b6b')
-    +';margin-top:4px;">'+(PCSO_HISTORY_STATUS.loaded?'\u2713':'\u26a0')+' Data source: '+PCSO_HISTORY_STATUS.source+'</div>';
+    +';margin-top:4px;">'+(PCSO_HISTORY_STATUS.loaded?'✓':'⚠')+' Data source: '+PCSO_HISTORY_STATUS.source+'</div>';
 
   html+='<div class="alt-card" style="margin-bottom:14px;text-align:center;">'
     +'<div class="alt-label" style="margin-bottom:10px;">Overall Alignment \u00b7 '+when+'</div>'
