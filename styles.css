@@ -974,10 +974,18 @@
    Replaces <input type="date"> so a tap on a day commits straight away; the
    native mobile dialog always carries a Clear/Cancel/Set row that a page has
    no way to suppress. */
+/* Glass, the same recipe the topbar, the bottom nav and the stream segmented
+   control use: a translucent ground plus a backdrop blur with a little
+   saturation, a hairline of white for the lit edge, and a soft drop shadow on
+   the floating panel. The blur is what makes it read as glass rather than as
+   flat transparency — the page behind stays visible but goes soft. */
 #oracle-page .opick-field{position:relative;flex:1;min-width:0}
 #oracle-page .opick-trigger{
   width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;
-  background:var(--card);border:1px solid var(--border);border-radius:8px;
+  background:rgba(15,16,20,.55);
+  -webkit-backdrop-filter:blur(16px) saturate(160%);
+  backdrop-filter:blur(16px) saturate(160%);
+  border:1px solid rgba(255,255,255,.08);border-radius:10px;
   color:var(--text);font-family:var(--inter,'Inter',sans-serif);font-size:12px;padding:9px 11px;
   cursor:pointer;text-align:left;
 }
@@ -985,14 +993,27 @@
 #oracle-page .opick-chev{color:var(--muted);font-size:10px;flex-shrink:0}
 #oracle-page .opick-cal{
   display:none;position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;
-  background:var(--card2);border:1px solid var(--border2);border-radius:12px;
-  padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.55);
+  /* Denser ground than the topbar's .6: those sit over mostly-dark page, this
+     sits over the gradient spheres, and at .6 they bled through as coloured
+     blobs behind the day numbers. .82 keeps the frosted look while the dates
+     stay crisp enough to tap accurately. */
+  background:rgba(12,13,18,.82);
+  -webkit-backdrop-filter:blur(28px) saturate(160%);
+  backdrop-filter:blur(28px) saturate(160%);
+  border:1px solid rgba(255,255,255,.10);border-radius:14px;
+  padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.45);
+}
+/* Without backdrop-filter the panel is merely see-through and the day numbers
+   sit on top of whatever is behind them, so those browsers get it opaque. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  #oracle-page .opick-trigger{background:var(--card)}
+  #oracle-page .opick-cal{background:var(--card2)}
 }
 #oracle-page .opick-cal.open{display:block}
 #oracle-page .opick-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 #oracle-page .opick-cal-title{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.12em;color:var(--text)}
 #oracle-page .opick-nav{
-  background:none;border:1px solid var(--border);border-radius:7px;color:var(--accent2);
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);border-radius:9px;color:var(--accent2);
   font-size:15px;line-height:1;width:28px;height:28px;cursor:pointer;flex-shrink:0;
 }
 #oracle-page .opick-nav.opick-off{color:var(--muted);opacity:.4;cursor:default}
