@@ -991,8 +991,16 @@
 }
 #oracle-page .opick-trigger:focus-visible{outline:none;border-color:var(--accent)}
 #oracle-page .opick-chev{color:var(--muted);font-size:10px;flex-shrink:0}
+/* The panel animates in rather than appearing, so it stays out of the layout
+   via position:absolute and out of reach via visibility:hidden — display:none
+   cannot be transitioned, and visibility:hidden already blocks pointer and
+   focus, so nothing behind it changes. visibility flips instantly on open and
+   only after the fade on close, which is what the two transition lines below
+   differ on. */
 #oracle-page .opick-cal{
-  display:none;position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;
+  position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;
+  opacity:0;visibility:hidden;transform:translateY(-8px) scale(.985);transform-origin:top center;
+  transition:opacity .16s ease, transform .22s cubic-bezier(.22,1,.36,1), visibility 0s linear .22s;
   /* Denser ground than the topbar's .6: those sit over mostly-dark page, this
      sits over the gradient spheres, and at .6 they bled through as coloured
      blobs behind the day numbers. .82 keeps the frosted look while the dates
@@ -1009,7 +1017,19 @@
   #oracle-page .opick-trigger{background:var(--card)}
   #oracle-page .opick-cal{background:var(--card2)}
 }
-#oracle-page .opick-cal.open{display:block}
+#oracle-page .opick-cal.open{
+  opacity:1;visibility:visible;transform:none;
+  transition:opacity .18s ease, transform .28s cubic-bezier(.22,1,.36,1), visibility 0s;
+}
+/* The day grid drifts up a touch behind the panel. The rule only matches once
+   .open lands, so the animation restarts on every open without any JS. */
+#oracle-page .opick-cal.open .opick-dow,
+#oracle-page .opick-cal.open .opick-grid{animation:opick-grid-in .3s cubic-bezier(.22,1,.36,1) both}
+#oracle-page .opick-cal.open .opick-grid{animation-delay:.04s}
+@keyframes opick-grid-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* The trigger's chevron points up while its calendar is open. */
+#oracle-page .opick-chev{transition:transform .22s cubic-bezier(.22,1,.36,1)}
+#oracle-page .opick-field:has(.opick-cal.open) .opick-chev{transform:rotate(180deg)}
 #oracle-page .opick-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 #oracle-page .opick-cal-title{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.12em;color:var(--text)}
 #oracle-page .opick-nav{
@@ -1135,6 +1155,41 @@
 /* The wrap's own 20px top padding doubles the card's when nested. */
 #oracle-page .personal-card .game-wrap{padding:12px 0 0}
 #oracle-page .personal-card #personal-wrap{padding-top:0}
+
+/* ── DISCLOSURE ANIMATION (the per-line readings and the personal card) ──
+   <details> normally snaps open. ::details-content is the box holding
+   everything but the <summary>, so it can be given a height to animate; the
+   0 -> auto interpolation needs interpolate-size, and content-visibility has
+   to transition with allow-discrete or the content vanishes at the start of
+   the close instead of fading with it. Browsers without ::details-content
+   simply keep the old instant open — nothing else depends on this. */
+@supports (interpolate-size:allow-keywords){ #oracle-page{interpolate-size:allow-keywords} }
+#oracle-page details.oracle-reading::details-content,
+#oracle-page details.personal-card::details-content{
+  block-size:0;overflow:hidden;opacity:0;
+  transition:block-size .32s cubic-bezier(.22,1,.36,1), opacity .24s ease,
+             content-visibility .32s allow-discrete;
+}
+#oracle-page details.oracle-reading[open]::details-content,
+#oracle-page details.personal-card[open]::details-content{block-size:auto;opacity:1}
+/* The summary lifts slightly under the finger, so the tap has a response even
+   before the panel below it has finished opening. */
+#oracle-page .oracle-reading summary,
+#oracle-page .personal-card-sum{transition:opacity .15s ease}
+#oracle-page .oracle-reading summary:active,
+#oracle-page .personal-card-sum:active{opacity:.62}
+
+/* Everything above is decoration; anyone who asked the OS for less motion gets
+   the instant open they had before, with no half-animated states. */
+@media (prefers-reduced-motion:reduce){
+  #oracle-page .opick-cal,
+  #oracle-page .opick-cal.open,
+  #oracle-page .opick-chev,
+  #oracle-page details.oracle-reading::details-content,
+  #oracle-page details.personal-card::details-content{transition:none}
+  #oracle-page .opick-cal.open .opick-dow,
+  #oracle-page .opick-cal.open .opick-grid{animation:none}
+}
 
 /* The day's reading */
 #oracle-page .oracle-reading{width:100%;margin:4px 0 2px;padding-bottom:10px}
