@@ -1021,6 +1021,19 @@
 #oracle-page .ofam b{font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--accent2);letter-spacing:.05em}
 #oracle-page .ofam-src{font-size:7.5px;color:var(--muted);letter-spacing:.04em}
 
+/* ── ANALYZE MY OWN PERSONAL NUMBERS (collapsible card) ──
+   Wraps the game selector, EZ2 draw time, the six inputs, the button and the
+   reading it renders. Same eyebrow type as the two date panels above it, with
+   the caret from the per-line readings so the toggle reads the same way. */
+#oracle-page .personal-card{padding:14px 0 0;margin:0 auto}
+#oracle-page .personal-card-sum{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px}
+#oracle-page .personal-card-sum::-webkit-details-marker{display:none}
+#oracle-page .personal-card-sum .pcso-history-eyebrow{margin-bottom:0}
+#oracle-page .personal-card[open] .personal-card-sum .opick-caret{transform:rotate(90deg)}
+/* The wrap's own 20px top padding doubles the card's when nested. */
+#oracle-page .personal-card .game-wrap{padding:12px 0 0}
+#oracle-page .personal-card #personal-wrap{padding-top:0}
+
 /* The day's reading */
 #oracle-page .oracle-reading{width:100%;margin:4px 0 2px;padding-bottom:10px}
 /* The summary IS the pick row: a caret followed by that game's spheres, so the

@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#07090f"/>
   <title>JomerPB Stream</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="styles.css?v=20260816k"/>
+  <link rel="stylesheet" href="styles.css?v=20260816l"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png"/>
   <link rel="apple-touch-icon" href="icon-192.png"/>
   <script defer src="stream.js?v=20260714a"></script>
-  <script defer src="oracle.js?v=20260816k"></script>
+  <script defer src="oracle.js?v=20260816l"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
 <body>
@@ -684,6 +684,17 @@
   <div class="oracle-pick-note" id="oracle-pick-note"></div>
 </div>
 
+<!-- ANALYZE MY OWN PERSONAL NUMBERS
+     Collapsed by default. Everything the personal analysis needs — the game
+     selector, the EZ2 draw time, the six inputs, the button, and the reading it
+     produces (#loader / #results) — lives inside this one card so the Oracle
+     page opens on the two date panels alone. -->
+<details class="pcso-history personal-card" id="personal-card">
+  <summary class="personal-card-sum">
+    <span class="opick-caret" aria-hidden="true">&#9656;</span>
+    <span class="pcso-history-eyebrow">Analyze My Own Personal Numbers</span>
+  </summary>
+
 <!-- GAME SELECTOR -->
 <div class="game-wrap page">
   <div class="game-eyebrow">▸ Select Game</div>
@@ -752,7 +763,7 @@
 <!-- RESULTS -->
 <div id="results"></div>
 
-
+</details>
 
 </div>
 <!-- TRADE PAGE -->
