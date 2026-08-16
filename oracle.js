@@ -1565,6 +1565,86 @@ function dCls(c){ return c>=8?'s8':c>=7?'s7':c>=6?'s6':c>=5?'s5':'s4'; }
 function lcard(icon,name,nums,steps,extra='',isNew=false){
   return `<div class="lcard"><div class="lhead"><div class="licon">${icon}</div><div><div class="lname">${name}${isNew?'<span class="lnew">★ Expert</span>':''}</div><div class="lpills">${nums.map(n=>`<span class="pill">${n}</span>`).join('')}</div></div></div><div class="lsteps">${steps.map(s=>`• ${s}`).join('<br>')}</div>${extra}</div>`;
 }
+// ══════════════════════════
+// SHARED LAYER PANELS
+// The horary grid, BaZi pillars and I Ching trigrams were built inline inside
+// renderResults. They are lifted out so the Oracle Pick panel's reading can
+// render the identical cards instead of a second, lesser version — and so
+// renderPersonalResults can finally show them too: it read them off
+// conv._horaryHTML / _baziHTML / _ichingHTML, which nothing ever set, so those
+// three panels have always come out empty there.
+// ══════════════════════════
+function oracleHoraryHTML(layers){
+  var jup=layers.astro.planets&&layers.astro.planets[0]; // Jupiter
+  var jupDign=layers.astro.jupiterDignity||'Peregrine (no essential dignity)';
+  var jupColor=(jupDign.indexOf('Domicile')===0||jupDign==='Exalted')?'var(--green)':(jupDign.indexOf('Detriment')===0||jupDign==='Fall')?'var(--red)':'var(--muted2)';
+  return `
+    <div class="hgrid">
+      <div class="hbox">
+        <div class="hbox-title">Ascendant</div>
+        <div class="hbox-val">${layers.astro.horaryASC}</div>
+        <div class="hbox-sub">Ruler: ${layers.astro.horaryASCRuler}<br>Chart is ${layers.astro.isRadical?'radical ✓':'NOT radical ⚠ (Asc near sign boundary)'}<br>Moon ${layers.astro.moonVoid?'is void of course ⚠':'not void ✓'}<br>${layers.astro.viaCombusta?'In Via Combusta ⚠':'Not Via Combusta ✓'}</div>
+      </div>
+      <div class="hbox">
+        <div class="hbox-title">5th House (Gambling)</div>
+        <div class="hbox-val">${layers.astro.h5sign}</div>
+        <div class="hbox-sub">Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}<br><span style="opacity:.7">Equal House system</span></div>
+      </div>
+      <div class="hbox">
+        <div class="hbox-title">Part of Fortune ⊕</div>
+        <div class="hbox-val">~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
+        <div class="hbox-sub">${layers.astro.isDayChart?'Day':'Night'} chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
+      </div>
+      <div class="hbox">
+        <div class="hbox-title">Jupiter Status</div>
+        <div class="hbox-val" style="color:${jupColor}">${jupDign.split(' ')[0].toUpperCase()}${jupDign.indexOf('Exalted')===0?' ★':''}</div>
+        <div class="hbox-sub">${jup?jup.deg+'° '+jup.sign:''}<br>${jupDign}</div>
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      ${layers.astro.aspects.map(a=>`<div class="arow">
+        <span style="color:${a.nature==='favorable'?'var(--green)':a.nature==='caution'?'var(--orange)':'var(--red)'}">${a.nature==='favorable'?'✓':a.nature==='caution'?'⚠':'⚡'}</span>
+        <b> ${a.asp}</b> — ${a.note}
+      </div>`).join('')}
+    </div>`;
+}
+
+function oracleBaziHTML(layers){
+  return `
+    <div class="bpillars">
+      ${[layers.bazi.year,layers.bazi.month,layers.bazi.day,layers.bazi.hour].map((p,i)=>`
+        <div class="bp">
+          <div class="bp-role">${['Year','Month','Day','Hour'][i]}</div>
+          <div class="bp-stem">${p.stem}</div>
+          <div class="bp-branch">${p.branch}</div>
+          <div class="bp-nums">${p.nums.map(n=>`<span class="bpn">${n}</span>`).join('')}</div>
+        </div>`).join('')}
+    </div>
+    ${layers.bazi.interactions.map(x=>`<div class="bint"><b>${x.type}:</b> ${x.desc}</div>`).join('')}`;
+}
+
+function oracleIChingHTML(layers){
+  return `
+    <div class="irow">
+      <div class="ibox">
+        <div class="isym">${layers.iching.hex.upper.sym}</div>
+        <div class="iname">${layers.iching.hex.upper.name}</div>
+        <div class="imsg">Upper</div>
+      </div>
+      <div class="ibox" style="flex:2">
+        <div class="isym">卦${layers.iching.hex.num}</div>
+        <div class="iname">${layers.iching.hex.name} · ${layers.iching.hex.english}</div>
+        <div class="imsg">${layers.iching.hex.gambling}</div>
+      </div>
+      <div class="ibox">
+        <div class="isym">${layers.iching.hex.lower.sym}</div>
+        <div class="iname">${layers.iching.hex.lower.name}</div>
+        <div class="imsg">Lower</div>
+      </div>
+    </div>
+    <div class="ichange"><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}<br><b>Changed hex ${layers.iching.hex.changed.num}:</b> ${layers.iching.hex.changed.name} · where it's heading</div>`;
+}
+
 function renderResults(layers,conv,energy,gameKey,drawHour){
   var game=GAMES[gameKey];
   var isEZ2=gameKey==='ez2';
@@ -1645,72 +1725,9 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
   // layerAstrology() (previously these were hardcoded "✓" text and a
   // permanently-"EXALTED, 29°16' Cancer" Jupiter regardless of the actual
   // date).
-  var jup=layers.astro.planets&&layers.astro.planets[0]; // Jupiter
-  var jupDign=layers.astro.jupiterDignity||'Peregrine (no essential dignity)';
-  var jupColor=(jupDign.indexOf('Domicile')===0||jupDign==='Exalted')?'var(--green)':(jupDign.indexOf('Detriment')===0||jupDign==='Fall')?'var(--red)':'var(--muted2)';
-  var horaryHTML=`
-    <div class="hgrid">
-      <div class="hbox">
-        <div class="hbox-title">Ascendant</div>
-        <div class="hbox-val">${layers.astro.horaryASC}</div>
-        <div class="hbox-sub">Ruler: ${layers.astro.horaryASCRuler}<br>Chart is ${layers.astro.isRadical?'radical ✓':'NOT radical ⚠ (Asc near sign boundary)'}<br>Moon ${layers.astro.moonVoid?'is void of course ⚠':'not void ✓'}<br>${layers.astro.viaCombusta?'In Via Combusta ⚠':'Not Via Combusta ✓'}</div>
-      </div>
-      <div class="hbox">
-        <div class="hbox-title">5th House (Gambling)</div>
-        <div class="hbox-val">${layers.astro.h5sign}</div>
-        <div class="hbox-sub">Ruler: <b>${layers.astro.h5ruler}</b><br>${layers.astro.h5rulerPos}<br>${layers.astro.h5aspect}<br><span style="opacity:.7">Equal House system</span></div>
-      </div>
-      <div class="hbox">
-        <div class="hbox-title">Part of Fortune ⊕</div>
-        <div class="hbox-val">~${layers.astro.pofDeg}° ${layers.astro.pofSign}</div>
-        <div class="hbox-sub">${layers.astro.isDayChart?'Day':'Night'} chart formula<br>Digit: <b>${layers.astro.pofDigit}</b><br>Ruler: ${layers.astro.pofRuler}</div>
-      </div>
-      <div class="hbox">
-        <div class="hbox-title">Jupiter Status</div>
-        <div class="hbox-val" style="color:${jupColor}">${jupDign.split(' ')[0].toUpperCase()}${jupDign.indexOf('Exalted')===0?' ★':''}</div>
-        <div class="hbox-sub">${jup?jup.deg+'° '+jup.sign:''}<br>${jupDign}</div>
-      </div>
-    </div>
-    <div style="margin-top:8px">
-      ${layers.astro.aspects.map(a=>`<div class="arow">
-        <span style="color:${a.nature==='favorable'?'var(--green)':a.nature==='caution'?'var(--orange)':'var(--red)'}">${a.nature==='favorable'?'✓':a.nature==='caution'?'⚠':'⚡'}</span>
-        <b> ${a.asp}</b> — ${a.note}
-      </div>`).join('')}
-    </div>`;
-
-  // BaZi panel
-  var baziHTML=`
-    <div class="bpillars">
-      ${[layers.bazi.year,layers.bazi.month,layers.bazi.day,layers.bazi.hour].map((p,i)=>`
-        <div class="bp">
-          <div class="bp-role">${['Year','Month','Day','Hour'][i]}</div>
-          <div class="bp-stem">${p.stem}</div>
-          <div class="bp-branch">${p.branch}</div>
-          <div class="bp-nums">${p.nums.map(n=>`<span class="bpn">${n}</span>`).join('')}</div>
-        </div>`).join('')}
-    </div>
-    ${layers.bazi.interactions.map(x=>`<div class="bint"><b>${x.type}:</b> ${x.desc}</div>`).join('')}`;
-
-  // I Ching panel
-  var ichingHTML=`
-    <div class="irow">
-      <div class="ibox">
-        <div class="isym">${layers.iching.hex.upper.sym}</div>
-        <div class="iname">${layers.iching.hex.upper.name}</div>
-        <div class="imsg">Upper</div>
-      </div>
-      <div class="ibox" style="flex:2">
-        <div class="isym">卦${layers.iching.hex.num}</div>
-        <div class="iname">${layers.iching.hex.name} · ${layers.iching.hex.english}</div>
-        <div class="imsg">${layers.iching.hex.gambling}</div>
-      </div>
-      <div class="ibox">
-        <div class="isym">${layers.iching.hex.lower.sym}</div>
-        <div class="iname">${layers.iching.hex.lower.name}</div>
-        <div class="imsg">Lower</div>
-      </div>
-    </div>
-    <div class="ichange"><b>Changing line:</b> ${layers.iching.hex.changingLine}<br><b>Nuclear hex ${layers.iching.hex.nuclear.num}:</b> ${layers.iching.hex.nuclear.name}<br><b>Changed hex ${layers.iching.hex.changed.num}:</b> ${layers.iching.hex.changed.name} · where it's heading</div>`;
+  var horaryHTML=oracleHoraryHTML(layers);
+  var baziHTML=oracleBaziHTML(layers);
+  var ichingHTML=oracleIChingHTML(layers);
 
   // Stats panel
   var maxF=Math.max(...Object.values(layers.stats.freq))||1;
@@ -1870,7 +1887,8 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   var seen={}; var digitCardsHTML=userNums.map(n=>{ var d=digitOf(n); if(seen[d]) return ''; seen[d]=true; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0,layers:[]}; return `<div class="dcard ${dCls(ds.count)}"><div class="dnum">${d}</div><div class="dscore">${ds.count}/11 layers</div><div class="ddots">${dotHTML(ds.layers,conv.LABELS||[])}</div></div>`; }).filter(Boolean).join('');
   var mapHTML=userNums.map(n=>{ var d=digitOf(n); var cls=hotNums.includes(n)?'hot':(layers.stats.freq&&(layers.stats.freq[n]||0)>=2)?'warm':'cold'; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="maprow"><span class="mapdig">Your # <b>${pad(n)}</b> <span style="color:var(--muted)">(digit ${d} · ${ds.count}/11)</span></span><div class="mapnums"><span class="mn ${cls}">${pad(n)}</span></div></div>`; }).join('');
   var freqBarsHTML=userNums.map(n=>{ var f=layers.stats.freq&&layers.stats.freq[n]?layers.stats.freq[n]:0; var w=Math.min(100,f*12); return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:10px;color:var(--muted2);width:22px">${pad(n)}</span><div style="flex:1;height:6px;background:var(--border);border-radius:3px"><div style="height:6px;background:${hotNums.includes(n)?'var(--gold)':'var(--teal)'};border-radius:3px;width:${w}%"></div></div><span style="font-size:10px;color:var(--muted)">${f}x</span></div>`; }).join('');
-  var horaryHTML=conv._horaryHTML||''; var baziHTML=conv._baziHTML||''; var ichingHTML=conv._ichingHTML||'';
+  // was conv._horaryHTML / _baziHTML / _ichingHTML, which nothing ever assigned
+  var horaryHTML=oracleHoraryHTML(layers), baziHTML=oracleBaziHTML(layers), ichingHTML=oracleIChingHTML(layers);
   document.getElementById('results').innerHTML=`
     <div class="slabel">✦ Personal Number Analysis · ${game.name}</div>
     <div class="balls-card"><div class="balls-eyebrow">Your Numbers — Oracle Convergence Check</div><div class="balls-row">${ballsHTML}</div><div class="balls-note">Ball tag = digit (d) + convergence score out of 11 sources<br>Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · Ho=Horary · En=Energy</div></div>
@@ -2453,14 +2471,14 @@ function oracleDateReading(dateStr,drawHour){
   var out=null;
   try{
     var hour=drawHour||'9PM';
-    var ic=null,bz=null,ta=null,fs=null,as=null,nu=null,an=null;
-    try{ic=layerIChing(hour);}catch(e){}
-    try{bz=layerBazi(hour);}catch(e){}
-    try{ta=layerTarot(hour);}catch(e){}
-    try{fs=layerFengshui();}catch(e){}
-    try{as=layerAstrology(hour);}catch(e){}
-    try{nu=layerNumerology(hour);}catch(e){}
-    try{an=layerAngelNumbers(hour);}catch(e){}
+    var L={};
+    try{L.num=layerNumerology(hour);}catch(e){}
+    try{L.astro=layerAstrology(hour);}catch(e){}
+    try{L.bazi=layerBazi(hour);}catch(e){}
+    try{L.fs=layerFengshui();}catch(e){}
+    try{L.iching=layerIChing(hour);}catch(e){}
+    try{L.tarot=layerTarot(hour);}catch(e){}
+    try{L.angel=layerAngelNumbers(hour);}catch(e){}
 
     // full numbers the engine actually rewards, and what each one means
     var meaning={};
@@ -2469,44 +2487,25 @@ function oracleDateReading(dateStr,drawHour){
       if(!meaning[n]) meaning[n]=[];
       if(meaning[n].indexOf(label)<0) meaning[n].push(label);
     }
-    var hex=ic&&ic.hex;
+    var hex=L.iching&&L.iching.hex;
     if(hex){
       mark(hex.num,'I Ching hexagram '+hex.num+(hex.name?' \u00b7 '+hex.name:''));
       if(hex.nuclear) mark(hex.nuclear.num,'nuclear hexagram '+hex.nuclear.num);
       if(hex.changed) mark(hex.changed.num,'changed hexagram '+hex.changed.num);
     }
-    if(ta){
-      mark(ta.cardNum,'Tarot \u00b7 '+(ta.cardName||('card '+ta.cardNum)));
-      mark(ta.rawSum,'date number ('+ta.rawSum+')');
+    if(L.tarot){
+      mark(L.tarot.cardNum,'Tarot \u00b7 '+(L.tarot.cardName||('card '+L.tarot.cardNum)));
+      mark(L.tarot.rawSum,'date number ('+L.tarot.rawSum+')');
     }
-    if(an&&Array.isArray(an.nums)) an.nums.forEach(function(dg){ mark(dg*11,'angel number '+(dg*11)); });
+    if(L.angel&&Array.isArray(L.angel.nums)) L.angel.nums.forEach(function(dg){ mark(dg*11,'angel number '+(dg*11)); });
 
-    out={
-      iching:hex?{num:hex.num,name:hex.name,english:hex.english,gambling:hex.gambling,
-                  changingLine:hex.changingLine,
-                  nuclear:hex.nuclear?hex.nuclear.num+' \u00b7 '+hex.nuclear.name:null,
-                  changed:hex.changed?hex.changed.num+' \u00b7 '+hex.changed.name:null}:null,
-      bazi:bz?['year','month','day','hour'].map(function(k){
-        var pl=bz[k]; return pl?{role:k,stem:pl.stem,branch:pl.branch,el:pl.stemEl+'/'+pl.branchEl}:null;
-      }).filter(Boolean):[],
-      tarot:ta?{num:ta.cardNum,name:ta.cardName,gambling:ta.gambling}:null,
-      fengshui:(fs&&fs.loShu)?{centre:fs.loShu.C}:null,
-      astro:as?{asc:as.horaryASC,h5:as.h5sign,h5ruler:as.h5ruler,
-                pof:as.pofDeg+' '+as.pofSign,day:as.isDayChart,moonVoid:as.moonVoid}:null,
-      numerology:nu?{py:(nu.pyNums||[]).join(', '),ch:(nu.chNums||[]).join(', ')}:null,
-      meaning:meaning
-    };
+    out={layers:L,meaning:meaning};
   } finally {
     _D=saved._D; _M=saved._M; _Y=saved._Y; _DOW=saved._DOW;
   }
   return out;
 }
 
-// Rendered as the same gradient spheres Run Expert uses — .ball plus the b1..b6
-// tier classes, in ascending order exactly as renderResults does it — with the
-// same d<digit>·<count>/11 tag underneath. A number carrying a named meaning for
-// the date gets a marker; that meaning is literally why convergence() promoted
-// it (+10 via metaNumBonus), so the marker points at real mechanism.
 function oraclePickBalls(nums,meaning,counts){
   return (nums||[]).map(function(n,i){
     var d=digitOf(n);
@@ -2542,52 +2541,47 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,counts){
     +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts)+'</div></div>';
 }
 
-// The date's reading, rendered once above the games — it is the same reading for
-// every 6-ball draw that day (all are 9PM).
+// The date's reading, rendered once above the games. Built from the SAME
+// helpers Run Expert uses — the dcard convergence grid and lcard() with the
+// horary / BaZi / I Ching panels — so the two views are one design, not two.
 function oracleReadingHTML(rd,digits){
-  if(!rd) return '';
-  var rows=[];
-  // The digit ranking is date-only now, so it is identical for every game that
-  // day — shown once here rather than repeated under each one.
+  if(!rd||!rd.layers) return '';
+  var L=rd.layers;
+  var html='';
+
   if(digits&&digits.sorted&&digits.sorted.length){
-    rows.push(['Digits',digits.sorted.slice(0,4).map(function(f){
-      var srcs=(f.layers||[]).map(function(i){ return digits.LABELS[i]; }).filter(Boolean).join(' ');
-      return '<b>'+f.digit+'</b> '+f.count+'/'+digits.LABELS.length+(srcs?' <span style="opacity:.7">('+srcs+')</span>':'');
-    }).join('<br>')]);
+    html+='<div class="ord-step">Step 1 — Digit Convergence · 11 Sources</div>'
+      +'<div class="dgrid">'+digits.sorted.slice(0,6).map(function(sc){
+        return '<div class="dcard '+dCls(sc.count)+'">'
+          +'<div class="dnum">'+sc.digit+'</div>'
+          +'<div class="dscore">'+sc.count+'/'+digits.LABELS.length+' layers</div>'
+          +'<div class="ddots">'+dotHTML(sc.layers,digits.LABELS)+'</div></div>';
+      }).join('')+'</div>';
   }
-  if(rd.iching) rows.push(['I Ching',
-    '<b>'+rd.iching.num+' \u00b7 '+rd.iching.name+'</b> ('+rd.iching.english+')'
-    +(rd.iching.gambling?'<span class="ord-note">'+rd.iching.gambling+'</span>':'')
-    +'<span class="ord-note">nuclear '+(rd.iching.nuclear||'\u2014')+' \u00b7 changed '+(rd.iching.changed||'\u2014')+'</span>']);
-  if(rd.bazi&&rd.bazi.length) rows.push(['BaZi',
-    rd.bazi.map(function(p){ return p.stem+p.branch; }).join(' \u00b7 ')
-    +'<span class="ord-note">'+rd.bazi.map(function(p){ return p.role+': '+p.el; }).join(' \u00b7 ')+'</span>']);
-  if(rd.tarot) rows.push(['Tarot',
-    '<b>'+rd.tarot.name+'</b> ('+rd.tarot.num+')'
-    +(rd.tarot.gambling?'<span class="ord-note">'+rd.tarot.gambling+'</span>':'')]);
-  if(rd.fengshui) rows.push(['Flying Star','<b>'+rd.fengshui.centre+'</b> in the centre palace']);
-  if(rd.astro) rows.push(['Horary',
-    rd.astro.asc+' rising'
-    +'<span class="ord-note">5th house '+rd.astro.h5+' (ruler '+rd.astro.h5ruler+') \u00b7 Part of Fortune '+rd.astro.pof
-    +' \u00b7 '+(rd.astro.day?'day':'night')+' chart'+(rd.astro.moonVoid?' \u00b7 Moon void of course':'')+'</span>']);
-  if(rd.numerology) rows.push(['Numerology','Pythagorean '+rd.numerology.py+'<span class="ord-note">Chaldean '+rd.numerology.ch+'</span>']);
 
   var meantKeys=Object.keys(rd.meaning||{}).map(Number).sort(function(a,b){return a-b;});
-  var meantHTML='';
   if(meantKeys.length){
-    meantHTML='<div class="ord-meant"><div class="ord-meant-h">Numbers carrying a meaning today</div>'
+    html+='<div class="ord-step">Numbers Carrying A Meaning Today</div><div class="ord-meant">'
       +meantKeys.map(function(n){
-        return '<div class="ord-meant-row"><span class="pnum pick pnum-meant">'+p2(n)+'</span>'
+        return '<div class="ord-meant-row"><span class="pnum pick">'+p2(n)+'</span>'
           +'<span>'+rd.meaning[n].join(' \u00b7 ')+'</span></div>';
       }).join('')
-      +'<div class="ord-note" style="margin-top:6px">These are the full-number matches the engine rewards (+10 each) when choosing within a digit family.</div></div>';
+      +'<div class="ord-note">These are the full-number matches the engine rewards (+10 each) when choosing within a digit family.</div></div>';
   }
 
+  html+='<div class="ord-step">Full 11-Layer Breakdown</div>';
+  try{
+    if(L.num)    html+=lcard('\uD83D\uDD22','Numerology — Pythagorean + Chaldean',L.num.nums,L.num.steps);
+    if(L.astro)  html+=lcard('\uD83E\uDE90','Astrology — Dignities + Aspects + Horary',L.astro.nums.slice(0,7),L.astro.steps,oracleHoraryHTML(L),true);
+    if(L.bazi)   html+=lcard('\u262F\uFE0F','BaZi — Exact Pillars + Clashes + Hidden Stems',L.bazi.nums,L.bazi.steps,oracleBaziHTML(L),true);
+    if(L.fs)     html+=lcard('\uD83C\uDFEE','Feng Shui — Flying Star + Lo Shu + Fixed Stars',L.fs.nums,L.fs.steps,'',false);
+    if(L.iching) html+=lcard('\u262F','I Ching — Hexagram + Nuclear + Changing Line',L.iching.nums,L.iching.steps,oracleIChingHTML(L),true);
+    if(L.tarot)  html+=lcard('\uD83C\uDCCF','Tarot — Major Arcana Card of the Day',L.tarot.nums,L.tarot.steps,'',true);
+    if(L.angel)  html+=lcard('\uD83D\uDE07','Angel Numbers — Repeating-Digit Resonance',L.angel.nums.length?L.angel.nums:['\u2014'],L.angel.steps,'',true);
+  }catch(e){ console.error('reading cards:',e); }
+
   return '<details class="oracle-reading"><summary>\u25b8 The day\u2019s reading</summary>'
-    +'<div class="ord-body">'
-    +rows.map(function(r){ return '<div class="ord-row"><span class="ord-k">'+r[0]+'</span><span class="ord-v">'+r[1]+'</span></div>'; }).join('')
-    +meantHTML
-    +'</div></details>';
+    +'<div class="ord-body">'+html+'</div></details>';
 }
 
 function oraclePickRender(){
@@ -2626,8 +2620,8 @@ function oraclePickRender(){
   if(digits&&digits.sorted) digits.sorted.forEach(function(f){ counts[f.digit]=f.count; });
   out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
     +'<div class="oracle-pick-sub">'+scheduled.length+' draw'+(scheduled.length===1?'':'s')+' this day</div>'
-    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal,meaning,counts); }).join('')
-    +oracleReadingHTML(reading,digits);
+    +oracleReadingHTML(reading,digits)
+    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal,meaning,counts); }).join('');
 
   if(noteEl){
     var todayStr=oraclePickTodayStr();
