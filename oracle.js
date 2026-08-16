@@ -2566,10 +2566,6 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
   var ds=(slice&&slice.digitScores)||{};
   var totalScore=scored.reduce(function(a,n){ var d=digitOf(n); return a+(ds[d]?ds[d].score:0); },0);
   var pct=scored.length?Math.round(totalScore/(scored.length*10)*100):0;
-  var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
-  var al=pct>=70?'\uD83D\uDFE2 Strong Alignment':pct>=45?'\uD83D\uDFE1 Moderate Alignment':'\uD83D\uDD34 Weak Alignment';
-  var alignHTML='<div class="opick-align"><span class="opick-pct" style="color:'+ac+'">'+pct+'%</span>'
-    +'<span class="opick-allabel">'+al+'</span></div>';
 
   var ballsHTML;
   if(gameKey==='ez2'){
@@ -2581,39 +2577,53 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
     ballsHTML='<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts)+'</div>';
   }
 
-  // order within a line: game, its alignment score, its reading, then the
-  // numbers — the reading sits BEFORE the picks it explains
-  return '<div class="oracle-pick-game-row">'+name+alignHTML
-    +oracleReadingHTML(reading,slice,scored,pct,gameKey)+ballsHTML+'</div>';
+  // order within a line: game, its reading (which holds the alignment card),
+  // then the numbers — the reading sits BEFORE the picks it explains
+  return '<div class="oracle-pick-game-row">'+name
+    +oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr)+ballsHTML+'</div>';
 }
 
 // The reading for one game line. Built from the SAME helpers Run Expert uses —
 // the alignment notes, the energy bars, the dcard convergence grid and lcard()
 // with the horary / BaZi / I Ching panels — so the two views are one design.
-function oracleReadingHTML(rd,slice,scored,pct,gameKey){
+function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr){
   if(!rd||!rd.layers) return '';
   var L=rd.layers, html='';
+  var when=oraclePickFmtDate(dateStr);
 
-  html+='<div class="ord-step">Alignment</div>';
-  html+='<div class="ord-note">Mode: \u26a1\uD83C\uDF10 Hybrid \u2014 strongest digit energies, max '
+  // ── Overall Alignment — the identical .alt-card Run Expert renders ──
+  var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
+  var al=pct>=70?'\uD83D\uDFE2 Strong Alignment':pct>=45?'\uD83D\uDFE1 Moderate Alignment':'\uD83D\uDD34 Weak Alignment';
+  var modeHTML='<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: \u26a1\uD83C\uDF10 Hybrid \u2014 strongest digit energies, max '
     +((gameKey==='ez2')?'one number':'two numbers')+' per digit family</div>';
   var cnt={};
   (scored||[]).forEach(function(n){ var d=digitOf(n); cnt[d]=(cnt[d]||0)+1; });
   var coll=Object.keys(cnt).filter(function(d){ return cnt[d]>1; });
-  html+='<div class="ord-note">'+(coll.length
-    ? '\u2139 '+coll.map(function(d){ return cnt[d]+' picks ride digit '+d; }).join(', ')+' \u2014 concentrated on the strongest digit score by design'
-    : '\u2713 Picks draw on distinct digit scores')+'</div>';
+  var collisionHTML=coll.length
+    ? '<div style="font-size:11px;color:var(--muted);margin-top:8px;">\u2139 '+coll.map(function(d){ return cnt[d]+' picks ride digit '+d; }).join(', ')+' \u2014 concentrated on the strongest digit score by design</div>'
+    : '<div style="font-size:11px;color:var(--muted);margin-top:8px;">\u2713 Picks draw on distinct digit scores</div>';
   var draws=(slice&&slice.statsDraws)||[];
+  var backtestHTML='';
   if(draws.length){
     var pd=[]; (scored||[]).forEach(function(n){ var d=digitOf(n); if(pd.indexOf(d)<0) pd.push(d); });
     var hit=draws.filter(function(dr){ return dr.some(function(n){ return pd.indexOf(digitOf(n))>=0; }); }).length;
-    html+='<div class="ord-note">\uD83D\uDCCA Historical check: '+Math.round(hit/draws.length*100)
-      +'% of last '+draws.length+' draws had at least one number matching these digits (real data, not the formula)</div>';
+    backtestHTML='<div style="font-size:11px;color:var(--muted2);margin-top:4px;">\uD83D\uDCCA Historical check: '
+      +Math.round(hit/draws.length*100)+'% of last '+draws.length
+      +' draws had at least one number matching these digits (real data, not the formula)</div>';
   }
+  var sourceHTML='<div style="font-size:10px;color:'+(PCSO_HISTORY_STATUS.loaded?'var(--muted)':'#ff6b6b')
+    +';margin-top:4px;">'+(PCSO_HISTORY_STATUS.loaded?'\u2713':'\u26a0')+' Data source: '+PCSO_HISTORY_STATUS.source+'</div>';
+
+  html+='<div class="alt-card" style="margin-bottom:14px;text-align:center;">'
+    +'<div class="alt-label" style="margin-bottom:10px;">Overall Alignment \u00b7 '+when+'</div>'
+    +'<div style="font-size:36px;font-weight:800;color:'+ac+';margin-bottom:4px;">'+pct+'%</div>'
+    +'<div style="font-size:13px;color:var(--muted2)">'+al+'</div>'
+    +modeHTML+collisionHTML+backtestHTML+sourceHTML+'</div>';
 
   if(slice&&slice.energy){
-    html+='<div class="ord-step">Elemental Energy Balance \u2014 All 11 Layers</div>'
-      +oraclePickEnergyHTML(slice.energy);
+    html+='<div class="slabel">Current Energy Flow \u00b7 '+when+' \u00b7 '+((gameKey==='ez2')?'9PM':'9PM')+'</div>'
+      +'<div class="eflow"><div class="eflow-title">\u26a1 Elemental Energy Balance \u2014 All 11 Layers</div>'
+      +oraclePickEnergyHTML(slice.energy)+'</div>';
   }
 
   if(slice&&slice.sorted&&slice.sorted.length){
