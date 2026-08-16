@@ -1023,9 +1023,18 @@
 
 /* The day's reading */
 #oracle-page .oracle-reading{width:100%;margin:4px 0 2px;padding-bottom:10px}
-#oracle-page .oracle-reading summary{font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.15em;color:var(--muted2);cursor:pointer;list-style:none;text-align:center}
+/* The summary IS the pick row: a caret followed by that game's spheres, so the
+   whole row is the toggle and the reading opens underneath it. */
+#oracle-page .oracle-reading summary{cursor:pointer;list-style:none}
 #oracle-page .oracle-reading summary::-webkit-details-marker{display:none}
-#oracle-page .oracle-reading[open] summary{margin-bottom:9px}
+#oracle-page .opick-sum{display:flex;align-items:center;justify-content:center;gap:6px}
+/* EZ2's column block is width:100% in the game row, which would strand the
+   caret at the far left of the summary — shrink it to its content here. */
+#oracle-page .opick-sum .oracle-pick-cols{width:auto}
+#oracle-page .opick-caret{color:var(--muted2);font-size:12px;line-height:1;flex-shrink:0;transition:transform .15s}
+#oracle-page .oracle-reading[open] .opick-caret{transform:rotate(90deg)}
+@media (max-width:360px){ #oracle-page .opick-sum{gap:4px} #oracle-page .opick-caret{font-size:10px} }
+#oracle-page .oracle-reading[open] summary{margin-bottom:11px}
 #oracle-page .ord-body{text-align:left}
 #oracle-page .ord-note{display:block;font-size:10px;color:var(--muted);margin-top:2px;line-height:1.5}
 /* Section headers inside the reading, matching Run Expert's step rules */

@@ -2579,9 +2579,16 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
 
   // order within a line: game, its reading (which holds the alignment card),
   // then the numbers — the reading sits BEFORE the picks it explains
+  // the collapsible IS the pick row: a caret, then the spheres. Clicking
+  // anywhere on the row opens that game's reading underneath.
+  var body=oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr);
+  if(!body) return '<div class="oracle-pick-game-row">'+name+ballsHTML+'</div>';
   return '<div class="oracle-pick-game-row">'+name
-    +oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr)+ballsHTML+'</div>';
+    +'<details class="oracle-reading"><summary class="opick-sum">'
+    +'<span class="opick-caret" aria-hidden="true">\u25b8</span>'+ballsHTML+'</summary>'
+    +'<div class="ord-body">'+body+'</div></details></div>';
 }
+
 
 // The reading for one game line. Built from the SAME helpers Run Expert uses —
 // the alignment notes, the energy bars, the dcard convergence grid and lcard()
@@ -2657,8 +2664,7 @@ function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr){
     if(L.angel)  html+=lcard('\uD83D\uDE07','Angel Numbers \u2014 Repeating-Digit Resonance',L.angel.nums.length?L.angel.nums:['\u2014'],L.angel.steps,'',true);
   }catch(e){ console.error('reading cards:',e); }
 
-  return '<details class="oracle-reading"><summary>\u25b8 The day\u2019s reading</summary>'
-    +'<div class="ord-body">'+html+'</div></details>';
+  return html;
 }
 
 function oraclePickRender(){
