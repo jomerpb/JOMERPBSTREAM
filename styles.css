@@ -1009,9 +1009,9 @@
   #oracle-page .oracle-pick-game-row .ball{width:40px;height:40px;font-size:15px}
   #oracle-page .oracle-pick-game-row .ball .btag{font-size:6px}
 }
-/* A picked number that carries a named meaning for the date — the same set
-   convergence() pays +10 for. Marked, not recoloured: it is still a pick. */
-#oracle-page .ball-meant{box-shadow:0 0 0 2px var(--accent2),0 0 10px rgba(155,127,255,.5)}
+/* .ball-meant carries no styling on purpose — it is kept only as the hook for
+   the title tooltip naming why that number was promoted. The reading's
+   "numbers carrying a meaning today" list is where those are shown. */
 #oracle-page .pnum-meant{position:relative;border-color:var(--accent2)}
 #oracle-page .pnum-meant::after{content:'\25c6';position:absolute;top:-5px;right:-3px;font-size:7px;color:var(--accent2)}
 
