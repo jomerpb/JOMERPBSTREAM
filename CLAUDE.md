@@ -113,9 +113,43 @@ What this means in practice:
   statistical ("hot", "overdue", frequency) — carries information about the next draw.
   Say so plainly if the question comes up; don't hedge and don't oversell.
 
+## Rule: the pick is HISTORY-FREE
+
+**Standing instruction from the repo owner.** The Oracle's pick is computed from
+the date alone. `layerStats` still runs and its frequency/hot/overdue figures are
+still *displayed* on the Run Expert page as reference information, but nothing it
+produces reaches `convergence()` any more. Concretely:
+
+- `LABELS` is 11 sources, not 12 — `'St'` is gone from the convergence cluster.
+- Digit-family score is the metaphysical cluster alone, normalised to the day's
+  own leader (`inL.length / maxMeta * 10`).
+- **Within-family selection** — the job stats used to do — is now a rotation
+  driven by the reading: `offset(d) = ((star + d) * pool + hex + dnum) mod k`,
+  where `star` is the Flying Star in digit *d*'s own Lo Shu palace, `pool` is the
+  game's max, `hex` the Mei Hua hexagram number, `dnum` the unreduced date
+  number. `metaNumBonus` (+10) still overrides it for full-number matches.
+
+Why it matters: a pick for a future date no longer moves as new draws land.
+Verified — 50 recomputes with draws injected produce 0 changes, and picks are
+identical with the entire draw history deleted.
+
+Two consequences to keep in mind:
+
+- **`oracle-history.json` spans two engines.** Entries logged before this change
+  were produced by the stats engine; they are immutable and stay as they are. A
+  past date shows 📌 recorded (old engine) while a live recompute of the same
+  date now returns something different. That is expected, not a bug.
+- The composition `(star + d) * pool` was selected over four simpler ones by
+  measuring 120 dates for *presentation* only — it is the only one that never
+  makes two same-day games produce identical picks. Never tune it for hit rate.
+
+The `offset` formula is a **house rule**, documented as such in the code: the
+ingredients are authentic and dated, but no tradition prescribes combining them
+this way.
+
 ## Oracle scoring internals (rebuilt — see git history for the audit)
 
-`layerStats` no longer uses the original `freq30*4 + hot*6 + overdue*5` summed per
+**(Historical — this describes `layerStats` itself, which still computes these figures for display but no longer feeds the pick; see the history-free rule above.)** `layerStats` no longer uses the original `freq30*4 + hot*6 + overdue*5` summed per
 digit family. That formula had three defects: `hotNums` and `freq30` were the *same*
 30-draw computation scored twice; weights were summed over unequal digital-root
 families (digits 1-4 carried a structural +17%..+25% edge); and "hot" and "overdue"

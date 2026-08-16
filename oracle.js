@@ -1251,13 +1251,12 @@ function energyDigits(energy){
 // ══════════════════════════
 function convergence(layers,gameKey){
   var game=GAMES[gameKey];
-  var LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','Ta','An','Ho','En','St'];
+  // 11 sources. 'St' (statistics) was removed — the pick no longer depends on
+  // draw history at all; see WITHIN-FAMILY SELECTION below.
+  var LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','Ta','An','Ho','En'];
   var enNums=energyDigits(layers.energy); // Element Energy digits (may be [])
   var hoNums=(layers.astro&&layers.astro.horaryNums)||[]; // Horary digits
   var digitScores={};
-  var rawStatW={};
-  for(var d=1;d<=9;d++) rawStatW[d]=layers.stats.digitWeight[d]||0;
-  var maxStatW=Math.max(1,...Object.values(rawStatW));
   // PASS 1 — collect which sources hit each digit.
   var collected={};
   for(var d=1;d<=9;d++){
@@ -1273,29 +1272,16 @@ function convergence(layers,gameKey){
     if(layers.angel.nums.includes(d)) inL.push(8);
     if(hoNums.includes(d)) inL.push(9);
     if(enNums.includes(d)) inL.push(10);
-    if(layers.stats.topDigits.slice(0,4).includes(d)) inL.push(11);
     collected[d]=inL;
   }
-  // PASS 2 — score. Indices 0-10 (Py,Ch,As,Ba,Fs,IC,PoF,Ta,An,Ho,En) all derive
-  // from the same date/hour input — not independent confirmations — so they are
-  // scored as one correlated cluster. Index 11 (Stats) is the only layer built
-  // from real historical draw data and is scored on its own scale.
-  // REBALANCE: both clusters are normalized SYMMETRICALLY — each relative to
-  // the day's strongest digit in its own cluster, each worth up to 5. The old
-  // scheme normalized stats to its max (leader always earned the full 5) while
-  // capping meta at 4 via a fixed denominator the cluster could never reach,
-  // so the stats leader was mathematically unbeatable. That structural
-  // asymmetry is what froze picks day-to-day (EZ2 repeats, unchanged 6-ball
-  // picks after the Tarot/Angel upgrade).
-  var maxMeta=Math.max(1,...Object.values(collected).map(function(a){return a.filter(function(i){return i<11;}).length;}));
+  // PASS 2 — score. All eleven sources derive from the same date/hour input and
+  // are not independent confirmations, so they are scored as one correlated
+  // cluster, normalised against the day's own strongest digit. Kept on a 0..10
+  // scale so renderResults' alignment percentage is unchanged.
+  var maxMeta=Math.max(1,...Object.values(collected).map(function(a){return a.length;}));
   for(var d=1;d<=9;d++){
     var inL=collected[d];
-    var statFrac=rawStatW[d]/maxStatW;            // 0–1, relative to today's stats leader
-    var metaCount=inL.filter(i=>i<11).length;     // 0-11
-    var metaFrac=metaCount/maxMeta;               // 0–1, relative to today's meta leader
-    var metaWeight=metaFrac*5;                    // correlated cluster, up to 5
-    var statScore=statFrac*5;                     // real-data layer, up to 5
-    digitScores[d]={count:inL.length,layers:inL,statWeight:rawStatW[d],metaCount:metaCount,score:metaWeight+statScore};
+    digitScores[d]={count:inL.length,layers:inL,metaCount:inL.length,score:(inL.length/maxMeta)*10};
   }
   var sorted=Object.entries(digitScores)
     .map(([d,s])=>({digit:parseInt(d),...s}))
@@ -1308,14 +1294,7 @@ function convergence(layers,gameKey){
       if(digitOf(n)===d) digitToNums[d].push(n);
   }
 
-  var hotNums=layers.stats.hotNums||[];
-  // Within-digit-family selection was previously 100% stats (lifetime freq +
-  // hot bonus) — metaphysics had zero say in the final number, and lifetime
-  // freq barely moves per draw, so the chosen number was effectively frozen.
-  // Now: windowed 30-draw freq (responsive) + hot bonus + date-sensitive
-  // metaphysical FULL-NUMBER matches (Tarot card of the day, I Ching hexagram,
-  // Angel repdigit numbers 11/22/33...), all of which change with the date.
-  var selFreq=layers.stats.freq30||layers.stats.freq||{};
+  // Full numbers that carry a named meaning for the date.
   var cardN=(layers.tarot&&typeof layers.tarot.cardNum==='number')?layers.tarot.cardNum:null;
   var dateSumN=(layers.tarot&&typeof layers.tarot.rawSum==='number')?layers.tarot.rawSum:null; // unreduced date digit-sum ("date number")
   var hexRaw=layers.iching&&layers.iching.hex;
@@ -1329,10 +1308,9 @@ function convergence(layers,gameKey){
       if(rep>=1&&rep<=game.max&&angelFull.indexOf(rep)<0) angelFull.push(rep);
     });
   }
-  // +10 per date-varying FULL-NUMBER match. Sized against realistic stats
-  // margins in a 30-draw window (leader ≈ freq 4×4 + hot 6 = 22 vs runner-up
-  // ≈ 12–18): 10 lets a genuine date signal overturn near-leads without
-  // steamrolling a clearly hot number.
+  // +10 per date-varying FULL-NUMBER match. Larger than any rotation position
+  // (max = family size, 7), so a number that IS the day's hexagram, card or
+  // date number is always taken first in its family.
   function metaNumBonus(n){
     var b=0;
     if(cardN!==null&&cardN>=1&&n===cardN) b+=10;
@@ -1343,19 +1321,62 @@ function convergence(layers,gameKey){
     if(angelFull.indexOf(n)>=0) b+=10;
     return b;
   }
-  // Within-family ordering now uses layerStats' single standardised
-  // numScore (recency + overdue, already blended and de-duplicated) in
-  // place of the old freq30*4 + hot*6 pair, which double-counted the same
-  // 30-draw window twice — see the SCORING comment in layerStats. Falls
-  // back to the legacy expression if numScore is unavailable, so an older
-  // cached engine can't produce an unordered pick.
-  var numSc=layers.stats.numScore;
+
+  // ══════════════════════════
+  // WITHIN-FAMILY SELECTION — from the reading, not from history
+  // ══════════════════════════
+  // The layers only ever name a DIGIT. Digit 9 in 6/58 is the family
+  // {9,18,27,36,45,54}; something must say which member. That job used to belong
+  // to layerStats' numScore. With history out of the engine, leaving it unfilled
+  // drops the sort onto its (a-b) tiebreak — the lowest member of every family,
+  // every time. Measured: mean pick 12.1 against a fair-draw mean of 29.5, with
+  // only 2 of 36 picks above 29.
+  //
+  // So the reading fills it. Each family is ROTATED to start at an offset taken
+  // from three dated figures the engine already casts:
+  //
+  //   star — the Flying Star occupying that digit's own Lo Shu palace (1 lives
+  //          in N, 2 in SW, 3 in E ... 9 in S — the classical 4-9-2 / 3-5-7 /
+  //          8-1-6 square). Per-digit, changes monthly.
+  //   hex  — the Mei Hua Yi Shu hexagram number cast for that date and hour.
+  //   dnum — the unreduced date number (same digit-sum the Tarot layer uses).
+  //
+  //   pool — the game's own pool size (42/45/49/55/58). Without it, two games
+  //          drawn on the same date land on the same family positions and their
+  //          picks come out near-identical. 6/42 and 6/58 are different
+  //          questions, so the reading answers them differently.
+  //
+  //   offset(d) = ((star + d) * pool + hex + dnum) mod familySize
+  //
+  // The (star + d) * pool shape was chosen over four simpler compositions by
+  // measuring 120 consecutive dates: it is the only one that never produced two
+  // same-day games with identical picks (0 such pairs, worst overlap 5 of 6,
+  // versus 11 identical pairs for a plain additive pool term). That selection
+  // criterion is PRESENTATION — two games should not look like copies of each
+  // other — never hit rate, which is not something any composition can improve.
+  //
+  // HOUSE RULE, stated plainly: no tradition prescribes adding a flying star to
+  // a hexagram number and counting around a family. The three ingredients are
+  // authentic and dated; combining them this way is this repo's own convention,
+  // chosen because it is per-digit, moves daily, and reaches the whole board.
+  // It is not a claim about anything.
+  var LOSHU_HOME={1:'N',2:'SW',3:'E',4:'SE',5:'C',6:'NW',7:'W',8:'NE',9:'S'};
+  var loShu=(layers.fs&&layers.fs.loShu)||{};
+  var dnumForIdx=(typeof dateSumN==='number'&&isFinite(dateSumN))?dateSumN:0;
+  var hexForIdx=(typeof hexN==='number'&&isFinite(hexN))?hexN:0;
+  function familyOffset(digit,size){
+    if(!size) return 0;
+    var star=loShu[LOSHU_HOME[digit]];
+    if(typeof star!=='number'||!isFinite(star)) star=digit;
+    var o=((star+digit)*game.max+hexForIdx+dnumForIdx)%size;
+    return o<0?o+size:o;
+  }
   function bestNums(digit){
-    return (digitToNums[digit]||[]).sort((a,b)=>{
-      var sA,sB;
-      if(numSc){ sA=(numSc[a]||0)+metaNumBonus(a); sB=(numSc[b]||0)+metaNumBonus(b); }
-      else { sA=(selFreq[a]||0)*4+(hotNums.includes(a)?6:0)+metaNumBonus(a);
-             sB=(selFreq[b]||0)*4+(hotNums.includes(b)?6:0)+metaNumBonus(b); }
+    var fam=(digitToNums[digit]||[]).slice().sort(function(a,b){return a-b;});
+    var k=fam.length, off=familyOffset(digit,k), rank={};
+    for(var i=0;i<k;i++) rank[fam[(off+i)%k]]=k-i; // member at the offset ranks first
+    return fam.slice().sort(function(a,b){
+      var sA=(rank[a]||0)+metaNumBonus(a), sB=(rank[b]||0)+metaNumBonus(b);
       return (sB-sA)||(a-b);
     });
   }
@@ -1568,7 +1589,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     var d=digitOf(n);
     var ds=conv.digitScores[d];
     return `<div class="ball ${BTIERS[Math.min(i,5)]}">
-      ${pad(n)}<span class="btag">d${d}·${ds.count}/12</span>
+      ${pad(n)}<span class="btag">d${d}·${ds.count}/11</span>
     </div>`;
   }).join('');
   var altHTML=showAlt.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
@@ -1603,7 +1624,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
   var digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
     <div class="dcard ${dCls(s.count)}">
       <div class="dnum">${s.digit}</div>
-      <div class="dscore">${s.count}/12 layers</div>
+      <div class="dscore">${s.count}/11 layers</div>
       <div class="ddots">${dotHTML(s.layers,conv.LABELS)}</div>
     </div>`).join('');
 
@@ -1612,7 +1633,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
   var mapHTML=conv.sorted.slice(0,5).map(s=>{
     var nums=conv.digitToNums[s.digit]||[];
     return `<div class="maprow">
-      <span class="mapdig">Digit <b>${s.digit}</b> <span style="color:var(--muted)">(${s.count}/8)</span></span>
+      <span class="mapdig">Digit <b>${s.digit}</b> <span style="color:var(--muted)">(${s.count}/11)</span></span>
       <div class="mapnums">${nums.map(n=>{
         var cls=hotNums.includes(n)?'hot':(layers.stats.freq[n]||0)>=2?'warm':'cold';
         return `<span class="mn ${cls}">${pad(n)}</span>`;
@@ -1762,7 +1783,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       </div>
       <div class="lsteps">
         • <b>Hot numbers (${game.short}${isEZ2?' '+drawHour:''}):</b> ${hotNums.map(n=>pad(n)).join(', ')}<br>
-        • <b>Top stat digits:</b> ${layers.stats.topDigits.slice(0,5).join(', ')} (freq×4 + hot×6 + overdue×5)<br>
+        • <b>Top stat digits:</b> ${layers.stats.topDigits.slice(0,5).join(', ')} — <i>reference only; the statistics layer no longer feeds the pick</i><br>
         • <b>Recent draws analyzed:</b> ${layers.stats.draws.length} draws · Game pool: 1–${game.max}
       </div>
       <div class="st-grid">
@@ -1772,7 +1793,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     </div>
 
     <div class="disc">
-      ⚠️ [Guessing] — 12-layer expert reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (${TODAY_PH} planetary positions via a published low-precision ephemeris algorithm, accurate to roughly 1-2 arcminutes), Horary chart (Equal House system, strictures checked: radicality, void-of-course Moon, Via Combusta), Part of Fortune (day/night-aware formula), exact BaZi four pillars (dynamic daily pillars, true solar-term month/year boundaries) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (authentic Mei Hua Yi Shu time-based casting) with nuclear, changing line, and changed hexagram, Element Energy flow (BaZi + planetary + Flying Star synthesis, Lo Shu number map), Tarot (Major Arcana card of the day), Angel Numbers (repeating-digit resonance scan), and PCSO official historical data. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
+      ⚠️ [Guessing] — 11-layer date reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (${TODAY_PH} planetary positions via a published low-precision ephemeris algorithm, accurate to roughly 1-2 arcminutes), Horary chart (Equal House system, strictures checked: radicality, void-of-course Moon, Via Combusta), Part of Fortune (day/night-aware formula), exact BaZi four pillars (dynamic daily pillars, true solar-term month/year boundaries) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (authentic Mei Hua Yi Shu time-based casting) with nuclear, changing line, and changed hexagram, Element Energy flow (BaZi + planetary + Flying Star synthesis, Lo Shu number map), Tarot (Major Arcana card of the day), Angel Numbers (repeating-digit resonance scan), with PCSO official historical data shown for reference only — it no longer feeds the pick. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
     </div>
   `;
 }
@@ -1828,7 +1849,7 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   var elCls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
   var elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
   var energyHTML=elOrder.map(e=>`<div class="erow"><span class="elabel">${elEmoji[e]} ${e}</span><div class="ebar-wrap"><div class="ebar ${elCls[e]}" style="width:0%" data-w="${energy[e].pct}%"></div></div><span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span></div>`).join('');
-  var ballsHTML=userNums.map((n,i)=>{ var d=digitOf(n); var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="ball ${BTIERS[Math.min(i,5)]}">${pad(n)}<span class="btag">d${d}·${ds.count}/12</span></div>`; }).join('');
+  var ballsHTML=userNums.map((n,i)=>{ var d=digitOf(n); var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="ball ${BTIERS[Math.min(i,5)]}">${pad(n)}<span class="btag">d${d}·${ds.count}/11</span></div>`; }).join('');
   var totalScore=userNums.reduce((s,n)=>{ var d=digitOf(n); return s+(conv.digitScores&&conv.digitScores[d]?conv.digitScores[d].score:0); },0);
   var pct=Math.round(totalScore/(userNums.length*10)*100);
   var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
@@ -1846,8 +1867,8 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
     ? `<div style="font-size:11px;color:var(--muted2);margin-top:4px;">📊 Historical check: ${backtestPct}% of last ${histDraws.length} draws had at least one number matching these digits (real data, not the formula)</div>`
     : '';
   var sourceHTML=`<div style="font-size:10px;color:${PCSO_HISTORY_STATUS.loaded?'var(--muted)':'#ff6b6b'};margin-top:4px;">${PCSO_HISTORY_STATUS.loaded?'✓':'⚠'} Data source: ${PCSO_HISTORY_STATUS.source}</div>`;
-  var seen={}; var digitCardsHTML=userNums.map(n=>{ var d=digitOf(n); if(seen[d]) return ''; seen[d]=true; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0,layers:[]}; return `<div class="dcard ${dCls(ds.count)}"><div class="dnum">${d}</div><div class="dscore">${ds.count}/12 layers</div><div class="ddots">${dotHTML(ds.layers,conv.LABELS||[])}</div></div>`; }).filter(Boolean).join('');
-  var mapHTML=userNums.map(n=>{ var d=digitOf(n); var cls=hotNums.includes(n)?'hot':(layers.stats.freq&&(layers.stats.freq[n]||0)>=2)?'warm':'cold'; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="maprow"><span class="mapdig">Your # <b>${pad(n)}</b> <span style="color:var(--muted)">(digit ${d} · ${ds.count}/12)</span></span><div class="mapnums"><span class="mn ${cls}">${pad(n)}</span></div></div>`; }).join('');
+  var seen={}; var digitCardsHTML=userNums.map(n=>{ var d=digitOf(n); if(seen[d]) return ''; seen[d]=true; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0,layers:[]}; return `<div class="dcard ${dCls(ds.count)}"><div class="dnum">${d}</div><div class="dscore">${ds.count}/11 layers</div><div class="ddots">${dotHTML(ds.layers,conv.LABELS||[])}</div></div>`; }).filter(Boolean).join('');
+  var mapHTML=userNums.map(n=>{ var d=digitOf(n); var cls=hotNums.includes(n)?'hot':(layers.stats.freq&&(layers.stats.freq[n]||0)>=2)?'warm':'cold'; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="maprow"><span class="mapdig">Your # <b>${pad(n)}</b> <span style="color:var(--muted)">(digit ${d} · ${ds.count}/11)</span></span><div class="mapnums"><span class="mn ${cls}">${pad(n)}</span></div></div>`; }).join('');
   var freqBarsHTML=userNums.map(n=>{ var f=layers.stats.freq&&layers.stats.freq[n]?layers.stats.freq[n]:0; var w=Math.min(100,f*12); return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:10px;color:var(--muted2);width:22px">${pad(n)}</span><div style="flex:1;height:6px;background:var(--border);border-radius:3px"><div style="height:6px;background:${hotNums.includes(n)?'var(--gold)':'var(--teal)'};border-radius:3px;width:${w}%"></div></div><span style="font-size:10px;color:var(--muted)">${f}x</span></div>`; }).join('');
   var horaryHTML=conv._horaryHTML||''; var baziHTML=conv._baziHTML||''; var ichingHTML=conv._ichingHTML||'';
   document.getElementById('results').innerHTML=`
@@ -2044,7 +2065,12 @@ function pcsoHistDateChanged(){
 // the Stats layer never sees data it couldn't have known about yet). Swaps
 // the module-level date globals (_D/_M/_Y/_DOW) for the duration of the calc,
 // runs the existing layer functions unchanged, then restores everything.
-function computeOracleAsOf(gameKey,dateStr){
+// opts.withDetail — return {picks, sorted} per draw instead of a bare picks
+// array, so the reading panel can show which digit families led and which
+// layers hit them. Default (no opts) shape is unchanged: snapshot_oracle.mjs
+// and the Look Up panel still get plain arrays.
+function computeOracleAsOf(gameKey,dateStr,opts){
+  var withDetail=!!(opts&&opts.withDetail);
   var g=GAMES[gameKey];
   var saved={_D:_D,_M:_M,_Y:_Y,_DOW:_DOW};
   var parts=dateStr.split('-');
@@ -2064,7 +2090,8 @@ function computeOracleAsOf(gameKey,dateStr){
     try{stats=layerStats(gk,drawHour);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},topNums:[],freq:{},freq30:{},hotNums:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy=null;}
     layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
-    try{conv=convergence(layers,gk);}catch(e){conv={picks:[]};}
+    try{conv=convergence(layers,gk);}catch(e){conv={picks:[],sorted:[],LABELS:[]};}
+    if(withDetail) return {picks:conv.picks||[],sorted:conv.sorted||[],LABELS:conv.LABELS||[]};
     return conv.picks;
   }
 
@@ -2403,15 +2430,91 @@ function oraclePickDayDiff(fromStr,toStr){
   return Math.round((tb-ta)/86400000);
 }
 
-function oraclePickBalls(nums){
+
+// ══════════════════════════
+// THE DAY'S READING
+// The seven date-derived layers each compute a real, dated result — the Mei Hua
+// Yi Shu hexagram cast for that date and hour, the BaZi four pillars, the Tarot
+// card, the Flying Star, the horary chart. The pick panel used to discard all of
+// it and print six numbers. This returns it for display, plus `meaning`: the map
+// of full numbers that carry a named significance for the date, which is exactly
+// the set convergence()'s metaNumBonus pays +10 for. So a number annotated here
+// is not decoration — it is the reason that number was promoted.
+//
+// Swaps the module-level date globals for the duration and restores them, the
+// same discipline computeOracleAsOf uses.
+// ══════════════════════════
+function oracleDateReading(dateStr,drawHour){
+  var saved={_D:_D,_M:_M,_Y:_Y,_DOW:_DOW};
+  var p=String(dateStr||'').split('-');
+  if(p.length!==3) return null;
+  var y=parseInt(p[0]),m=parseInt(p[1]),d=parseInt(p[2]);
+  _D=d; _M=m; _Y=y; _DOW=new Date(y,m-1,d).getDay();
+  var out=null;
+  try{
+    var hour=drawHour||'9PM';
+    var ic=null,bz=null,ta=null,fs=null,as=null,nu=null,an=null;
+    try{ic=layerIChing(hour);}catch(e){}
+    try{bz=layerBazi(hour);}catch(e){}
+    try{ta=layerTarot(hour);}catch(e){}
+    try{fs=layerFengshui();}catch(e){}
+    try{as=layerAstrology(hour);}catch(e){}
+    try{nu=layerNumerology(hour);}catch(e){}
+    try{an=layerAngelNumbers(hour);}catch(e){}
+
+    // full numbers the engine actually rewards, and what each one means
+    var meaning={};
+    function mark(n,label){
+      if(typeof n!=='number'||!isFinite(n)||n<1) return;
+      if(!meaning[n]) meaning[n]=[];
+      if(meaning[n].indexOf(label)<0) meaning[n].push(label);
+    }
+    var hex=ic&&ic.hex;
+    if(hex){
+      mark(hex.num,'I Ching hexagram '+hex.num+(hex.name?' \u00b7 '+hex.name:''));
+      if(hex.nuclear) mark(hex.nuclear.num,'nuclear hexagram '+hex.nuclear.num);
+      if(hex.changed) mark(hex.changed.num,'changed hexagram '+hex.changed.num);
+    }
+    if(ta){
+      mark(ta.cardNum,'Tarot \u00b7 '+(ta.cardName||('card '+ta.cardNum)));
+      mark(ta.rawSum,'date number ('+ta.rawSum+')');
+    }
+    if(an&&Array.isArray(an.nums)) an.nums.forEach(function(dg){ mark(dg*11,'angel number '+(dg*11)); });
+
+    out={
+      iching:hex?{num:hex.num,name:hex.name,english:hex.english,gambling:hex.gambling,
+                  changingLine:hex.changingLine,
+                  nuclear:hex.nuclear?hex.nuclear.num+' \u00b7 '+hex.nuclear.name:null,
+                  changed:hex.changed?hex.changed.num+' \u00b7 '+hex.changed.name:null}:null,
+      bazi:bz?['year','month','day','hour'].map(function(k){
+        var pl=bz[k]; return pl?{role:k,stem:pl.stem,branch:pl.branch,el:pl.stemEl+'/'+pl.branchEl}:null;
+      }).filter(Boolean):[],
+      tarot:ta?{num:ta.cardNum,name:ta.cardName,gambling:ta.gambling}:null,
+      fengshui:(fs&&fs.loShu)?{centre:fs.loShu.C}:null,
+      astro:as?{asc:as.horaryASC,h5:as.h5sign,h5ruler:as.h5ruler,
+                pof:as.pofDeg+' '+as.pofSign,day:as.isDayChart,moonVoid:as.moonVoid}:null,
+      numerology:nu?{py:(nu.pyNums||[]).join(', '),ch:(nu.chNums||[]).join(', ')}:null,
+      meaning:meaning
+    };
+  } finally {
+    _D=saved._D; _M=saved._M; _Y=saved._Y; _DOW=saved._DOW;
+  }
+  return out;
+}
+
+// A number carrying a named meaning for the date gets a marker; that meaning is
+// literally why convergence() promoted it (+10 via metaNumBonus), so the marker
+// points at real mechanism, not decoration.
+function oraclePickBalls(nums,meaning){
   return (nums||[]).map(function(n){
-    return '<span class="pnum pick">'+p2(n)+'</span>';
+    var m=meaning&&meaning[n];
+    return '<span class="pnum pick'+(m?' pnum-meant':'')+'"'+(m?' title="'+m.join(' \u00b7 ')+'"':'')+'>'+p2(n)+'</span>';
   }).join('');
 }
 
-// One block per game: label + source tag on the left, the picked numbers under
-// it. EZ2 fans out into its three draw times.
-function oraclePickGameHTML(gameKey,dateStr){
+// One block per game: label + source tag, the picked numbers, and the digit
+// families that carried them. EZ2 fans out into its three draw times.
+function oraclePickGameHTML(gameKey,dateStr,meaning){
   var look=null;
   try{ look=oracleHistLookup(gameKey,dateStr); }
   catch(e){ console.error('oraclePickGameHTML '+gameKey+' '+dateStr+':',e); }
@@ -2425,12 +2528,60 @@ function oraclePickGameHTML(gameKey,dateStr){
     var cols=['2PM','5PM','9PM'].map(function(t){
       var nums=look.picks[t]||[];
       return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'
-        +'<div class="pcso-hist-row">'+oraclePickBalls(nums)+'</div></div>';
+        +'<div class="pcso-hist-row">'+oraclePickBalls(nums,meaning)+'</div></div>';
     }).join('');
     return '<div class="oracle-pick-game-row">'+name+'<div class="oracle-pick-cols">'+cols+'</div></div>';
   }
   return '<div class="oracle-pick-game-row">'+name
-    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks)+'</div></div>';
+    +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning)+'</div></div>';
+}
+
+// The date's reading, rendered once above the games — it is the same reading for
+// every 6-ball draw that day (all are 9PM).
+function oracleReadingHTML(rd,digits){
+  if(!rd) return '';
+  var rows=[];
+  // The digit ranking is date-only now, so it is identical for every game that
+  // day — shown once here rather than repeated under each one.
+  if(digits&&digits.sorted&&digits.sorted.length){
+    rows.push(['Digits',digits.sorted.slice(0,4).map(function(f){
+      var srcs=(f.layers||[]).map(function(i){ return digits.LABELS[i]; }).filter(Boolean).join(' ');
+      return '<b>'+f.digit+'</b> '+f.count+'/'+digits.LABELS.length+(srcs?' <span style="opacity:.7">('+srcs+')</span>':'');
+    }).join('<br>')]);
+  }
+  if(rd.iching) rows.push(['I Ching',
+    '<b>'+rd.iching.num+' \u00b7 '+rd.iching.name+'</b> ('+rd.iching.english+')'
+    +(rd.iching.gambling?'<span class="ord-note">'+rd.iching.gambling+'</span>':'')
+    +'<span class="ord-note">nuclear '+(rd.iching.nuclear||'\u2014')+' \u00b7 changed '+(rd.iching.changed||'\u2014')+'</span>']);
+  if(rd.bazi&&rd.bazi.length) rows.push(['BaZi',
+    rd.bazi.map(function(p){ return p.stem+p.branch; }).join(' \u00b7 ')
+    +'<span class="ord-note">'+rd.bazi.map(function(p){ return p.role+': '+p.el; }).join(' \u00b7 ')+'</span>']);
+  if(rd.tarot) rows.push(['Tarot',
+    '<b>'+rd.tarot.name+'</b> ('+rd.tarot.num+')'
+    +(rd.tarot.gambling?'<span class="ord-note">'+rd.tarot.gambling+'</span>':'')]);
+  if(rd.fengshui) rows.push(['Flying Star','<b>'+rd.fengshui.centre+'</b> in the centre palace']);
+  if(rd.astro) rows.push(['Horary',
+    rd.astro.asc+' rising'
+    +'<span class="ord-note">5th house '+rd.astro.h5+' (ruler '+rd.astro.h5ruler+') \u00b7 Part of Fortune '+rd.astro.pof
+    +' \u00b7 '+(rd.astro.day?'day':'night')+' chart'+(rd.astro.moonVoid?' \u00b7 Moon void of course':'')+'</span>']);
+  if(rd.numerology) rows.push(['Numerology','Pythagorean '+rd.numerology.py+'<span class="ord-note">Chaldean '+rd.numerology.ch+'</span>']);
+
+  var meantKeys=Object.keys(rd.meaning||{}).map(Number).sort(function(a,b){return a-b;});
+  var meantHTML='';
+  if(meantKeys.length){
+    meantHTML='<div class="ord-meant"><div class="ord-meant-h">Numbers carrying a meaning today</div>'
+      +meantKeys.map(function(n){
+        return '<div class="ord-meant-row"><span class="pnum pick pnum-meant">'+p2(n)+'</span>'
+          +'<span>'+rd.meaning[n].join(' \u00b7 ')+'</span></div>';
+      }).join('')
+      +'<div class="ord-note" style="margin-top:6px">These are the full-number matches the engine rewards (+10 each) when choosing within a digit family.</div></div>';
+  }
+
+  return '<details class="oracle-reading"><summary>\u25b8 The day\u2019s reading</summary>'
+    +'<div class="ord-body">'
+    +rows.map(function(r){ return '<div class="ord-row"><span class="ord-k">'+r[0]+'</span><span class="ord-v">'+r[1]+'</span></div>'; }).join('')
+    +meantHTML
+    +'</div></details>';
 }
 
 function oraclePickRender(){
@@ -2455,16 +2606,27 @@ function oraclePickRender(){
     out.innerHTML='<span class="pcso-hist-none">No PCSO draw is scheduled on '+oraclePickFmtDate(dateVal)+'.</span>';
     return;
   }
+  var reading=null;
+  try{ reading=oracleDateReading(dateVal,'9PM'); }catch(e){ console.error('oracleDateReading:',e); }
+  var meaning=(reading&&reading.meaning)||{};
+  // one detail run for the day — the digit ranking no longer varies by game
+  var digits=null;
+  try{
+    var probe=scheduled.filter(function(g){return g!=='ez2';})[0]||scheduled[0];
+    var det=computeOracleAsOf(probe,dateVal,{withDetail:true});
+    digits=(probe==='ez2')?(det&&det['9PM']):det;
+  }catch(e){ console.error('digit detail:',e); }
   out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
     +'<div class="oracle-pick-sub">'+scheduled.length+' draw'+(scheduled.length===1?'':'s')+' this day</div>'
-    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal); }).join('');
+    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal,meaning); }).join('')
+    +oracleReadingHTML(reading,digits);
 
   if(noteEl){
     var todayStr=oraclePickTodayStr();
     var notes=[];
     if(dateVal>todayStr){
       var ahead=oraclePickDayDiff(todayStr,dateVal);
-      notes.push('Read '+ahead+' day'+(ahead===1?'':'s')+' ahead. The date layers (numerology, astrology, BaZi, Flying Star, I Ching, Tarot, Angel) are computed for '+oraclePickFmtDate(dateVal)+' exactly; the statistics layer can only use draws that exist today, so these picks can still shift as results land between now and then.');
+      notes.push('Read '+ahead+' day'+(ahead===1?'':'s')+' ahead. Every layer is computed for '+oraclePickFmtDate(dateVal)+' exactly and nothing here uses past draws, so this pick is already final \u2014 it will read the same on the day itself.');
     }
     notes.push('⚠️ For entertainment only. Lottery draws are independent random events — no layer here can know the next one. Play responsibly.');
     noteEl.innerHTML=notes.map(function(t){return '<div>'+t+'</div>';}).join('');
