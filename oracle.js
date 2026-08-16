@@ -1963,19 +1963,8 @@ function pcsoRender(){
   if(lbl) lbl.textContent=d.date;
   var h='';
   var phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
-  var phHour=phNow.getHours()+phNow.getMinutes()/60;
-  d.ez2.forEach(function(e){
-    var drawDone=e.nums.length>0||(phHour>=(e.cutoff+0.1));
-    var n;
-    if(e.nums.length>0){
-      n=e.nums.map(function(x){return '<span class="pnum win">'+p2(x)+'</span>';}).join('');
-    } else if(drawDone){
-      n='<span class="pcso-pending" style="color:var(--muted2)">Result not yet recorded</span>';
-    } else {
-      n='<span class="pcso-pending">Pending…</span>';
-    }
-    h+='<div class="pcso-row"><span class="pcso-game">EZ2</span><span class="pcso-draw">'+e.draw+'</span><div class="pcso-nums">'+n+'</div></div>';
-  });
+  // EZ2 rows removed from this widget on request; EZ2 results are still
+  // available in the Look Up Past Result panel.
   d.balls.forEach(function(g){
     var n=g.done?g.nums.map(function(x){return '<span class="pnum win">'+p2(x)+'</span>';}).join(''):'<span class="pcso-pending">'+(g.note||'Pending…')+'</span>';
     var meta='';
@@ -2565,7 +2554,37 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
   var scored=(gameKey==='ez2')?(look.picks['9PM']||[]):look.picks;
   var ds=(slice&&slice.digitScores)||{};
   var totalScore=scored.reduce(function(a,n){ var d=digitOf(n); return a+(ds[d]?ds[d].score:0); },0);
-  var pct=scored.length?Math.round(totalScore/(scored.length*10)*100):0;
+  var digitPct=scored.length?Math.round(totalScore/(scored.length*10)*100):0;
+
+  // ── MEANING CAPTURE — the only genuinely per-game half of the score ──
+  // Digit convergence is computed from the eleven date layers, which take no
+  // game input, and the capped filler always takes two from each of the top
+  // three families — so the digit half is arithmetically identical for every
+  // 6-ball game on a date. Measured: same digitScores, same digit multiset,
+  // therefore the same percentage every time.
+  //
+  // What does differ is the day's meaningful FULL numbers. They are absolute,
+  // so the pool decides which are even reachable — on 2026-08-16 the changed
+  // hexagram 52 is in play for 6/58 and out of range for 6/49 — and the
+  // family rotation decides which of the reachable ones the pick actually
+  // takes. So the score blends the two.
+  //
+  // 70/30 is a stated choice, not a tuned one: digit convergence is the
+  // reading's backbone and stays dominant, while capture is a sharper but
+  // much smaller signal (a handful of numbers a day). Never tune either
+  // weight for hit rate.
+  var W_DIGIT=0.70, W_CAPTURE=0.30;
+  var pool=(GAMES[gameKey]&&GAMES[gameKey].max)||58;
+  var meantAll=Object.keys(meaning||{}).map(Number);
+  var reachable=meantAll.filter(function(n){ return n>=1&&n<=pool; });
+  var captured=scored.filter(function(n){ return meantAll.indexOf(n)>=0; });
+  var capMax=Math.min(scored.length,reachable.length);
+  var capPct=capMax?Math.round(captured.length/capMax*100):null;
+  // No meaningful number is reachable today — nothing to capture, so the
+  // score is the digit half alone rather than a penalty for the impossible.
+  var pct=(capPct===null)?digitPct:Math.round(W_DIGIT*digitPct+W_CAPTURE*capPct);
+  var breakdown={digitPct:digitPct,capPct:capPct,captured:captured,reachable:reachable,
+                 capMax:capMax,wDigit:W_DIGIT,wCapture:W_CAPTURE};
 
   var ballsHTML;
   if(gameKey==='ez2'){
@@ -2581,7 +2600,7 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
   // then the numbers — the reading sits BEFORE the picks it explains
   // the collapsible IS the pick row: a caret, then the spheres. Clicking
   // anywhere on the row opens that game's reading underneath.
-  var body=oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr);
+  var body=oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr,breakdown);
   if(!body) return '<div class="oracle-pick-game-row">'+name+ballsHTML+'</div>';
   return '<div class="oracle-pick-game-row">'+name
     +'<details class="oracle-reading"><summary class="opick-sum">'
@@ -2593,7 +2612,7 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
 // The reading for one game line. Built from the SAME helpers Run Expert uses —
 // the alignment notes, the energy bars, the dcard convergence grid and lcard()
 // with the horary / BaZi / I Ching panels — so the two views are one design.
-function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr){
+function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr,bd){
   if(!rd||!rd.layers) return '';
   var L=rd.layers, html='';
   var when=oraclePickFmtDate(dateStr);
@@ -2603,6 +2622,17 @@ function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr){
   var al=pct>=70?'\uD83D\uDFE2 Strong Alignment':pct>=45?'\uD83D\uDFE1 Moderate Alignment':'\uD83D\uDD34 Weak Alignment';
   var modeHTML='<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: \u26a1\uD83C\uDF10 Hybrid \u2014 strongest digit energies, max '
     +((gameKey==='ez2')?'one number':'two numbers')+' per digit family</div>';
+  var splitHTML='';
+  if(bd){
+    splitHTML='<div style="font-size:11px;color:var(--muted);margin-top:6px;">'
+      +'Digit convergence <b>'+bd.digitPct+'%</b> \u00d7'+bd.wDigit
+      +(bd.capPct===null
+        ? ' \u2014 no meaningful number is reachable in 1\u2013'+((GAMES[gameKey]&&GAMES[gameKey].max)||'')+' today, so the score is the digit half alone'
+        : '  \u00b7  meaning capture <b>'+bd.capPct+'%</b> \u00d7'+bd.wCapture
+          +'<br>captured '+(bd.captured.length?bd.captured.map(function(n){return p2(n);}).join(', '):'none')
+          +' of '+bd.capMax+' reachable ('+bd.reachable.map(function(n){return p2(n);}).join(', ')+')')
+      +'</div>';
+  }
   var cnt={};
   (scored||[]).forEach(function(n){ var d=digitOf(n); cnt[d]=(cnt[d]||0)+1; });
   var coll=Object.keys(cnt).filter(function(d){ return cnt[d]>1; });
@@ -2625,7 +2655,7 @@ function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr){
     +'<div class="alt-label" style="margin-bottom:10px;">Overall Alignment \u00b7 '+when+'</div>'
     +'<div style="font-size:36px;font-weight:800;color:'+ac+';margin-bottom:4px;">'+pct+'%</div>'
     +'<div style="font-size:13px;color:var(--muted2)">'+al+'</div>'
-    +modeHTML+collisionHTML+backtestHTML+sourceHTML+'</div>';
+    +modeHTML+splitHTML+collisionHTML+backtestHTML+sourceHTML+'</div>';
 
   if(slice&&slice.energy){
     html+='<div class="slabel">Current Energy Flow \u00b7 '+when+' \u00b7 '+((gameKey==='ez2')?'9PM':'9PM')+'</div>'
