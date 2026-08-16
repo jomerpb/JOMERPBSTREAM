@@ -1001,7 +1001,7 @@
 /* A picked number that carries a named meaning for the date — the same set
    convergence() pays +10 for. Marked, not recoloured: it is still a pick. */
 #oracle-page .pnum-meant{position:relative;border-color:var(--accent2)}
-#oracle-page .pnum-meant::after{content:'\u25c6';position:absolute;top:-5px;right:-3px;font-size:7px;color:var(--accent2)}
+#oracle-page .pnum-meant::after{content:'\25c6';position:absolute;top:-5px;right:-3px;font-size:7px;color:var(--accent2)}
 
 /* Digit families that carried a game's pick */
 #oracle-page .oracle-pick-fam{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:9px}
