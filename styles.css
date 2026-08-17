@@ -965,12 +965,6 @@
 #oracle-page .pcso-hist-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 #oracle-page .pcso-hist-none{font-size:11px;color:var(--muted);font-style:italic}
 #oracle-page .pcso-hist-jackpot{font-size:11px;color:#4cfc9a;font-weight:700;margin-top:8px;text-align:center}
-/* Stand-in jackpot for a draw that has no result on file yet — carried over
-   from the previous play. Same green so it reads as the same kind of figure,
-   dimmed and tagged so it is never mistaken for a confirmed amount. */
-#oracle-page .pcso-hist-jackpot.est{color:rgba(76,252,154,.62)}
-#oracle-page .pcso-hist-est-tag{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:1px 4px;margin-left:3px;vertical-align:1px}
-#oracle-page .pcso-hist-estnote{font-size:10px;line-height:1.45;color:var(--muted);margin-top:3px;text-align:center;max-width:280px;margin-left:auto;margin-right:auto}
 /* Sub-label inside a game block ("Oracle's Pick", "pick") and its match count.
    .pcso-hist-oracle-label is gone with the single-game layout. */
 #oracle-page .pcso-hist-sublbl{font-family:'Bebas Neue',sans-serif;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin:10px 0 5px;text-align:center}
@@ -1203,39 +1197,48 @@
    spheres — so the whole row is the toggle and the reading opens underneath. */
 #oracle-page .oracle-reading summary{cursor:pointer;list-style:none}
 #oracle-page .oracle-reading summary::-webkit-details-marker{display:none}
-/* EDGE TO EDGE. The numbers used to be centred in the row, which left an empty
-   gutter on the right exactly as wide as the name on the left — symmetric
-   margins, but only one of them holding anything. Now the name keeps its fixed
-   lead at the left and the numbers TAKE THE REST: the row stretches to the
-   card's right edge, so there is no gutter to mirror. It also makes them
-   noticeably bigger, because none of the width is being reserved for nothing.
-   The lead is back in normal flow — with nothing to centre around, absolute
-   positioning bought nothing and only risked the numbers running under it. */
-#oracle-page .opick-sum{display:flex;align-items:center;gap:8px}
+/* EDGE TO EDGE, now STACKED. The name used to sit inline to the left of the
+   spheres; it is a header line above them instead, so the spheres get the whole
+   card width — the lead is no longer holding any of it — and the jackpot line
+   has somewhere to live, which it does not beside six spheres. The summary is
+   still the whole toggle: header, jackpot line and spheres are all inside it,
+   so a tap anywhere on the block opens the reading. */
+#oracle-page .opick-sum{display:flex;flex-direction:column;align-items:stretch;gap:7px}
 #oracle-page .opick-lead{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
 #oracle-page .opick-lead-main{display:flex;align-items:center;gap:6px}
+/* The header line reads left, as a group label for what is under it. .opick-lead
+   is shared with Look Up Result, which centres its own lead — override only
+   inside the stacked summary. */
+#oracle-page .opick-sum > .opick-lead{align-items:flex-start}
 /* Direct children only. As a descendant selector this also hit the .pcso-hist-row
    nested inside each EZ2 column and, being declared later at equal specificity,
    overrode that row's width:100% — so EZ2's columns collapsed to their content
    and its spheres came out half-size while every other row filled. */
 #oracle-page .opick-sum > .pcso-hist-row,
-#oracle-page .opick-sum > .oracle-pick-cols{flex:1;width:auto;min-width:0}
+#oracle-page .opick-sum > .oracle-pick-cols{width:100%;min-width:0}
 #oracle-page .opick-caret{color:var(--muted2);font-size:12px;line-height:1;flex-shrink:0;transition:transform .15s}
 #oracle-page .oracle-reading[open] .opick-caret{transform:rotate(90deg)}
-/* Rows still line up with each other because the lead is a fixed width: "EZ2"
-   is a shorter name than "6/49", and without the reserve its numbers would
-   start further left than the rows above. In em of the name's own size, so it
-   tracks the steps below. */
+/* What the previous play left on the table, for a draw that has not happened
+   yet. Muted, not the confirmed jackpot's bright green: it is carried over, and
+   the real figure lands in Look Up Result once the draw is posted. */
+#oracle-page .opick-jackpot{font-size:10px;line-height:1.5;color:var(--muted);text-align:left}
+/* Look Up Result still needs the reserve: its name is a left column beside the
+   body, and without a shared width "EZ2" would start its numbers further left
+   than "6/45" above it. Only the stacked summary drops it — there the names sit
+   on their own line at the card's edge, where a right-aligned 4.2em box would
+   just push them off it. */
 #oracle-page .oracle-pick-gname{min-width:4.2em}
+#oracle-page .opick-sum .oracle-pick-gname{min-width:0;text-align:left}
 @media (max-width:429px){
   #oracle-page .opick-sum{gap:6px}
   #oracle-page .opick-lead-main{gap:4px}
   #oracle-page .oracle-pick-gname{font-size:12px;letter-spacing:.08em}
 }
 @media (max-width:360px){
-  #oracle-page .opick-sum{gap:4px}
+  #oracle-page .opick-sum{gap:5px}
   #oracle-page .opick-caret{font-size:10px}
   #oracle-page .oracle-pick-gname{font-size:11px;letter-spacing:.04em}
+  #oracle-page .opick-jackpot{font-size:9px}
 }
 #oracle-page .oracle-reading[open] summary{margin-bottom:11px}
 #oracle-page .ord-body{text-align:left}
