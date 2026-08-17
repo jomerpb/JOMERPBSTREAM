@@ -2295,27 +2295,43 @@ function pcsoHistResetJackpot(gameKey,dateStr){
   return reset;
 }
 
-// Standing in for a draw that isn't on file yet: the prize the previous play
-// left on the table, so the amount at stake is visible before PCSO posts the
-// result. Two cases, and they give different numbers \u2014 if nobody won the last
-// draw its jackpot rolls over into this one, but if somebody did, this draw
-// starts again from the game's reset amount. Labelled an estimate either way:
-// PCSO's announced figure includes the sales since that draw, which is not
-// something this file knows. Replaced by the real jackpot the moment the
-// result lands in pcso-history.json \u2014 nothing here has to be cleaned up.
-function pcsoHistEstJackpotHTML(gameKey,dateStr){
+// How far ahead a draw still gets a jackpot line on the Oracle Pick panel.
+// The panel reaches two years out, and an estimate carried from today's
+// standings says nothing useful about a draw four months away \u2014 every draw in
+// between moves the number. Seven days is the horizon where "what is on the
+// table" is still roughly what will be on the table.
+var ORACLE_PICK_JACKPOT_DAYS=7;
+
+// The money line under a game's name on the Oracle Pick panel: what the
+// previous play left on the table, so the amount at stake is readable next to
+// the numbers. Two cases, and they give different figures \u2014 if nobody won the
+// last draw its jackpot rolls over into this one, but if somebody did, this
+// draw starts again from the game's reset amount.
+//
+// Shown only for a 6-ball draw that is between today and +7 days and has no
+// result on file yet. A drawn date already carries the real figure in Look Up
+// Result, and EZ2 is excluded because its prize is fixed, not a rollover.
+//
+// It is an estimate \u2014 PCSO's announced figure also includes the sales since
+// that draw, which this file has no way to know \u2014 hence the wording, which
+// states the fact it is derived from ("no winner on Aug 14") rather than
+// asserting a jackpot for a draw that has not happened.
+function oraclePickJackpotHTML(gameKey,dateStr){
+  if(gameKey==='ez2') return '';
+  var today=oraclePickTodayStr();
+  if(dateStr<today) return '';
+  if(oraclePickDayDiff(today,dateStr)>ORACLE_PICK_JACKPOT_DAYS) return '';
+  if(pcsoHistEntry(gameKey,dateStr)) return '';
   var prev=pcsoHistPrevEntry(gameKey,dateStr);
   if(!prev||typeof prev.jackpot!=='number'||!isFinite(prev.jackpot)) return '';
   var won=(typeof prev.winners==='number'&&prev.winners>0);
   var amt=won?pcsoHistResetJackpot(gameKey,dateStr):prev.jackpot;
   if(typeof amt!=='number'||!isFinite(amt)) return '';
   var when=pcsoHistShortDate(prev.date);
-  var note=won
-    ? when+' was won \u2014 this draw restarts at the minimum.'
-    : 'No winner on '+when+', so '+pcsoFmtJackpot(prev.jackpot)+' rolls over.';
-  return '<div class="pcso-hist-jackpot est">'+pcsoFmtJackpot(amt)
-    +' jackpot <span class="pcso-hist-est-tag">est.</span></div>'
-    +'<div class="pcso-hist-estnote">'+note+' Updates when the result is posted.</div>';
+  var txt=won
+    ? when+' was won, so this draw restarts at '+pcsoFmtJackpot(amt)+'.'
+    : 'No winner on '+when+', so '+pcsoFmtJackpot(amt)+' rolls over.';
+  return '<div class="opick-jackpot">'+txt+' Updates when the result is posted.</div>';
 }
 
 function pcsoHistJackpotHTML(entry){
@@ -2372,8 +2388,7 @@ function pcsoHistGameHTML(gameKey,dateStr){
   var win6=(entry&&Array.isArray(entry.nums))?entry.nums:[];
   var body6=win6.length
     ? '<div class="pcso-hist-row">'+pcsoHistWinBalls(win6)+'</div>'+pcsoHistJackpotHTML(entry)
-    : '<div class="pcso-hist-row"><span class="pcso-hist-none">No result on file.</span></div>'
-      +pcsoHistEstJackpotHTML(gameKey,dateStr);
+    : '<div class="pcso-hist-row"><span class="pcso-hist-none">No result on file.</span></div>';
   if(look&&Array.isArray(look.picks)&&look.picks.length){
     var hits=look.picks.filter(function(n){ return win6.indexOf(n)>=0; }).length;
     body6+='<div class="pcso-hist-sublbl">Oracle\u2019s Pick</div>'
@@ -2722,25 +2737,26 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
     ballsHTML='<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts)+'</div>';
   }
 
-  // The whole line IS the toggle, read left to right: game name + source tag,
-  // then the caret, then that game's spheres. Clicking anywhere on it opens
-  // the reading underneath, which sits BEFORE the picks it explains.
-  // EZ2's spheres carry a 2PM/5PM/9PM label above them, which makes its column
-  // block taller than a 6-ball row and puts the flex centre line above the
-  // spheres. The lead gets an empty label of the SAME class, so both sides have
-  // the same header row and the name and caret land on the spheres' centre --
-  // rather than nudging it with a magic margin that would drift the next time
-  // .oracle-pick-slot changes.
-  var lead='<span class="opick-lead">'
-    +((gameKey==='ez2')?'<span class="oracle-pick-slot" aria-hidden="true">&nbsp;</span>':'')
-    +'<span class="opick-lead-main">'+name
+  // The whole block IS the toggle, read top to bottom: the game name + source
+  // tag + caret on their own line, then the jackpot line when there is one,
+  // then that game's spheres. Clicking anywhere on it opens the reading
+  // underneath, which sits BEFORE the picks it explains.
+  //
+  // The name used to sit inline to the LEFT of the spheres. Stacking it is what
+  // makes room for the jackpot line \u2014 a full-width sentence has nowhere to go
+  // beside a row of six spheres \u2014 and it hands the spheres the width the lead
+  // was holding. No EZ2 spacer any more: the empty .oracle-pick-slot label
+  // existed only to drop the inline name onto the centre line of EZ2's taller
+  // column block, and above the spheres there is nothing to centre against.
+  var lead='<span class="opick-lead"><span class="opick-lead-main">'+name
     +'<span class="opick-caret" aria-hidden="true">\u25b8</span></span></span>';
+  var jackpot=oraclePickJackpotHTML(gameKey,dateStr);
 
   var body=oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr,breakdown);
-  if(!body) return '<div class="oracle-pick-game-row"><div class="oracle-pick-gname-block">'+name+'</div>'+ballsHTML+'</div>';
+  if(!body) return '<div class="oracle-pick-game-row"><div class="oracle-pick-gname-block">'+name+'</div>'+jackpot+ballsHTML+'</div>';
   return '<div class="oracle-pick-game-row">'
     +'<details class="oracle-reading"><summary class="opick-sum">'
-    +lead+ballsHTML+'</summary>'
+    +lead+jackpot+ballsHTML+'</summary>'
     +'<div class="ord-body">'+body+'</div></details></div>';
 }
 
