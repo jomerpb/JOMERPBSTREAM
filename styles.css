@@ -636,6 +636,63 @@
 #oracle-page .b4{background:radial-gradient(circle at 35% 30%,#aa88ff,var(--accent) 55%,#3a1aaa);color:#fff;border:2px solid rgba(124,92,252,.5)}
 #oracle-page .b5{background:radial-gradient(circle at 35% 30%,#66dd99,#22aa55 55%,#115528);color:#fff;border:2px solid rgba(76,200,120,.4)}
 #oracle-page .b6{background:radial-gradient(circle at 35% 30%,#ff88aa,var(--red) 55%,#aa1133);color:#fff;border:2px solid rgba(252,92,124,.4)}
+
+/* ── ORACLE PICK SPHERE COLOURS (.osph-0 .. .osph-35) ──
+   36 colours: 6 games x 6 positions, every one distinct, so a colour cannot
+   repeat within a line, within a game, or on a day — a day shows at most four
+   games, 24 spheres. Keyed on the GAME rather than its slot in that day's
+   list, so a game keeps its own six on every date.
+
+   Within a row the six hues sit a full 60 degrees apart — red, yellow, green,
+   cyan, blue, magenta — so neighbours are strongly different colours rather
+   than shades of one family. Each game rotates that wheel by 10 degrees, which
+   is exactly what keeps all 36 distinct (0,10,20,30,40,50 are distinct modulo
+   60), and carries its own lightness/saturation so two rows never read as a
+   copy of each other.
+
+   The b1..b6 tiers above are untouched: Run Expert's own sphere rows still use
+   them, and oraclePickBalls falls back to them when no game is passed.
+
+   Same recipe as those tiers — highlight at 35%/30%, base at 55%, dark rim,
+   2px translucent border. Text colour per sphere is chosen by measured WCAG
+   contrast against its own base rather than by eye; the weakest of the 36 is
+   4.7:1. Generated, not hand-picked — see the commit for the generator. */
+#oracle-page .osph-0{background:radial-gradient(circle at 35% 30%,#f9a9a9,#ea5353 55%,#ab0d0d);color:#12100a;border:2px solid rgba(239,128,128,.5)}
+#oracle-page .osph-1{background:radial-gradient(circle at 35% 30%,#f9f9a9,#eaea53 55%,#abab0d);color:#12100a;border:2px solid rgba(239,239,128,.5)}
+#oracle-page .osph-2{background:radial-gradient(circle at 35% 30%,#a9f9a9,#53ea53 55%,#0dab0d);color:#12100a;border:2px solid rgba(128,239,128,.5)}
+#oracle-page .osph-3{background:radial-gradient(circle at 35% 30%,#a9f9f9,#53eaea 55%,#0dabab);color:#12100a;border:2px solid rgba(128,239,239,.5)}
+#oracle-page .osph-4{background:radial-gradient(circle at 35% 30%,#a9a9f9,#5353ea 55%,#0d0dab);color:#fff;border:2px solid rgba(128,128,239,.5)}
+#oracle-page .osph-5{background:radial-gradient(circle at 35% 30%,#f9a9f9,#ea53ea 55%,#ab0dab);color:#12100a;border:2px solid rgba(239,128,239,.5)}
+#oracle-page .osph-6{background:radial-gradient(circle at 35% 30%,#fbdbd5,#ec917e 55%,#d13415);color:#12100a;border:2px solid rgba(242,183,171,.5)}
+#oracle-page .osph-7{background:radial-gradient(circle at 35% 30%,#f5fbd5,#daec7e 55%,#b1d115);color:#12100a;border:2px solid rgba(230,242,171,.5)}
+#oracle-page .osph-8{background:radial-gradient(circle at 35% 30%,#d5fbdb,#7eec91 55%,#15d134);color:#12100a;border:2px solid rgba(171,242,183,.5)}
+#oracle-page .osph-9{background:radial-gradient(circle at 35% 30%,#d5f5fb,#7edaec 55%,#15b1d1);color:#12100a;border:2px solid rgba(171,230,242,.5)}
+#oracle-page .osph-10{background:radial-gradient(circle at 35% 30%,#dbd5fb,#917eec 55%,#3415d1);color:#12100a;border:2px solid rgba(183,171,242,.5)}
+#oracle-page .osph-11{background:radial-gradient(circle at 35% 30%,#fbd5f5,#ec7eda 55%,#d115b1);color:#12100a;border:2px solid rgba(242,171,230,.5)}
+#oracle-page .osph-12{background:radial-gradient(circle at 35% 30%,#f88e59,#d55515 55%,#612405);color:#12100a;border:2px solid rgba(235,112,51,.5)}
+#oracle-page .osph-13{background:radial-gradient(circle at 35% 30%,#c3f859,#95d515 55%,#426105);color:#12100a;border:2px solid rgba(173,235,51,.5)}
+#oracle-page .osph-14{background:radial-gradient(circle at 35% 30%,#59f88e,#15d555 55%,#056124);color:#12100a;border:2px solid rgba(51,235,112,.5)}
+#oracle-page .osph-15{background:radial-gradient(circle at 35% 30%,#59c3f8,#1595d5 55%,#054261);color:#12100a;border:2px solid rgba(51,173,235,.5)}
+#oracle-page .osph-16{background:radial-gradient(circle at 35% 30%,#8e59f8,#5515d5 55%,#240561);color:#fff;border:2px solid rgba(112,51,235,.5)}
+#oracle-page .osph-17{background:radial-gradient(circle at 35% 30%,#f859c3,#d51595 55%,#610542);color:#fff;border:2px solid rgba(235,51,173,.5)}
+#oracle-page .osph-18{background:radial-gradient(circle at 35% 30%,#f8dbbf,#e5a86c 55%,#b66616);color:#12100a;border:2px solid rgba(237,194,151,.5)}
+#oracle-page .osph-19{background:radial-gradient(circle at 35% 30%,#dbf8bf,#a8e56c 55%,#66b616);color:#12100a;border:2px solid rgba(194,237,151,.5)}
+#oracle-page .osph-20{background:radial-gradient(circle at 35% 30%,#bff8db,#6ce5a8 55%,#16b666);color:#12100a;border:2px solid rgba(151,237,194,.5)}
+#oracle-page .osph-21{background:radial-gradient(circle at 35% 30%,#bfdbf8,#6ca8e5 55%,#1666b6);color:#12100a;border:2px solid rgba(151,194,237,.5)}
+#oracle-page .osph-22{background:radial-gradient(circle at 35% 30%,#dbbff8,#a86ce5 55%,#6616b6);color:#12100a;border:2px solid rgba(194,151,237,.5)}
+#oracle-page .osph-23{background:radial-gradient(circle at 35% 30%,#f8bfdb,#e56ca8 55%,#b61666);color:#12100a;border:2px solid rgba(237,151,194,.5)}
+#oracle-page .osph-24{background:radial-gradient(circle at 35% 30%,#fcd27e,#efab25 55%,#8b5e04);color:#12100a;border:2px solid rgba(242,190,84,.5)}
+#oracle-page .osph-25{background:radial-gradient(circle at 35% 30%,#a8fc7e,#68ef25 55%,#318b04);color:#12100a;border:2px solid rgba(137,242,84,.5)}
+#oracle-page .osph-26{background:radial-gradient(circle at 35% 30%,#7efcd2,#25efab 55%,#048b5e);color:#12100a;border:2px solid rgba(84,242,190,.5)}
+#oracle-page .osph-27{background:radial-gradient(circle at 35% 30%,#7ea8fc,#2568ef 55%,#04318b);color:#fff;border:2px solid rgba(84,137,242,.5)}
+#oracle-page .osph-28{background:radial-gradient(circle at 35% 30%,#d27efc,#ab25ef 55%,#5e048b);color:#fff;border:2px solid rgba(190,84,242,.5)}
+#oracle-page .osph-29{background:radial-gradient(circle at 35% 30%,#fc7ea8,#ef2568 55%,#8b0431);color:#12100a;border:2px solid rgba(242,84,137,.5)}
+#oracle-page .osph-30{background:radial-gradient(circle at 35% 30%,#f0e39d,#d8c24f 55%,#8c7917);color:#12100a;border:2px solid rgba(226,208,121,.5)}
+#oracle-page .osph-31{background:radial-gradient(circle at 35% 30%,#abf09d,#66d84f 55%,#2a8c17);color:#12100a;border:2px solid rgba(139,226,121,.5)}
+#oracle-page .osph-32{background:radial-gradient(circle at 35% 30%,#9df0e3,#4fd8c2 55%,#178c79);color:#12100a;border:2px solid rgba(121,226,208,.5)}
+#oracle-page .osph-33{background:radial-gradient(circle at 35% 30%,#9dabf0,#4f66d8 55%,#172a8c);color:#fff;border:2px solid rgba(121,139,226,.5)}
+#oracle-page .osph-34{background:radial-gradient(circle at 35% 30%,#e39df0,#c24fd8 55%,#79178c);color:#12100a;border:2px solid rgba(208,121,226,.5)}
+#oracle-page .osph-35{background:radial-gradient(circle at 35% 30%,#f09dab,#d84f66 55%,#8c172a);color:#12100a;border:2px solid rgba(226,121,139,.5)}
 #oracle-page .btag{
   position:absolute;bottom:-4px;right:-4px;
   background:rgba(0,0,0,.85);

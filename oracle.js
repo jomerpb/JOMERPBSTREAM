@@ -2687,12 +2687,30 @@ function oracleDateReading(dateStr,drawHour){
   return out;
 }
 
-function oraclePickBalls(nums,meaning,counts){
+// Sphere colour on the Oracle Pick panel is per GAME and per POSITION — 6 x 6
+// = 36 distinct colours — so no colour can repeat within a line, within a
+// game, or on a day (a day shows at most 4 games, 24 spheres). A game keeps
+// its own six on every date, since the index is the game itself and not its
+// slot in that day's list. Run Expert keeps the shared b1..b6 tiers.
+var OSPH_GAMES=['642','645','649','655','658','ez2'];
+function osphClass(gameKey,i){
+  var g=OSPH_GAMES.indexOf(gameKey);
+  return 'osph-'+((g<0?0:g)*6+Math.min(i,5));
+}
+
+// offset shifts where this group starts in the six positions. EZ2 renders three
+// two-sphere columns through three separate calls, and without it every column
+// restarted at position 0 — so its six spheres only ever used two colours,
+// alternating down the row, while a 6-ball row used all six. 2PM starts at 0,
+// 5PM at 2, 9PM at 4, and EZ2 gets six distinct spheres like every other game.
+function oraclePickBalls(nums,meaning,counts,offset,gameKey){
+  var off=offset||0;
   return (nums||[]).map(function(n,i){
     var d=digitOf(n);
     var m=meaning&&meaning[n];
     var c=(counts&&typeof counts[d]==='number')?counts[d]:null;
-    return '<div class="ball '+BTIERS[Math.min(i,5)]+(m?' ball-meant':'')+'"'
+    var tier=gameKey?osphClass(gameKey,i+off):BTIERS[Math.min(i+off,5)];
+    return '<div class="ball '+tier+(m?' ball-meant':'')+'"'
       +(m?' title="'+m.join(' \u00b7 ')+'"':'')+'>'+pad(n)
       +'<span class="btag">d'+d+(c!==null?'\u00b7'+c+'/11':'')+'</span></div>';
   }).join('');
@@ -2751,12 +2769,12 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
 
   var ballsHTML;
   if(gameKey==='ez2'){
-    ballsHTML='<div class="oracle-pick-cols">'+['2PM','5PM','9PM'].map(function(t){
+    ballsHTML='<div class="oracle-pick-cols">'+['2PM','5PM','9PM'].map(function(t,ci){
       return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'
-        +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks[t]||[],meaning,counts)+'</div></div>';
+        +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks[t]||[],meaning,counts,ci*2,gameKey)+'</div></div>';
     }).join('')+'</div>';
   } else {
-    ballsHTML='<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts)+'</div>';
+    ballsHTML='<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts,0,gameKey)+'</div>';
   }
 
   // The whole block IS the toggle, read top to bottom: one head line carrying
