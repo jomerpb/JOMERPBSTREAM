@@ -2242,14 +2242,87 @@ function pcsoHistPickBalls(picks,winning){
   }).join('');
 }
 
+// "\u20b1213.1M" from a raw amount. Strings that are already formatted ("\u20b1213.1M",
+// straight off pcso-results.json) pass through untouched.
+function pcsoFmtJackpot(jp){
+  if(jp===null||jp===undefined||jp==='') return '';
+  if(typeof jp==='number'||(typeof jp==='string'&&/^[\d.]+$/.test(jp))){
+    var n=parseFloat(jp);
+    if(!isFinite(n)) return '';
+    return '\u20b1'+(n>=1000000?(n/1000000).toFixed(1)+'M':n.toLocaleString());
+  }
+  return String(jp);
+}
+
+// "Aug 16" \u2014 the estimate note names the draw it came from, and the full
+// "Sun, Aug 16 2026" that oraclePickFmtDate returns is too long for the line.
+function pcsoHistShortDate(dateStr){
+  var p=String(dateStr||'').split('-');
+  if(p.length!==3) return dateStr||'';
+  var mi=parseInt(p[1],10)-1;
+  if(!(mi>=0&&mi<12)) return dateStr;
+  return _phMo[mi]+' '+parseInt(p[2],10);
+}
+
+// The most recent draw on file for this game strictly before dateStr.
+// PCSO_HISTORY arrives newest-first, but the scan doesn't rely on that.
+function pcsoHistPrevEntry(gameKey,dateStr){
+  var best=null;
+  (PCSO_HISTORY[gameKey]||[]).forEach(function(e){
+    if(!e.date||e.date>=dateStr) return;
+    if(!best||e.date>best.date) best=e;
+  });
+  return best;
+}
+
+// What a game's jackpot restarts at after somebody wins it. Read from the data
+// rather than hardcoded: the jackpot of the first draw following each won draw
+// is the reset amount, and the most recent one is the level in force now. PCSO
+// has raised these over time (6/58 went 49.5M \u2192 75M), so the historical
+// minimum is the wrong answer \u2014 only the latest reset is used, with the
+// minimum kept as a fallback for a game that has never been won on file.
+function pcsoHistResetJackpot(gameKey,dateStr){
+  var list=(PCSO_HISTORY[gameKey]||[]).filter(function(e){
+    return e.date&&e.date<dateStr&&typeof e.jackpot==='number'&&isFinite(e.jackpot);
+  }).sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+  var reset=null;
+  for(var i=1;i<list.length;i++){
+    if(typeof list[i-1].winners==='number'&&list[i-1].winners>0) reset=list[i].jackpot;
+  }
+  if(reset===null&&list.length){
+    reset=list.reduce(function(m,e){ return e.jackpot<m?e.jackpot:m; },list[0].jackpot);
+  }
+  return reset;
+}
+
+// Standing in for a draw that isn't on file yet: the prize the previous play
+// left on the table, so the amount at stake is visible before PCSO posts the
+// result. Two cases, and they give different numbers \u2014 if nobody won the last
+// draw its jackpot rolls over into this one, but if somebody did, this draw
+// starts again from the game's reset amount. Labelled an estimate either way:
+// PCSO's announced figure includes the sales since that draw, which is not
+// something this file knows. Replaced by the real jackpot the moment the
+// result lands in pcso-history.json \u2014 nothing here has to be cleaned up.
+function pcsoHistEstJackpotHTML(gameKey,dateStr){
+  var prev=pcsoHistPrevEntry(gameKey,dateStr);
+  if(!prev||typeof prev.jackpot!=='number'||!isFinite(prev.jackpot)) return '';
+  var won=(typeof prev.winners==='number'&&prev.winners>0);
+  var amt=won?pcsoHistResetJackpot(gameKey,dateStr):prev.jackpot;
+  if(typeof amt!=='number'||!isFinite(amt)) return '';
+  var when=pcsoHistShortDate(prev.date);
+  var note=won
+    ? when+' was won \u2014 this draw restarts at the minimum.'
+    : 'No winner on '+when+', so '+pcsoFmtJackpot(prev.jackpot)+' rolls over.';
+  return '<div class="pcso-hist-jackpot est">'+pcsoFmtJackpot(amt)
+    +' jackpot <span class="pcso-hist-est-tag">est.</span></div>'
+    +'<div class="pcso-hist-estnote">'+note+' Updates when the result is posted.</div>';
+}
+
 function pcsoHistJackpotHTML(entry){
   var jp=entry&&entry.jackpot;
   if(!jp) return '';
-  var disp=jp;
-  if(typeof jp==='number'||(typeof jp==='string'&&/^[\d.]+$/.test(jp))){
-    var n=parseFloat(jp);
-    disp='\u20b1'+(n>=1000000?(n/1000000).toFixed(1)+'M':n.toLocaleString());
-  }
+  var disp=pcsoFmtJackpot(jp);
+  if(!disp) return '';
   // Whether the jackpot was actually won, in the same words the Today's Results
   // widget uses. Only shown when the field is really there — a missing count is
   // not evidence of "no winner", so an entry without it just says the amount.
@@ -2299,7 +2372,8 @@ function pcsoHistGameHTML(gameKey,dateStr){
   var win6=(entry&&Array.isArray(entry.nums))?entry.nums:[];
   var body6=win6.length
     ? '<div class="pcso-hist-row">'+pcsoHistWinBalls(win6)+'</div>'+pcsoHistJackpotHTML(entry)
-    : '<div class="pcso-hist-row"><span class="pcso-hist-none">No result on file.</span></div>';
+    : '<div class="pcso-hist-row"><span class="pcso-hist-none">No result on file.</span></div>'
+      +pcsoHistEstJackpotHTML(gameKey,dateStr);
   if(look&&Array.isArray(look.picks)&&look.picks.length){
     var hits=look.picks.filter(function(n){ return win6.indexOf(n)>=0; }).length;
     body6+='<div class="pcso-hist-sublbl">Oracle\u2019s Pick</div>'

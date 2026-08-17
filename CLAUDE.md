@@ -68,7 +68,7 @@ When in doubt, check the deployment and say which of the two states it is in.
 
 The Oracle tab has **two** date pickers, deliberately distinct, and the split is the point — don't merge them or duplicate one into the other:
 
-- **"Look Up Past Result"** is anchored on a *draw*: capped at today, renders nothing unless `PCSO_HISTORY` has that date, one game at a time, and it's the only place that shows actual winning numbers, gold match highlighting and match counts.
+- **"Look Up Past Result"** is anchored on a *draw*: capped at today, renders nothing unless `PCSO_HISTORY` has that date, one game at a time, and it's the only place that shows actual winning numbers, gold match highlighting and match counts. When a 6-ball draw is *not* on file yet it shows an estimated jackpot in its place (`pcsoHistEstJackpotHTML`), carried from the previous play: the previous jackpot if that draw had no winner, otherwise the game's reset amount, which `pcsoHistResetJackpot` reads out of the history (the jackpot of the first draw after the most recent won one) rather than hardcoding it — PCSO has raised these over time, so the historical minimum is the wrong number. It is dimmed and tagged `est.`, and the real figure replaces it automatically once the result lands in `pcso-history.json`. EZ2 is deliberately excluded: its prize is fixed, not a rollover.
 - **"Oracle Pick For Any Date"** (`oraclePickRender`) is anchored on the *date*: no game selector at all — it lists **every** game scheduled that weekday (`oracleGamesOnDate`, 6-ball ascending then EZ2 last) with just its picked numbers, for any date out to +2 years.
 
 Both prefer the immutable `oracle-history.json` entry over a live recompute, tagged 📌 recorded vs ↻ recomputed.
