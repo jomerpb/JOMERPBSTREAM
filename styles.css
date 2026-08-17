@@ -965,6 +965,12 @@
 #oracle-page .pcso-hist-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 #oracle-page .pcso-hist-none{font-size:11px;color:var(--muted);font-style:italic}
 #oracle-page .pcso-hist-jackpot{font-size:11px;color:#4cfc9a;font-weight:700;margin-top:8px;text-align:center}
+/* Stand-in jackpot for a draw that has no result on file yet — carried over
+   from the previous play. Same green so it reads as the same kind of figure,
+   dimmed and tagged so it is never mistaken for a confirmed amount. */
+#oracle-page .pcso-hist-jackpot.est{color:rgba(76,252,154,.62)}
+#oracle-page .pcso-hist-est-tag{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:1px 4px;margin-left:3px;vertical-align:1px}
+#oracle-page .pcso-hist-estnote{font-size:10px;line-height:1.45;color:var(--muted);margin-top:3px;text-align:center;max-width:280px;margin-left:auto;margin-right:auto}
 /* Sub-label inside a game block ("Oracle's Pick", "pick") and its match count.
    .pcso-hist-oracle-label is gone with the single-game layout. */
 #oracle-page .pcso-hist-sublbl{font-family:'Bebas Neue',sans-serif;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin:10px 0 5px;text-align:center}
