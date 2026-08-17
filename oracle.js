@@ -2242,7 +2242,7 @@ function pcsoHistPickBalls(picks,winning){
   }).join('');
 }
 
-// "\u20b1213.1M" from a raw amount. Strings that are already formatted ("\u20b1213.1M",
+// "₱213.1M" from a raw amount. Strings that are already formatted ("₱213.1M",
 // straight off pcso-results.json) pass through untouched.
 function pcsoFmtJackpot(jp){
   if(jp===null||jp===undefined||jp==='') return '';
@@ -2254,7 +2254,7 @@ function pcsoFmtJackpot(jp){
   return String(jp);
 }
 
-// "Aug 16" \u2014 the estimate note names the draw it came from, and the full
+// "Aug 16" — the estimate note names the draw it came from, and the full
 // "Sun, Aug 16 2026" that oraclePickFmtDate returns is too long for the line.
 function pcsoHistShortDate(dateStr){
   var p=String(dateStr||'').split('-');
@@ -2278,8 +2278,8 @@ function pcsoHistPrevEntry(gameKey,dateStr){
 // What a game's jackpot restarts at after somebody wins it. Read from the data
 // rather than hardcoded: the jackpot of the first draw following each won draw
 // is the reset amount, and the most recent one is the level in force now. PCSO
-// has raised these over time (6/58 went 49.5M \u2192 75M), so the historical
-// minimum is the wrong answer \u2014 only the latest reset is used, with the
+// has raised these over time (6/58 went 49.5M → 75M), so the historical
+// minimum is the wrong answer — only the latest reset is used, with the
 // minimum kept as a fallback for a game that has never been won on file.
 function pcsoHistResetJackpot(gameKey,dateStr){
   var list=(PCSO_HISTORY[gameKey]||[]).filter(function(e){
@@ -2297,24 +2297,29 @@ function pcsoHistResetJackpot(gameKey,dateStr){
 
 // How far ahead a draw still gets a jackpot line on the Oracle Pick panel.
 // The panel reaches two years out, and an estimate carried from today's
-// standings says nothing useful about a draw four months away \u2014 every draw in
+// standings says nothing useful about a draw four months away — every draw in
 // between moves the number. Seven days is the horizon where "what is on the
 // table" is still roughly what will be on the table.
 var ORACLE_PICK_JACKPOT_DAYS=7;
 
-// The money line under a game's name on the Oracle Pick panel: what the
-// previous play left on the table, so the amount at stake is readable next to
-// the numbers. Two cases, and they give different figures \u2014 if nobody won the
-// last draw its jackpot rolls over into this one, but if somebody did, this
-// draw starts again from the game's reset amount.
+// The amount itself, in the same green bold both panels give a confirmed
+// jackpot: whatever else the line says, the figure is the part being read.
+function pcsoAmtHTML(n){ return '<span class="opick-amt">'+pcsoFmtJackpot(n)+'</span>'; }
+
+// The money clause that rides on the SAME line as the game's name on the Oracle
+// Pick panel: what the previous play left on the table, so the amount at stake
+// is readable beside the numbers. Two cases, and they give different figures —
+// if nobody won the last draw its jackpot rolls over into this one, but if
+// somebody did, this draw starts again from the game's reset amount.
 //
-// Shown only for a 6-ball draw that is between today and +7 days and has no
-// result on file yet. A drawn date already carries the real figure in Look Up
-// Result, and EZ2 is excluded because its prize is fixed, not a rollover.
+// Shown only for a 6-ball draw dated today..+ORACLE_PICK_JACKPOT_DAYS that has
+// no result on file yet. A past date is never estimated — by then Look Up
+// Result has the confirmed figure on its own head line — and EZ2 is excluded
+// because its prize is fixed, not a rollover.
 //
-// It is an estimate \u2014 PCSO's announced figure also includes the sales since
-// that draw, which this file has no way to know \u2014 hence the wording, which
-// states the fact it is derived from ("no winner on Aug 14") rather than
+// It is an estimate — PCSO's announced figure also includes the sales since
+// that draw, which this file has no way to know — hence the wording, which
+// states the fact it is derived from ("No winner on Aug 14") rather than
 // asserting a jackpot for a draw that has not happened.
 function oraclePickJackpotHTML(gameKey,dateStr){
   if(gameKey==='ez2') return '';
@@ -2328,75 +2333,92 @@ function oraclePickJackpotHTML(gameKey,dateStr){
   var amt=won?pcsoHistResetJackpot(gameKey,dateStr):prev.jackpot;
   if(typeof amt!=='number'||!isFinite(amt)) return '';
   var when=pcsoHistShortDate(prev.date);
-  var txt=won
-    ? when+' was won, so this draw restarts at '+pcsoFmtJackpot(amt)+'.'
-    : 'No winner on '+when+', so '+pcsoFmtJackpot(amt)+' rolls over.';
-  return '<div class="opick-jackpot">'+txt+' Updates when the result is posted.</div>';
+  return '<span class="opick-jackpot">'+(won
+    ? when+' was won, so this draw restarts at '+pcsoAmtHTML(amt)+'.'
+    : 'No winner on '+when+', so '+pcsoAmtHTML(amt)+' rolls over.')+'</span>';
 }
 
+// The confirmed figure, on the head line beside the game's name in Look Up
+// Result — inline, because it belongs to the game; the rows underneath are the
+// numbers. Same green bold as the estimate above.
 function pcsoHistJackpotHTML(entry){
   var jp=entry&&entry.jackpot;
   if(!jp) return '';
   var disp=pcsoFmtJackpot(jp);
   if(!disp) return '';
-  // Whether the jackpot was actually won, in the same words the Today's Results
-  // widget uses. Only shown when the field is really there — a missing count is
-  // not evidence of "no winner", so an entry without it just says the amount.
+  // Whether the jackpot was actually won. Only shown when the field is really
+  // there — a missing count is not evidence of "no winner", so an entry without
+  // it just says the amount.
   var wtxt='';
   if(entry&&typeof entry.winners==='number'&&isFinite(entry.winners)){
     wtxt=' · <span class="pcso-hist-winners'+(entry.winners>0?' won':'')+'">'
-      +(entry.winners===0?'No winner — jackpot rolls!'
+      +(entry.winners===0?'No winner'
         :entry.winners===1?'1 winner'
         :entry.winners.toLocaleString()+' winners')+'</span>';
   }
-  return '<div class="pcso-hist-jackpot">'+disp+' jackpot'+wtxt+'</div>';
+  return '<span class="opick-jackpot"><span class="opick-amt">'+disp+' jackpot</span>'+wtxt+'</span>';
 }
 
-// One block per game drawn that day: what came out, then what the Oracle had.
+// One block per game drawn that day, stacked the same way the Oracle Pick
+// panel stacks its games: a head line carrying the game name, its source tag
+// and the CONFIRMED jackpot, then the winning numbers, then the Oracle's pick,
+// then the caption that scores it. No caret — Look Up is not collapsible.
+//
+// The name used to be a left column beside the numbers, which is why the row
+// needed a fixed-width lead, a min-height tuned to one chip and an empty slot
+// spacer for EZ2. Stacking retires all three: on its own line the name lines up
+// with every other name for free, and the chips get the whole card width.
 function pcsoHistGameHTML(gameKey,dateStr){
   var entry=pcsoHistEntry(gameKey,dateStr);
   var look=null;
   try{ look=oracleHistLookup(gameKey,dateStr); }
   catch(e){ console.error('oracleHistLookup '+gameKey+' '+dateStr+':',e); }
-  // Same lead as the Oracle Pick panel: the game name and its source tag sit at
-  // the head of the row, ahead of the winning numbers. There is no caret here —
-  // Look Up is not collapsible. The row is top-aligned rather than centred, so
-  // the name lands on the WINNING row specifically, not on the middle of a
-  // block that also holds the jackpot line, the Oracle's pick and the score.
-  var name='<span class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
-    +(look?oracleSrcTag(look.source,false):'')+'</span>';
-  var lead='<div class="opick-lead">'
-    +((gameKey==='ez2')?'<span class="oracle-pick-slot" aria-hidden="true">&nbsp;</span>':'')
-    +'<span class="opick-lead-main">'+name+'</span></div>';
+  var head='<div class="opick-head"><span class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
+    +(look?oracleSrcTag(look.source,false):'')+'</span>'+pcsoHistJackpotHTML(entry)+'</div>';
+
+  // The caption under the picks, naming the row above it and scoring it. One
+  // line rather than a label above and a count below, which put two pieces of
+  // 10px text around a row that reads perfectly well between them.
+  function pickCap(matched,total){
+    return '<div class="pcso-hist-sublbl">Oracle\u2019s Pick'
+      +(matched===null?'':' \u00b7 <span class="pcso-hist-score">'+matched+' of '+total+' matched</span>')
+      +'</div>';
+  }
 
   if(gameKey==='ez2'){
+    var anyWin=false,anyPick=false,hitsE=0,totalE=0;
     var cols=['2PM','5PM','9PM'].map(function(t){
       var win=(entry&&entry.draws&&entry.draws[t])||[];
       var picks=(look&&look.picks&&look.picks[t])||[];
+      if(win.length) anyWin=true;
+      if(picks.length){
+        anyPick=true;
+        totalE+=picks.length;
+        hitsE+=picks.filter(function(n){ return win.indexOf(n)>=0; }).length;
+      }
       var body=win.length
         ? '<div class="pcso-hist-row">'+pcsoHistWinBalls(win)+'</div>'
         : '<div class="pcso-hist-row"><span class="pcso-hist-none">Pending\u2026</span></div>';
-      if(picks.length){
-        body+='<div class="pcso-hist-sublbl">pick</div><div class="pcso-hist-row">'+pcsoHistPickBalls(picks,win)+'</div>';
-      }
+      if(picks.length) body+='<div class="pcso-hist-row">'+pcsoHistPickBalls(picks,win)+'</div>';
       return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'+body+'</div>';
     }).join('');
-    return '<div class="oracle-pick-game-row lookup-row">'+lead
-      +'<div class="lookup-body"><div class="oracle-pick-cols">'+cols+'</div></div></div>';
+    // EZ2 is scored across all three draws at once — the caption sits under the
+    // whole block, so a per-column count would have nowhere to go.
+    return '<div class="oracle-pick-game-row lookup-row">'+head
+      +'<div class="oracle-pick-cols">'+cols+'</div>'
+      +(anyPick?pickCap(anyWin?hitsE:null,totalE):'')+'</div>';
   }
 
   var win6=(entry&&Array.isArray(entry.nums))?entry.nums:[];
   var body6=win6.length
-    ? '<div class="pcso-hist-row">'+pcsoHistWinBalls(win6)+'</div>'+pcsoHistJackpotHTML(entry)
+    ? '<div class="pcso-hist-row">'+pcsoHistWinBalls(win6)+'</div>'
     : '<div class="pcso-hist-row"><span class="pcso-hist-none">No result on file.</span></div>';
   if(look&&Array.isArray(look.picks)&&look.picks.length){
     var hits=look.picks.filter(function(n){ return win6.indexOf(n)>=0; }).length;
-    body6+='<div class="pcso-hist-sublbl">Oracle\u2019s Pick</div>'
-      +'<div class="pcso-hist-row">'+pcsoHistPickBalls(look.picks,win6)+'</div>';
-    if(win6.length) body6+='<div class="pcso-hist-score">'+hits+' of 6 matched</div>';
+    body6+='<div class="pcso-hist-row">'+pcsoHistPickBalls(look.picks,win6)+'</div>'
+      +pickCap(win6.length?hits:null,look.picks.length);
   }
-  return '<div class="oracle-pick-game-row lookup-row">'+lead
-    +'<div class="lookup-body">'+body6+'</div></div>';
+  return '<div class="oracle-pick-game-row lookup-row">'+head+body6+'</div>';
 }
 
 function pcsoHistRender(){
@@ -2737,26 +2759,26 @@ function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
     ballsHTML='<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts)+'</div>';
   }
 
-  // The whole block IS the toggle, read top to bottom: the game name + source
-  // tag + caret on their own line, then the jackpot line when there is one,
-  // then that game's spheres. Clicking anywhere on it opens the reading
-  // underneath, which sits BEFORE the picks it explains.
+  // The whole block IS the toggle, read top to bottom: one head line carrying
+  // the game name, its source tag, the caret and the jackpot clause, then that
+  // game's spheres underneath. Clicking anywhere on it opens the reading, which
+  // sits BEFORE the picks it explains.
   //
-  // The name used to sit inline to the LEFT of the spheres. Stacking it is what
-  // makes room for the jackpot line \u2014 a full-width sentence has nowhere to go
+  // The name used to sit inline to the LEFT of the spheres. Moving it onto its
+  // own line is what gives the jackpot clause somewhere to go \u2014 it has nowhere
   // beside a row of six spheres \u2014 and it hands the spheres the width the lead
   // was holding. No EZ2 spacer any more: the empty .oracle-pick-slot label
   // existed only to drop the inline name onto the centre line of EZ2's taller
   // column block, and above the spheres there is nothing to centre against.
-  var lead='<span class="opick-lead"><span class="opick-lead-main">'+name
-    +'<span class="opick-caret" aria-hidden="true">\u25b8</span></span></span>';
-  var jackpot=oraclePickJackpotHTML(gameKey,dateStr);
+  var head='<div class="opick-head">'+name
+    +'<span class="opick-caret" aria-hidden="true">\u25b8</span>'
+    +oraclePickJackpotHTML(gameKey,dateStr)+'</div>';
 
   var body=oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr,breakdown);
-  if(!body) return '<div class="oracle-pick-game-row"><div class="oracle-pick-gname-block">'+name+'</div>'+jackpot+ballsHTML+'</div>';
+  if(!body) return '<div class="oracle-pick-game-row"><div class="oracle-pick-gname-block">'+name+'</div>'+ballsHTML+'</div>';
   return '<div class="oracle-pick-game-row">'
     +'<details class="oracle-reading"><summary class="opick-sum">'
-    +lead+jackpot+ballsHTML+'</summary>'
+    +head+ballsHTML+'</summary>'
     +'<div class="ord-body">'+body+'</div></details></div>';
 }
 
