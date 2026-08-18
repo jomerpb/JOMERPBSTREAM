@@ -96,6 +96,26 @@ A third panel, **"Analyze My Own Personal Numbers"** (`<details id="personal-car
 
 **One scorer, two surfaces.** The alignment percentage is `oracleAlignment(nums, digitScores, meaning, poolMax)` — digit convergence ×0.70 blended with meaning capture ×0.30 — and both the Oracle Pick panel and Analyze My Numbers call it. It exists because they drifted: the pick panel blended both halves while the personal view reported the digit half alone, so identical numbers read 54% in one place and 67% in the other. Never re-inline either half; and per the statistics rule above, never tune the two weights for hit rate.
 
+**The digit half is measured against what the POOL allows** (`oracleDigitIdeal`),
+not against a flat `nums.length * 10`. This matters because digit families are
+finite and unequal: digit 1's family holds 5 numbers in 6/42 but 7 in 6/58, so a
+six-number set can sit entirely on the day's strongest digit in 6/58 and
+physically cannot in 6/42. Scored against the flat maximum the digit half came
+out **identical for every 6-ball game on a date — 730 of 730 dates measured** —
+because the picker takes two numbers from each of the same top three families
+whatever the pool, leaving both numerator and denominator pool-blind. Two games
+on one day then printed the same overall percentage on ~70% of dates, which
+reads as a bug and wasted the 70% weight. With the pool ceiling in place they
+differ on ~75% of dates instead, and **the picks themselves are untouched —
+verified identical on 2514/2514 game-dates.**
+
+Note what the ceiling cannot be: normalising against the best total achievable
+*under the picker's own spread cap* pins the figure to exactly 100% every time
+(measured 428/428), because the pick IS the argmax of that score. The ceiling
+has to ignore the cap — it asks "how close is this pick to the best expression
+of today's digit reading this pool allows", and the spread rule is precisely
+what costs it the remainder.
+
 **`index.html` cache-busts its assets by query string** (`oracle.js?v=…`, `styles.css?v=…`). Bump the version whenever you change those files — `index.html` itself is unversioned, so shipping new markup against a stale cached script silently produces dead controls.
 - **trade.js** — PSE stock trading/signals tab. `PSE_ALL_STOCKS` near the top is mock/display seed data only (same fallback pattern as oracle.js's `GAMES`); real data comes from `pse-*.json` files written by the scraper pipelines below.
 - **styles.css** — shared styles for all three tabs (not split per-tab).
