@@ -157,6 +157,56 @@ console.log('\n4. oracleAlignment — the shared scorer');
         bdSmall.reachable.includes(7) && !bdSmall.reachable.includes(50),
         JSON.stringify(bdSmall.reachable));
 
+  // ── the digit half is pool-aware ──
+  // It used to be scored against a flat `nums.length * 10`, which made it
+  // identical for every 6-ball game on a date (730/730 measured) — the picker
+  // takes two from each of the same top three families whatever the pool, so
+  // both halves of the fraction were pool-blind. It is now measured against the
+  // strongest total the pool actually allows, which differs because digit
+  // families are finite and unequal in size.
+  {
+    const dsFlat = {}; for (let d = 1; d <= 9; d++) dsFlat[d] = { score: d === 1 ? 10 : 1 };
+    // Digit family 1 holds 5 numbers in 6/42 but 7 in 6/58, so a six-number set
+    // can sit entirely on the day's best digit in 6/58 and cannot in 6/42.
+    const small = sb.oracleDigitIdeal(dsFlat, 42, 6);
+    const large = sb.oracleDigitIdeal(dsFlat, 58, 6);
+    check('the achievable ceiling is lower in a smaller pool', small < large, `${small} vs ${large}`);
+    check('the ceiling never exceeds every-number-at-the-best-score',
+          large <= 6 * 10 && small <= 6 * 10, `${small} / ${large}`);
+    check('an empty request has no ceiling', sb.oracleDigitIdeal(dsFlat, 58, 0) === 0);
+
+    // Same numbers, same reading, different pool must now read differently.
+    const a = sb.oracleAlignment([1, 10, 19, 28, 37, 2], dsFlat, {}, 42).digitPct;
+    const b = sb.oracleAlignment([1, 10, 19, 28, 37, 2], dsFlat, {}, 58).digitPct;
+    check('the same numbers score differently in different pools', a !== b, `6/42 ${a}% vs 6/58 ${b}%`);
+
+    // And it must still be a real fraction of a real ceiling.
+    const bd = sb.oracleAlignment([1, 10, 19, 28, 37, 2], dsFlat, {}, 58);
+    check('digitPct is the pick total over the pool ceiling',
+          bd.digitPct === Math.round(bd.digitTotal / bd.digitIdeal * 100),
+          `${bd.digitPct} vs ${bd.digitTotal}/${bd.digitIdeal}`);
+  }
+
+  // Across real dates the day's games must no longer all print one number.
+  {
+    let differ = 0, dates = 0;
+    for (const ds of sweepDates(200)) {
+      const games = sb.oracleGamesOnDate(ds).filter((g) => g !== 'ez2');
+      if (games.length < 2) continue;
+      const reading = sb.oracleDateReading(ds, '9PM');
+      const mean = (reading && reading.meaning) || {};
+      const pcts = games.map((g) => {
+        const det = sb.computeOracleAsOf(g, ds, { withDetail: true });
+        return sb.oracleAlignment(det.picks, det.digitScores, mean, sb.GAMES[g].max).pct;
+      });
+      dates++;
+      if (new Set(pcts).size > 1) differ++;
+    }
+    const rate = differ / dates * 100;
+    check(`same-day games mostly print different percentages (${differ}/${dates}, ${rate.toFixed(0)}%, floor 50%)`,
+          rate >= 50, `${rate.toFixed(0)}%`);
+  }
+
   // The drift was one surface re-deriving the percentage instead of asking for
   // it, so the check that matters is that BOTH named surfaces still call this
   // function inside their own bodies — a value comparison cannot see a

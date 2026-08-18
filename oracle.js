@@ -1792,11 +1792,47 @@ function oracleMeaningFromLayers(L){
 // take no game input); meaning capture is the per-game half, since the pool
 // decides which meaningful numbers are even reachable. 70/30 is a stated
 // choice — never tune either weight for hit rate.
+// The best digit-score total ANY set of `need` distinct numbers could reach in
+// THIS pool. It is the ceiling the digit half is measured against, and it is
+// pool-specific because digit families are finite and unequal: 6/42's largest
+// family holds 5 numbers, 6/58's holds 7. So a 6/58 pick could in principle put
+// all six numbers on the day's strongest digit, while a 6/42 pick physically
+// cannot — it runs out of members and has to spend its last picks on a weaker
+// family.
+//
+// This is what makes the digit half say something per game. Scored against a
+// flat `need * 10` instead, the figure was identical for every 6-ball game on a
+// date — 730 of 730 dates measured — because the picker takes two numbers from
+// each of the same top three families whatever the pool, so numerator and
+// denominator were both pool-blind. Two games on one day then printed the same
+// percentage ~70% of the time, which read as a bug and effectively wasted the
+// 70% weight.
+//
+// Greedy is exact here: with families independent and each capped by its own
+// size, filling from the highest-scoring family down is optimal.
+function oracleDigitIdeal(digitScores,poolMax,need){
+  if(!need||need<1) return 0;
+  var pool=poolMax||58, sizes={};
+  for(var n=1;n<=pool;n++){ var d=digitOf(n); sizes[d]=(sizes[d]||0)+1; }
+  var order=Object.keys(sizes).map(function(d){
+    return {digit:parseInt(d),size:sizes[d],score:(digitScores&&digitScores[d]&&digitScores[d].score)||0};
+  }).sort(function(a,b){ return (b.score-a.score)||(a.digit-b.digit); });
+  var left=need,total=0;
+  for(var i=0;i<order.length&&left>0;i++){
+    var take=Math.min(order[i].size,left);
+    total+=take*order[i].score; left-=take;
+  }
+  return total;
+}
+
 function oracleAlignment(nums,digitScores,meaning,poolMax){
   var W_DIGIT=0.70, W_CAPTURE=0.30;
   nums=nums||[]; digitScores=digitScores||{};
   var total=nums.reduce(function(a,n){ var d=digitOf(n); return a+(digitScores[d]?digitScores[d].score:0); },0);
-  var digitPct=nums.length?Math.round(total/(nums.length*10)*100):0;
+  // Measured against what this pool actually allows, not a flat 10 per number.
+  var digitIdeal=oracleDigitIdeal(digitScores,poolMax,nums.length);
+  var digitPct=(nums.length&&digitIdeal>0)?Math.round(total/digitIdeal*100):0;
+  if(digitPct>100) digitPct=100; if(digitPct<0) digitPct=0;
   var meantAll=Object.keys(meaning||{}).map(Number);
   var reachable=meantAll.filter(function(n){ return n>=1&&n<=(poolMax||58); });
   var captured=nums.filter(function(n){ return meantAll.indexOf(n)>=0; });
@@ -1804,7 +1840,8 @@ function oracleAlignment(nums,digitScores,meaning,poolMax){
   var capPct=capMax?Math.round(captured.length/capMax*100):null;
   var pct=(capPct===null)?digitPct:Math.round(W_DIGIT*digitPct+W_CAPTURE*capPct);
   return {pct:pct,digitPct:digitPct,capPct:capPct,captured:captured,reachable:reachable,
-          capMax:capMax,wDigit:W_DIGIT,wCapture:W_CAPTURE};
+          capMax:capMax,wDigit:W_DIGIT,wCapture:W_CAPTURE,
+          digitTotal:total,digitIdeal:digitIdeal};
 }
 
 // The "digit convergence X% x0.7 · meaning capture Y% x0.3" line.
@@ -1812,6 +1849,7 @@ function oracleAlignSplitHTML(bd,poolMax){
   if(!bd) return '';
   return '<div style="font-size:11px;color:var(--muted);margin-top:6px;">'
     +'Digit convergence <b>'+bd.digitPct+'%</b> \u00d7'+bd.wDigit
+    +'<span title="Measured against the strongest total 1\u2013'+(poolMax||'')+' allows, which depends on how many numbers each digit family holds in this game."> of what 1\u2013'+(poolMax||'')+' allows</span>'
     +(bd.capPct===null
       ? ' \u2014 no meaningful number is reachable in 1\u2013'+(poolMax||'')+' today, so the score is the digit half alone'
       : '  \u00b7  meaning capture <b>'+bd.capPct+'%</b> \u00d7'+bd.wCapture
