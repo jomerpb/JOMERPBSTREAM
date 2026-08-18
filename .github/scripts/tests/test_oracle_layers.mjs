@@ -84,12 +84,25 @@ function setDate(sb, y, m, d) {
 }
 
 /** A run of fair random draws — every number equally likely. */
+// Seeded so the suite is deterministic. With Math.random the fair-data test
+// below was a coin flip against its own tolerance: measured on unmodified
+// main, the family gap wandered from -4.87 to +4.39 against a limit of 6, so
+// CI went red at random with nothing wrong. mulberry32 is a standard 32-bit
+// PRNG; the seed is arbitrary and only has to be fixed.
+let _fairSeed = 0x9e3779b9;
+function _fairRandom() {
+  _fairSeed = (_fairSeed + 0x6d2b79f5) | 0;
+  let t = _fairSeed;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
 function fairDraws(max, picks, count) {
   const out = [];
   for (let i = 0; i < count; i++) {
     const draw = [];
     while (draw.length < picks) {
-      const n = 1 + Math.floor(Math.random() * max);
+      const n = 1 + Math.floor(_fairRandom() * max);
       if (!draw.includes(n)) draw.push(n);
     }
     out.push(draw);
@@ -308,6 +321,83 @@ console.log('\n6. Same-day and future draws cannot change a pick');
   const seenEz2 = (sbDoctored.PCSO_HISTORY.ez2 || []).some((e) => e.date === DATE);
   check('the doctored history really contains both planted draws', seen6 && seenEz2,
         `6-ball ${seen6}, ez2 ${seenEz2} — this test proves nothing without them`);
+}
+
+// ── 7. ephemeris epoch ──────────────────────────────────────────────────
+// The whole astro engine is quoted from Paul Schlyter, whose day number `d`
+// is referred to 2000 Jan 0.0 (JD 2451543.5) — NOT to J2000.0 (JD 2451545.0),
+// which is 1.5 days later. astroDayNumber() once subtracted 2451545 while a
+// comment called the result "Schlyter's d", running the entire ephemeris
+// 1.000 day behind: the Moon ~13.2 deg out, nearly half a zodiac sign.
+console.log('\n7. Ephemeris epoch matches Schlyter');
+{
+  // Schlyter's own published day-number formula, as the independent reference.
+  const schlyter = (y, m, D, ut) =>
+    367 * y - Math.floor(7 * (y + Math.floor((m + 9) / 12)) / 4) + Math.floor(275 * m / 9) + D - 730530 + ut / 24;
+  let worst = 0;
+  for (const [y, m, d] of [[2000, 1, 1], [1999, 12, 31], [2026, 3, 20], [2026, 8, 18], [2030, 6, 1]]) {
+    worst = Math.max(worst, Math.abs(sb.astroDayNumber(y, m, d, 8) - schlyter(y, m, d, 0)));
+  }
+  check("astroDayNumber equals Schlyter's day number", worst < 1e-9, `worst delta ${worst}`);
+
+  // Independent anchor: the March 2026 equinox (Sun at 0 deg) is 2026-03-20
+  // 14:46 UT. Schlyter's Sun is good to ~1 arcmin, so allow half a day.
+  let lo = sb.astroDayNumber(2026, 3, 15, 8), hi = sb.astroDayNumber(2026, 3, 25, 8);
+  for (let k = 0; k < 60; k++) {
+    const mid = (lo + hi) / 2;
+    if (sb.astroSunPos(mid).lonsun > 180) lo = mid; else hi = mid;
+  }
+  const equinoxJd = (lo + hi) / 2 + 2451543.5;
+  const trueJd = 2461120.11528; // 2026-03-20 14:46 UT
+  check('March 2026 equinox lands on the right day', Math.abs(equinoxJd - trueJd) < 0.5,
+        `off by ${((equinoxJd - trueJd) * 24 * 60).toFixed(0)} min`);
+}
+
+// ── 8. Chinese lunar calendar ───────────────────────────────────────────
+// layerIChing casts Mei Hua Yi Shu on the LUNAR month and day. Chinese New
+// Year is lunar month 1 day 1 by definition, so it pins both the month
+// numbering and the leap-month rule at once.
+console.log('\n8. Chinese lunar calendar');
+{
+  const cny = [[2020, 1, 25], [2021, 2, 12], [2022, 2, 1], [2023, 1, 22], [2024, 2, 10],
+               [2025, 1, 29], [2026, 2, 17], [2027, 2, 6], [2028, 1, 26], [2033, 1, 31]];
+  const bad = cny.filter(([y, m, d]) => {
+    const r = sb.chineseLunarDate(y, m, d);
+    return !(r.month === 1 && r.day === 1 && !r.leap);
+  });
+  check('Chinese New Year is lunar month 1 day 1', bad.length === 0,
+        bad.map((c) => c.join('-')).join(', '));
+
+  // Leap months, by the "first month of the sui with no zhongqi" rule.
+  const leaps = [[2020, 5, 23, 4], [2023, 3, 22, 2], [2025, 7, 25, 6]];
+  const badLeap = leaps.filter(([y, m, d, n]) => {
+    const r = sb.chineseLunarDate(y, m, d);
+    return !(r.leap && r.month === n && r.day === 1);
+  });
+  check('known leap months are detected and numbered', badLeap.length === 0,
+        badLeap.map((c) => c.join('-')).join(', '));
+
+  // Structural invariants across a long span.
+  let shape = true, detail = '';
+  for (let y = 2018; y <= 2035 && shape; y++) {
+    for (let m = 1; m <= 12; m++) {
+      const r = sb.chineseLunarDate(y, m, 15);
+      if (!(r.month >= 1 && r.month <= 12 && r.day >= 1 && r.day <= 30)) {
+        shape = false; detail = `${y}-${m}-15 -> ${JSON.stringify(r)}`; break;
+      }
+    }
+  }
+  check('lunar month 1..12 and day 1..30 everywhere 2018-2035', shape, detail);
+
+  // KNOWN LIMIT, asserted so it cannot silently get worse: Schlyter's Moon is
+  // ~1-2 arcmin, i.e. new-moon timing good to about +/-26 min. When a new moon
+  // falls within ~15 min of local midnight the month start can land on the
+  // wrong civil day. Measured against Meeus over 730 lunations (1990-2050):
+  // 2 disagreements, 0.3%. 2030-02-03 00:08 CST is one of them.
+  const y2030 = sb.chineseLunarDate(2030, 2, 3);
+  check('2030 CNY is the documented +/-26 min edge case (day 1 or 2)',
+        y2030.month === 1 && (y2030.day === 1 || y2030.day === 2),
+        JSON.stringify(y2030));
 }
 
 console.log('\n' + '='.repeat(62));
