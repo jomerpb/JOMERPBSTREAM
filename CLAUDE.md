@@ -24,12 +24,25 @@ run all three, not the same one three times:
    Assert zero `pageerror`/console errors and no horizontal overflow at 320px.
    This is the lane that catches dead controls, unstyled markup, empty
    dropdowns, and stale-asset problems — the ones a unit test will never see.
-3. **Regression — everything else still works.** Run
-   `node .github/scripts/tests/test_oracle_layers.mjs`, and for any change under
-   the Oracle engine re-run `snapshot_oracle.mjs` with `FORCE_OVERWRITE=1`
-   against a *copy* of the repo, diffing its picks against the committed
-   `oracle-history.json`. Identical output proves the daily pipeline is
-   unaffected. Never point this lane at the real `oracle-history.json`.
+3. **Regression — everything else still works.** Run the whole suite (about
+   50 seconds, and what `.github/workflows/tests.yml` runs on every push):
+
+   ```
+   node   .github/scripts/tests/test_oracle_layers.mjs      # layers do what they claim
+   node   .github/scripts/tests/test_oracle_pick.mjs        # pick shape, scorer, schedule, palette, jackpot
+   node   .github/scripts/tests/test_snapshot_oracle.mjs    # the daily oracle-history.json writer
+   python3 .github/scripts/tests/test_sphere_palette.py     # styles.css still matches its generator
+   python3 .github/scripts/tests/test_scrape_pcso.py
+   python3 .github/scripts/tests/test_append_pcso_history.py
+   ```
+
+   The Python ones need `beautifulsoup4` installed or they cannot even import.
+   For any change under the Oracle engine also re-run `snapshot_oracle.mjs` with
+   `FORCE_OVERWRITE=1` against a *copy* of the repo, diffing its picks against
+   the committed `oracle-history.json`. Identical output proves the daily
+   pipeline is unaffected. Never point this lane at the real
+   `oracle-history.json` — `test_snapshot_oracle.mjs` does this on a temp copy
+   and asserts the real file is untouched.
 
 Then, before claiming it is live: **verify the deployed state, not the intent.**
 Confirm the commits are actually on `main` (`git fetch` first — a merged PR only
@@ -95,6 +108,12 @@ All workflows in `.github/workflows/` are `workflow_dispatch` (manual) only — 
 
 1. `pcso-history-append.yml` (`0 15 * * *` UTC = 23:00 Asia/Manila, after that day's 9PM draws are posted) — appends the day's results to `pcso-history.json`.
 2. `oracle-snapshot.yml` (`5 16 * * *` UTC = 00:05 Asia/Manila, before that day's draws) — computes and logs the next day's pick, with the previous day's draws already in place.
+
+`tests.yml` is a third exception to the manual-only convention, in a different
+direction: it has **no cron**, but it runs on every push and pull request. The
+convention removed *scheduled* runs; a test suite that only runs when someone
+remembers is the reason a broken engine could reach the two scheduled jobs
+above unnoticed. Don't convert it to `workflow_dispatch` only.
 
 The append job's schedule is a deliberate exception: `pcso-history.json` feeds the Oracle tab's "Look Up Past Result" panel, and while it was dispatch-only it routinely ran 2-4 days behind `pcso-results.json` (which powers the "Today's Results" widget), so the two panels disagreed about the same draw. Both jobs remain manually dispatchable; the append script is append-only and never overwrites verified entries, so a scheduled run overlapping a manual "Fetch Live" dispatch cannot corrupt the file.
 
@@ -172,8 +191,13 @@ Two consequences to keep in mind:
   past date shows 📌 recorded (old engine) while a live recompute of the same
   date now returns something different. That is expected, not a bug.
 - The composition `(star + d) * pool` was selected over four simpler ones by
-  measuring 120 dates for *presentation* only — it is the only one that never
-  makes two same-day games produce identical picks. Never tune it for hit rate.
+  measuring 120 dates for *presentation* only — over that window it was the only
+  one where no two same-day games produced identical picks. **That "never" does
+  not hold on a wider window:** swept over 2024-2028 it collides on **20 of 1827
+  multi-6-ball dates (1.09%)** — e.g. 2026-04-06 has 6/45 and 6/55 both on
+  `[2,12,15,20,24,39]`. It is still the best of the five measured, and the rate
+  is low enough to leave alone; `test_oracle_pick.mjs` bounds it at 3% rather
+  than asserting a zero that was never true. Never tune it for hit rate.
 
 The `offset` formula is a **house rule**, documented as such in the code: the
 ingredients are authentic and dated, but no tradition prescribes combining them

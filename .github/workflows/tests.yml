@@ -1,0 +1,76 @@
+name: Tests
+
+# The suites under .github/scripts/tests/ existed but nothing ran them — they
+# only executed when someone remembered to. Meanwhile pcso-history-append.yml
+# and oracle-snapshot.yml run on a schedule every day against whatever is on
+# main. This runs every suite on push and on pull requests so a regression is
+# caught before those jobs pick it up.
+#
+# No cron here: per the repo convention only the two data-pipeline workflows
+# are scheduled. This is triggered by commits, and dispatchable by hand.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch: {}
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Oracle engine and PCSO pipeline
+    runs-on: ubuntu-latest
+    # The Oracle suites sweep several years of dates through the real engine.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # scrape_pcso.py and append_pcso_history.py import BeautifulSoup at module
+      # scope, so their tests cannot even load without it.
+      - name: Install Python dependencies
+        run: python3 -m pip install --quiet beautifulsoup4 requests
+
+      # ── Oracle engine ──
+      - name: Oracle layers — each layer does what it claims
+        run: node .github/scripts/tests/test_oracle_layers.mjs
+
+      - name: Oracle pick — shape, scorer, schedule, palette, jackpot
+        run: node .github/scripts/tests/test_oracle_pick.mjs
+
+      - name: Oracle snapshot — the daily oracle-history.json writer
+        run: node .github/scripts/tests/test_snapshot_oracle.mjs
+
+      - name: Sphere palette — styles.css matches its generator
+        run: python3 .github/scripts/tests/test_sphere_palette.py
+
+      # ── PCSO data pipeline feeding the Oracle tab ──
+      - name: PCSO scraper — second source cannot degrade a good result
+        run: python3 .github/scripts/tests/test_scrape_pcso.py
+
+      - name: PCSO history append — append-only guarantee
+        run: python3 .github/scripts/tests/test_append_pcso_history.py
+
+      # The pipeline must not be left dirty by a test run.
+      - name: Confirm the tests wrote nothing into the checkout
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::a test modified the working tree:"
+            git status --porcelain
+            git diff
+            exit 1
+          fi
+          echo "working tree clean"
