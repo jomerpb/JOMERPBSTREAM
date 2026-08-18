@@ -2585,6 +2585,46 @@ function pcsoHistJackpotHTML(entry){
   return '<span class="opick-jackpot"><span class="opick-amt">'+disp+' jackpot</span>'+wtxt+'</span>';
 }
 
+// PCSO's published prize matrix for the 6-ball games, taken from each game's
+// own page on pcso.gov.ph (read Aug 2026). Two of the four tiers are POOLS,
+// not per-ticket amounts: PCSO pays the 5-match and 4-match categories as a
+// fixed sum "to be shared equally per standard bet", so a draw with 698
+// four-match winners pays each of them a few hundred pesos, not the pool.
+// pcso-history.json carries a winner count for the JACKPOT only, so the
+// per-ticket figure for those two tiers is unknowable here — the caption says
+// "a share of" rather than inventing one. Only the 3-match tier is a fixed
+// prize, and only it can be stated flatly.
+//
+// `min` is the published minimum jackpot, used solely as a fallback when an
+// entry on file has no jackpot figure of its own — never in place of a
+// confirmed one.
+//
+// EZ2 is absent on purpose: this panel scores it across all three of the day's
+// draws at once, so there is no single draw for a prize tier to attach to, and
+// its prize is fixed rather than tiered anyway.
+var PCSO_PRIZE_TIERS={
+  '642':{min:10000000,p5:1100000,p4:1000000,p3:20},
+  '645':{min:15000000,p5:1200000,p4:1100000,p3:30},
+  '649':{min:25000000,p5:1300000,p4:1200000,p3:50},
+  '655':{min:45000000,p5:1400000,p4:1300000,p3:60},
+  '658':{min:75000000,p5:1500000,p4:1400000,p3:100}
+};
+
+// What the Look Up Result caption adds after the match count once the pick
+// actually won something. Below 3 matches PCSO pays nothing, so there is
+// nothing to add and the caption stays as it was.
+function pcsoHistPrizeHTML(gameKey,matched,entry){
+  var t=PCSO_PRIZE_TIERS[gameKey];
+  if(!t||typeof matched!=='number'||matched<3) return '';
+  var txt;
+  if(matched===3) txt='Balik Taya '+pcsoAmtHTML(t.p3);
+  else if(matched===4) txt='You won a share of '+pcsoAmtHTML(t.p4);
+  else if(matched===5) txt='You won a share of '+pcsoAmtHTML(t.p5);
+  else txt='Answered Prayer \u2014 you won the jackpot amounting '
+    +pcsoAmtHTML((entry&&entry.jackpot)||t.min);
+  return ' \u00b7 <span class="pcso-hist-prize">'+txt+'</span>';
+}
+
 // One block per game drawn that day, stacked the same way the Oracle Pick
 // panel stacks its games: a head line carrying the game name, its source tag
 // and the CONFIRMED jackpot, then the winning numbers, then the Oracle's pick,
@@ -2605,9 +2645,14 @@ function pcsoHistGameHTML(gameKey,dateStr){
   // The caption under the picks, naming the row above it and scoring it. One
   // line rather than a label above and a count below, which put two pieces of
   // 10px text around a row that reads perfectly well between them.
+  // A scoring pick also says what PCSO pays for it, and goes green when it
+  // paid anything at all (3+). Only the 6-ball games have a prize tier here,
+  // so EZ2 keeps the plain gold count.
   function pickCap(matched,total){
+    var paid=!!PCSO_PRIZE_TIERS[gameKey]&&typeof matched==='number'&&matched>=3;
     return '<div class="pcso-hist-sublbl">Oracle\u2019s Pick'
-      +(matched===null?'':' \u00b7 <span class="pcso-hist-score">'+matched+' of '+total+' matched</span>')
+      +(matched===null?'':' \u00b7 <span class="pcso-hist-score'+(paid?' win':'')+'">'
+        +matched+' of '+total+' matched</span>'+pcsoHistPrizeHTML(gameKey,matched,entry))
       +'</div>';
   }
 

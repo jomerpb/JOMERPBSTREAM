@@ -1027,6 +1027,13 @@
    numbers with two pieces of 10px text. */
 #oracle-page .pcso-hist-sublbl{font-family:'Bebas Neue',sans-serif;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin:8px 0 0;text-align:center}
 #oracle-page .pcso-hist-score{color:var(--gold);font-weight:700}
+/* A pick that actually paid (3+ of 6) drops the gold for the money green and
+   picks up a glow, so a winning line is visible without reading the count.
+   text-shadow inherits, so the .opick-amt inside the prize clause glows too.
+   Only the 6-ball games get .win — EZ2 is scored across three draws at once
+   and has no tier to pay out. */
+#oracle-page .pcso-hist-score.win,
+#oracle-page .pcso-hist-prize{color:var(--green);font-weight:700;text-shadow:0 0 6px rgba(76,252,154,.65),0 0 16px rgba(76,252,154,.35)}
 
 /* ── IN-PAGE CALENDAR (Oracle Pick For Any Date) ──
    Replaces <input type="date"> so a tap on a day commits straight away; the
