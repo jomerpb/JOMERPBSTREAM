@@ -198,6 +198,53 @@ combinations) — a dead input that `convergence()` counted as an independent so
 forever. It now also includes the Chaldean values of the weekday and month names, so
 it varies with the date being read.
 
+## Astro engine: epoch, and the lunar calendar
+
+**The ephemeris epoch was off by one day.** Every constant in the astro engine is
+quoted from Paul Schlyter, whose day number `d` is referred to **2000 Jan 0.0
+(JD 2451543.5)** — not to J2000.0 (JD 2451545.0), which is 1.5 days later.
+`astroDayNumber` subtracted 2451545 while its own comment called the result
+"Schlyter's `d`", so the whole ephemeris ran exactly **1.000 day behind**. Cost in
+mean motion: **Moon ~13.2°** (nearly half a zodiac sign), Mercury ~4.1°, Venus
+~1.6°, Sun ~1.0°, Mars ~0.5°. Confirmed three ways — Schlyter's own published
+day-number formula (off by −1.000 at every date tested), 13 consecutive new moons
+against Meeus (all 1.00 day late), and the March 2026 equinox (engine said
+2026-03-21 14:33 UT; true value 2026-03-20 14:46 UT). Fixed to `jdn-2451544`;
+the equinox now lands 13 min off, inside Schlyter's stated accuracy. Covered by
+test 7 in `test_oracle_layers.mjs`, which pins it to Schlyter's formula directly
+so it cannot drift back.
+
+**`layerIChing` casts on the real lunar date.** Mei Hua Yi Shu's 年月日時起卦法
+takes the *lunar* month and day; the layer used to feed it the Gregorian ones and
+disclosed that as a simplification. `chineseLunarDate()` now does the conversion
+from the engine's own Sun/Moon longitudes — new-moon search for month starts, the
+winter-solstice month as month 11, and the leap month as the first month of the
+sui with no zhongqi, numbered after the month it follows. Over 2026 the lunar day
+and the Gregorian day agree on **0 of 365 dates**, so this was never cosmetic.
+
+Known limit, asserted in test 8 rather than papered over: Schlyter's Moon is
+~1-2 arcmin, i.e. new-moon timing good to **±26 min** (mean error +0.6 min, over
+730 lunations 1990-2050 against Meeus). When a new moon falls within ~15 min of
+local midnight the month start can land on the wrong civil day — **2 of 730
+lunations, 0.3%**. 2030-02-03 00:08 CST is one of them, so the engine puts
+Chinese New Year 2030 one day early. That is the ephemeris's resolution, not a
+logic error; don't special-case it.
+
+The year branch stays on the **Lichun-based solar year** that `layerBazi`/
+`layerFengshui` use — one of the two live conventions, and it keeps the three
+layers agreeing with each other. Leap-month numbering (take the preceding
+month's number) is likewise one school of several; both are house choices,
+documented as such in the code.
+
+Together these moved **94.3% of picks** over a 120-date × 5-game sweep (64.4% of
+individual numbers), which widens the 📌 recorded vs ↻ recomputed gap on past
+dates. That is expected, for the same reason the history-free change was.
+
+**`fairDraws` in `test_oracle_layers.mjs` is seeded.** It used `Math.random`, and
+the fair-data family-bias check is a tolerance test: measured on unmodified main
+the gap wandered from −4.87 to +4.39 against a limit of 6, so CI went red at
+random with nothing wrong. It now uses a fixed-seed mulberry32.
+
 ## Rule: never hardcode ticker symbols / IDs
 
 For PSE, ticker symbols and PSE's internal `cmpy_id`/`security_id` are **always resolved live** by paging PSE's company directory (`resolveAllIds()` in `pse-scraper-full/scrape_pse_full.js`, reused verbatim in `scrape_pse_live.js`) — never maintained as a static list in scraper code. Same principle for stream.js: TMDB/AniList IDs are always looked up via their search/detail APIs, never hardcoded per title.
