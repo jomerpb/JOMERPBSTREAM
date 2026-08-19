@@ -400,6 +400,124 @@ console.log('\n8. Chinese lunar calendar');
         JSON.stringify(y2030));
 }
 
+// ── 9. Element -> digit tables use ONE scheme, and reach all nine digits ──
+// layerBazi and layerIChing each carried a table that mixed two incompatible
+// systems: Water/Fire/Wood from the He Tu 生成數 (1/6, 2/7, 3/8) sitting beside
+// Metal [6,7] and Earth [2,5,8], which are Lo Shu PALACE numbers. Nothing in
+// either scheme puts 4 or 9 where that mix left them, so both layers were
+// structurally incapable of ever naming digit 4 or digit 9 — measured 0% of
+// 1096 dates for each — while 6 and 7 were paid by two elements at once.
+// Downstream the digit-4 family took 1.7% of all picks against a uniform
+// 11.1%, and 31 was never picked in 6/49 across three years of dates.
+// A wrong-but-consistent table would still pass a "does it vary" test, so this
+// asserts the property that actually failed: full coverage of 1..9.
+console.log('\n9. BaZi and I Ching can reach every digit 1-9');
+{
+  const seenBazi = new Set(), seenIching = new Set();
+  const d0 = Date.UTC(2025, 0, 1);
+  for (let i = 0; i < 400; i++) {
+    const dt = new Date(d0 + i * 86400000);
+    setDate(sb, dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+    for (const hr of ['2PM', '5PM', '9PM']) {
+      sb.layerBazi(hr).nums.forEach((n) => seenBazi.add(n));
+      sb.layerIChing(hr).nums.forEach((n) => seenIching.add(n));
+    }
+  }
+  const missingB = [1,2,3,4,5,6,7,8,9].filter((d) => !seenBazi.has(d));
+  const missingI = [1,2,3,4,5,6,7,8,9].filter((d) => !seenIching.has(d));
+  check('layerBazi emits all nine digits over 400 dates', missingB.length === 0,
+        `never emitted: ${missingB.join(', ')}`);
+  check('layerIChing emits all nine digits over 400 dates', missingI.length === 0,
+        `never emitted: ${missingI.join(', ')}`);
+
+  // And the consequence the user actually sees: no number in any pool may be
+  // unreachable. Before the fix, 31 was picked 0 times in 6/49 over 3 years.
+  const unreachable = [];
+  for (const gk of ['642', '645', '649', '655', '658']) {
+    const picked = new Set();
+    for (let i = 0; i < 400; i++) {
+      const dt = new Date(d0 + i * 86400000);
+      const ds = dt.toISOString().slice(0, 10);
+      if (sb.oracleGamesOnDate(ds).indexOf(gk) < 0) continue;
+      sb.computeOracleAsOf(gk, ds).forEach((n) => picked.add(n));
+    }
+    for (let n = 1; n <= sb.GAMES[gk].max; n++) if (!picked.has(n)) unreachable.push(`${gk}:${n}`);
+  }
+  check('no number in any pool is unreachable by the picker', unreachable.length === 0,
+        unreachable.join(' '));
+}
+
+// ── 10. Flying Star annual number is always a star, 1..9 ─────────────────
+// `9-((fsYear-2024)%9)` was guarded only against undershoot. JavaScript's %
+// keeps the sign of the dividend, so years before the 2024 anchor overshot the
+// TOP of the range and the guard never fired — 2023 gave 10, 2022 gave 11,
+// 2020 gave 13. The Oracle Pick picker's min is 2020-01-01, so the page really
+// rendered "Annual Flying Star 2022 = #11", and because convergence() only
+// scans digits 1..9 the annual star silently vanished from every reading
+// before Lichun 2024.
+console.log('\n10. Flying Star numbers stay inside 1..9');
+{
+  const bad = [];
+  for (let y = 2018; y <= 2045; y++) {
+    for (const m of [1, 3, 6, 9, 12]) {
+      setDate(sb, y, m, 15);
+      const fs = sb.layerFengshui();
+      const nums = [fs.nums, Object.values(fs.loShu)].flat();
+      for (const v of nums) if (!(Number.isInteger(v) && v >= 1 && v <= 9)) bad.push(`${y}-${m}:${v}`);
+    }
+  }
+  check('every annual/monthly/palace star is an integer 1..9 across 2018-2045',
+        bad.length === 0, bad.slice(0, 8).join(' '));
+
+  // Known anchor points on the descending annual cycle.
+  const want = { 2020: 4, 2022: 2, 2023: 1, 2024: 9, 2025: 8, 2026: 7, 2033: 9 };
+  const wrong = [];
+  for (const y of Object.keys(want)) {
+    setDate(sb, Number(y), 6, 15);
+    const got = sb.layerFengshui().nums[0]; // annualStar is first in the set
+    if (got !== want[y]) wrong.push(`${y} want ${want[y]} got ${got}`);
+  }
+  check('annual star counts down 2024=9 and wraps both directions',
+        wrong.length === 0, wrong.join('; '));
+}
+
+// ── 11. reduce() is the digital root, with the old safe fallback ──────────
+// Rewritten from a String-split/parseInt walk to the closed form n%9. The two
+// must agree on every integer, and the guard matters as much as the formula:
+// the string version fell through to 9 for NaN/undefined/floats (parseInt('.')
+// -> NaN -> `n||9`), and callers treat the result as a usable digit. A bare
+// n%9 would hand them NaN instead and poison every comparison downstream.
+console.log('\n11. reduce() digital root');
+{
+  const slow = (n) => { if (n <= 0) return 9; while (n > 9) n = [...String(n)].reduce((a, b) => a + parseInt(b), 0); return n || 9; };
+  let bad = 0, first = '';
+  for (let n = -50; n <= 20000; n++) {
+    if (sb.reduce(n) !== slow(n)) { bad++; if (!first) first = `n=${n} got ${sb.reduce(n)} want ${slow(n)}`; }
+  }
+  check('matches the iterative digit-sum on every integer -50..20000', bad === 0, first);
+  check('non-numbers still fall back to 9, never NaN',
+        sb.reduce(NaN) === 9 && sb.reduce(undefined) === 9 && sb.reduce(12.5) === 9,
+        `${sb.reduce(NaN)} / ${sb.reduce(undefined)} / ${sb.reduce(12.5)}`);
+}
+
+// ── 12. computeOracleAsOf restores the globals when it THROWS ────────────
+// Test 5 covers the happy path. The restore used to be a bare statement after
+// the work, so any throw before it — an unknown game key, a missing history
+// bucket after a failed fetch — left _D/_M/_Y/_DOW pinned to the looked-up
+// date for the rest of the session, and every later render on the page then
+// silently computed for the wrong day.
+console.log('\n12. computeOracleAsOf restores globals on the error path');
+{
+  setDate(sb, 2026, 8, 15);
+  const before = { D: sb._D, M: sb._M, Y: sb._Y, DOW: sb._DOW };
+  let threw = false;
+  try { sb.computeOracleAsOf('no-such-game', '2025-01-20'); } catch (e) { threw = true; }
+  check('a bad game key still throws (the guard is not swallowing errors)', threw);
+  check('date globals restored even though the call threw',
+        sb._D === before.D && sb._M === before.M && sb._Y === before.Y && sb._DOW === before.DOW,
+        `${before.Y}-${before.M}-${before.D} became ${sb._Y}-${sb._M}-${sb._D}`);
+}
+
 console.log('\n' + '='.repeat(62));
 console.log(failures.length
   ? `${failures.length} failure(s): ${failures.join(', ')}`
