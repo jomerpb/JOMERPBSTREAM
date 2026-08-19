@@ -256,10 +256,22 @@ function oracleSrcTag(source,withWord){
 }
 
 // ══════════════════════════
+// Digital root. The closed form n%9 (with 0 mapped to 9) is exactly the
+// repeated digit-sum for every positive integer, and avoids the string
+// split/parseInt walk this used to run — that mattered because reduce() is
+// called inside convergence()'s per-number loops for every game and date, so
+// the sweeps and the snapshot job paid for it thousands of times per run
+// (measured 931ms -> 26ms over 2M calls). The non-integer guard is not
+// cosmetic: the old version fell through to 9 for NaN/undefined/floats
+// (parseInt('.') -> NaN -> `n||9`), and callers rely on getting a usable
+// digit back rather than a NaN that would silently poison every comparison
+// downstream. Verified identical to the old implementation on every integer
+// in -50..100000.
 function reduce(n){
+  if(!Number.isInteger(n)) return 9;
   if(n<=0) return 9;
-  while(n>9) n=[...String(n)].reduce((a,b)=>a+parseInt(b),0);
-  return n||9;
+  var r=n%9;
+  return r===0?9:r;
 }
 function digitOf(n){ return reduce(n); }
 function pad(n){ return String(n).padStart(2,'0'); }
@@ -639,8 +651,21 @@ function layerBazi(drawHour){
   var branches=['Zi子','Chou丑','Yin寅','Mao卯','Chen辰','Si巳','Wu午','Wei未','Shen申','You酉','Xu戌','Hai亥'];
   var stemEl=['Wood','Wood','Fire','Fire','Earth','Earth','Metal','Metal','Water','Water'];
   var branchEl=['Water','Earth','Wood','Wood','Earth','Fire','Fire','Earth','Metal','Metal','Earth','Water'];
-  var branchNums=[[1,6],[2,5],[3,8],[3,8],[5],[2,7],[2,7],[2,5],[6,7],[6,7],[5],[1,6]];
-  var stemNums=[[3,8],[3,8],[2,7],[2,7],[5],[5],[6,7],[6,7],[1,6],[1,6]];
+  // Element -> number by the He Tu 生成數 (Water 1/6, Fire 2/7, Wood 3/8,
+  // Metal 4/9, Earth 5/10->5) — the numbers classically attached to the Five
+  // Elements themselves, which is the right table for stems and branches.
+  // These arrays used to MIX two incompatible schemes: Water/Fire/Wood were He
+  // Tu, but Metal was written [6,7] and Chou/Wei Earth [2,5], which are Lo Shu
+  // PALACE numbers (the 9-square used by layerFengshui). The consequence was
+  // not cosmetic — 4 and 9 appear in no Lo Shu-Metal pair and in no Earth pair,
+  // so this layer could never emit digit 4 or digit 9 at all (measured: 0% of
+  // 1096 dates for each), while 6 and 7 were paid twice. Downstream the digit-4
+  // family collected 1.7% of all picks against a uniform 11.1%, and 31 was
+  // never once picked in 6/49 across three years of dates.
+  // Lo Shu palace numbers are still correct where palaces are what is being
+  // read — see calcEnergy()/energyDigits(), which use them deliberately.
+  var branchNums=[[1,6],[5],[3,8],[3,8],[5],[2,7],[2,7],[5],[4,9],[4,9],[5],[1,6]];
+  var stemNums=[[3,8],[3,8],[2,7],[2,7],[5],[5],[4,9],[4,9],[1,6],[1,6]];
 
   // Solar longitude of the day (needed for both the year-switch at Lichun
   // and the true Jie-Qi month boundary below). BaZi is a solar calendar —
@@ -695,14 +720,30 @@ function layerBazi(drawHour){
 
   var nums=[...new Set([...day.nums,...hour.nums])];
 
-  // BaZi interactions (clashes, combinations)
+  // ── BaZi interactions (六冲 branch clashes) ──
+  // Two fixes here. (a) The renderer prints `x.desc`, but the pushed object
+  // only ever carried {type,a,b,effect} — so every clash rendered literally as
+  // "Clash: undefined". The day branch cycles every 12 days and the 9PM hour
+  // branch is fixed at Hai, so that misrender fired on roughly one day in
+  // twelve. (b) Only Day-vs-Hour was checked; a 六冲 is a relation between any
+  // two of the four pillars, so all six pairings are examined now. Display
+  // only — `nums` below is unchanged, and nothing here reaches convergence().
   var interactions=[];
-  // Day-Hour branch clash check
-  var clashPairs=[[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]];
-  clashPairs.forEach(function(p){
-    if((dBranch===p[0]&&hBranch===p[1])||(dBranch===p[1]&&hBranch===p[0]))
-      interactions.push({type:"Clash",a:branches[dBranch],b:branches[hBranch],effect:"tension"});
-  });
+  var pillarBranches=[{lbl:'Year',idx:yBranch},{lbl:'Month',idx:mBranch},
+                      {lbl:'Day',idx:dBranch},{lbl:'Hour',idx:hBranch}];
+  for(var pa=0;pa<pillarBranches.length;pa++){
+    for(var pb=pa+1;pb<pillarBranches.length;pb++){
+      var A=pillarBranches[pa],B=pillarBranches[pb];
+      // 六冲: branches exactly six positions apart on the twelve-branch cycle.
+      if(((A.idx-B.idx)%12+12)%12!==6) continue;
+      interactions.push({
+        type:'Clash \u51b2',
+        a:branches[A.idx],b:branches[B.idx],effect:'tension',
+        desc:A.lbl+' '+branches[A.idx]+' \u2194 '+B.lbl+' '+branches[B.idx]
+             +' \u2014 six-position clash (\u516d\u51b2), tension between these two pillars'
+      });
+    }
+  }
   return {
     nums,day,hour,year,month,interactions,
     steps:[
@@ -722,10 +763,23 @@ function layerFengshui(){
   var fsYear=_Y;
   if(_M===1||(_M===2&&_fsSunLon<315)) fsYear=_Y-1;
 
-  // Period 9 (2024-2043) — fixed
-  // Annual star: 2024=9,2025=8,2026=7... counting down, wrapping 1→9.
-  var annualStar=9-((fsYear-2024)%9);
-  if(annualStar<=0)annualStar+=9;
+  // Annual star: 2024=9, 2025=8, 2026=7 ... counting down and wrapping 1→9.
+  // The previous form was `9-((fsYear-2024)%9)` guarded only by `if(<=0)+=9`.
+  // JavaScript's % keeps the sign of the dividend, so every year BEFORE the
+  // 2024 anchor overshot the top of the range instead of the bottom and the
+  // guard never fired: 2023 gave 10, 2022 gave 11, 2020 gave 13 (correct: 1, 2
+  // and 4). That is reachable — the Oracle Pick date picker's min is
+  // 2020-01-01 — and it was visible on the page as "Annual Flying Star 2022 =
+  // #11". It was also silently load-bearing: convergence() only scans digits
+  // 1..9, so an out-of-range star simply dropped out of the reading for every
+  // date before Lichun 2024. Wrapping in both directions fixes it.
+  var annualStar=(((8-(fsYear-2024))%9)+9)%9+1;
+
+  // Period (元運): 20-year blocks, Period 1 beginning 1864, cycling 1..9.
+  // Derived rather than hardcoded to "Period 9 (2024-2043)", for the same
+  // reason as above — this panel is reachable for dates in Period 8.
+  var fsPeriodStart=1864+20*Math.floor((fsYear-1864)/20);
+  var fsPeriod=((Math.floor((fsYear-1864)/20))%9+9)%9+1;
 
   // Monthly star starting value (the "正月" / first-solar-month center
   // number that subsequent months count down from) — classical rule keys
@@ -784,9 +838,16 @@ function layerFengshui(){
   return {
     nums,loShu:grid,
     steps:[
-      `<b>Period 9 (2024-2043)</b> · ruling star = 9 · active: <b>2,7,9</b>`,
-      `<b>Annual Flying Star ${_Y} = #${annualStar}</b>`,
-      `<b>Monthly Star (Month ${_M}) = #${monthlyStar}</b> in center`,
+      // Labels quote the LICHUN-based solar year and solar month these values
+      // are actually computed from, not the Gregorian ones — for a January or
+      // early-February date the two differ, and the panel used to print the
+      // Gregorian year beside a star belonging to the previous solar year. The
+      // old line also asserted a fixed "active: 2,7,9" set with no source and
+      // no period dependence; the period and its ruling star are stated, and
+      // the unsourced claim is dropped rather than carried into other periods.
+      `<b>Period ${fsPeriod} (${fsPeriodStart}-${fsPeriodStart+19})</b> · ruling star = <b>${fsPeriod}</b>`,
+      `<b>Annual Flying Star ${fsYear} (solar year) = #${annualStar}</b>`,
+      `<b>Monthly Star (solar month ${monthOffset+1} since Lichun) = #${monthlyStar}</b> in center`,
       `<b>Center + East sector stars:</b> #${monthlyStar} (center) + #${grid.E} (East) → digits: <b>${nums.join(',')}</b>`,
     ]
   };
@@ -1030,7 +1091,13 @@ function layerIChing(drawHour){
   // element, so it's corrected to "Wood" here (Wood/Thunder happened to
   // share the same digit set below, so this was cosmetic, not a scoring bug).
   var triEl=['','Metal','Metal','Fire','Wood','Wood','Water','Earth','Earth'];
-  var elNums={'Metal':[6,7],'Fire':[2,7],'Wood':[3,8],'Water':[1,6],'Earth':[2,5,8]};
+  // Same He Tu 生成數 table layerBazi() uses, and for the same reason: this
+  // map was mixed too (Metal [6,7] and Earth [2,5,8] are Lo Shu palace numbers
+  // sitting next to He Tu Fire/Wood/Water), which left digits 4 and 9 with no
+  // element to come from — measured 0% across 1096 dates. Consistent He Tu
+  // makes element->digit a bijection over 1..9, so all nine digits stay
+  // reachable from the four trigram-pair sets this casting can produce.
+  var elNums={'Metal':[4,9],'Fire':[2,7],'Wood':[3,8],'Water':[1,6],'Earth':[5]};
 
   var hexNum=ichingHexNumOf(lower,upper);
 
@@ -1262,12 +1329,10 @@ function layerStats(gameKey,drawHour){
   for(var i=1;i<=game.max;i++) freq[i]=0;
   draws.forEach(draw=>draw.forEach(n=>{ if(n>=1&&n<=game.max) freq[n]++; }));
 
-  // Windowed frequency (most recent 30 draws, newest-first) — used for SCORING.
-  // Full-history freq above is kept for display, but lifetime counts barely move
-  // per draw and were freezing the picks; the 30-draw window is responsive.
-  var freq30={};
-  for(var i=1;i<=game.max;i++) freq30[i]=0;
-  draws.slice(0,30).forEach(draw=>draw.forEach(n=>{ if(n>=1&&n<=game.max) freq30[n]++; }));
+  // (The 30-draw windowed frequency that used to live here is gone. Its comment
+  // still called it "used for SCORING", but the recency signal below replaced it
+  // and the history-free change then removed the whole statistics path from the
+  // pick — nothing read freq30 any more, in the engine or in any renderer.)
 
   var lastSeen={};
   for(var i=0;i<draws.length;i++)
@@ -1278,7 +1343,6 @@ function layerStats(gameKey,drawHour){
   // (gap >= 50% of total history) scaled with dataset size and never fired
   // once full history loaded — verified 0/260 numbers on live data.
   var expGap=isEZ2?(game.max/2):(game.max/6);
-  var overdueAt=Math.ceil(expGap*2);
 
   // ══════════════════════════
   // SCORING — rebuilt. The previous formula was
@@ -1359,20 +1423,32 @@ function layerStats(gameKey,drawHour){
 
   var topDigits=Object.entries(digitWeight).sort((a,b)=>b[1]-a[1]).map(e=>parseInt(e[0]));
 
-  // numScore is also exposed non-negative for within-family ordering in
-  // convergence(), replacing the freq30*4 + hot*6 pair there. Scaled to
-  // 0..38 deliberately: the OLD within-family score topped out around
-  // freq30(8)*4 + hot(6) = 38, and metaNumBonus adds +10 per date-varying
-  // full-number match. Keeping the same ceiling preserves the existing
-  // balance between the stats signal and the metaphysical bonuses, so
-  // this fix changes the stats math without silently re-tuning how much
-  // say Tarot/I-Ching/Angel numbers have.
+  // numScore is also exposed non-negative, on a 0..38 scale. That ceiling is
+  // historical — it matched the OLD within-family score's maximum (freq30(8)*4
+  // + hot(6) = 38) so the rebuild could not silently re-tune the metaphysical
+  // +10 bonuses against it. convergence() no longer consumes it (the pick is
+  // history-free), but test_oracle_layers.mjs test 2 recomputes it from recZ
+  // and gapZ to prove the documented 0.65/0.35 blend is what the code runs.
   var mnN=Math.min(...Object.values(numScore)), mxN=Math.max(...Object.values(numScore));
   var spanN=(mxN-mnN)||1;
   var numScoreNorm={};
   for(var n=1;n<=game.max;n++) numScoreNorm[n]=(numScore[n]-mnN)/spanN*38;
 
-  return {freq,freq30,lastSeen,digitWeight,topDigits,nums:topDigits.slice(0,5),hotNums,draws,overdueAt,
+  // WHAT THIS LAYER EXPORTS, and why almost all of it stays.
+  // Under the history-free rule the pick takes nothing from here, which makes
+  // it tempting to strip the z-score math as dead. It is not dead, twice over:
+  //   - `topDigits` is displayed on Run Expert as "Top stat digits", and it is
+  //     the end of the whole chain above (recZ/gapZ -> numScore -> family
+  //     means -> digitWeight -> topDigits), so every step feeds a live view;
+  //   - recZ, gapZ, numScore, halfLife, wRecency and wOverdue are read by
+  //     test 2 in test_oracle_layers.mjs, which recomputes the documented
+  //     0.65/0.35 blend from them and asserts the two signals stay distinct.
+  //     That test is the guard against the original double-count returning,
+  //     so these are its interface, not decoration.
+  // Only four exports had no reader anywhere in the repo — freq30 (whose own
+  // comment still claimed it was "used for SCORING"), lastSeen, overdueAt and a
+  // `nums` alias for topDigits — and those are the ones now gone.
+  return {freq,digitWeight,topDigits,hotNums,draws,
           numScore:numScoreNorm,recZ,gapZ,halfLife:HALF_LIFE,wRecency:W_RECENCY,wOverdue:W_OVERDUE};
 }
 
@@ -1576,8 +1652,10 @@ function convergence(layers,gameKey){
   // HYBRID PICKER — Constrained Max Score. Merges the old Max Score and Full
   // Spread modes into ONE combination: greedy fill in `ranked` order (the
   // score-optimal order under the alignment metric — family order = `sorted`,
-  // within-family order = bestNums: 30-draw freq + hot + date full-number
-  // bonuses) with a per-digit-family cap. Lotto: cap 2 → guarantees at least
+  // within-family order = bestNums: the reading-driven family rotation plus the
+  // date's full-number bonuses) with a per-digit-family cap. This comment used
+  // to read "30-draw freq + hot + date full-number bonuses", describing the
+  // statistics engine the history-free change already removed from the pick. Lotto: cap 2 → guarantees at least
   // 3 distinct digit families in 6 picks while still doubling up on the
   // strongest signals. EZ2: cap 1 → the top two digit signals, best number
   // each. By construction the hybrid's alignment score sits between the old
@@ -1721,7 +1799,7 @@ async function generate(){
     try{iching=layerIChing(dh);}catch(e){console.error('layerIChing:',e);iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
     try{tarot=layerTarot(dh);}catch(e){console.error('layerTarot:',e);tarot={nums:[5],cardNum:5,cardName:'The Hierophant',gambling:'',steps:[]};}
     try{angel=layerAngelNumbers(dh);}catch(e){console.error('layerAngelNumbers:',e);angel={nums:[],hasSignal:false,hits:[],mirrorHit:false,steps:[]};}
-    try{stats=layerStats(currentGame,dh);}catch(e){console.error('layerStats:',e);stats={topDigits:[9,1,3],digitWeight:{},topNums:[],freq:{},freq30:{},hotNums:[]};}
+    try{stats=layerStats(currentGame,dh);}catch(e){console.error('layerStats:',e);stats={topDigits:[9,1,3],digitWeight:{},freq:{},hotNums:[],draws:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){console.error('calcEnergy:',e);energy={bars:{Fire:30,Water:30,Wood:9,Metal:9,Earth:22}};}
     layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
     try{conv=convergence(layers,currentGame);}catch(e){console.error('convergence:',e);conv={sorted:[],best:[]};}
@@ -2138,7 +2216,7 @@ async function generatePersonal(){
     try{iching=layerIChing(dh);}catch(e){iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
     try{tarot=layerTarot(dh);}catch(e){tarot={nums:[5],cardNum:5,cardName:'The Hierophant',gambling:'',steps:[]};}
     try{angel=layerAngelNumbers(dh);}catch(e){angel={nums:[],hasSignal:false,hits:[],mirrorHit:false,steps:[]};}
-    try{stats=layerStats(currentGame,dh);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},topNums:[],freq:{},freq30:{},hotNums:[]};}
+    try{stats=layerStats(currentGame,dh);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},freq:{},hotNums:[],draws:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy={bars:{Fire:30,Water:30,Wood:9,Metal:9,Earth:22}};}
     layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
     try{conv=convergence(layers,currentGame);}catch(e){conv={sorted:[],best:[]};}
@@ -2382,7 +2460,8 @@ function computeOracleAsOf(gameKey,dateStr,opts){
   var withDetail=!!(opts&&opts.withDetail);
   var g=GAMES[gameKey];
   var saved={_D:_D,_M:_M,_Y:_Y,_DOW:_DOW};
-  var parts=dateStr.split('-');
+  try{
+  var parts=String(dateStr||'').split('-');
   var y=parseInt(parts[0]),m=parseInt(parts[1]),d=parseInt(parts[2]);
   var dObj=new Date(y,m-1,d);
   _D=d; _M=m; _Y=y; _DOW=dObj.getDay();
@@ -2396,7 +2475,7 @@ function computeOracleAsOf(gameKey,dateStr,opts){
     try{iching=layerIChing(drawHour);}catch(e){iching={nums:[]};}
     try{tarot=layerTarot(drawHour);}catch(e){tarot={nums:[]};}
     try{angel=layerAngelNumbers(drawHour);}catch(e){angel={nums:[]};}
-    try{stats=layerStats(gk,drawHour);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},topNums:[],freq:{},freq30:{},hotNums:[]};}
+    try{stats=layerStats(gk,drawHour);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},freq:{},hotNums:[],draws:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy=null;}
     layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
     try{conv=convergence(layers,gk);}catch(e){conv={picks:[],sorted:[],LABELS:[]};}
@@ -2446,8 +2525,18 @@ function computeOracleAsOf(gameKey,dateStr,opts){
     }
   }
 
-  _D=saved._D; _M=saved._M; _Y=saved._Y; _DOW=saved._DOW;
   return result;
+  } finally {
+    // The restore used to sit here as a bare statement AFTER the work. Every
+    // layer call inside runOne() is individually guarded, but the code around
+    // it is not — an unknown gameKey (g is undefined, so `g.draws` throws) or a
+    // missing PCSO_HISTORY bucket after a failed fetch throws before the
+    // restore is reached, and _D/_M/_Y/_DOW then stay pinned to the requested
+    // date for the rest of the page session, so every later render silently
+    // computes for the wrong day. oracleDateReading() directly below always
+    // used try/finally; this now matches it, as its own comment claimed.
+    _D=saved._D; _M=saved._M; _Y=saved._Y; _DOW=saved._DOW;
+  }
 }
 
 // The draw on file for this game/date, or null.

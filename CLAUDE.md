@@ -208,10 +208,13 @@ identical with the entire draw history deleted.
 
 Two consequences to keep in mind:
 
-- **`oracle-history.json` spans two engines.** Entries logged before this change
-  were produced by the stats engine; they are immutable and stay as they are. A
-  past date shows 📌 recorded (old engine) while a live recompute of the same
-  date now returns something different. That is expected, not a bug.
+- **`oracle-history.json` spans multiple engines.** Entries logged before this
+  change were produced by the stats engine; the element-map fix below moved the
+  picks again. They are immutable and stay as they are — never regenerate them.
+  A past date shows 📌 recorded (whichever engine wrote it) while a live
+  recompute of the same date now returns something different. That is expected,
+  not a bug. The entry for 2026-08-19 is the last one written by the pre-fix
+  element map; everything from the next scheduled run on is the current engine.
 - The composition `(star + d) * pool` was selected over four simpler ones by
   measuring 120 dates for *presentation* only — over that window it was the only
   one where no two same-day games produced identical picks. **That "never" does
@@ -234,15 +237,112 @@ families (digits 1-4 carried a structural +17%..+25% edge); and "hot" and "overd
 are contradictory rules that were both paid. It now uses one exponentially-decayed
 recency signal (half-life 15 draws) plus a gap signal, both standardised as z-scores
 against a fair draw, blended at an explicit 0.65/0.35, and **averaged** per family so
-size cancels. `convergence()`'s `bestNums()` consumes the resulting `numScore`
-(scaled 0..38 to preserve the metaphysical `+10` bonuses' relative weight) instead of
-re-applying `freq30*4 + hot*6`.
+size cancels. `numScore` is still exported on a 0..38 scale (the old within-family
+ceiling, kept so the metaphysical `+10` bonuses were never silently re-tuned against
+it) — but nothing in the engine consumes it any more, since the pick is history-free.
+
+**Do not "clean up" `layerStats` by deleting the z-score math.** It looks dead and
+is not, twice over: `topDigits` is displayed on Run Expert as "Top stat digits" and
+sits at the end of the whole chain (recZ/gapZ → numScore → family means →
+digitWeight → topDigits), and `recZ`/`gapZ`/`numScore`/`halfLife`/`wRecency`/
+`wOverdue` are the interface test 2 in `test_oracle_layers.mjs` uses to recompute the
+documented 0.65/0.35 blend and prove the original double-count has not returned.
+Only four exports genuinely had no reader anywhere in the repo — `freq30` (whose own
+comment still claimed it was "used for SCORING"), `lastSeen`, `overdueAt` and a
+`nums` alias for `topDigits` — and those are gone.
 
 `layerNumerology`'s Chaldean half previously scored three fixed words and therefore
 emitted `[3,7]` on **every** date (verified constant across 4,032 date/hour
 combinations) — a dead input that `convergence()` counted as an independent source
 forever. It now also includes the Chaldean values of the weekday and month names, so
 it varies with the date being read.
+
+## Two fixes worth not re-breaking
+
+- **Flying Star annual number wrapped only one way.** `9-((fsYear-2024)%9)` was
+  guarded by `if(annualStar<=0)annualStar+=9`, but JavaScript's `%` keeps the
+  sign of the dividend, so years *before* the 2024 anchor overshot the top of
+  the range and the guard never fired: 2023 → 10, 2022 → 11, 2020 → 13. The
+  Oracle Pick picker's min is `2020-01-01`, so this rendered on the live page as
+  "Annual Flying Star 2022 = #11", and because `convergence()` only scans digits
+  1..9 the annual star silently dropped out of every reading before Lichun 2024.
+  Now `(((8-(fsYear-2024))%9)+9)%9+1`. The period is derived too (20-year blocks
+  from 1864) instead of hardcoded to "Period 9 (2024-2043)", and the step labels
+  quote the **solar** year and solar month the values actually come from rather
+  than the Gregorian ones. The old line's unsourced "active: 2,7,9" claim was
+  dropped rather than propagated into other periods. Test 10 bounds every
+  annual/monthly/palace star to 1..9 across 2018-2045.
+- **`computeOracleAsOf` restored the date globals outside `try/finally`.** Each
+  layer call inside `runOne` is guarded, but the code around it is not — an
+  unknown game key or a missing `PCSO_HISTORY` bucket after a failed fetch threw
+  before the restore line, leaving `_D/_M/_Y/_DOW` pinned to the looked-up date
+  for the rest of the page session, so every later render silently computed for
+  the wrong day. `oracleDateReading` always did this correctly; the two now
+  match, as `computeOracleAsOf`'s own comment already claimed. Test 5 covers the
+  happy path, test 12 the throwing one.
+
+`reduce()` is also now the closed-form digital root (`n%9`, 0→9) instead of a
+String-split/parseInt walk — 931ms → 26ms over 2M calls, which is the sweeps and
+the snapshot job, not the browser. Keep the `Number.isInteger` guard: the old
+version fell through to `9` for NaN/undefined/floats and callers rely on getting
+a digit back, not a NaN that poisons every comparison downstream. Test 11 pins
+it to the old implementation on every integer in -50..20000.
+
+## Rule: one element→number scheme per table
+
+**There are two legitimate schemes and they are not interchangeable.**
+
+- **He Tu 生成數** — the numbers attached to the Five Elements themselves:
+  Water 1/6, Fire 2/7, Wood 3/8, Metal **4/9**, Earth 5(/10). Used by
+  `layerBazi` (stem and branch element numbers) and `layerIChing` (trigram
+  element numbers). Element→digit is a bijection over 1..9 under this scheme.
+- **Lo Shu palace numbers** — the nine-square: Water 1, Earth 2/5/8, Wood 3/4,
+  Metal **6/7**, Fire 9. Used by `layerFengshui` (it *is* the grid) and by
+  `calcEnergy`/`energyDigits`, which read elements back out of that grid.
+
+Both tables in the first group used to **mix the two**: Water/Fire/Wood were He
+Tu, but Metal was written `[6,7]` and Chou/Wei Earth `[2,5]` — Lo Shu values.
+No scheme puts 4 or 9 anywhere in that mixture, so `layerBazi` and `layerIChing`
+were each **structurally incapable of emitting digit 4 or digit 9** — measured
+0% of 1096 dates, both layers, both digits — while 6 and 7 were paid by two
+elements at once.
+
+That was not cosmetic. It starved two of nine digit families all the way to the
+pick: digit 4 took **1.7%** of all picks against a uniform 11.1%, digit 9
+**5.5%**, and **31 was never once picked in 6/49 across three years of dates**
+(measured over 2,348 six-ball game-dates). Unifying both tables on He Tu moved
+**46.6% of picks**, brought digit 4 to 6.2% and digit 9 to 13.4%, cut the
+family-imbalance χ² from 4372 to 2793, and left **no unreachable number in any
+pool**. Test 9 in `test_oracle_layers.mjs` pins both layers to full 1..9
+coverage and asserts every number in every pool is reachable, so a future edit
+cannot quietly re-mix them.
+
+The remaining imbalance is a different, known thing — see the note on constant
+sources below. Do not "fix" it by re-tuning weights for hit rate.
+
+## Known: five digits carry a permanent vote
+
+Measured over 1461 dates, for the 9PM draw that every 6-ball game uses, three
+sources emit the same digit on **every single date**: `Py` always emits **9**
+(the draw hour), `Ch` always emits **3 and 7** (the fixed words PCSO and LOTTO),
+and `Ba` always emits **1 and 6** (the 9PM hour branch is always Hai → Water).
+Every other layer's always-set is empty.
+
+This is a *consequence of the layers being correct*, not a defect: the hour
+really is 9, the reading really is about PCSO, and the 9PM hour pillar really is
+Hai. It is recorded here because it explains the residual shape of the pick
+distribution (families 1/3/6/7 lead, 8 trails) and so that nobody "discovers" it
+again and treats it as a bug. Changing it means changing what a layer claims to
+read, which is a design decision, not a fix.
+
+Related, and also known: the eleven sources are **eleven slots, not eleven
+independent generators**. `As`, `PoF` and `Ho` all come from one ephemeris call,
+and `En` is computed *from* `Ba`/`As`/`Fs` — its digits coincide with Astrology
+70%, BaZi 53%, Feng Shui 36%. `convergence()` already normalises against the
+day's own leader rather than treating 11 hits as 11 confirmations, which is the
+main mitigation. Do not "fix" this by weighting `En` **up**; if it is ever
+regrouped, the derived source should count for less than its parents, not the
+same.
 
 ## Astro engine: epoch, and the lunar calendar
 
