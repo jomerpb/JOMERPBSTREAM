@@ -116,6 +116,45 @@ The real search found **8**. Pure noise finds 7 as a matter of routine and
 reaches 8 about a quarter of the time. The "winning combination" is what a
 search of that size returns from data with nothing in it.
 
+## History or future? Both — and they say the same thing
+
+Worth being exact about what was graded, because the two levels differ.
+
+**Every individual pick is clean.** The engine is history-free: `computeOracleAsOf`
+derives a pick from the date alone, so a pick for a past date is genuinely what
+the Oracle would have said in advance. It never sees the draw it is scored
+against, or any draw. Verified at 926/926 by `validate.mjs`.
+
+**The choice of configuration is not clean, by construction.** The winner was
+crowned *because* it scored well on those same 926 draws. That is the entire
+leak — not in any pick, but in which configuration gets called best. The holdout
+and `SHUFFLE` tests exist to measure exactly that.
+
+**And there is a real forward record.** `oracle-history.json` holds picks the
+daily snapshot job wrote at 00:05 Manila and committed to git *before* the 9PM
+draws. Nothing selected them afterwards. `forward.mjs` grades them:
+
+```
+40 logged days, 2026-07-11 to 2026-08-20 — 84 six-ball picks with a draw on file
+matches 0..6 : 39 / 28 / 15 / 2 / 0 / 0 / 0
+mean         : 0.762   (chance for this exact mix 0.733;  z = +0.35)
+4-or-better  : 0       (chance expected 0.09)
+best result  : 3 matches, twice
+EZ2          : 116 draws, one number right 15 times (chance ~14.5), both right 0
+```
+
+The pre-registration is checkable in git. The `2026-08-18` entry, including its
+6/49 pick, was committed in `d8ae4f0` at **2026-08-17T16:38Z**; that day's draws
+were appended in `dea3df3` at **2026-08-18T15:23Z** — the pick was public
+roughly 20 hours before the draw happened.
+
+Caveat, stated rather than buried: 39 of those 40 days were written by the
+engine as it stood before the element-map fix (`CLAUDE.md` records 2026-08-19 as
+the last pre-fix entry), so this is a forward test of *an* Oracle engine, not
+solely the current one. The sample is also small — 84 picks expect 0.09
+four-matches, so seeing zero proves little on its own. What it does establish is
+that nothing about the forward record departs from chance.
+
 ## Is the best-found combination better than the shipped one?
 
 No. Asked directly, and tested directly: give the **same optimiser the same
