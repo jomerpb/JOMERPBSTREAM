@@ -116,6 +116,38 @@ The real search found **8**. Pure noise finds 7 as a matter of routine and
 reaches 8 about a quarter of the time. The "winning combination" is what a
 search of that size returns from data with nothing in it.
 
+## Is the best-found combination better than the shipped one?
+
+No. Asked directly, and tested directly: give the **same optimiser the same
+budget on shuffled data**, where the date carries no information about the draw,
+and it does just as well.
+
+```
+RESTARTS=150, real draws                  ceiling = 12
+RESTARTS=150, SHUFFLE=21 (meaningless)    ceiling = 13
+RESTARTS=150, SHUFFLE=22 (meaningless)    ceiling = 13
+RESTARTS=150, SHUFFLE=23 (meaningless)    ceiling = 13
+```
+
+The noise runs beat the real one. Reproduce with `SHUFFLE=<n>` on `climb.mjs`.
+
+Three more readings point the same way:
+
+- **The mean barely moves.** Against the exact hypergeometric model for these
+  926 draws (expected total 678.9 matches, s.d. 23.1), the shipped engine scores
+  **z = -0.39** and the 12-hit ceiling **z = +1.52**. A configuration that really
+  read the draws better would lift the whole distribution; this one only
+  rearranges near-misses into the tail it was told to maximise.
+- **It would be a miracle only if chosen in advance.** For a combination fixed
+  before seeing the draws, 12 four-or-better results is a 1-in-1.4-billion event
+  (Poisson, lambda = 0.988). It was not fixed in advance — it was selected
+  *because* it hit, out of millions of candidates.
+- **It reads the date less, not more.** The shipped engine emits **901 distinct
+  picks across 926 game-dates** — a genuinely different reading almost every
+  draw. The 12-hit ceiling recycles **140**. The optimiser did not find a sharper
+  reading; it found a narrow rotation of number sets that happened to land on
+  this particular history.
+
 ## Why the numbers rise anyway
 
 Because search effort buys in-sample hits and nothing else. A configuration that
@@ -153,6 +185,6 @@ Two guards exist because both caught real errors during this work:
 
 The best combination found is the stage-3 ceiling above, at **12 of 926**. It is
 not better than the shipped engine at anything except fitting draws it was shown.
-On unseen draws it is worse than picking a configuration at random, and a search
-of the same size on deliberately meaningless data finds nearly as many. Lottery
-draws are independent random events; no arrangement of these layers changes that.
+On unseen draws it is worse than picking a configuration at random, and the same
+optimiser on deliberately meaningless data reaches **13**. Lottery draws are
+independent random events; no arrangement of these layers changes that.

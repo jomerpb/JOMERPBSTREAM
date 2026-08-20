@@ -10,6 +10,12 @@
 //
 // Usage: node --max-old-space-size=6144 .github/scripts/sweeps/climb.mjs
 //        RESTARTS=1500 HOPS=25 TRIALS=20 SEED=424242 node ... (defaults shown)
+//
+// SHUFFLE=<n> shuffles the date -> winning-numbers link inside each game before
+// searching, so no configuration can carry information. Run it at the SAME
+// RESTARTS budget as a real run: whatever ceiling it reaches is what this
+// optimiser extracts from nothing, and a real ceiling only means something if
+// it clears that. Skips the holdout (there is nothing to hold out).
 import fs from 'fs';
 import { POOL, LABELS, families, loadReadings, mulberry, HERE } from './lib.mjs';
 import path from 'path';
@@ -17,6 +23,7 @@ import path from 'path';
 const RESTARTS = Number(process.env.RESTARTS || 1500);
 const HOPS     = Number(process.env.HOPS     || 25);
 const TRIALS   = Number(process.env.TRIALS   || 20);
+const SHUFFLE  = process.env.SHUFFLE ? Number(process.env.SHUFFLE) : 0;
 const rnd      = mulberry(Number(process.env.SEED || 424242));
 
 const { draws, readings } = loadReadings();
@@ -42,6 +49,19 @@ const D = draws.map(dr => {
            fam:[1,2,3,4,5,6,7,8,9].map(d=>Int16Array.from(fam[d])),
            test: dr.date >= splitAt ? 1 : 0 };
 });
+if (SHUFFLE){
+  const shuf = mulberry(SHUFFLE);
+  const byGame = {};
+  draws.forEach((d,i)=>{ (byGame[d.game] = byGame[d.game] || []).push(i); });
+  for (const g of Object.keys(byGame)){
+    const ids = byGame[g], perm = ids.slice();
+    for (let i = perm.length-1; i > 0; i--){ const j = Math.floor(shuf()*(i+1)); [perm[i],perm[j]] = [perm[j],perm[i]]; }
+    const pool = POOL[g];
+    const fresh = ids.map((_,i)=>{ const w = new Uint8Array(pool+1); for (const n of draws[perm[i]].nums) w[n] = 1; return w; });
+    ids.forEach((id,i)=>{ D[id].win = fresh[i]; });
+  }
+  console.log(`*** SHUFFLE=${SHUFFLE} — date/draw link permuted within each game; this run measures NOISE ***\n`);
+}
 const TRAIN = D.filter(d=>!d.test), TEST = D.filter(d=>d.test);
 
 function score(set, mask, cap, dir, off){
@@ -115,6 +135,11 @@ console.log(`   ${show(RA.best)}`);
 console.log(`   self-check, independently re-scored = ${recheck} ${recheck===RA.best.score?'(consistent)':'*** INCONSISTENT ***'}`);
 if (recheck !== RA.best.score) process.exitCode = 1;
 
+if (SHUFFLE){
+  console.log(`\n(holdout skipped — nothing to hold out on shuffled data)`);
+  fs.writeFileSync(path.join(HERE,`climb.null.${SHUFFLE}.json`), JSON.stringify({ shuffle:SHUFFLE, restarts:RESTARTS, ceiling:RA.best }, null, 1));
+  process.exit(process.exitCode || 0);
+}
 console.log(`\nREPEATED HOLDOUT — optimise on ${TRAIN.length} training draws, then read ${TEST.length} unseen ones:`);
 const rows = [];
 for (let t = 0; t < TRIALS; t++){
