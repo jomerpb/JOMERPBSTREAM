@@ -162,13 +162,21 @@ budget on shuffled data**, where the date carries no information about the draw,
 and it does just as well.
 
 ```
-RESTARTS=150, real draws                  ceiling = 12
-RESTARTS=150, SHUFFLE=21 (meaningless)    ceiling = 13
-RESTARTS=150, SHUFFLE=22 (meaningless)    ceiling = 13
-RESTARTS=150, SHUFFLE=23 (meaningless)    ceiling = 13
+                                    ceiling reached
+REAL DRAWS,  RESTARTS=1500                  12
+REAL DRAWS,  RESTARTS=150                   12
+
+SHUFFLED, RESTARTS=1500, seeds 1..9   13 13 13 13 13 13 13 12 12
+SHUFFLED, RESTARTS=150,  seeds 21..23       13 13 13
 ```
 
-The noise runs beat the real one. Reproduce with `SHUFFLE=<n>` on `climb.mjs`.
+Nine full-budget runs on meaningless data: seven reach 13, two reach 12. The
+real draws reach 12 — the *bottom* of the noise range, never above it. Every
+ceiling is confirmed by the run's own self-check (it re-scores the returned
+configuration independently, because an earlier version of this optimiser
+reported a score its winner did not have).
+
+Reproduce with `SHUFFLE=<n>` on `climb.mjs`.
 
 Three more readings point the same way:
 
