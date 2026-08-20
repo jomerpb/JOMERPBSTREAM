@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+
+# sweep outputs — regenerate with extract.mjs / grid.mjs / climb.mjs / null.mjs
+.github/scripts/sweeps/readings.json
+.github/scripts/sweeps/*.result.json
