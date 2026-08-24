@@ -765,6 +765,10 @@
 #oracle-page .dot.on{background:rgba(124,92,252,.2);border-color:var(--accent);color:var(--accent2)}
 #oracle-page .dot.gold{background:rgba(245,200,66,.15);border-color:rgba(245,200,66,.4);color:var(--gold)}
 #oracle-page .dot.teal{background:rgba(76,200,252,.1);border-color:rgba(76,200,252,.3);color:var(--teal)}
+/* MC = the Monte Carlo control arm: a fair-pool simulation, not a reading.
+   Deliberately the quietest dot on the grid so it can never be mistaken for a
+   strong signal, and dashed so it reads as the control it is. */
+#oracle-page .dot.mc{background:rgba(160,168,190,.10);border:1px dashed rgba(160,168,190,.45);color:var(--muted2)}
 #oracle-page .dot.off{background:var(--surface);color:var(--muted)}
 
 /* ══════════════════════════════════

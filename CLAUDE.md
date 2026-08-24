@@ -77,7 +77,7 @@ When in doubt, check the deployment and say which of the two states it is in.
 ## File split
 
 - **stream.js** — Anime/TV/Movie streaming tab. TMDB + AniList API client-side. IDs (movie/show/episode) always resolved live from those APIs, never hardcoded.
-- **oracle.js** — PCSO lottery "prediction" tab. Numerology/astrology/BaZi/feng-shui/I-Ching/tarot/stats layers converge into number picks (`convergence()`). `GAMES` object at top has hardcoded historical draws as a **fallback only** — overwritten at load by a live fetch of `pcso-history.json` (see `loadPcsoHistoryIntoGames`). `computeOracleAsOf(gameKey, dateStr)` recomputes any date's pick — past or future — from only the draws dated strictly before it; used by `snapshot_oracle.mjs` and by both Oracle date pickers. Its return shape (bare picks array; `{'2PM':[],'5PM':[],'9PM':[]}` for EZ2) is what the snapshot script logs, so don't change it.
+- **oracle.js** — PCSO lottery "prediction" tab. Numerology/astrology/BaZi/feng-shui/I-Ching/tarot/Monte-Carlo layers converge into number picks (`convergence()`); the stats layer is display-only. `GAMES` object at top has hardcoded historical draws as a **fallback only** — overwritten at load by a live fetch of `pcso-history.json` (see `loadPcsoHistoryIntoGames`). `computeOracleAsOf(gameKey, dateStr)` recomputes any date's pick — past or future — from only the draws dated strictly before it; used by `snapshot_oracle.mjs` and by both Oracle date pickers. Its return shape (bare picks array; `{'2PM':[],'5PM':[],'9PM':[]}` for EZ2) is what the snapshot script logs, so don't change it.
 
 The Oracle tab has **two** date pickers, deliberately distinct, and the split is the point — don't merge them or duplicate one into the other:
 
@@ -193,7 +193,10 @@ the date alone. `layerStats` still runs and its frequency/hot/overdue figures ar
 still *displayed* on the Run Expert page as reference information, but nothing it
 produces reaches `convergence()` any more. Concretely:
 
-- `LABELS` is 11 sources, not 12 — `'St'` is gone from the convergence cluster.
+- `'St'` is gone from the convergence cluster. (The list is 12 again, but
+  because `'MC'` was **added** — see the Monte Carlo section below — not
+  because `'St'` came back. Read the count from `ORACLE_LABELS.length`, never
+  by typing a number.)
 - Digit-family score is the metaphysical cluster alone, normalised to the day's
   own leader (`inL.length / maxMeta * 10`).
 - **Within-family selection** — the job stats used to do — is now a rotation
@@ -330,19 +333,104 @@ Every other layer's always-set is empty.
 
 This is a *consequence of the layers being correct*, not a defect: the hour
 really is 9, the reading really is about PCSO, and the 9PM hour pillar really is
-Hai. It is recorded here because it explains the residual shape of the pick
+Hai. (The Monte Carlo layer's always-set is empty too — verified over 1,461
+dates — as a fair simulation's would be.) It is recorded here because it
+explains the residual shape of the pick
 distribution (families 1/3/6/7 lead, 8 trails) and so that nobody "discovers" it
 again and treats it as a bug. Changing it means changing what a layer claims to
 read, which is a design decision, not a fix.
 
-Related, and also known: the eleven sources are **eleven slots, not eleven
-independent generators**. `As`, `PoF` and `Ho` all come from one ephemeris call,
-and `En` is computed *from* `Ba`/`As`/`Fs` — its digits coincide with Astrology
-70%, BaZi 53%, Feng Shui 36%. `convergence()` already normalises against the
-day's own leader rather than treating 11 hits as 11 confirmations, which is the
-main mitigation. Do not "fix" this by weighting `En` **up**; if it is ever
+Related, and also known: the metaphysical sources are **slots, not independent
+generators**. `As`, `PoF` and `Ho` all come from one ephemeris call, and `En` is
+computed *from* `Ba`/`As`/`Fs` — its digits coincide with Astrology 70%, BaZi
+53%, Feng Shui 36%. `convergence()` already normalises against the day's own
+leader rather than treating every hit as an independent confirmation, which is
+the main mitigation. Do not "fix" this by weighting `En` **up**; if it is ever
 regrouped, the derived source should count for less than its parents, not the
 same.
+
+## The Monte Carlo layer is a CONTROL ARM, not a twelfth opinion
+
+`layerMonteCarlo(drawHour, gameKey)` is the twelfth convergence source (`'MC'`,
+always last in `ORACLE_LABELS`). It simulates `MONTE_CARLO_TRIALS` (2,000)
+complete draws of that game from a **fair** pool — every number 1..max equally
+likely, `k` per trial, drawn without replacement, exactly the draw PCSO runs —
+and emits the two digit families that came out furthest above their own
+expectation.
+
+**Its output is sampling noise by construction, and that is the entire point.**
+The Oracle tab is a statistics exercise (see the rule above). This layer is its
+control: a source known to carry zero information, scored by `convergence()` on
+exactly the same footing as the eleven metaphysical ones, so the comparison the
+tab exists to make can actually be made. It is not a prediction aid and the card
+on the page says so in its own text. Never re-present it as one, and never tune
+it.
+
+Four things about it are load-bearing:
+
+- **The pool is FLAT, not weighted by the day's reading.** The obvious version
+  of this layer samples numbers weighted by the day's digit scores. That version
+  is circular: it re-samples the other layers' votes and hands back the leader
+  they already named, dressed as an independent opinion, raising that family's
+  score without adding one bit of new input. Don't "improve" it that way.
+- **It is history-free and deterministic**, like the rest of the pick. Never
+  `Math.random`: the seed is an avalanche hash of (date, draw hour, pool,
+  picks-per-draw) — all dated or structural, no draw result anywhere — so a date
+  simulates the same draws on every page load, in the browser and in
+  `snapshot_oracle.mjs`, forever. Including the pool in the seed means two games
+  on one day simulate their *own* draw rather than sharing one.
+- **Families are standardised, never counted raw.** Digit families are unequal
+  and pool-dependent (digit 1 holds 5 numbers in 6/42 and 7 in 6/58), so ranking
+  by raw count would just rank by family size — a structural artefact wearing a
+  reading's clothes. Each family's per-trial count is
+  Hypergeometric(pool, familySize, k), so the layer publishes the exact z-score
+  and a p-value from it. Measured over a year of dates x 9 families x 6 games,
+  the z's come out mean 0.000, sd 0.99-1.01, 4.7-5.2% beyond 1.96σ — i.e. the
+  published figure is the true one. Test 13 pins all of it.
+- **The simulation loop is hand-inlined against locals on purpose.** The
+  readable version (a mulberry32 closure, `Array.indexOf` dedupe, `digitOf()`
+  per number) measured **11.0 ms per call** inside a Node `vm` context against
+  **0.88 ms** for the inlined one, on byte-identical output — every global reach
+  in that sandbox goes through the context's global proxy, and this loop runs
+  `trials * k` times per pick. Test 13 reproduces the stream from an independent
+  mulberry32 and demands the same counts, so the inlining cannot drift.
+
+**More trials do not sharpen it.** The z-score's denominator grows as √N, so
+raising the trial count shrinks the excess toward zero while the ranking of the
+nine families stays exactly as arbitrary. There is no N at which this converges
+on an answer; it converges on "no family is special", which is the true answer.
+`MONTE_CARLO_TRIALS` is set for a stable sample the snapshot job and the test
+sweeps can afford — never tuned for output.
+
+### What adding it actually did (measured, both engines, same harness)
+
+- **Picks moved on 36.4% of game-dates** (2,395 of 6,576 over 2024-2026, all six
+  games; 11.3% of individual numbers). Per game: 6/42 32.8%, 6/45 32.2%,
+  6/49 28.8%, 6/55 34.0%, 6/58 30.6%, EZ2 60.0%.
+- **Hit rate did not move off chance, which is the finding.** Walk-forward over
+  every draw on file (934 six-ball draws): mean matches **0.7248 → 0.7281**, a
+  change of +0.0032 against a standard error of 0.0346 — **0.09σ**, i.e. nothing.
+  The chance baseline for these five pools is 0.734. EZ2: 0.1219 → 0.1189
+  against a chance baseline of 4/31 = 0.1290. Zero 6/6 before, zero after; the
+  3-match count went 14 → 13.
+- **No new unreachable numbers** in any pool, and the digit-family share of
+  picks is essentially unchanged (largest family 23.3% → 22.9%, smallest
+  4.0% → 4.2%). The known family imbalance is the constant-source effect
+  documented above; a noise source neither causes nor cures it.
+- **Same-day collisions dropped**, a presentation win: two 6-ball games printing
+  identical picks fell from **1.42% to 0.60%** of multi-6-ball dates over
+  2024-2028 (test 8's bound is 3%). Per-game seeding is why.
+
+Read that list in the right order: a source with **provably no information**
+moved a third of the picks and left the hit rate exactly where it was. That is
+the tab's own thesis, now measurable on the page rather than only asserted in
+this file.
+
+**`oracle-history.json` now spans one more engine.** Entries logged before this
+change came from the 11-source engine; they are immutable and stay as they are —
+never regenerate them. A past date will show 📌 recorded (whatever engine wrote
+it) while a live recompute returns something different. Expected, for the same
+reason the history-free and element-map changes were.
 
 ## Astro engine: epoch, and the lunar calendar
 

@@ -1319,6 +1319,175 @@ function layerAngelNumbers(drawHour){
   };
 }
 
+// ══════════════════════════
+// LAYER 11: MONTE CARLO (fair-draw simulation — the control arm)
+// Eleventh layer FUNCTION, twelfth convergence SOURCE — the two counts differ
+// because layerAstrology alone feeds three slots (As, PoF, Ho) and calcEnergy
+// feeds a fourth (En). ORACLE_LABELS is the source list; this is 'MC'.
+//
+// Simulates MONTE_CARLO_TRIALS complete draws of this game from a FAIR pool
+// and reports the two digit families that came out furthest above their own
+// expectation, as a z-score. That is the whole layer.
+//
+// WHY A FAIR POOL, AND NOT A WEIGHTED ONE. The obvious version of this layer
+// samples numbers weighted by the day's own digit scores. That version is
+// circular: it re-samples the other layers' votes and hands back the leader
+// they already named, dressed up as an independent twelfth opinion. It would
+// raise the day's leading family's score without adding one bit of new input.
+// So the pool here is flat — every number 1..max equally likely, drawn without
+// replacement, k per trial, exactly the game PCSO actually runs.
+//
+// WHAT IT IS FOR. The Oracle tab is a statistics exercise (see CLAUDE.md), and
+// this layer is its control arm. Its output is sampling noise BY CONSTRUCTION —
+// there is no signal in a fair pool and the code is not pretending otherwise.
+// It is scored by convergence() on exactly the same footing as the eleven
+// metaphysical sources, which makes the comparison the tab exists to make:
+// a source known to carry zero information moves the pick as much as any of
+// them, and moves the hit rate no further from chance than they do. Measured
+// walk-forward on this repo's own pcso-history.json, adding it left the six-ball
+// mean at the chance baseline — the point, not a disappointment.
+//
+// MORE TRIALS DO NOT SHARPEN IT. The z-score's denominator grows as sqrt(N),
+// so raising the trial count shrinks the excess toward zero while the RANKING
+// of the nine families stays exactly as arbitrary. There is no N at which this
+// converges on an answer; it converges on "no family is special", which is the
+// true answer. MONTE_CARLO_TRIALS is set for a stable, honest sample that the
+// snapshot job and the test sweeps can afford, not tuned for output.
+//
+// HISTORY-FREE AND DETERMINISTIC — non-negotiable, see the history-free rule.
+// Never Math.random(): the pick for a date must be identical on every load,
+// in the browser and in snapshot_oracle.mjs, today and in a year. The seed is
+// mixed from the date, the draw hour and the game's own pool/pick-size, so the
+// simulation is of THIS game's draw on THIS date and two games on one day get
+// different simulations. No draw history is read, here or anywhere below.
+// ══════════════════════════
+var MONTE_CARLO_TRIALS=2000;
+
+// Seed = avalanche hash of (date, hour, pool, picks-per-draw). Every ingredient
+// is dated or structural; none of them is a draw result.
+function mcSeedFor(hourNum,poolMax,k){
+  var s=(_Y*10000+_M*100+_D)>>>0;
+  s=Math.imul(s^0x9E3779B9,0x85EBCA6B)>>>0;
+  s=(s^Math.imul(hourNum+1,0xC2B2AE35))>>>0;
+  s=(s^Math.imul(poolMax*100+k,0x27D4EB2F))>>>0;
+  s=Math.imul(s^(s>>>13),0x85EBCA6B)>>>0;
+  return (s^(s>>>16))>>>0;
+}
+
+function layerMonteCarlo(drawHour,gameKey){
+  var gk=gameKey||'658';
+  var game=GAMES[gk]||GAMES['658'];
+  var poolMax=game.max;
+  var k=(gk==='ez2')?2:6;
+  var h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
+  var trials=MONTE_CARLO_TRIALS;
+
+  // Family sizes are UNEQUAL and depend on the pool (digit 1 holds 5 numbers in
+  // 6/42 and 7 in 6/58), so a raw count would just rank the families by size —
+  // a structural artefact, not noise. Everything below is standardised.
+  var famSize={};
+  for(var d=1;d<=9;d++) famSize[d]=0;
+  for(var n=1;n<=poolMax;n++) famSize[digitOf(n)]++;
+
+  // ── THE SIMULATION ──
+  // Written against locals on purpose, and it matters more than it looks. This
+  // loop runs trials*k times per pick, and the engine is executed inside a Node
+  // `vm` context by both snapshot_oracle.mjs and the test suite, where every
+  // reach for a global (Math.floor, digitOf, the counts object) goes through the
+  // context's global proxy. The readable version — a mulberry32 closure, an
+  // array `.indexOf` dedupe, digitOf() per number — measured 11.0 ms per call in
+  // that sandbox against 0.88 ms for this one, a 12.5x difference on identical
+  // output (verified byte-for-byte before the rewrite). Keep it in locals.
+  //
+  // The generator is mulberry32, inlined below: 32-bit state, one add and three
+  // xor-multiply-shift rounds. Chosen over an LCG because an LCG's low bits are
+  // badly non-random and this code takes the result modulo the pool size, which
+  // is exactly where that would show. test_oracle_layers.mjs pins the stream
+  // against an independent implementation so this inlining cannot drift.
+  var rngState=mcSeedFor(h,poolMax,k)>>>0;
+  var imul=Math.imul, mfloor=Math.floor;
+  var counts=[0,0,0,0,0,0,0,0,0,0]; // index = digit family 1..9; [0] unused
+  var drawn=new Array(k);
+  for(var t=0;t<trials;t++){
+    var filled=0;
+    while(filled<k){
+      rngState=(rngState+0x6D2B79F5)>>>0;
+      var x=rngState;
+      x=imul(x^(x>>>15),x|1);
+      x^=x+imul(x^(x>>>7),x|61);
+      var u=((x^(x>>>14))>>>0)/4294967296;
+      var pick=1+mfloor(u*poolMax);
+      if(pick>poolMax) pick=poolMax; // u is [0,1); belt-and-braces on the edge
+      var dup=false;
+      for(var q=0;q<filled;q++) if(drawn[q]===pick){ dup=true; break; }
+      if(dup) continue;               // without replacement, like the real draw
+      drawn[filled++]=pick;
+      var dr=pick%9;                  // digitOf() inlined; pick >= 1 always
+      counts[dr===0?9:dr]++;
+    }
+  }
+
+  // Per trial, a family's count is Hypergeometric(poolMax, famSize, k):
+  //   mean k*p,  var k*p*(1-p)*(poolMax-k)/(poolMax-1)
+  // Trials are independent, so both scale by `trials`. This is the exact null,
+  // not a normal approximation stapled on afterwards.
+  var stats=[];
+  for(var d=1;d<=9;d++){
+    var p=famSize[d]/poolMax;
+    var mean=trials*k*p;
+    var varr=trials*k*p*(1-p)*(poolMax-k)/(poolMax-1);
+    var sd=Math.sqrt(varr);
+    stats.push({digit:d,size:famSize[d],obs:counts[d],exp:mean,
+      z:sd>0?(counts[d]-mean)/sd:0});
+  }
+  // Descending z, ties broken by digit so the output is deterministic even when
+  // two equal-sized families land on the same count.
+  var ranked=stats.slice().sort(function(a,b){ return (b.z-a.z)||(a.digit-b.digit); });
+  var nums=ranked.slice(0,2).map(function(s){ return s.digit; });
+  var top=ranked[0];
+
+  // Two-sided p for the single strongest family, then the probability that a
+  // fair simulation throws up at least one family that extreme across all 9 —
+  // the multiple-comparisons correction that makes the honest point: an
+  // "impressive" excess here is the expected outcome, not a finding.
+  var pOne=mcNormalTwoSided(Math.abs(top.z));
+  var pAny=1-Math.pow(1-pOne,9);
+  var fmt=function(z){ return (z>=0?'+':'−')+Math.abs(z).toFixed(2)+'σ'; };
+
+  return {
+    nums,trials,poolMax,k,seedHour:h,stats,ranked,famSize,counts,
+    topZ:top.z,pOne:pOne,pAny:pAny,
+    steps:[
+      `<b>Simulated:</b> ${trials.toLocaleString()} fair ${game.short} draws `
+        +`(${(trials*k).toLocaleString()} numbers), pool 1–${poolMax}, drawn without replacement`,
+      `<b>Seeded from:</b> ${pad(_D)}/${pad(_M)}/${_Y} · ${drawHour||'9PM'} · pool ${poolMax} `
+        +`— fixed seed, so this date always simulates the same draws (no Math.random, no draw history)`,
+      `<b>Most over-represented families:</b> `
+        +ranked.slice(0,2).map(function(s){ return `digit <b>${s.digit}</b> ${fmt(s.z)} `
+          +`(${s.obs} vs ${s.exp.toFixed(0)} expected, family of ${s.size})`; }).join(' · '),
+      `<b>Least:</b> digit ${ranked[8].digit} ${fmt(ranked[8].z)}`,
+      `<b>Is that excess meaningful?</b> No. p=${pOne.toFixed(3)} for the strongest family alone, `
+        +`but across all 9 families a fair simulation is this lopsided `
+        +`<b>${(pAny*100).toFixed(1)}%</b> of the time.`,
+      `<b>Control arm — read this one honestly:</b> the pool above is fair by construction, `
+        +`so the numbers this layer contributes are sampling noise and nothing else. `
+        +`It is scored exactly like the other eleven sources on purpose: it is the yardstick `
+        +`they are measured against. Raising the trial count shrinks σ as √N and never `
+        +`sharpens the ranking — there is no signal here to sharpen.`,
+    ]
+  };
+}
+
+// Two-sided tail of the standard normal, via the Abramowitz & Stegun 7.1.26
+// erf approximation (|error| < 1.5e-7). Used only to print an honest p-value
+// in the Monte Carlo card; nothing in the pick consumes it.
+function mcNormalTwoSided(z){
+  var x=Math.abs(z)/Math.SQRT2;
+  var tt=1/(1+0.3275911*x);
+  var y=1-(((((1.061405429*tt-1.453152027)*tt)+1.421413741)*tt-0.284496736)*tt+0.254829592)*tt*Math.exp(-x*x);
+  return 1-y; // 1 - erf(|z|/sqrt2)
+}
+
 function layerStats(gameKey,drawHour){
   var game=GAMES[gameKey];
   var isEZ2=gameKey==='ez2';
@@ -1513,15 +1682,26 @@ function energyDigits(energy){
 }
 
 // ══════════════════════════
-// MASTER CONVERGENCE — 11 digit sources
+// MASTER CONVERGENCE — 12 digit sources
 // ══════════════════════════
+// The source list lives at module scope because the number of sources is
+// printed all over the UI ("3/12 layers", the ball tags, the step headings).
+// Those used to be a hardcoded "11" in eight places, which is one edit away
+// from a page that says 11 while the engine scores 12. Read the length from
+// here instead of typing the count.
+//
+// 'St' (statistics) was removed when the pick became history-free — see the
+// WITHIN-FAMILY SELECTION note below. 'MC' (Monte Carlo) is the newest and is
+// deliberately last: it is the control arm, a fair-pool simulation whose
+// output is sampling noise by construction. See layerMonteCarlo().
+var ORACLE_LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','Ta','An','Ho','En','MC'];
+
 function convergence(layers,gameKey){
   var game=GAMES[gameKey];
-  // 11 sources. 'St' (statistics) was removed — the pick no longer depends on
-  // draw history at all; see WITHIN-FAMILY SELECTION below.
-  var LABELS=['Py','Ch','As','Ba','Fs','IC','PoF','Ta','An','Ho','En'];
+  var LABELS=ORACLE_LABELS;
   var enNums=energyDigits(layers.energy); // Element Energy digits (may be [])
   var hoNums=(layers.astro&&layers.astro.horaryNums)||[]; // Horary digits
+  var mcNums=(layers.mc&&layers.mc.nums)||[]; // Monte Carlo digits (control arm; [] if the layer threw)
   var digitScores={};
   // PASS 1 — collect which sources hit each digit.
   var collected={};
@@ -1538,12 +1718,17 @@ function convergence(layers,gameKey){
     if(layers.angel.nums.includes(d)) inL.push(8);
     if(hoNums.includes(d)) inL.push(9);
     if(enNums.includes(d)) inL.push(10);
+    if(mcNums.includes(d)) inL.push(11);
     collected[d]=inL;
   }
-  // PASS 2 — score. All eleven sources derive from the same date/hour input and
+  // PASS 2 — score. All twelve sources derive from the same date/hour input and
   // are not independent confirmations, so they are scored as one correlated
   // cluster, normalised against the day's own strongest digit. Kept on a 0..10
   // scale so renderResults' alignment percentage is unchanged.
+  //
+  // Normalising against the day's own leader is also what keeps the Monte Carlo
+  // source from inflating anything: it adds at most one vote to two families,
+  // and the divisor moves with it.
   var maxMeta=Math.max(1,...Object.values(collected).map(function(a){return a.length;}));
   for(var d=1;d<=9;d++){
     var inL=collected[d];
@@ -1783,7 +1968,8 @@ async function generate(){
     `🃏 Tarot · Major Arcana card of the day…`,
     `😇 Angel Numbers · scanning for repeating-digit resonance…`,
     `📊 PCSO ${game.short} historical data · reference only, not in the pick…`,
-    `🎯 11-source digit convergence · mapping to 1–${game.max}…`,
+    `🎲 Monte Carlo · ${MONTE_CARLO_TRIALS.toLocaleString()} simulated fair draws · control arm…`,
+    `🎯 ${ORACLE_LABELS.length}-source digit convergence · mapping to 1–${game.max}…`,
   ];
   var si=0;
   var el=document.getElementById('lsteps');
@@ -1791,7 +1977,7 @@ async function generate(){
   var iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
   setTimeout(()=>{
     clearInterval(iv);
-    var num,astro,bazi,fs,iching,tarot,angel,stats,energy,layers,conv;
+    var num,astro,bazi,fs,iching,tarot,angel,mc,stats,energy,layers,conv;
     try{num=layerNumerology(dh);}catch(e){console.error('layerNumerology:',e);num={pyNums:[7],chNums:[3],allNums:[3,7],steps:[]};}
     try{astro=layerAstrology(dh);}catch(e){console.error('layerAstrology:',e);astro={nums:[1,6],pofNums:[2],horaryNums:[2,7],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,isDayChart:true,jupiterDignity:'Peregrine (no essential dignity)',viaCombusta:false,isRadical:true,moonVoid:false,planets:[],aspects:[],steps:[]};}
     try{bazi=layerBazi(dh);}catch(e){console.error('layerBazi:',e);bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',stemEl:'Fire',branch:'Wu',branchEl:'Fire',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
@@ -1799,9 +1985,10 @@ async function generate(){
     try{iching=layerIChing(dh);}catch(e){console.error('layerIChing:',e);iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
     try{tarot=layerTarot(dh);}catch(e){console.error('layerTarot:',e);tarot={nums:[5],cardNum:5,cardName:'The Hierophant',gambling:'',steps:[]};}
     try{angel=layerAngelNumbers(dh);}catch(e){console.error('layerAngelNumbers:',e);angel={nums:[],hasSignal:false,hits:[],mirrorHit:false,steps:[]};}
+    try{mc=layerMonteCarlo(dh,currentGame);}catch(e){console.error('layerMonteCarlo:',e);mc={nums:[],steps:[]};}
     try{stats=layerStats(currentGame,dh);}catch(e){console.error('layerStats:',e);stats={topDigits:[9,1,3],digitWeight:{},freq:{},hotNums:[],draws:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){console.error('calcEnergy:',e);energy={bars:{Fire:30,Water:30,Wood:9,Metal:9,Earth:22}};}
-    layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
+    layers={num,astro,bazi,fs,iching,tarot,angel,mc,stats,energy};
     try{conv=convergence(layers,currentGame);}catch(e){console.error('convergence:',e);conv={sorted:[],best:[]};}
     document.getElementById('loader').style.display='none';
     try{
@@ -1823,10 +2010,20 @@ async function generate(){
 // RENDER
 // ══════════════════════════
 var BTIERS=['b1','b2','b3','b4','b5','b6'];
+// Long names for the dot tooltips, keyed by the ORACLE_LABELS short code.
+var ORACLE_SOURCE_NAMES={Py:'Pythagorean numerology',Ch:'Chaldean numerology',
+  As:'Astrology',Ba:'BaZi',Fs:'Feng Shui \u2014 Flying Star',IC:'I Ching',
+  PoF:'Part of Fortune',Ta:'Tarot',An:'Angel numbers',Ho:'Horary',
+  En:'Element energy',MC:'Monte Carlo \u2014 fair-pool control arm'};
+// One dot per convergence source, lit where that source hit the digit. The
+// parallel `icons` array this used to carry duplicated the labels it is handed
+// (both read Py, Ch, As...) and still had 'St' sitting in slot 11 from before
+// the history-free change removed it — so the twelfth source would have been
+// drawn as "St". The label IS the icon; only the colour class is per source,
+// and MC gets its own muted class because it is the control, not a reading.
 function dotHTML(idxs,labels){
-  var icons=['Py','Ch','As','Ba','Fs','IC','PoF','Ta','An','Ho','En','St'];
-  var cls=['on','on','on','on','on','teal','teal','teal','teal','teal','teal','gold'];
-  return labels.map((l,i)=>`<span class="dot ${idxs.includes(i)?cls[i]:'off'}" title="${l}">${icons[i]}</span>`).join('');
+  var cls=['on','on','on','on','on','teal','teal','teal','teal','teal','teal','mc'];
+  return (labels||[]).map((l,i)=>`<span class="dot ${idxs.includes(i)?(cls[i]||'on'):'off'}" title="${ORACLE_SOURCE_NAMES[l]||l}">${l}</span>`).join('');
 }
 function dCls(c){ return c>=8?'s8':c>=7?'s7':c>=6?'s6':c>=5?'s5':'s4'; }
 
@@ -2040,7 +2237,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     var d=digitOf(n);
     var ds=conv.digitScores[d];
     return `<div class="ball ${BTIERS[Math.min(i,5)]}">
-      ${pad(n)}<span class="btag">d${d}·${ds.count}/11</span>
+      ${pad(n)}<span class="btag">d${d}·${ds.count}/${ORACLE_LABELS.length}</span>
     </div>`;
   }).join('');
   var altHTML=showAlt.map(n=>`<div class="aball">${pad(n)}</div>`).join('');
@@ -2075,7 +2272,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
   var digitCardsHTML=conv.sorted.slice(0,6).map(s=>`
     <div class="dcard ${dCls(s.count)}">
       <div class="dnum">${s.digit}</div>
-      <div class="dscore">${s.count}/11 layers</div>
+      <div class="dscore">${s.count}/${ORACLE_LABELS.length} layers</div>
       <div class="ddots">${dotHTML(s.layers,conv.LABELS)}</div>
     </div>`).join('');
 
@@ -2084,7 +2281,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
   var mapHTML=conv.sorted.slice(0,5).map(s=>{
     var nums=conv.digitToNums[s.digit]||[];
     return `<div class="maprow">
-      <span class="mapdig">Digit <b>${s.digit}</b> <span style="color:var(--muted)">(${s.count}/11)</span></span>
+      <span class="mapdig">Digit <b>${s.digit}</b> <span style="color:var(--muted)">(${s.count}/${ORACLE_LABELS.length})</span></span>
       <div class="mapnums">${nums.map(n=>{
         var cls=hotNums.includes(n)?'hot':(layers.stats.freq[n]||0)>=2?'warm':'cold';
         return `<span class="mn ${cls}">${pad(n)}</span>`;
@@ -2114,10 +2311,10 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
 
   document.getElementById('results').innerHTML=`<div class="slabel">${isEZ2?'Recommended Pair':'Recommended Combination'} · ${game.name}</div>
     <div class="balls-card">
-      <div class="balls-eyebrow">Primary Pick — 11-Layer Expert Oracle</div>
+      <div class="balls-eyebrow">Primary Pick — ${ORACLE_LABELS.length}-Layer Expert Oracle</div>
       <div class="balls-row">${ballsHTML}</div>
       <div class="balls-note">
-        Ball tag = digit (d) + convergence score out of 11 sources<br>
+        Ball tag = digit (d) + convergence score out of ${ORACLE_LABELS.length} sources<br>
         Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · Ho=Horary · En=Energy
       </div>
     </div>
@@ -2133,15 +2330,19 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
 
     <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
     <div class="eflow">
-      <div class="eflow-title">⚡ Elemental Energy Balance — All 11 Layers</div>
+      <div class="eflow-title">⚡ Elemental Energy Balance — All ${ORACLE_LABELS.length} Layers</div>
       ${energyHTML}
     </div>
 
-    <div class="slabel">Step 1 — Digit Convergence · 11 Sources</div>
+    <div class="slabel">Step 1 — Digit Convergence · ${ORACLE_LABELS.length} Sources</div>
+    <!-- These swatches must match dotHTML()'s class list, and for a while they
+         did not: "Chaldean" was drawn gold here while dotHTML has always given
+         Ch the purple 'on' class — gold belonged to 'St', which left the
+         convergence when the pick became history-free. -->
     <div class="legend">
-      <span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span>
+      <span class="leg"><span class="ldot" style="background:var(--accent)"></span>Numerology · Astro · BaZi · Feng Shui</span>
       <span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF · Tarot · Angel · Horary · Energy</span>
-      <span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean</span>
+      <span class="leg"><span class="ldot" style="background:rgba(160,168,190,.35);border:1px dashed rgba(160,168,190,.6)"></span>Monte Carlo (control)</span>
       <span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span>
     </div>
     <div class="dgrid">${digitCardsHTML}</div>
@@ -2153,7 +2354,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
       </div>${mapHTML}
     </div>
 
-    <div class="slabel">Full 11-Layer Breakdown</div>
+    <div class="slabel">Full ${ORACLE_LABELS.length}-Layer Breakdown</div>
     ${lcard('🔢','Numerology — Pythagorean + Chaldean',layers.num.nums,layers.num.steps)}
     ${lcard('🪐','Astrology — Dignities + Aspects + Horary',layers.astro.nums.slice(0,7),layers.astro.steps,horaryHTML,true)}
     ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
@@ -2161,6 +2362,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     ${lcard('☯','I Ching — Hexagram 45 + Nuclear + Changing Line',layers.iching.nums,layers.iching.steps,ichingHTML,true)}
     ${lcard('🃏','Tarot — Major Arcana Card of the Day',layers.tarot.nums,layers.tarot.steps,'',true)}
     ${lcard('😇','Angel Numbers — Repeating-Digit Resonance',layers.angel.nums.length?layers.angel.nums:['—'],layers.angel.steps,'',true)}
+    ${layers.mc?lcard('🎲','Monte Carlo — Fair-Draw Simulation (control)',layers.mc.nums&&layers.mc.nums.length?layers.mc.nums:['—'],layers.mc.steps||[],'',false):''}
     <div class="lcard">
       <div class="lhead">
         <div class="licon">📊</div>
@@ -2181,7 +2383,7 @@ function renderResults(layers,conv,energy,gameKey,drawHour){
     </div>
 
     <div class="disc">
-      ⚠️ [Guessing] — 11-layer date reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (${TODAY_PH} planetary positions via a published low-precision ephemeris algorithm, accurate to roughly 1-2 arcminutes), Horary chart (Equal House system, strictures checked: radicality, void-of-course Moon, Via Combusta), Part of Fortune (day/night-aware formula), exact BaZi four pillars (dynamic daily pillars, true solar-term month/year boundaries) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (authentic Mei Hua Yi Shu time-based casting) with nuclear, changing line, and changed hexagram, Element Energy flow (BaZi + planetary + Flying Star synthesis, Lo Shu number map), Tarot (Major Arcana card of the day), Angel Numbers (repeating-digit resonance scan), with PCSO official historical data shown for reference only — it no longer feeds the pick. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
+      ⚠️ [Guessing] — ${ORACLE_LABELS.length}-layer date reading using: Pythagorean + Chaldean numerology, real-time astrology with essential dignities (${TODAY_PH} planetary positions via a published low-precision ephemeris algorithm, accurate to roughly 1-2 arcminutes), Horary chart (Equal House system, strictures checked: radicality, void-of-course Moon, Via Combusta), Part of Fortune (day/night-aware formula), exact BaZi four pillars (dynamic daily pillars, true solar-term month/year boundaries) with clash/combine/hidden stem analysis, Feng Shui Flying Star Lo Shu (monthly star #8 in center), I Ching hexagram (authentic Mei Hua Yi Shu time-based casting) with nuclear, changing line, and changed hexagram, Element Energy flow (BaZi + planetary + Flying Star synthesis, Lo Shu number map), Tarot (Major Arcana card of the day), Angel Numbers (repeating-digit resonance scan), Monte Carlo (${MONTE_CARLO_TRIALS.toLocaleString()} simulated fair draws of this game's pool — a deliberate CONTROL ARM whose output is sampling noise by construction, scored on the same footing as every other source so you can see what an information-free layer looks like next to the rest), with PCSO official historical data shown for reference only — it no longer feeds the pick. All readings based on current cosmic energy flow — no personal data used. No method can guarantee lottery outcomes. For entertainment only. Play responsibly and within your means.
     </div>
   `;
 }
@@ -2203,12 +2405,12 @@ async function generatePersonal(){
   document.getElementById('loader').style.display='block';
   var gw=document.querySelector('#oracle-page .game-wrap'); if(gw) gw.style.display='none';
   document.getElementById('loader').scrollIntoView({behavior:'smooth',block:'start'});
-  var msgs=['🔢 Analyzing your numbers — Pythagorean + Chaldean…','🪐 Cross-referencing planetary positions…','🏛️ Horary chart — 5th house gambling…','⭐ Part of Fortune alignment…','☯️ BaZi day pillar compatibility…','🏮 Flying Star Lo Shu resonance…','🔮 I Ching hexagram match…','🃏 Tarot card of the day…','😇 Angel Numbers scan…','📊 PCSO '+game.short+' historical analysis…','🎯 Convergence scoring your numbers…'];
+  var msgs=['🔢 Analyzing your numbers — Pythagorean + Chaldean…','🪐 Cross-referencing planetary positions…','🏛️ Horary chart — 5th house gambling…','⭐ Part of Fortune alignment…','☯️ BaZi day pillar compatibility…','🏮 Flying Star Lo Shu resonance…','🔮 I Ching hexagram match…','🃏 Tarot card of the day…','😇 Angel Numbers scan…','🎲 Monte Carlo — simulating fair draws…','📊 PCSO '+game.short+' historical analysis…','🎯 Convergence scoring your numbers…'];
   var si=0; var el=document.getElementById('lsteps'); el.innerHTML='';
   var iv=setInterval(()=>{ if(si<msgs.length){ el.innerHTML+=msgs[si]+'<br>'; si++; } else clearInterval(iv); },240);
   setTimeout(()=>{
     clearInterval(iv);
-    var dh=currentGame==='ez2'?currentDraw:'9PM'; var num,astro,bazi,fs,iching,tarot,angel,stats,energy,layers,conv;
+    var dh=currentGame==='ez2'?currentDraw:'9PM'; var num,astro,bazi,fs,iching,tarot,angel,mc,stats,energy,layers,conv;
     try{num=layerNumerology(dh);}catch(e){num={pyNums:[7],chNums:[3],allNums:[3,7],steps:[]};}
     try{astro=layerAstrology(dh);}catch(e){astro={nums:[1,6],pofNums:[2],horaryNums:[2,7],horaryASC:'Cancer 15°',horaryASCRuler:'Moon',h5sign:'Scorpio',h5ruler:'Mars',h5rulerPos:'Taurus',h5aspect:'Square',pofSign:'Leo',pofDeg:'20°',pofRuler:'Sun',pofDigit:2,isDayChart:true,jupiterDignity:'Peregrine (no essential dignity)',viaCombusta:false,isRadical:true,moonVoid:false,planets:[],aspects:[],steps:[]};}
     try{bazi=layerBazi(dh);}catch(e){bazi={nums:[1,6],day:{stem:'Gui',stemEl:'Water',branch:'You',branchEl:'Rooster',nums:[6,7]},hour:{stem:'Jia',stemEl:'Wood',branch:'Hai',branchEl:'Pig',nums:[1,3,6]},year:{stem:'Bing',stemEl:'Fire',branch:'Wu',branchEl:'Fire',nums:[2,7]},month:{stem:'Ji',branch:'Wu',nums:[2,5,7]},interactions:[],steps:[]};}
@@ -2216,9 +2418,10 @@ async function generatePersonal(){
     try{iching=layerIChing(dh);}catch(e){iching={nums:[2,5],hex:45,pofNums:[5],steps:[]};}
     try{tarot=layerTarot(dh);}catch(e){tarot={nums:[5],cardNum:5,cardName:'The Hierophant',gambling:'',steps:[]};}
     try{angel=layerAngelNumbers(dh);}catch(e){angel={nums:[],hasSignal:false,hits:[],mirrorHit:false,steps:[]};}
+    try{mc=layerMonteCarlo(dh,currentGame);}catch(e){mc={nums:[],steps:[]};}
     try{stats=layerStats(currentGame,dh);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},freq:{},hotNums:[],draws:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy={bars:{Fire:30,Water:30,Wood:9,Metal:9,Earth:22}};}
-    layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
+    layers={num,astro,bazi,fs,iching,tarot,angel,mc,stats,energy};
     try{conv=convergence(layers,currentGame);}catch(e){conv={sorted:[],best:[]};}
     conv.picks=nums; conv.altPicks=[];
     document.getElementById('loader').style.display='none';
@@ -2237,7 +2440,7 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
   var elCls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
   var elEmoji={'Fire':'🔥','Water':'💧','Wood':'🌿','Metal':'⚙️','Earth':'🟤'};
   var energyHTML=elOrder.map(e=>`<div class="erow"><span class="elabel">${elEmoji[e]} ${e}</span><div class="ebar-wrap"><div class="ebar ${elCls[e]}" style="width:0%" data-w="${energy[e].pct}%"></div></div><span class="epct" style="color:${energy[e].pct>=28?'var(--gold)':'var(--muted2)'}">${energy[e].pct}%</span></div>`).join('');
-  var ballsHTML=userNums.map((n,i)=>{ var d=digitOf(n); var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="ball ${BTIERS[Math.min(i,5)]}">${pad(n)}<span class="btag">d${d}·${ds.count}/11</span></div>`; }).join('');
+  var ballsHTML=userNums.map((n,i)=>{ var d=digitOf(n); var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="ball ${BTIERS[Math.min(i,5)]}">${pad(n)}<span class="btag">d${d}·${ds.count}/${ORACLE_LABELS.length}</span></div>`; }).join('');
   // Same scorer the Oracle Pick panel uses — digit convergence blended with
   // meaning capture. This used to be the digit half alone, so the very same six
   // numbers reported a different percentage here than on the pick card.
@@ -2260,25 +2463,25 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
     ? `<div style="font-size:11px;color:var(--muted2);margin-top:4px;">📊 Historical check: ${backtestPct}% of last ${histDraws.length} draws had at least one number matching these digits (real data, not the formula)</div>`
     : '';
   var sourceHTML=`<div style="font-size:10px;color:${PCSO_HISTORY_STATUS.loaded?'var(--muted)':'#ff6b6b'};margin-top:4px;">${PCSO_HISTORY_STATUS.loaded?'✓':'⚠'} Data source: ${PCSO_HISTORY_STATUS.source}</div>`;
-  var seen={}; var digitCardsHTML=userNums.map(n=>{ var d=digitOf(n); if(seen[d]) return ''; seen[d]=true; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0,layers:[]}; return `<div class="dcard ${dCls(ds.count)}"><div class="dnum">${d}</div><div class="dscore">${ds.count}/11 layers</div><div class="ddots">${dotHTML(ds.layers,conv.LABELS||[])}</div></div>`; }).filter(Boolean).join('');
-  var mapHTML=userNums.map(n=>{ var d=digitOf(n); var cls=hotNums.includes(n)?'hot':(layers.stats.freq&&(layers.stats.freq[n]||0)>=2)?'warm':'cold'; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="maprow"><span class="mapdig">Your # <b>${pad(n)}</b> <span style="color:var(--muted)">(digit ${d} · ${ds.count}/11)</span></span><div class="mapnums"><span class="mn ${cls}">${pad(n)}</span></div></div>`; }).join('');
+  var seen={}; var digitCardsHTML=userNums.map(n=>{ var d=digitOf(n); if(seen[d]) return ''; seen[d]=true; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0,layers:[]}; return `<div class="dcard ${dCls(ds.count)}"><div class="dnum">${d}</div><div class="dscore">${ds.count}/${ORACLE_LABELS.length} layers</div><div class="ddots">${dotHTML(ds.layers,conv.LABELS||[])}</div></div>`; }).filter(Boolean).join('');
+  var mapHTML=userNums.map(n=>{ var d=digitOf(n); var cls=hotNums.includes(n)?'hot':(layers.stats.freq&&(layers.stats.freq[n]||0)>=2)?'warm':'cold'; var ds=conv.digitScores&&conv.digitScores[d]?conv.digitScores[d]:{count:0}; return `<div class="maprow"><span class="mapdig">Your # <b>${pad(n)}</b> <span style="color:var(--muted)">(digit ${d} · ${ds.count}/${ORACLE_LABELS.length})</span></span><div class="mapnums"><span class="mn ${cls}">${pad(n)}</span></div></div>`; }).join('');
   var freqBarsHTML=userNums.map(n=>{ var f=layers.stats.freq&&layers.stats.freq[n]?layers.stats.freq[n]:0; var w=Math.min(100,f*12); return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:10px;color:var(--muted2);width:22px">${pad(n)}</span><div style="flex:1;height:6px;background:var(--border);border-radius:3px"><div style="height:6px;background:${hotNums.includes(n)?'var(--gold)':'var(--teal)'};border-radius:3px;width:${w}%"></div></div><span style="font-size:10px;color:var(--muted)">${f}x</span></div>`; }).join('');
   // was conv._horaryHTML / _baziHTML / _ichingHTML, which nothing ever assigned
   var horaryHTML=oracleHoraryHTML(layers), baziHTML=oracleBaziHTML(layers), ichingHTML=oracleIChingHTML(layers);
   document.getElementById('results').innerHTML=`
     <div class="slabel">✦ Personal Number Analysis · ${game.name}</div>
-    <div class="balls-card"><div class="balls-eyebrow">Your Numbers — Oracle Convergence Check</div><div class="balls-row">${ballsHTML}</div><div class="balls-note">Ball tag = digit (d) + convergence score out of 11 sources<br>Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · Ho=Horary · En=Energy</div></div>
+    <div class="balls-card"><div class="balls-eyebrow">Your Numbers — Oracle Convergence Check</div><div class="balls-row">${ballsHTML}</div><div class="balls-note">Ball tag = digit (d) + convergence score out of ${ORACLE_LABELS.length} sources<br>Py=Pythagorean · Ch=Chaldean · As=Astro · Ba=BaZi · Fs=FengShui · IC=IChing · PoF=Part of Fortune · Ta=Tarot · An=Angel Numbers · Ho=Horary · En=Energy · MC=Monte Carlo (control)</div></div>
     <div class="alt-card" style="margin-bottom:14px;text-align:center;"><div class="alt-label" style="margin-bottom:10px;">Overall Alignment · ${TODAY_PH}</div><div style="font-size:36px;font-weight:800;color:${ac};margin-bottom:4px;">${pct}%</div><div style="font-size:13px;color:var(--muted2)">${al}</div>${splitHTML}${collisionHTML}${backtestHTML}${sourceHTML}</div>
     <div class="slabel">Current Energy Flow · ${TODAY_PH} · ${drawHour}</div>
-    <div class="eflow"><div class="eflow-title">⚡ Elemental Energy Balance — All 11 Layers</div>${energyHTML}</div>
+    <div class="eflow"><div class="eflow-title">⚡ Elemental Energy Balance — All ${ORACLE_LABELS.length} Layers</div>${energyHTML}</div>
     <div class="slabel">Step 1 — Digit Convergence · Your Numbers</div>
-    <div class="legend"><span class="leg"><span class="ldot" style="background:var(--accent)"></span>Metaphysical</span><span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF · Tarot · Angel · Horary · Energy</span><span class="leg"><span class="ldot" style="background:var(--gold)"></span>Chaldean</span><span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span></div>
+    <div class="legend"><span class="leg"><span class="ldot" style="background:var(--accent)"></span>Numerology · Astro · BaZi · Feng Shui</span><span class="leg"><span class="ldot" style="background:var(--teal)"></span>I Ching · PoF · Tarot · Angel · Horary · Energy</span><span class="leg"><span class="ldot" style="background:rgba(160,168,190,.35);border:1px dashed rgba(160,168,190,.6)"></span>Monte Carlo (control)</span><span class="leg"><span class="ldot" style="background:var(--surface);border:1px solid var(--border)"></span>Not in layer</span></div>
     <div class="dgrid">${digitCardsHTML}</div>
     <div class="slabel">Step 2 — Your Numbers vs Oracle Map · 1–${game.max}</div>
     <div class="lcard"><div class="lsteps" style="border:none;padding:0;margin-bottom:10px">🔥 Gold = Hot number &nbsp; 💜 Purple = 2+ recent &nbsp; Gray = Cold</div>${mapHTML}</div>
     <div class="slabel">Step 3 — Frequency in Last ${layers.stats.draws?layers.stats.draws.length:16} Draws</div>
     <div class="lcard"><div class="lsteps" style="border:none;padding:0">${freqBarsHTML}</div></div>
-    <div class="slabel">Full 11-Layer Breakdown</div>
+    <div class="slabel">Full ${ORACLE_LABELS.length}-Layer Breakdown</div>
     ${lcard('🔢','Numerology — Pythagorean + Chaldean',layers.num.nums,layers.num.steps)}
     ${lcard('🪐','Astrology — Dignities + Aspects + Horary',layers.astro.nums.slice(0,7),layers.astro.steps,horaryHTML,true)}
     ${lcard('☯️','BaZi — Exact Pillars + Clashes + Hidden Stems',layers.bazi.nums,layers.bazi.steps,baziHTML,true)}
@@ -2286,6 +2489,7 @@ function renderPersonalResults(layers,conv,energy,gameKey,drawHour,userNums){
     ${lcard('☯','I Ching — Hexagram + Nuclear + Changing Line',layers.iching.nums,layers.iching.steps,ichingHTML,true)}
     ${lcard('🃏','Tarot — Major Arcana Card of the Day',layers.tarot.nums,layers.tarot.steps,'',true)}
     ${lcard('😇','Angel Numbers — Repeating-Digit Resonance',layers.angel.nums.length?layers.angel.nums:['—'],layers.angel.steps,'',true)}
+    ${layers.mc?lcard('🎲','Monte Carlo — Fair-Draw Simulation (control)',layers.mc.nums&&layers.mc.nums.length?layers.mc.nums:['—'],layers.mc.steps||[],'',false):''}
     <div class="lcard"><div class="lhead"><div class="licon">📊</div><div><div class="lname">PCSO ${game.short} — Historical Data</div><div class="lpills">${layers.stats.topDigits.slice(0,5).map(d=>`<span class="pill g">${d}</span>`).join('')}</div></div></div><div class="lsteps">• <b>Hot numbers:</b> ${hotNums.map(n=>pad(n)).join(', ')}<br>• <b>Top stat digits:</b> ${layers.stats.topDigits.slice(0,5).join(', ')}<br>• <b>Draws analyzed:</b> ${layers.stats.draws?layers.stats.draws.length:16} · Pool: 1–${game.max}</div><div class="st-grid"><div class="stbox"><div class="stitle">🔥 Hot Numbers</div>${hotNums.map(n=>`<span class="hnum">${pad(n)}</span>`).join('')}</div><div class="stbox"><div class="stitle">📈 Your Numbers Frequency</div>${freqBarsHTML}</div></div></div>
     <div class="disc">⚠️ [Guessing] — For entertainment only. No method can guarantee lottery outcomes. Play responsibly.</div>`;
 }
@@ -2467,7 +2671,7 @@ function computeOracleAsOf(gameKey,dateStr,opts){
   _D=d; _M=m; _Y=y; _DOW=dObj.getDay();
 
   function runOne(drawHour,gk){
-    var num,astro,bazi,fs,iching,tarot,angel,stats,energy,layers,conv;
+    var num,astro,bazi,fs,iching,tarot,angel,mc,stats,energy,layers,conv;
     try{num=layerNumerology(drawHour);}catch(e){num={pyNums:[],chNums:[],allNums:[],nums:[]};}
     try{astro=layerAstrology(drawHour);}catch(e){astro={nums:[],pofNums:[],horaryNums:[]};}
     try{bazi=layerBazi(drawHour);}catch(e){bazi={nums:[]};}
@@ -2475,13 +2679,18 @@ function computeOracleAsOf(gameKey,dateStr,opts){
     try{iching=layerIChing(drawHour);}catch(e){iching={nums:[]};}
     try{tarot=layerTarot(drawHour);}catch(e){tarot={nums:[]};}
     try{angel=layerAngelNumbers(drawHour);}catch(e){angel={nums:[]};}
+    try{mc=layerMonteCarlo(drawHour,gk);}catch(e){mc={nums:[]};}
     try{stats=layerStats(gk,drawHour);}catch(e){stats={topDigits:[9,1,3],digitWeight:{},freq:{},hotNums:[],draws:[]};}
     try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy=null;}
-    layers={num,astro,bazi,fs,iching,tarot,angel,stats,energy};
+    layers={num,astro,bazi,fs,iching,tarot,angel,mc,stats,energy};
     try{conv=convergence(layers,gk);}catch(e){conv={picks:[],sorted:[],LABELS:[]};}
     if(withDetail) return {picks:conv.picks||[],sorted:conv.sorted||[],LABELS:conv.LABELS||[],
       digitScores:conv.digitScores||{},needed:conv.needed,
-      energy:energy,statsDraws:(stats&&stats.draws)||[]};
+      energy:energy,statsDraws:(stats&&stats.draws)||[],
+      // Monte Carlo is per-GAME (it simulates that game's own pool), so it
+      // cannot ride along on oracleDateReading()'s single per-date reading the
+      // way the other cards do. It comes back here instead.
+      mc:mc};
     return conv.picks;
   }
 
@@ -3072,7 +3281,7 @@ function oraclePickBalls(nums,meaning,counts,offset,gameKey){
     var tier=gameKey?osphClass(gameKey,i+off):BTIERS[Math.min(i+off,5)];
     return '<div class="ball '+tier+(m?' ball-meant':'')+'"'
       +(m?' title="'+m.join(' \u00b7 ')+'"':'')+'>'+pad(n)
-      +'<span class="btag">d'+d+(c!==null?'\u00b7'+c+'/11':'')+'</span></div>';
+      +'<span class="btag">d'+d+(c!==null?'\u00b7'+c+'/'+ORACLE_LABELS.length:'')+'</span></div>';
   }).join('');
 }
 
@@ -3201,12 +3410,12 @@ function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr,bd){
 
   if(slice&&slice.energy){
     html+='<div class="slabel">Current Energy Flow \u00b7 '+when+' \u00b7 '+((gameKey==='ez2')?'9PM':'9PM')+'</div>'
-      +'<div class="eflow"><div class="eflow-title">\u26a1 Elemental Energy Balance \u2014 All 11 Layers</div>'
+      +'<div class="eflow"><div class="eflow-title">\u26a1 Elemental Energy Balance \u2014 All '+ORACLE_LABELS.length+' Layers</div>'
       +oraclePickEnergyHTML(slice.energy)+'</div>';
   }
 
   if(slice&&slice.sorted&&slice.sorted.length){
-    html+='<div class="ord-step">Step 1 \u2014 Digit Convergence \u00b7 11 Sources</div>'
+    html+='<div class="ord-step">Step 1 \u2014 Digit Convergence \u00b7 '+ORACLE_LABELS.length+' Sources</div>'
       +'<div class="dgrid">'+slice.sorted.slice(0,6).map(function(sc){
         return '<div class="dcard '+dCls(sc.count)+'">'
           +'<div class="dnum">'+sc.digit+'</div>'
@@ -3225,7 +3434,7 @@ function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr,bd){
       +'<div class="ord-note">Full-number matches the engine rewards (+10 each) when choosing within a digit family.</div></div>';
   }
 
-  html+='<div class="ord-step">Full 11-Layer Breakdown</div>';
+  html+='<div class="ord-step">Full '+ORACLE_LABELS.length+'-Layer Breakdown</div>';
   try{
     if(L.num)    html+=lcard('\uD83D\uDD22','Numerology \u2014 Pythagorean + Chaldean',L.num.nums,L.num.steps);
     if(L.astro)  html+=lcard('\uD83E\uDE90','Astrology \u2014 Dignities + Aspects + Horary',L.astro.nums.slice(0,7),L.astro.steps,oracleHoraryHTML(L),true);
@@ -3234,6 +3443,11 @@ function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr,bd){
     if(L.iching) html+=lcard('\u262F','I Ching \u2014 Hexagram + Nuclear + Changing Line',L.iching.nums,L.iching.steps,oracleIChingHTML(L),true);
     if(L.tarot)  html+=lcard('\uD83C\uDCCF','Tarot \u2014 Major Arcana Card of the Day',L.tarot.nums,L.tarot.steps,'',true);
     if(L.angel)  html+=lcard('\uD83D\uDE07','Angel Numbers \u2014 Repeating-Digit Resonance',L.angel.nums.length?L.angel.nums:['\u2014'],L.angel.steps,'',true);
+    // Monte Carlo rides in on the per-GAME detail slice, not on rd.layers:
+    // oracleDateReading() is cast once per DATE and shared by every game on it,
+    // and this layer simulates one specific game's pool.
+    var mcL=slice&&slice.mc;
+    if(mcL)      html+=lcard('\uD83C\uDFB2','Monte Carlo \u2014 Fair-Draw Simulation (control)',(mcL.nums&&mcL.nums.length)?mcL.nums:['\u2014'],mcL.steps||[],'',false);
   }catch(e){ console.error('reading cards:',e); }
 
   return html;

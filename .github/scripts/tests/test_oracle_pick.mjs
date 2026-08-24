@@ -92,6 +92,18 @@ console.log('\n2. computeOracleAsOf return shape (snapshot_oracle.mjs contract)'
   check('withDetail adds picks/sorted/digitScores without changing picks',
         det && JSON.stringify(det.picks) === JSON.stringify(six)
         && Array.isArray(det.sorted) && typeof det.digitScores === 'object');
+  // The source list is read for its LENGTH all over the UI ("3/12 layers", the
+  // ball tags, the step headings). Those were eight hardcoded "11"s until the
+  // Monte Carlo source landed; they now read ORACLE_LABELS.length, and this is
+  // what stops the list and the page drifting apart again.
+  check('ORACLE_LABELS is the 12-source list convergence hands back',
+        JSON.stringify(sb.ORACLE_LABELS) === JSON.stringify(det.LABELS)
+        && sb.ORACLE_LABELS.length === 12
+        && sb.ORACLE_LABELS[sb.ORACLE_LABELS.length - 1] === 'MC',
+        JSON.stringify(sb.ORACLE_LABELS));
+  check('no hardcoded source count survives in oracle.js',
+        !/\/11\b|\b11[- ](?:source|Source|Layer|layer)|All 11 Layers/.test(
+          fs.readFileSync(ORACLE_JS, 'utf8')));
 }
 
 // ── 3. the pick is reproducible across a fresh engine ────────────────────

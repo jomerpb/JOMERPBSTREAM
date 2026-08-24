@@ -133,6 +133,7 @@ const LAYER_FLOORS = {
   layerIChing: 4,        // measured   8 (hexagram maps to few digits)
   layerTarot: 6,         // measured  17 (22 major arcana)
   layerAngelNumbers: 2,  // measured   4 (a signal detector — usually silent)
+  layerMonteCarlo: 40,   // measured  71 of the 72 possible ordered digit pairs
 };
 
 const distinct = {};
@@ -516,6 +517,170 @@ console.log('\n12. computeOracleAsOf restores globals on the error path');
   check('date globals restored even though the call threw',
         sb._D === before.D && sb._M === before.M && sb._Y === before.Y && sb._DOW === before.DOW,
         `${before.Y}-${before.M}-${before.D} became ${sb._Y}-${sb._M}-${sb._D}`);
+}
+
+// ── 13. Monte Carlo layer — the control arm behaves like a control ────────
+// layerMonteCarlo simulates fair draws and reports the digit families that
+// came out furthest above expectation. It is scored by convergence() exactly
+// like the eleven metaphysical sources, so the whole point of it collapses if
+// any of the following stops holding: it must be reproducible (the pick is
+// computed from the date alone and must not move between page loads), it must
+// read no draw history, its simulated pool must actually be FAIR, and the
+// z-score it publishes must be the real one for a hypergeometric draw — a
+// wrong variance would have the card overstating how surprising its own noise
+// is, which is the one thing a control arm may never do.
+console.log('\n13. Monte Carlo layer (control arm)');
+{
+  const GAMES_UNDER_TEST = [['642', 42, 6], ['645', 45, 6], ['649', 49, 6],
+                            ['655', 55, 6], ['658', 58, 6], ['ez2', 31, 2]];
+
+  // (a) shape and simulation integrity
+  {
+    let shapeOK = true, sumOK = true, poolOK = true, detail = '';
+    for (const [gk, poolMax, k] of GAMES_UNDER_TEST) {
+      setDate(sb, 2026, 8, 24);
+      const r = sb.layerMonteCarlo('9PM', gk);
+      if (r.poolMax !== poolMax || r.k !== k) { poolOK = false; detail = `${gk}: pool ${r.poolMax}/${r.k}`; }
+      // two distinct digit families, both real digits
+      if (r.nums.length !== 2 || new Set(r.nums).size !== 2
+          || r.nums.some((d) => !Number.isInteger(d) || d < 1 || d > 9)) {
+        shapeOK = false; detail = `${gk}: ${JSON.stringify(r.nums)}`;
+      }
+      // every simulated number landed in some family, and nothing leaked
+      let total = 0, famTotal = 0;
+      for (let d = 1; d <= 9; d++) { total += r.counts[d]; famTotal += r.famSize[d]; }
+      if (total !== r.trials * k || famTotal !== poolMax) {
+        sumOK = false; detail = `${gk}: drew ${total} of ${r.trials * k}, families cover ${famTotal} of ${poolMax}`;
+      }
+    }
+    check('emits exactly 2 distinct digit families in 1..9', shapeOK, detail);
+    check('simulates the right pool and pick-count per game', poolOK, detail);
+    check('every simulated number is counted exactly once', sumOK, detail);
+  }
+
+  // (b) reproducible — the pick must not move between loads
+  {
+    setDate(sb, 2026, 8, 24);
+    const a = JSON.stringify(sb.layerMonteCarlo('9PM', '658').counts);
+    const b = JSON.stringify(sb.layerMonteCarlo('9PM', '658').counts);
+    const sb2 = await loadEngine(historyText);
+    setDate(sb2, 2026, 8, 24);
+    const c = JSON.stringify(sb2.layerMonteCarlo('9PM', '658').counts);
+    check('same date gives the same simulation twice in one session', a === b);
+    check('same date gives the same simulation in a fresh engine', a === c);
+  }
+
+  // (c) history-free — the standing rule. A layer that reads draws would make
+  // a future date's pick move as results land, which is the exact defect the
+  // history-free change removed from the engine.
+  {
+    setDate(sb, 2026, 9, 15);
+    const withHistory = JSON.stringify(sb.layerMonteCarlo('9PM', '658').nums);
+    const empty = await loadEngine(JSON.stringify({ updated: '', '6/58': [], '6/55': [],
+      '6/49': [], '6/45': [], '6/42': [], ez2: [] }));
+    setDate(empty, 2026, 9, 15);
+    const withNone = JSON.stringify(empty.layerMonteCarlo('9PM', '658').nums);
+    check('identical with the entire draw history deleted', withHistory === withNone,
+          `${withHistory} vs ${withNone}`);
+  }
+
+  // (d) the generator is the mulberry32 it says it is. The simulation loop is
+  // hand-inlined for speed (11.0ms -> 0.88ms per call inside this sandbox), so
+  // this reproduces it from an independent implementation and demands the same
+  // counts. If someone "tidies" the inlined arithmetic, this fails.
+  {
+    const mulberry32 = (seed) => {
+      let a = seed >>> 0;
+      return () => {
+        a = (a + 0x6D2B79F5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    };
+    let allMatch = true, detail = '';
+    for (const [gk, poolMax, k] of GAMES_UNDER_TEST) {
+      setDate(sb, 2026, 8, 24);
+      const r = sb.layerMonteCarlo('9PM', gk);
+      const rnd = mulberry32(sb.mcSeedFor(9, poolMax, k));
+      const ref = new Array(10).fill(0);
+      for (let t = 0; t < r.trials; t++) {
+        const drawn = [];
+        while (drawn.length < k) {
+          const n = 1 + Math.floor(rnd() * poolMax);
+          if (drawn.includes(n)) continue;
+          drawn.push(n);
+          ref[n % 9 === 0 ? 9 : n % 9]++;
+        }
+      }
+      for (let d = 1; d <= 9; d++) if (ref[d] !== r.counts[d]) { allMatch = false; detail = `${gk} d${d}: ${ref[d]} vs ${r.counts[d]}`; }
+    }
+    check('inlined generator matches a reference mulberry32 exactly', allMatch, detail);
+  }
+
+  // (e) the published z-score is the true one. Under a fair draw a family's
+  // per-trial count is Hypergeometric(pool, familySize, k); if that variance
+  // is wrong the z's spread away from 1 and the card's p-value lies. Measured
+  // over a year of dates x 9 families per game.
+  {
+    let calibOK = true, lines = [];
+    for (const [gk] of GAMES_UNDER_TEST) {
+      const zs = [];
+      for (let t = Date.UTC(2026, 0, 1); t <= Date.UTC(2026, 11, 31); t += 86400000) {
+        const dt = new Date(t);
+        setDate(sb, dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+        sb.layerMonteCarlo('9PM', gk).stats.forEach((st) => zs.push(st.z));
+      }
+      const n = zs.length;
+      const mean = zs.reduce((a, b) => a + b, 0) / n;
+      const sd = Math.sqrt(zs.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+      const tail = zs.filter((z) => Math.abs(z) > 1.96).length / n;
+      const ok = Math.abs(mean) < 0.12 && sd > 0.88 && sd < 1.12 && tail > 0.025 && tail < 0.085;
+      if (!ok) calibOK = false;
+      lines.push(`${gk} mean=${mean.toFixed(3)} sd=${sd.toFixed(3)} tail=${(tail * 100).toFixed(1)}%`);
+    }
+    check('z-scores are calibrated: mean~0, sd~1, ~5% beyond 1.96sigma', calibOK, lines.join(' | '));
+  }
+
+  // (f) no family-size bias in what it EMITS. Families are unequal (digit 1
+  // holds 5 numbers in 6/42 and 7 in 6/58), so a layer that ranked families by
+  // raw count would emit the big ones almost every time — a structural
+  // artefact masquerading as a reading. Standardising is what prevents it.
+  {
+    let biasOK = true, lines = [];
+    for (const [gk] of GAMES_UNDER_TEST) {
+      const share = new Array(10).fill(0);
+      let total = 0;
+      for (let t = Date.UTC(2025, 0, 1); t <= Date.UTC(2026, 11, 31); t += 86400000) {
+        const dt = new Date(t);
+        setDate(sb, dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+        sb.layerMonteCarlo('9PM', gk).nums.forEach((d) => { share[d]++; total++; });
+      }
+      let lo = 1, hi = 0;
+      for (let d = 1; d <= 9; d++) { const p = share[d] / total; if (p < lo) lo = p; if (p > hi) hi = p; }
+      if (lo < 0.06 || hi > 0.18) biasOK = false;   // uniform is 11.1%
+      lines.push(`${gk} ${(lo * 100).toFixed(1)}%..${(hi * 100).toFixed(1)}%`);
+    }
+    check('emitted families stay near uniform (6%..18%, uniform 11.1%)', biasOK, lines.join(' | '));
+  }
+
+  // (g) it actually reaches the pick. A source that is wired up but never
+  // credited would be invisible — the same failure mode as the frozen
+  // Chaldean half in test 1, one level further down.
+  {
+    setDate(sb, 2026, 8, 24);
+    const det = sb.computeOracleAsOf('658', '2026-08-24', { withDetail: true });
+    const mcIdx = det.LABELS.indexOf('MC');
+    const mcNums = det.mc && det.mc.nums ? det.mc.nums : [];
+    check('MC is the last convergence source', mcIdx === det.LABELS.length - 1 && mcIdx === 11,
+          `LABELS=${JSON.stringify(det.LABELS)}`);
+    check('the detail slice carries the Monte Carlo card', mcNums.length === 2,
+          JSON.stringify(det.mc && det.mc.nums));
+    check('every digit MC named is credited to MC in the convergence',
+          mcNums.every((d) => (det.digitScores[d].layers || []).includes(mcIdx)),
+          mcNums.map((d) => `d${d}:${JSON.stringify(det.digitScores[d].layers)}`).join(' '));
+  }
 }
 
 console.log('\n' + '='.repeat(62));
