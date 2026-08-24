@@ -52,6 +52,63 @@ carries the commits that existed when it was merged) and, when it matters,
 Report what each lane did and what it returned. If a lane genuinely cannot run,
 say which one and why — do not quietly drop it to two.
 
+## Rule: contradict yourself before you recommend anything
+
+**Standing instruction from the repo owner — mandatory, every session, every
+task. This applies to diagnoses and recommendations, not just to code.**
+
+Never present a cause, a fix, or a recommendation until you have actively tried
+to prove it wrong and reported what that attempt returned. One test that agrees
+with your hypothesis is not evidence — it is the hypothesis restated. The
+falsification attempt is part of the work, not an optional extra step, and its
+result gets shown even when it kills the idea you liked.
+
+Concretely, before recommending anything:
+
+1. **State the hypothesis as something that could be false.** "X is what's slow"
+   has to be phrased so a measurement could contradict it.
+2. **Build the condition where your hypothesis predicts the opposite.** If you
+   think X is the cause, measure with X removed *and* with X present under
+   conditions the user actually experiences. A cause that only shows up in your
+   sandbox's artificial conditions is a sandbox artifact until proven otherwise.
+3. **Check whether your test environment manufactured the result.** Blocked
+   domains, missing network, absent files, an empty cache, a stub — ask what
+   the harness is doing that the user's device is not.
+4. **Try to make the fix fail.** Combine it with the conditions it does not
+   address. A fix that works in isolation and dies in combination is not a fix.
+5. **Say what the recommendation does NOT fix**, out loud, before the user asks.
+6. **Quantify the win against the alternative**, not against nothing. "This
+   saves 80ms" and "this saves 3,400ms" are different recommendations.
+
+When the falsification changes the answer, **say so plainly and lead with the
+correction** — do not bury the reversal under new numbers or let a wall of fresh
+evidence quietly replace the earlier claim. Name what you got wrong in one
+sentence, give the corrected answer, move on. Do not ruminate or apologise at
+length; the correction is the deliverable, not the contrition.
+
+If falsification is genuinely impossible for some claim (no access to the real
+device, an external service that cannot be reproduced), say which claim is
+unfalsified and what would be needed to settle it. An unfalsified claim is
+labelled as such — never upgraded to a conclusion by confidence alone.
+
+**The reason this rule exists.** Asked why the PWA was slow to open, the first
+answer was "a render-blocking Google Fonts link", measured at 12,872ms to first
+paint versus 172ms without it — a 75x difference, presented as the cause. That
+measurement was real and the conclusion drawn from it was wrong: the sandbox's
+proxy was resetting the connection to `fonts.googleapis.com`, an artificial
+condition. Re-measured on working network profiles, removing the font saved
+**70-90ms**, not 12 seconds. The actual dominant cost was downloading ~686KB of
+uncached shell on every launch — **3,660ms** to first paint on weak LTE, which a
+service worker takes to **224ms**. The falsifying test was never run until the
+owner asked "this will fix the loading?" and forced it. The right answer was
+reachable from the start; only the discipline was missing.
+
+The corollary that same session is why step 4 is in the list: the service worker
+alone tested at 204ms, but with the font `<link>` left in the HTML and Google
+unreachable it went back to **8,160ms** — a perfect cache defeated entirely by
+the thing that had just been demoted to "minor". Neither fix was correct alone,
+and only the combined test showed it.
+
 ## Rule: always close with an explicit status
 
 **Standing instruction from the repo owner.** Every reply that finishes a piece
