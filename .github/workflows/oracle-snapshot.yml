@@ -2,7 +2,15 @@ name: Oracle Snapshot (Daily)
 
 on:
   schedule:
-    - cron: '5 16 * * *'   # 00:05 Asia/Manila (UTC+8) — just after midnight, before any draw that day
+    # Primary: 00:05 Asia/Manila (UTC+8) — just after midnight, before any draw that day.
+    - cron: '5 16 * * *'
+    # Retry ticks, for the same dropped-schedule failure documented in
+    # pcso-history-append.yml (2026-08-27: no scheduled run fired at all, so no
+    # pick was logged for 2026-08-28). Both still land before the day's first
+    # draw at 2PM Manila, and snapshot_oracle.mjs is idempotent per day unless
+    # FORCE_OVERWRITE=1 — a retry after a successful run writes nothing.
+    - cron: '45 18 * * *'  # 02:45 Asia/Manila
+    - cron: '45 22 * * *'  # 06:45 Asia/Manila
   workflow_dispatch:
 
 jobs:
