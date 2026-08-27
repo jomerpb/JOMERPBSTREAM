@@ -16,7 +16,24 @@ name: PCSO History Append (Daily)
 # dispatch landing together cannot corrupt the file.
 on:
   schedule:
-    - cron: '0 15 * * *'   # 23:00 Asia/Manila (UTC+8) — after the 9PM draws are posted
+    # Primary: 23:00 Asia/Manila (UTC+8), after that day's 9PM draws are posted.
+    - cron: '0 15 * * *'
+    # Two RETRY ticks. GitHub's cron is best-effort, not a guarantee: a
+    # scheduled tick can be delayed or dropped outright under load, and on
+    # 2026-08-27 BOTH this job and oracle-snapshot.yml were skipped entirely
+    # (zero scheduled runs repo-wide that day, while a manual dispatch the same
+    # evening ran fine — so it was the scheduler, not Actions being disabled or
+    # out of quota). One dropped tick cost a full day of results in the Oracle
+    # tab's "Look Up Past Result" panel, because nothing retried until the next
+    # night's run 24h later.
+    #
+    # These cost ~25s each and almost always commit nothing: the script is
+    # append-only and idempotent, and its missing_scheduled_dates() gapfill
+    # backfills any date the primary tick missed. Verified against the live
+    # sources at 06:49 Manila — the 02:40/06:40 window does recover the
+    # previous day's draws, which is exactly the case that failed here.
+    - cron: '40 18 * * *'  # 02:40 Asia/Manila — first retry
+    - cron: '40 22 * * *'  # 06:40 Asia/Manila — last retry before the 2PM draw
   workflow_dispatch:
 
 jobs:
