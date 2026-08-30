@@ -19,6 +19,7 @@ let currentLang    = 'sub';
 
 // Pagination state
 let animePageState  = {sub:'trending', page:1, hasMore:false};
+let mangaPageState  = {sub:'trending', page:1, hasMore:false};
 let tvPageState     = {sub:'popular',  region:'', page:1, hasMore:false};
 let moviePageState  = {sub:'popular',  page:1, hasMore:false};
 let searchState     = {q:'', type:'all', page:1, hasMore:false};
@@ -135,23 +136,30 @@ function streamSeg(cat, el) {
   el.classList.add('active');
   updateSegSlide(el);
   document.getElementById('sec-anime').style.display  = (cat === 'anime')  ? '' : 'none';
+  document.getElementById('sec-manga').style.display  = (cat === 'manga')  ? '' : 'none';
   document.getElementById('sec-tv').style.display     = (cat === 'tv')     ? '' : 'none';
   document.getElementById('sec-movies').style.display = (cat === 'movies') ? '' : 'none';
   // Lazy-load the grid the first time a category is opened
   if (cat === 'anime'  && !document.getElementById('anime-grid').children.length)
     loadAnimeSub('trending', document.querySelector('#anime-tabs .ctab.active') || document.querySelectorAll('#anime-tabs .ctab')[1]);
+  if (cat === 'manga'  && !document.getElementById('manga-grid').children.length)
+    loadMangaSub('trending', document.querySelector('#manga-tabs .ctab.active') || document.querySelectorAll('#manga-tabs .ctab')[1]);
   if (cat === 'tv'     && !document.getElementById('tv-grid').children.length)
     loadTVSub('popular', '', document.querySelector('#tv-tabs .ctab.active') || document.querySelectorAll('#tv-tabs .ctab')[1]);
   if (cat === 'movies' && !document.getElementById('movies-grid').children.length)
     loadMovieSub('popular', document.querySelector('#movie-tabs .ctab.active') || document.querySelectorAll('#movie-tabs .ctab')[1]);
 }
 
+// Position of each category in #stream-seg, in DOM order. Every place that
+// needs to press a segment button by index reads this one map — the order is
+// declared once here rather than re-spelled at each call site.
+const SEG_INDEX = {anime:0, manga:1, tv:2, movies:3};
+
 function navTo(tab) {
-  // Anime/TV/Movies pages were merged into the home Stream tab
-  if (tab === 'anime' || tab === 'tv' || tab === 'movies') {
-    const idx = {anime:0, tv:1, movies:2}[tab];
+  // Anime/Manga/TV/Movies pages were merged into the home Stream tab
+  if (tab in SEG_INDEX) {
     navTo('home');
-    streamSeg(tab, document.querySelectorAll('#stream-seg .seg-btn')[idx]);
+    streamSeg(tab, document.querySelectorAll('#stream-seg .seg-btn')[SEG_INDEX[tab]]);
     return;
   }
   setNav(tab);
@@ -172,7 +180,7 @@ window.addEventListener('popstate', async (e) => {
   const page = state.page;
   if (page !== 'player-page') document.getElementById('player-iframe').src = '';
   showPage(page, true);
-  const navMap = {'home-page':'home','anime-page':'anime','tv-page':'tv','movies-page':'movies','search-page':'search','oracle-page':'oracle','trade-page':'trade'};
+  const navMap = {'home-page':'home','anime-page':'anime','manga-page':'manga','tv-page':'tv','movies-page':'movies','search-page':'search','oracle-page':'oracle','trade-page':'trade'};
   if (navMap[page]) setNav(navMap[page]);
   if (page === 'detail-page' && state.item) await openDetail(state.item, true);
   if (page === 'player-page' && state.item) {
@@ -209,6 +217,18 @@ function switchLang(lang) {
 // ═══════════════════════════════════════════
 // CARD BUILDERS — anchor tags for long press
 // ═══════════════════════════════════════════
+// Manga, manhwa and manhua are one internal type ('manga') — same AniList
+// query, same grid, same detail page — and differ only by country of origin.
+// The badge is the one place that spells the difference out, so the label is
+// derived from item.origin rather than stored as a separate type.
+const MANGA_ORIGIN_LABEL = {JP:'Manga', KR:'Manhwa', CN:'Manhua', TW:'Manhua'};
+function mangaKind(item) { return MANGA_ORIGIN_LABEL[item?.origin] || 'Manga'; }
+
+function typeLabelShort(item) {
+  if (item.type === 'manga') return mangaKind(item).toUpperCase();
+  return {anime:'ANIME', movie:'MOVIE', tv:'TV'}[item.type] || 'TV';
+}
+
 function skRow(n) {
   return Array(n).fill(0).map(()=>`<div style="flex-shrink:0;"><div class="sk" style="width:105px;height:148px;border-radius:8px;"></div><div class="sk" style="width:90px;height:9px;border-radius:4px;margin-top:5px;"></div></div>`).join('');
 }
@@ -219,7 +239,7 @@ function buildSmCard(item) {
   c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
   c.style.cssText = 'text-decoration:none;color:inherit;';
   const badge = item.score ? `<div class="card-sm-badge">⭐${item.score}</div>` : '';
-  const typeBadge = `<div class="card-sm-type ${item.type}">${item.type==='anime'?'ANIME':item.type==='movie'?'MOVIE':'TV'}</div>`;
+  const typeBadge = `<div class="card-sm-type ${item.type}">${typeLabelShort(item)}</div>`;
   c.innerHTML = `
     <div class="card-sm-img">
       <img src="${item.img||''}" alt="${item.title}" loading="lazy"/>
@@ -238,8 +258,8 @@ function buildGridCard(item) {
   c.className = 'grid-card';
   c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
   c.style.cssText = 'text-decoration:none;color:inherit;display:block;';
-  const typeColor = item.type==='anime'?'anime':item.type==='movie'?'movie':'tv';
-  const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'FILM':'TV';
+  const typeColor = item.type;
+  const typeLabel = item.type==='movie' ? 'FILM' : typeLabelShort(item);
 
   // Status is already mapped to text in fromTMDB/fromAL
   const statusText = item.status || '';
@@ -468,6 +488,124 @@ async function loadMoreAnime() {
 }
 
 // ═══════════════════════════════════════════
+// MANGA PAGE
+// ═══════════════════════════════════════════
+// Manga rides the same AniList endpoint the Anime tab already uses — one API
+// client, one rate limit, one grid renderer. It is a browse-and-discover tab,
+// NOT a reader: see openMangaDetail() for why the chapter images cannot be
+// fetched from this origin, and what the Read button does instead.
+
+// Every manga list query selects the same fields. Declared once so the grid,
+// the filter and the recommendation rows cannot drift apart in what they ask
+// for — a missing field there shows up as a blank pill, not as an error.
+const MANGA_FIELDS = 'id idMal title{english romaji}coverImage{large}bannerImage chapters volumes averageScore status startDate{year}format genres countryOfOrigin';
+
+// AniList models manhwa/manhua as ordinary MANGA with a different
+// countryOfOrigin, and light novels as format:NOVEL. Every query below
+// therefore excludes NOVEL — a text novel in a cover-art grid is noise.
+const MANGA_SUBS = {
+  trending:  {sort:'TRENDING_DESC'},
+  popular:   {sort:'POPULARITY_DESC'},
+  toprated:  {sort:'SCORE_DESC'},
+  releasing: {sort:'POPULARITY_DESC', status:'RELEASING'},
+  manhwa:    {sort:'POPULARITY_DESC', country:'KR'},
+  manhua:    {sort:'POPULARITY_DESC', country:'CN'},
+  oneshot:   {sort:'POPULARITY_DESC', format:'ONE_SHOT'},
+  action:    {sort:'POPULARITY_DESC', genre:'Action'},
+  romance:   {sort:'POPULARITY_DESC', genre:'Romance'},
+  fantasy:   {sort:'POPULARITY_DESC', genre:'Fantasy'},
+  // Isekai is an AniList *tag*, not a genre — the genre list has no such
+  // entry, so asking for genre:"Isekai" matches nothing at all.
+  isekai:    {sort:'POPULARITY_DESC', tag:'Isekai'},
+};
+
+// Deliberately NOT a `type` argument on fromAL(): that function is called as
+// `.map(fromAL)` in several places, where Array#map would hand the array
+// index in as the second argument and silently pick the wrong branch.
+function fromALManga(m) {
+  const statusMap = {RELEASING:'Ongoing',FINISHED:'Completed',NOT_YET_RELEASED:'Upcoming',CANCELLED:'Canceled',HIATUS:'On Hiatus'};
+  const origin = m.countryOfOrigin || 'JP';
+  const countryNames = {JP:'Japan',KR:'Korea',CN:'China',TW:'Taiwan'};
+  return {
+    type:     'manga',
+    al_id:    m.id,
+    mal_id:   m.idMal,
+    title:    m.title?.english || m.title?.romaji || 'Unknown',
+    year:     m.startDate?.year || '',
+    score:    m.averageScore ? (m.averageScore/10).toFixed(1) : null,
+    img:      m.coverImage?.large || m.coverImage?.medium || '',
+    banner:   m.bannerImage || m.coverImage?.extraLarge || '',
+    // AniList descriptions are HTML. <br> carries the paragraph breaks, so it
+    // becomes a newline before the remaining tags are stripped — otherwise
+    // every paragraph runs into the next one.
+    synopsis: (m.description||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'').trim(),
+    chapters: m.chapters || null,
+    volumes:  m.volumes  || null,
+    genre:    Array.isArray(m.genres) ? (m.genres[0]||'') : '',
+    genres:   m.genres || [],
+    status:   statusMap[m.status] || m.status || '',
+    format:   m.format || '',
+    origin,
+    country:  origin,
+    countryFlag: countryNames[origin] || origin,
+  };
+}
+
+async function loadMangaSub(sub, tabEl) {
+  mangaPageState = {sub, page:1, hasMore:false};
+  if (tabEl) { document.querySelectorAll('#manga-tabs .ctab').forEach(t=>t.classList.remove('active')); tabEl.classList.add('active'); }
+  document.getElementById('manga-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
+  document.getElementById('manga-more').style.display = 'none';
+  const {items, hasMore} = await fetchManga(sub, 1);
+  renderGrid('manga-grid', items);
+  mangaPageState.hasMore = hasMore;
+  document.getElementById('manga-more').style.display = hasMore ? 'block' : 'none';
+  if (hasMore) attachInfiniteScroll();
+}
+
+async function fetchManga(sub, page) {
+  const cfg = MANGA_SUBS[sub] || MANGA_SUBS.trending;
+  const Q = `query($page:Int,$sort:[MediaSort],$genres:[String],$tags:[String],$country:CountryCode,$statuses:[MediaStatus],$formats:[MediaFormat]){
+    Page(page:$page,perPage:24){
+      pageInfo{hasNextPage}
+      media(type:MANGA,isAdult:false,sort:$sort,genre_in:$genres,tag_in:$tags,countryOfOrigin:$country,status_in:$statuses,format_in:$formats,format_not_in:[NOVEL]){
+        ${MANGA_FIELDS}
+      }
+    }
+  }`;
+  const data = await al(Q, {
+    page,
+    sort:     [cfg.sort],
+    genres:   cfg.genre   ? [cfg.genre]   : undefined,
+    tags:     cfg.tag     ? [cfg.tag]     : undefined,
+    country:  cfg.country || undefined,
+    statuses: cfg.status  ? [cfg.status]  : undefined,
+    formats:  cfg.format  ? [cfg.format]  : undefined,
+  });
+  return {
+    items:   (data?.data?.Page?.media||[]).map(fromALManga),
+    // AniList reports this directly, so unlike the anime/TV grids there is no
+    // need to infer "there is more" from a full page of results.
+    hasMore: data?.data?.Page?.pageInfo?.hasNextPage || false,
+  };
+}
+
+async function loadMoreManga() {
+  if (!mangaPageState.hasMore) return;
+  mangaPageState.hasMore = false;
+  mangaPageState.page++;
+  if (mangaPageState.sub === 'filter') {
+    await applyMangaFilter(mangaPageState.page);
+  } else {
+    const {items, hasMore} = await fetchManga(mangaPageState.sub, mangaPageState.page);
+    renderGrid('manga-grid', items, true);
+    mangaPageState.hasMore = hasMore;
+    document.getElementById('manga-more').style.display = hasMore ? 'block' : 'none';
+    if (hasMore) attachInfiniteScroll();
+  }
+}
+
+// ═══════════════════════════════════════════
 // TV PAGE
 // ═══════════════════════════════════════════
 async function loadTVSub(sub, region, tabEl) {
@@ -602,6 +740,11 @@ async function fetchSearch(q, type, page) {
     const d = await al(Q, {s:q, page});
     results = results.concat((d?.data?.Page?.media||[]).map(fromAL));
   }
+  if (type === 'all' || type === 'manga') {
+    const Q = `query($s:String,$page:Int){Page(page:$page,perPage:12){media(type:MANGA,search:$s,isAdult:false,format_not_in:[NOVEL],sort:SEARCH_MATCH){${MANGA_FIELDS}}}}`;
+    const d = await al(Q, {s:q, page});
+    results = results.concat((d?.data?.Page?.media||[]).map(fromALManga));
+  }
   if (type === 'all' || type === 'tv') {
     const d = await tmdb('/search/tv', {query:q, page});
     results = results.concat((d?.results||[]).map(m=>fromTMDB(m,'tv')));
@@ -656,6 +799,8 @@ async function openDetail(item, restore=false) {
 
   if (item.type === 'anime') {
     await openAnimeDetail(item);
+  } else if (item.type === 'manga') {
+    await openMangaDetail(item);
   } else if (item.type === 'tv') {
     await openTVDetail(item);
   } else {
@@ -709,6 +854,75 @@ async function openAnimeDetail(item) {
 }
 
 // ── TV DETAIL ──
+// ── MANGA DETAIL ──
+// This is a browse page, not a reader, and that is a measured constraint
+// rather than a shortcut. The chapter-image APIs (api.mangadex.org,
+// api.comick.dev) answer a request from this page with no
+// Access-Control-Allow-Origin header, so the browser discards the response:
+// verified per-origin against a cache-busted request — api.mangadex.org
+// returns ACAO for https://mangadex.org and for http://localhost, and returns
+// none at all for https://jomerpb.github.io, which is where this site is
+// served from. That localhost carve-out is exactly why a local Playwright run
+// is not evidence here: reading would work on the test server and fail on the
+// deployed page. Three public CORS relays were tried as a way round it and all
+// three were down or paywalled (522, 522, 401). So the Read button hands the
+// title off to MangaDex's own search instead of pretending to open it.
+async function openMangaDetail(item) {
+  const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:MANGA){
+    id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description
+    chapters volumes averageScore status startDate{year}endDate{year}format genres countryOfOrigin siteUrl
+    tags{name}
+    staff(perPage:8,sort:RELEVANCE){edges{role node{name{full}}}}
+    relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes chapters volumes averageScore status seasonYear startDate{year}format genres type countryOfOrigin nextAiringEpisode{episode}}}}
+  }}`;
+  const vars = item.al_id ? {alId:item.al_id} : {malId:item.mal_id};
+  const r = await al(Q, vars);
+  const m = r?.data?.Media;
+  if (!m) { renderSimpleDetail(item, 'manga'); return; }
+
+  const full = {...fromALManga(m), al_id:m.id, mal_id:m.idMal||item.mal_id, siteUrl:m.siteUrl, endYear:m.endDate?.year||null};
+  currentItem = full;
+
+  renderDetailBackdrop(full.banner || full.img, full.title);
+  renderDetailHero(full, 'manga', matchMangaTags(m.tags));
+
+  // No chapter grid to label, so the EPISODES heading stays hidden — same
+  // treatment movies get.
+  renderDetailTagsRow([], false);
+
+  // AniList staff roles are free text ("Story & Art", "Story", "Art",
+  // "Original Creator", "Assistant"). Assistants are dropped: on a long
+  // serial they crowd out the actual author.
+  const creators = (m.staff?.edges||[])
+    .filter(e => !/assistant/i.test(e.role||''))
+    .slice(0,6)
+    .map(e => `${e.node?.name?.full||''}${e.role?` · ${e.role}`:''}`.trim())
+    .filter(Boolean);
+  const publication = [
+    mangaKind(full),
+    full.format === 'ONE_SHOT' ? 'One-shot' : '',
+    full.status,
+    full.year ? (full.endYear && full.endYear !== full.year ? `${full.year}–${full.endYear}` : `${full.year}${full.status==='Ongoing'?'–':''}`) : '',
+    full.volumes ? `${full.volumes} volumes` : '',
+    full.chapters ? `${full.chapters} chapters` : '',
+  ].filter(Boolean);
+  renderCastProduction('manga', creators, publication,
+    full.siteUrl ? [{label:'View on AniList ↗', href:full.siteUrl}] : []);
+
+  document.getElementById('detail-seasons-wrap').style.display = 'none';
+  document.getElementById('eps-grid').innerHTML = '';
+  allSeasons = [];
+  currentSeason = null;
+
+  const readBtn = document.getElementById('detail-play-btn');
+  readBtn.textContent = '📖 Read ↗';
+  readBtn.onclick = () => window.open(
+    `https://mangadex.org/search?q=${encodeURIComponent(full.title)}`,
+    '_blank', 'noopener');
+
+  loadRecommendations(full);
+}
+
 async function openTVDetail(item) {
   const data = await tmdb(`/tv/${item.tmdb_id||item.id}`, {append_to_response:'keywords,credits'});
   if (!data) { renderSimpleDetail(item, 'tv'); return; }
@@ -784,8 +998,8 @@ function renderDetailBackdrop(img, title) {
 }
 
 function renderDetailHero(item, type, extraTags=[]) {
-  const typeClass = {anime:'anime',tv:'tv',movie:'movie'}[type];
-  const typeLabel = {anime:'🎌 Anime',tv:'📺 TV Series',movie:'🎬 Movie'}[type];
+  const typeClass = {anime:'anime',manga:'manga',tv:'tv',movie:'movie'}[type];
+  const typeLabel = {anime:'🎌 Anime',manga:`📖 ${mangaKind(item)}`,tv:'📺 TV Series',movie:'🎬 Movie'}[type];
 
   document.getElementById('detail-poster').innerHTML = `<img src="${item.img||''}" alt="${item.title}" style="width:100%;height:100%;object-fit:cover;"/>`;
 
@@ -794,6 +1008,11 @@ function renderDetailHero(item, type, extraTags=[]) {
     {label: item.year||'', cls:''},
     {label: item.score?`⭐ ${item.score}`:'', cls:'accent'},
     {label: item.episodes?`${item.episodes} eps`:'', cls:''},
+    // Manga-only counts. Anime/TV/movie items never carry these keys, so no
+    // branch is needed — they simply filter out as empty below.
+    {label: item.chapters?`${item.chapters} ch`:'', cls:''},
+    {label: item.volumes?`${item.volumes} vol`:'', cls:''},
+    {label: type==='manga' && item.status ? item.status : '', cls:''},
     // Matched content tags (Miniseries, Isekai, etc.) now sit right next to
     // the episode-count badge in this same row, instead of appearing lower
     // down next to the "EPISODES" section heading.
@@ -885,14 +1104,28 @@ function buildEpGrid(count, seasonNum) {
 }
 
 function renderSimpleDetail(item, type) {
+  // Movies play as a single item and manga does not play at all, so neither
+  // gets an episode grid or the heading above it.
+  const episodic = type === 'anime' || type === 'tv';
   renderDetailBackdrop(item.banner||item.img, item.title);
   renderDetailHero(item, type);
-  renderDetailTagsRow([], type !== 'movie');
+  renderDetailTagsRow([], episodic);
   renderCastProduction(type, [], []);
+  if (type === 'manga') {
+    const readBtn = document.getElementById('detail-play-btn');
+    readBtn.textContent = '📖 Read ↗';
+    readBtn.onclick = () => window.open(
+      `https://mangadex.org/search?q=${encodeURIComponent(item.title)}`,
+      '_blank', 'noopener');
+    document.getElementById('eps-grid').innerHTML = '';
+    allSeasons = [];
+    currentSeason = null;
+    return;
+  }
   allSeasons = [{...item, season_number: type==='movie'?0:1}];
   currentSeason = allSeasons[0];
   totalEps = item.episodes || (type==='movie'?1:20);
-  if (type !== 'movie') buildEpGrid(totalEps, 1);
+  if (episodic) buildEpGrid(totalEps, 1);
 }
 
 // ═══════════════════════════════════════════
@@ -928,6 +1161,37 @@ const TV_MOVIE_TAG_DEFS = [
   {label:'Countryside',   terms:['countryside']},
 ];
 
+// Mirrors the gf-tag picker's data-val list, for the same reason the anime
+// table mirrors af-tag: a pill shown on a title should be a value the filter
+// can actually be set to.
+const MANGA_TAG_DEFS = [
+  {label:'Isekai',        val:'Isekai'},
+  {label:'Shounen',       val:'Shounen'},
+  {label:'Shoujo',        val:'Shoujo'},
+  {label:'Seinen',        val:'Seinen'},
+  {label:'Josei',         val:'Josei'},
+  {label:'Reincarnation', val:'Reincarnation'},
+  {label:'Cultivation',   val:'Cultivation'},
+  {label:'Villainess',    val:'Villainess'},
+  {label:'Martial Arts',  val:'Martial Arts'},
+  {label:'Dungeon',       val:'Dungeon'},
+  {label:'Super Power',   val:'Super Power'},
+  {label:'Revenge',       val:'Revenge'},
+  {label:'Time Skip',     val:'Time Skip'},
+  {label:'Historical',    val:'Historical'},
+  {label:'Female Lead',   val:'Female Protagonist'},
+  {label:'Iyashikei',     val:'Iyashikei'},
+];
+
+function matchMangaTags(aniListTags) {
+  const names = (aniListTags||[]).map(t=>t.name);
+  const out = [];
+  MANGA_TAG_DEFS.forEach(d => { if (names.includes(d.val) && !out.includes(d.label)) out.push(d.label); });
+  // The hero pill row is shared with year/score/chapter/volume/status badges;
+  // past three tags it wraps to a third line and pushes the synopsis down.
+  return out.slice(0,3);
+}
+
 function matchAnimeTags(aniListTags) {
   const names = (aniListTags||[]).map(t=>t.name);
   const out = [];
@@ -958,21 +1222,35 @@ function renderDetailTagsRow(matchedTags, showEpisodesText) {
   row.style.display = showEpisodesText ? 'flex' : 'none';
 }
 
-// Cast & Production is TV/Movie only — AniList has no reliable cast data for anime.
-function renderCastProduction(type, castNames, prodNames) {
+// Hidden for anime — AniList has no reliable cast data for it. TV/Movie fill
+// it with Cast + Production; manga reuses the same two-block layout for its
+// creators and publication run, plus an optional row of outbound links.
+const CASTPROD_LABELS = {
+  manga: {head:'Story & Art',        a:'Story & Art', b:'Publication'},
+  tv:    {head:'Cast & Production',  a:'Cast',        b:'Production'},
+  movie: {head:'Cast & Production',  a:'Cast',        b:'Production'},
+};
+
+function renderCastProduction(type, castNames, prodNames, links=[]) {
   const section = document.getElementById('detail-castprod');
   const body = document.getElementById('detail-castprod-body');
   if (type === 'anime') { section.style.display = 'none'; return; }
   section.style.display = 'block';
-  const castHtml = (castNames||[]).length
-    ? `<div class="dc-chiplist">${castNames.map(n=>`<span>${escapeHtml(n)}</span>`).join('')}</div>`
-    : `<div class="dc-empty">No cast information available.</div>`;
-  const prodHtml = (prodNames||[]).length
-    ? `<div class="dc-chiplist">${prodNames.map(n=>`<span>${escapeHtml(n)}</span>`).join('')}</div>`
-    : `<div class="dc-empty">No production information available.</div>`;
+  const L = CASTPROD_LABELS[type] || CASTPROD_LABELS.tv;
+  const head = document.getElementById('detail-castprod-title');
+  if (head) head.textContent = L.head;
+  const chips = (names, what) => (names||[]).length
+    ? `<div class="dc-chiplist">${names.map(n=>`<span>${escapeHtml(n)}</span>`).join('')}</div>`
+    : `<div class="dc-empty">No ${what} information available.</div>`;
+  const linkHtml = (links||[]).length
+    ? `<div class="dc-block"><div class="dc-block-label">Links</div><div class="dc-chiplist">${
+        links.map(l=>`<a class="dc-link" href="${escapeHtml(l.href)}" target="_blank" rel="noopener">${escapeHtml(l.label)}</a>`).join('')
+      }</div></div>`
+    : '';
   body.innerHTML = `
-    <div class="dc-block"><div class="dc-block-label">Cast</div>${castHtml}</div>
-    <div class="dc-block"><div class="dc-block-label">Production</div>${prodHtml}</div>`;
+    <div class="dc-block"><div class="dc-block-label">${L.a}</div>${chips(castNames, L.a.toLowerCase())}</div>
+    <div class="dc-block"><div class="dc-block-label">${L.b}</div>${chips(prodNames, L.b.toLowerCase())}</div>
+    ${linkHtml}`;
 }
 
 function toggleDcSection() {
@@ -1024,6 +1302,40 @@ async function loadRecommendations(item) {
     renderRecRow(1, '✨ Similar Anime', recList);
     renderRecRow(2, '🎌 More Like This', genreList);
     renderRecRow(3, '🔥 Trending Anime', trendList);
+
+  } else if (type === 'manga') {
+    // Row 1: the anime adaptation, when there is one. This is the one row that
+    // crosses tabs — the Anime tab can actually play what it links to.
+    const Q1 = `query($id:Int){Media(id:$id,type:MANGA){relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres type nextAiringEpisode{episode}}}}}}`;
+    const r1 = await al(Q1, {id: item.al_id});
+    const adaptations = (r1?.data?.Media?.relations?.edges||[])
+      .filter(e => e.node?.type === 'ANIME' && ['ADAPTATION','ALTERNATIVE','SIDE_STORY','SPIN_OFF'].includes(e.relationType))
+      .map(e => ({...fromAL(e.node), al_id:e.node.id, mal_id:e.node.idMal}));
+
+    // Row 2: AniList's own reader recommendations
+    const Q2 = `query($id:Int){Media(id:$id,type:MANGA){recommendations(perPage:12,sort:RATING_DESC){nodes{mediaRecommendation{${MANGA_FIELDS}}}}}}`;
+    const r2 = await al(Q2, {id: item.al_id});
+    const recList = (r2?.data?.Media?.recommendations?.nodes||[])
+      .map(n=>n.mediaRecommendation).filter(n=>n && n.format !== 'NOVEL')
+      .map(fromALManga);
+
+    // Row 3: what everyone else is reading right now
+    const Q3 = `{Page(perPage:12){media(type:MANGA,isAdult:false,format_not_in:[NOVEL],sort:TRENDING_DESC){${MANGA_FIELDS}}}}`;
+    const r3 = await al(Q3);
+    const trendList = (r3?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(fromALManga);
+
+    // Only slots 1 and 3 exist in the markup — renderRecRow silently drops
+    // anything addressed to the removed slot 2. So the three candidate rows are
+    // ranked and the best two that actually have items take the two real slots;
+    // otherwise a title with no anime adaptation would lose "Similar Manga"
+    // as well and show nothing but the generic trending row.
+    const rows = [
+      ['🎌 Anime Adaptation', adaptations],
+      ['✨ Similar Manga',    recList],
+      ['🔥 Trending Manga',   trendList],
+    ].filter(([, list]) => list.length);
+    renderRecRow(1, ...(rows[0] || ['', []]));
+    renderRecRow(3, ...(rows[1] || ['', []]));
 
   } else if (type === 'tv') {
     const id = item.tmdb_id || item.id;
@@ -1482,17 +1794,19 @@ function handleLiveSearch(q, source) {
 }
 
 async function fetchLiveResults(q, dropdownId) {
-  // Fetch anime + TV + movies in parallel, limit to 3 each = 9 max results
-  const [animeData, tvData, movieData] = await Promise.all([
+  // Fetch anime + manga + TV + movies in parallel, limit to 3 each = 12 max results
+  const [animeData, mangaData, tvData, movieData] = await Promise.all([
     al(`query($s:String){Page(perPage:3){media(type:ANIME,search:$s,isAdult:false,sort:SEARCH_MATCH){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`, {s:q}),
+    al(`query($s:String){Page(perPage:3){media(type:MANGA,search:$s,isAdult:false,format_not_in:[NOVEL],sort:SEARCH_MATCH){${MANGA_FIELDS}}}}`, {s:q}),
     tmdb('/search/tv',    {query:q, page:1}),
     tmdb('/search/movie', {query:q, page:1}),
   ]);
 
   const animeList = (animeData?.data?.Page?.media||[]).map(m => ({...fromAL(m), al_id:m.id}));
+  const mangaList = (mangaData?.data?.Page?.media||[]).map(fromALManga);
   const tvList    = (tvData?.results||[]).slice(0,3).map(m => fromTMDB(m,'tv'));
   const movieList = (movieData?.results||[]).slice(0,3).map(m => fromTMDB(m,'movie'));
-  const combined  = [...animeList, ...tvList, ...movieList];
+  const combined  = [...animeList, ...mangaList, ...tvList, ...movieList];
 
   const dropdown = document.getElementById(dropdownId);
   if (!combined.length) {
@@ -1504,15 +1818,15 @@ async function fetchLiveResults(q, dropdownId) {
   combined.forEach(item => {
     const el = document.createElement('div');
     el.className = 'dropdown-item';
-    const typeLabel = item.type==='anime'?'ANIME':item.type==='movie'?'MOVIE':'TV';
     el.innerHTML = `
       <div class="dropdown-thumb"><img src="${item.img||''}" alt="${item.title}" loading="lazy"/></div>
       <div class="dropdown-info">
         <div class="dropdown-title">${item.title}</div>
         <div class="dropdown-sub">
-          <span class="dropdown-type ${item.type}">${typeLabel}</span>
+          <span class="dropdown-type ${item.type}">${typeLabelShort(item)}</span>
           <span>${item.year||''}</span>
           ${item.episodes ? `<span>· ${item.episodes} eps</span>` : ''}
+          ${item.chapters ? `<span>· ${item.chapters} ch</span>` : ''}
           ${item.score ? `<span>· ⭐${item.score}</span>` : ''}
         </div>
       </div>`;
@@ -1614,13 +1928,19 @@ function onTagCheck(groupId) {
 // clearing 5-6 pickers at once) collapses into a single fetch instead of
 // firing one request per checkbox.
 let autoApplyTimer = null;
+// Picker-id prefix → the page whose filter it drives. 'mf' was already taken
+// by Movies when Manga arrived, hence 'gf' (manGa filter) rather than the
+// obvious initial.
+const FILTER_PREFIX_PAGE = {af:'anime', gf:'manga', tf:'tv', mf:'movies'};
+
 function scheduleAutoApply(groupId) {
-  const prefix = groupId.slice(0, 2); // 'af' | 'tf' | 'mf'
+  const page = FILTER_PREFIX_PAGE[groupId.slice(0, 2)];
   clearTimeout(autoApplyTimer);
   autoApplyTimer = setTimeout(() => {
-    if (prefix === 'af') applyAnimeFilter(1);
-    else if (prefix === 'tf') applyTVFilter(1);
-    else if (prefix === 'mf') applyMovieFilter(1);
+    if (page === 'anime')       applyAnimeFilter(1);
+    else if (page === 'manga')  applyMangaFilter(1);
+    else if (page === 'tv')     applyTVFilter(1);
+    else if (page === 'movies') applyMovieFilter(1);
   }, 250);
 }
 
@@ -1694,7 +2014,8 @@ function getMinRatingVal(groupId) {
 }
 
 function resetPageFilter(page) {
-  const prefix = page==='anime'?'af':page==='tv'?'tf':'mf';
+  const prefix = {anime:'af', manga:'gf', tv:'tf', movies:'mf'}[page];
+  if (!prefix) return;
   ['genre','year','rating','country','status','tag'].forEach(g => {
     const el = document.getElementById(`${prefix}-${g}`);
     if (el) clearTagPicker(`${prefix}-${g}`);
@@ -1760,6 +2081,60 @@ async function applyAnimeFilter(page=1) {
 
   animePageState = {sub:'filter', page, hasMore};
   document.getElementById('anime-more').style.display = hasMore ? 'block' : 'none';
+  if (hasMore) attachInfiniteScroll();
+}
+
+// ── MANGA FILTER ──
+// Same shape as the anime filter (AniList takes both), plus a country picker,
+// since manhwa/manhua are MANGA records that differ only by countryOfOrigin.
+let mangaFilterVars = null;
+let mangaFilterQ = null;
+
+async function applyMangaFilter(page=1) {
+  if (page === 1) {
+    document.getElementById('manga-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
+    document.getElementById('manga-more').style.display = 'none';
+
+    const genres   = getTagVals('gf-genre');    // multi-select — OR'd via genre_in
+    const tags     = getTagVals('gf-tag');      // multi-select — AniList tag names, OR'd via tag_in
+    const countries = getTagVals('gf-country'); // see note below
+    const minScore = getMinRatingVal('gf-rating');
+    const statuses = getTagVals('gf-status');   // multi-select — OR'd via status_in
+    const yr       = getYearEnvelope('gf-year');
+    const yGte = yr.gte ? parseInt(yr.gte.slice(0,4))*10000 : undefined;
+    const yLte = yr.lte ? parseInt(yr.lte.slice(0,4))*10000+1231 : undefined;
+
+    mangaFilterQ = `query($page:Int,$genres:[String],$tags:[String],$sort:[MediaSort],$yGte:FuzzyDateInt,$yLte:FuzzyDateInt,$minScore:Int,$statuses:[MediaStatus],$country:CountryCode){
+      Page(page:$page,perPage:24){
+        pageInfo{hasNextPage}
+        media(type:MANGA,isAdult:false,genre_in:$genres,tag_in:$tags,sort:$sort,startDate_greater:$yGte,startDate_lesser:$yLte,averageScore_greater:$minScore,status_in:$statuses,countryOfOrigin:$country,format_not_in:[NOVEL]){
+          ${MANGA_FIELDS}
+        }
+      }
+    }`;
+    mangaFilterVars = {
+      genres: genres.length ? genres : undefined,
+      tags:   tags.length   ? tags   : undefined,
+      sort:   ['SCORE_DESC'],
+      yGte, yLte, minScore,
+      statuses: statuses.length ? statuses : undefined,
+      // AniList's countryOfOrigin takes ONE CountryCode, not a list — there is
+      // no countryOfOrigin_in. Ticking several origins therefore falls back to
+      // no country constraint (i.e. all of them) rather than silently honouring
+      // only the first box the user checked.
+      country: countries.length === 1 ? countries[0] : undefined,
+    };
+  }
+
+  const data = await al(mangaFilterQ, {...mangaFilterVars, page});
+  const list = (data?.data?.Page?.media||[]).map(fromALManga);
+  const hasMore = data?.data?.Page?.pageInfo?.hasNextPage || false;
+
+  if (page === 1) renderGrid('manga-grid', list);
+  else list.forEach(m => document.getElementById('manga-grid').appendChild(buildGridCard(m)));
+
+  mangaPageState = {sub:'filter', page, hasMore};
+  document.getElementById('manga-more').style.display = hasMore ? 'block' : 'none';
   if (hasMore) attachInfiniteScroll();
 }
 
@@ -1912,13 +2287,14 @@ const infiniteObserver = new IntersectionObserver((entries) => {
     if (!entry.isIntersecting) return;
     const page = entry.target.dataset.page;
     if (page === 'anime'  && animePageState.hasMore)  loadMoreAnime();
+    if (page === 'manga'  && mangaPageState.hasMore)  loadMoreManga();
     if (page === 'tv'     && tvPageState.hasMore)     loadMoreTV();
     if (page === 'movies' && moviePageState.hasMore)  loadMoreMovies();
   });
 }, { rootMargin: '200px' });
 
 function attachInfiniteScroll() {
-  ['anime','tv','movies'].forEach(page => {
+  ['anime','manga','tv','movies'].forEach(page => {
     const sentinel = document.getElementById(`${page}-sentinel`);
     if (sentinel) infiniteObserver.observe(sentinel);
   });
@@ -2038,6 +2414,10 @@ async function initFromHash() {
       const Q=`query($id:Int){Media(id:$id,type:ANIME){id idMal title{english romaji}coverImage{large}bannerImage episodes averageScore status seasonYear format description}}`;
       const r=await al(Q,{id:parseInt(id)});
       if(r?.data?.Media){const m=r.data.Media;return{...fromAL(m),al_id:m.id,mal_id:m.idMal};}
+    } else if (type==='manga') {
+      const Q=`query($id:Int){Media(id:$id,type:MANGA){${MANGA_FIELDS} description}}`;
+      const r=await al(Q,{id:parseInt(id)});
+      if(r?.data?.Media)return fromALManga(r.data.Media);
     } else if (type==='tv') {
       const d=await tmdb(`/tv/${id}`); if(d)return fromTMDB(d,'tv');
     } else if (type==='movie') {
@@ -2047,7 +2427,7 @@ async function initFromHash() {
   }
 
   // Detail page
-  const detailM = hash.match(/^detail-(anime|tv|movie)-(\d+)$/);
+  const detailM = hash.match(/^detail-(anime|manga|tv|movie)-(\d+)$/);
   if (detailM) {
     showPage('detail-page');
     loadHome();
@@ -2082,12 +2462,11 @@ async function initFromHash() {
 
   // Tab pages
   // Old anime/tv/movies hashes now open home with that category selected
-  if (hash === 'anime' || hash === 'tv' || hash === 'movies') {
-    const idx = {anime:0, tv:1, movies:2}[hash];
+  if (hash in SEG_INDEX) {
     history.replaceState({page:'home-page'},'','#home');
     showPage('home-page'); setNav('home');
     loadHome();
-    streamSeg(hash, document.querySelectorAll('#stream-seg .seg-btn')[idx]);
+    streamSeg(hash, document.querySelectorAll('#stream-seg .seg-btn')[SEG_INDEX[hash]]);
     return;
   }
 
@@ -2104,9 +2483,8 @@ async function initFromHash() {
   loadHome();
   // Restore whichever segment (Anime/TV/Movies) the user last had open, so a refresh doesn't bounce back to Anime
   const savedSeg = localStorage.getItem('lastStreamSeg');
-  if (savedSeg && savedSeg !== 'anime') {
-    const idx = {anime:0, tv:1, movies:2}[savedSeg];
-    const btn = document.querySelectorAll('#stream-seg .seg-btn')[idx];
+  if (savedSeg && savedSeg !== 'anime' && savedSeg in SEG_INDEX) {
+    const btn = document.querySelectorAll('#stream-seg .seg-btn')[SEG_INDEX[savedSeg]];
     if (btn) streamSeg(savedSeg, btn);
   }
 }

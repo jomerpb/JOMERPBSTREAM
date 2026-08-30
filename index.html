@@ -33,11 +33,11 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260818c"/>
+  <link rel="stylesheet" href="styles.css?v=20260830a"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260714a"></script>
+  <script defer src="stream.js?v=20260830a"></script>
   <script defer src="oracle.js?v=20260819a"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -50,7 +50,7 @@
     <div class="topbar-logo" onclick="goHome()">JOMERPB <span>- STREAM</span></div>
     <div class="topbar-search" style="position:relative;">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="text" id="home-search-input" placeholder="Anime, movies, TV series..."
+      <input type="text" id="home-search-input" placeholder="Anime, manga, movies, TV..."
         oninput="handleLiveSearch(this.value,'home')"
         onkeydown="if(event.key==='Enter'){closeDropdown();doSearch(this.value)}"
         onfocus="if(this.value.trim().length>=2)openDropdown('home')"
@@ -74,6 +74,7 @@
   <div class="seg-toggle" id="stream-seg">
     <div class="seg-slide" id="stream-seg-slide"></div>
     <div class="seg-btn active" onclick="streamSeg('anime',this)">Anime</div>
+    <div class="seg-btn" onclick="streamSeg('manga',this)">Manga</div>
     <div class="seg-btn" onclick="streamSeg('tv',this)">TV Series</div>
     <div class="seg-btn" onclick="streamSeg('movies',this)">Movies</div>
   </div>
@@ -200,6 +201,161 @@
     </div>
     <div class="results-grid" id="anime-grid"></div>
     <div id="anime-more" style="display:none;"><div id="anime-sentinel" data-page="anime" style="height:1px;"></div><div class="loader-more"><div class="spinner-sm"></div></div></div>
+  </div>
+  </div>
+  <!-- Manga Section -->
+  <!-- Filter ids are prefixed gf- ("manGa filter"): af-/tf-/mf- were already
+       taken by Anime/TV/Movies, and scheduleAutoApply() dispatches purely on
+       the first two characters of the picker id. -->
+  <div class="row-section" id="sec-manga" style="display:none;">
+    <div class="row-header"><div class="row-title">📖 Trending Manga</div></div>
+  <div style="padding:0;">
+    <div class="content-tabs" id="manga-tabs">
+      <div class="ctab" onclick="togglePageFilter('manga-filter')">⚙ Filter</div>
+      <div class="ctab active" onclick="loadMangaSub('trending',this)">Trending</div>
+      <div class="ctab" onclick="loadMangaSub('popular',this)">Popular</div>
+      <div class="ctab" onclick="loadMangaSub('toprated',this)">Top Rated</div>
+      <div class="ctab" onclick="loadMangaSub('releasing',this)">Ongoing</div>
+      <div class="ctab" onclick="loadMangaSub('manhwa',this)">🇰🇷 Manhwa</div>
+      <div class="ctab" onclick="loadMangaSub('manhua',this)">🇨🇳 Manhua</div>
+      <div class="ctab" onclick="loadMangaSub('oneshot',this)">One-shot</div>
+      <div class="ctab" onclick="loadMangaSub('action',this)">Action</div>
+      <div class="ctab" onclick="loadMangaSub('romance',this)">Romance</div>
+      <div class="ctab" onclick="loadMangaSub('fantasy',this)">Fantasy</div>
+      <div class="ctab" onclick="loadMangaSub('isekai',this)">Isekai</div>
+    </div>
+    <!-- Manga Filter Panel -->
+    <div id="manga-filter" class="filter-panel" style="display:none;">
+      <div class="filter-row">
+      <div class="filter-section">
+        <div class="filter-label">Genre</div>
+        <div class="tag-picker" id="gf-genre" data-noun="Genre">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('gf-genre')"><span id="gf-genre-label">All Genres</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="Action" onchange="onTagCheck('gf-genre')">Action</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Adventure" onchange="onTagCheck('gf-genre')">Adventure</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Comedy" onchange="onTagCheck('gf-genre')">Comedy</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Drama" onchange="onTagCheck('gf-genre')">Drama</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Fantasy" onchange="onTagCheck('gf-genre')">Fantasy</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Horror" onchange="onTagCheck('gf-genre')">Horror</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Mystery" onchange="onTagCheck('gf-genre')">Mystery</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Romance" onchange="onTagCheck('gf-genre')">Romance</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Sci-Fi" onchange="onTagCheck('gf-genre')">Sci-Fi</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Slice of Life" onchange="onTagCheck('gf-genre')">Slice of Life</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Supernatural" onchange="onTagCheck('gf-genre')">Supernatural</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Psychological" onchange="onTagCheck('gf-genre')">Psychological</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Thriller" onchange="onTagCheck('gf-genre')">Thriller</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Sports" onchange="onTagCheck('gf-genre')">Sports</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Mecha" onchange="onTagCheck('gf-genre')">Mecha</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Ecchi" onchange="onTagCheck('gf-genre')">Ecchi</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('gf-genre')">Clear</button><button type="button" onclick="toggleTagPicker('gf-genre')">Done</button></div>
+          </div>
+        </div>
+        <div class="filter-selected-row" id="gf-genre-selected" style="display:none;"></div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Tag</div>
+        <div class="tag-picker" id="gf-tag">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('gf-tag')"><span id="gf-tag-label">All Tags</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="Isekai" onchange="onTagCheck('gf-tag')">Isekai</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Shounen" onchange="onTagCheck('gf-tag')">Shounen</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Shoujo" onchange="onTagCheck('gf-tag')">Shoujo</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Seinen" onchange="onTagCheck('gf-tag')">Seinen</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Josei" onchange="onTagCheck('gf-tag')">Josei</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Reincarnation" onchange="onTagCheck('gf-tag')">Reincarnation</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Cultivation" onchange="onTagCheck('gf-tag')">Cultivation</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Villainess" onchange="onTagCheck('gf-tag')">Villainess</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Martial Arts" onchange="onTagCheck('gf-tag')">Martial Arts</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Dungeon" onchange="onTagCheck('gf-tag')">Dungeon</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Super Power" onchange="onTagCheck('gf-tag')">Super Power</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Revenge" onchange="onTagCheck('gf-tag')">Revenge</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Time Skip" onchange="onTagCheck('gf-tag')">Time Skip</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Historical" onchange="onTagCheck('gf-tag')">Historical</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Female Protagonist" onchange="onTagCheck('gf-tag')">Female Lead</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="Iyashikei" onchange="onTagCheck('gf-tag')">Iyashikei</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('gf-tag')">Clear</button><button type="button" onclick="toggleTagPicker('gf-tag')">Done</button></div>
+          </div>
+        </div>
+        <div class="filter-selected-row" id="gf-tag-selected" style="display:none;"></div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Origin</div>
+        <div class="tag-picker" id="gf-country" data-noun="Country">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('gf-country')"><span id="gf-country-label">All Countries</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="JP" onchange="onTagCheck('gf-country')">🇯🇵 Manga</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="KR" onchange="onTagCheck('gf-country')">🇰🇷 Manhwa</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="CN" onchange="onTagCheck('gf-country')">🇨🇳 Manhua</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="TW" onchange="onTagCheck('gf-country')">🇹🇼 Taiwan</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('gf-country')">Clear</button><button type="button" onclick="toggleTagPicker('gf-country')">Done</button></div>
+          </div>
+        </div>
+        <div class="filter-selected-row" id="gf-country-selected" style="display:none;"></div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Year / Era</div>
+        <div class="tag-picker" id="gf-year" data-noun="Year">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('gf-year')"><span id="gf-year-label">All Years</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="2026" onchange="onTagCheck('gf-year')">2026</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2025" onchange="onTagCheck('gf-year')">2025</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2024" onchange="onTagCheck('gf-year')">2024</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2020s" onchange="onTagCheck('gf-year')">2020s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2010s" onchange="onTagCheck('gf-year')">2010s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="2000s" onchange="onTagCheck('gf-year')">2000s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="1990s" onchange="onTagCheck('gf-year')">1990s</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="1980s" onchange="onTagCheck('gf-year')">1980s</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('gf-year')">Clear</button><button type="button" onclick="toggleTagPicker('gf-year')">Done</button></div>
+          </div>
+        </div>
+        <div class="filter-selected-row" id="gf-year-selected" style="display:none;"></div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Min Rating</div>
+        <div class="tag-picker" id="gf-rating" data-noun="Rating">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('gf-rating')"><span id="gf-rating-label">Any Rating</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="90" onchange="onTagCheck('gf-rating')">9+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="80" onchange="onTagCheck('gf-rating')">8+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="70" onchange="onTagCheck('gf-rating')">7+</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="60" onchange="onTagCheck('gf-rating')">6+</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('gf-rating')">Clear</button><button type="button" onclick="toggleTagPicker('gf-rating')">Done</button></div>
+          </div>
+        </div>
+        <div class="filter-selected-row" id="gf-rating-selected" style="display:none;"></div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Status</div>
+        <div class="tag-picker" id="gf-status" data-noun="Status">
+          <div class="tag-picker-trigger" onclick="toggleTagPicker('gf-status')"><span id="gf-status-label">All Statuses</span><span class="tpt-caret">▾</span></div>
+          <div class="tag-picker-panel">
+            <div class="tag-picker-grid">
+              <label class="tag-picker-option"><input type="checkbox" data-val="RELEASING" onchange="onTagCheck('gf-status')">Ongoing</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="FINISHED" onchange="onTagCheck('gf-status')">Completed</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="HIATUS" onchange="onTagCheck('gf-status')">On Hiatus</label>
+              <label class="tag-picker-option"><input type="checkbox" data-val="NOT_YET_RELEASED" onchange="onTagCheck('gf-status')">Upcoming</label>
+            </div>
+            <div class="tag-picker-footer"><button type="button" onclick="clearTagPicker('gf-status')">Clear</button><button type="button" onclick="toggleTagPicker('gf-status')">Done</button></div>
+          </div>
+        </div>
+        <div class="filter-selected-row" id="gf-status-selected" style="display:none;"></div>
+      </div>
+      </div>
+      <button class="filter-clear-btn" onclick="resetPageFilter('manga')">Clear</button>
+    </div>
+    <div class="results-grid" id="manga-grid"></div>
+    <div id="manga-more" style="display:none;"><div id="manga-sentinel" data-page="manga" style="height:1px;"></div><div class="loader-more"><div class="spinner-sm"></div></div></div>
   </div>
   </div>
   <!-- TV Section -->
@@ -517,6 +673,7 @@
     <div class="content-tabs" id="search-type-tabs" style="padding:0;margin-bottom:12px;">
       <div class="ctab active" onclick="setSearchType('all',this)">All</div>
       <div class="ctab" onclick="setSearchType('anime',this)">🎌 Anime</div>
+      <div class="ctab" onclick="setSearchType('manga',this)">📖 Manga</div>
       <div class="ctab" onclick="setSearchType('tv',this)">📺 TV</div>
       <div class="ctab" onclick="setSearchType('movie',this)">🎬 Movies</div>
     </div>
@@ -550,7 +707,7 @@
     </div>
     <div class="dc-section" id="detail-castprod" style="display:none;">
       <div class="dc-head" onclick="toggleDcSection()">
-        <span>Cast &amp; Production</span><span class="dc-chev collapsed" id="detail-castprod-chev">▾</span>
+        <span id="detail-castprod-title">Cast &amp; Production</span><span class="dc-chev collapsed" id="detail-castprod-chev">▾</span>
       </div>
       <div class="dc-body collapsed" id="detail-castprod-body"></div>
     </div>
