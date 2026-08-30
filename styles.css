@@ -236,17 +236,21 @@
     .detail-synopsis{font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
     .detail-synopsis.expanded{-webkit-line-clamp:unset;overflow:visible;}
     .synopsis-toggle{display:none;font-size:11px;font-weight:700;color:var(--accent2);cursor:pointer;margin-bottom:14px;-webkit-tap-highlight-color:transparent;}
-    /* Tags this specific title matches (e.g. Isekai, Miniseries), shown
-       next to the EPISODES section label on the detail page. */
+    /* EPISODES header row: the section label on the left, then SUB/DUB and the
+       collapse chevron on the right. SUB/DUB used to sit beside the Watch
+       button (and a second copy lived in the player bar); it is one control
+       now, and it belongs to the thing it changes. */
     .eps-label-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 10px;margin-bottom:8px;}
     .eps-label-row .sec-label{margin-bottom:0;}
-    .detail-tags-row{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;}
-    .detail-tags-row .dpill{font-size:9px;}
+    .eps-head-right{display:flex;align-items:center;gap:10px;}
     .cta-row{display:flex;gap:8px;margin-bottom:18px;}
     .btn-play{flex:1;background:var(--accent);color:#fff;border:none;padding:11px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;}
     .lang-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
-    .ltbtn{background:none;border:none;color:var(--muted);padding:11px 13px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px;}
+    /* Compact now that it rides in a section header rather than a CTA row. */
+    .ltbtn{background:none;border:none;color:var(--muted);padding:6px 12px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;}
     .ltbtn.active{background:var(--accent2);color:#fff;}
+    /* Any header that collapses the block under it. */
+    .sec-toggle{cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
 
     /* CAST & PRODUCTION (TV/Movie only) — same collapse pattern as the
        Trade tab's card sections (chevron rotates, body display:none). */
@@ -273,48 +277,37 @@
     .seasons-scroll::-webkit-scrollbar{display:none;}
     .spill{flex-shrink:0;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;}
     .spill.active{background:var(--accent);border-color:var(--accent);color:#fff;}
-    .eps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;max-height:220px;overflow-y:auto;padding-right:2px;}
+    .eps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;max-height:220px;overflow-y:auto;padding-right:2px;margin-bottom:16px;}
+    .eps-grid.collapsed{display:none;}
     .eps-grid::-webkit-scrollbar{width:3px;}
     .eps-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
     .ep-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:9px 3px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;text-align:center;transition:all 0.15s;}
     .ep-btn:hover,.ep-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+    /* SIMILAR — the sentinel and the end message live inside this body on
+       purpose: collapsed, they are display:none, so the infinite-scroll
+       observer cannot page titles in behind a shut section. */
+    #detail-similar-body.collapsed{display:none;}
 
-    /* PLAYER */
-    .player-top{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg);}
-    .player-top-info{flex:1;min-width:0;}
-    .player-top-info h3{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .player-top-info p{font-size:10px;color:var(--muted);margin-top:1px;}
+    /* PLAYER — a section of the detail page, between the season pills and the
+       episode grid. It used to be a fixed full-screen #player-page with its own
+       back/home bar and its own Similar grid; that page is gone, so those
+       styles went with it, along with .player-bar/.lang-row/.lbtn (the second
+       SUB/DUB toggle, now one control in the EPISODES header) and .player-top.
+       What is left is a card that sits in .detail-body's normal 14px gutter,
+       like the Cast & Production card above it. */
+    .player-sticky-wrap{background:var(--bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
     .player-frame{width:100%;padding-top:56.25%;position:relative;background:#000;}
     .player-frame iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none;display:block;}
-    .player-sticky-wrap{background:var(--bg);}
 
-    /* PLAYER PAGE — fixed layout (2026-07-13): back/home buttons + video +
-       server dropdown + prev/next nav never move. #similar-movies-section
-       is the ONLY scrollable region on this page. */
-    #player-page.active{
-      display:flex;flex-direction:column;
-      position:fixed;top:0;left:0;right:0;bottom:0;
-      min-height:0;
-      height:100vh;height:100dvh;
-    }
-    #player-page .player-top,
-    #player-page .player-sticky-wrap{flex:0 0 auto;}
-    #player-page #similar-movies-section{
-      flex:1 1 auto;min-height:0;
-      overflow-y:auto;-webkit-overflow-scrolling:touch;
-      overscroll-behavior:contain;
-    }
-    .player-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);}
-    .server-label{font-size:10px;color:var(--muted);}
-    .server-label b{color:var(--accent2);}
+    /* Shown until something is actually played. Nothing has been requested from
+       a provider at this point — the iframe src is empty — so browsing detail
+       pages costs no third-party load and cannot autoplay. */
+    .player-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#000;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+    .player-placeholder img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.4;}
+    .player-placeholder-btn{position:relative;width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;padding-left:3px;box-shadow:0 4px 16px rgba(0,0,0,0.5);}
+    .player-placeholder-lbl{position:relative;font-size:11px;font-weight:700;letter-spacing:1px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8);}
     .server-btns{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
-    .srv-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:5px 14px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.5px;transition:all 0.15s;white-space:nowrap;}
-    .srv-btn.active{background:var(--accent2);border-color:var(--accent2);color:#fff;}
-    .srv-btn:hover:not(.active){border-color:var(--accent2);color:var(--accent2);}
-    .lang-row{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
-    .lbtn{background:none;border:none;color:var(--muted);padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px;}
-    .lbtn.active{background:var(--accent2);color:#fff;}
-    .ep-nav-row{display:flex;gap:10px;padding:0 14px 14px;align-items:center;justify-content:space-between;}
+    .ep-nav-row{display:flex;gap:10px;padding:12px 14px 14px;align-items:center;justify-content:space-between;}
     .ep-nav-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:9px 18px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;}
     .ep-nav-btn:disabled{opacity:0.3;cursor:not-allowed;}
     .ep-nav-ind{font-size:11px;color:var(--muted);text-align:center;}
