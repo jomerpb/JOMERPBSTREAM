@@ -828,58 +828,94 @@ async function loadMoreMovies() {
 // SEARCH
 // ═══════════════════════════════════════════
 let searchType = 'all';
+
+// Bumped by every new search and every filter change. A fetch whose id no
+// longer matches has been superseded and must not render: AniList and TMDB
+// answer at different speeds, so tapping Anime then Movies quickly could
+// otherwise land Anime's results last, underneath a lit Movies chip.
+let searchRunId = 0;
+
 function setSearchType(type, el) {
   searchType = type;
   document.querySelectorAll('#search-type-tabs .ctab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
+  // Re-run the current query under the new filter. This is the whole point of
+  // the chips and it was missing: the chip lit up and the grid underneath
+  // stayed exactly as it was — measured, all four chips left an identical
+  // 34-card mixed grid, while `searchType` said 'movie' and the rendered
+  // `searchState.type` still said 'all'.
+  if (searchState.q) runSearch(searchState.q);
 }
 
 async function doSearch(q) {
   if (!q?.trim()) return;
   navigateTo('search-page');
   setNav('search');
-  searchState = {q: q.trim(), type: searchType, page:1, hasMore:false};
+  await runSearch(q.trim());
+}
+
+// The fetch-and-render half of doSearch, without the navigation. Split out so
+// that changing the type filter re-queries in place instead of pushing a
+// history entry per chip tap.
+async function runSearch(q) {
+  const runId = ++searchRunId;
+  searchState = {q, type: searchType, page:1, hasMore:false};
   document.getElementById('search-label').textContent = `Results for "${q}"`;
   document.getElementById('search-label').style.display = 'block';
   document.getElementById('search-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
   document.getElementById('search-more').style.display = 'none';
 
-  const items = await fetchSearch(q.trim(), searchType, 1);
+  const {items, more} = await fetchSearch(q, searchState.type, 1);
+  if (runId !== searchRunId) return;   // a newer search started while this ran
   renderGrid('search-grid', items);
-  searchState.hasMore = items.length >= 20;
-  document.getElementById('search-more').style.display = searchState.hasMore ? 'block' : 'none';
+  searchState.hasMore = more;
+  document.getElementById('search-more').style.display = more ? 'block' : 'none';
 }
 
+// Returns {items, more}. `more` is asked of each source it actually queried —
+// AniList's own pageInfo.hasNextPage, TMDB's total_pages — rather than guessed
+// from the result count. The count can't answer it: this used to offer Load
+// More on `items.length >= 20`, and AniList is asked for 12 per page, so an
+// anime- or manga-only search could never reach the threshold and had no way
+// to page past its first 12. That went unnoticed while the type chips did not
+// filter at all, because the single-type branches were never reached.
 async function fetchSearch(q, type, page) {
-  let results = [];
+  let items = [];
+  let more = false;
 
   if (type === 'all' || type === 'anime') {
-    const Q = `query($s:String,$page:Int){Page(page:$page,perPage:12){media(type:ANIME,search:$s,isAdult:false,sort:SEARCH_MATCH){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`;
+    const Q = `query($s:String,$page:Int){Page(page:$page,perPage:12){pageInfo{hasNextPage}media(type:ANIME,search:$s,isAdult:false,sort:SEARCH_MATCH){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`;
     const d = await al(Q, {s:q, page});
-    results = results.concat((d?.data?.Page?.media||[]).map(fromAL));
+    items = items.concat((d?.data?.Page?.media||[]).map(fromAL));
+    if (d?.data?.Page?.pageInfo?.hasNextPage) more = true;
   }
   if (type === 'all' || type === 'manga') {
-    const Q = `query($s:String,$page:Int){Page(page:$page,perPage:12){media(type:MANGA,search:$s,isAdult:false,format_not_in:[NOVEL],sort:SEARCH_MATCH){${MANGA_FIELDS}}}}`;
+    const Q = `query($s:String,$page:Int){Page(page:$page,perPage:12){pageInfo{hasNextPage}media(type:MANGA,search:$s,isAdult:false,format_not_in:[NOVEL],sort:SEARCH_MATCH){${MANGA_FIELDS}}}}`;
     const d = await al(Q, {s:q, page});
-    results = results.concat((d?.data?.Page?.media||[]).map(fromALManga));
+    items = items.concat((d?.data?.Page?.media||[]).map(fromALManga));
+    if (d?.data?.Page?.pageInfo?.hasNextPage) more = true;
   }
   if (type === 'all' || type === 'tv') {
     const d = await tmdb('/search/tv', {query:q, page});
-    results = results.concat((d?.results||[]).map(m=>fromTMDB(m,'tv')));
+    items = items.concat((d?.results||[]).map(m=>fromTMDB(m,'tv')));
+    if (page < (d?.total_pages||1)) more = true;
   }
   if (type === 'all' || type === 'movie') {
     const d = await tmdb('/search/movie', {query:q, page});
-    results = results.concat((d?.results||[]).map(m=>fromTMDB(m,'movie')));
+    items = items.concat((d?.results||[]).map(m=>fromTMDB(m,'movie')));
+    if (page < (d?.total_pages||1)) more = true;
   }
-  return results;
+  return {items, more};
 }
 
 async function loadMoreSearch() {
+  const runId = searchRunId;
   searchState.page++;
-  const items = await fetchSearch(searchState.q, searchState.type, searchState.page);
+  const {items, more} = await fetchSearch(searchState.q, searchState.type, searchState.page);
+  if (runId !== searchRunId) return;   // the filter changed while this ran
   renderGrid('search-grid', items, true);
-  searchState.hasMore = items.length >= 20;
-  document.getElementById('search-more').style.display = searchState.hasMore ? 'block' : 'none';
+  searchState.hasMore = more;
+  document.getElementById('search-more').style.display = more ? 'block' : 'none';
 }
 
 // ═══════════════════════════════════════════
