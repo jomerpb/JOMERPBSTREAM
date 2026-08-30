@@ -877,24 +877,64 @@ async function openAnimeDetail(item) {
 // Hence the two trims below. Each is skipped when it would leave nothing useful.
 // The separator has to require whitespace AFTER the colon so that a name with an
 // internal colon ("Re:Zero") is not truncated to "Re".
-const MANGAFREAK_SEARCH = 'https://ww3.mangafreak.me/Find/';
+// Where a manga can be read. MangaFreak is the primary — it is what the Read
+// button opens. Orchisasia is offered only as a link chip further down the
+// page, never as the default: it is an 18+ BL/yaoi catalogue, and this tab
+// queries AniList with isAdult:false, so the two catalogues barely overlap —
+// measured 5/20 of the Manhwa sub-tab and 0/20 of Trending. Marked adult:true
+// so the chip can be styled and labelled as such rather than looking like an
+// ordinary source.
+const MANGA_SOURCES = {
+  mangafreak: {
+    label: 'MangaFreak ↗',
+    url: q => 'https://ww3.mangafreak.me/Find/' + encodeURIComponent(q),
+  },
+  orchisasia: {
+    label: 'Orchisasia 18+ ↗',
+    adult: true,
+    url: q => 'https://www.orchisasia.org/?post_type=wp-manga&s=' + encodeURIComponent(q),
+  },
+};
 
-function mangafreakQuery(title) {
+// Shared by both sources. The two trims exist for MangaFreak, whose matcher
+// needs every word of the query to appear in the title it indexed and whose
+// index drops leading articles. On Orchisasia (a WordPress ?s= search, which is
+// far more forgiving) they are a no-op — measured identical hit counts on 7
+// titles either way — so one normaliser serves both rather than two that could
+// drift apart.
+function mangaSearchQuery(title) {
   const tidy = t => String(t || '').trim().replace(/\s+/g, ' ');
   let q = tidy(title);
   const noArticle = tidy(q.replace(/^(?:the|a|an)\s+/i, ''));
   if (noArticle.length >= 2) q = noArticle;
   const noSubtitle = tidy(q.split(/\s*[:–—]\s+|\s+-\s+/)[0]);
   if (noSubtitle.length >= 2) q = noSubtitle;
-  // MangaFreak's own search box lowercases before navigating; the server is
-  // case-insensitive either way, but this keeps the URL identical to the one
-  // the site would have produced itself.
+  // MangaFreak's own search box lowercases before navigating; both servers are
+  // case-insensitive, but this keeps the URL identical to the one the site
+  // would have produced itself.
   return q.toLowerCase();
 }
 
+function mangaSourceUrl(key, item) {
+  return MANGA_SOURCES[key].url(mangaSearchQuery(item?.title));
+}
+
 function openMangaReader(item) {
-  window.open(MANGAFREAK_SEARCH + encodeURIComponent(mangafreakQuery(item.title)),
-              '_blank', 'noopener');
+  window.open(mangaSourceUrl('mangafreak', item), '_blank', 'noopener');
+}
+
+// Outbound links for the detail page's collapsible block: AniList for the
+// record itself, then every alternate reading source. MangaFreak is omitted —
+// the Read button above is already that link.
+function mangaDetailLinks(item) {
+  const links = [];
+  if (item?.siteUrl) links.push({label:'View on AniList ↗', href:item.siteUrl});
+  links.push({
+    label: MANGA_SOURCES.orchisasia.label,
+    href:  mangaSourceUrl('orchisasia', item),
+    adult: true,
+  });
+  return links;
 }
 
 async function openMangaDetail(item) {
@@ -936,8 +976,7 @@ async function openMangaDetail(item) {
     full.volumes ? `${full.volumes} volumes` : '',
     full.chapters ? `${full.chapters} chapters` : '',
   ].filter(Boolean);
-  renderCastProduction('manga', creators, publication,
-    full.siteUrl ? [{label:'View on AniList ↗', href:full.siteUrl}] : []);
+  renderCastProduction('manga', creators, publication, mangaDetailLinks(full));
 
   document.getElementById('detail-seasons-wrap').style.display = 'none';
   document.getElementById('eps-grid').innerHTML = '';
@@ -1138,7 +1177,7 @@ function renderSimpleDetail(item, type) {
   renderDetailBackdrop(item.banner||item.img, item.title);
   renderDetailHero(item, type);
   renderDetailTagsRow([], episodic);
-  renderCastProduction(type, [], []);
+  renderCastProduction(type, [], [], type === 'manga' ? mangaDetailLinks(item) : []);
   if (type === 'manga') {
     const readBtn = document.getElementById('detail-play-btn');
     readBtn.textContent = '📖 Read ↗';
@@ -1270,7 +1309,7 @@ function renderCastProduction(type, castNames, prodNames, links=[]) {
     : `<div class="dc-empty">No ${what} information available.</div>`;
   const linkHtml = (links||[]).length
     ? `<div class="dc-block"><div class="dc-block-label">Links</div><div class="dc-chiplist">${
-        links.map(l=>`<a class="dc-link" href="${escapeHtml(l.href)}" target="_blank" rel="noopener">${escapeHtml(l.label)}</a>`).join('')
+        links.map(l=>`<a class="dc-link${l.adult?' adult':''}" href="${escapeHtml(l.href)}" target="_blank" rel="noopener nofollow">${escapeHtml(l.label)}</a>`).join('')
       }</div></div>`
     : '';
   body.innerHTML = `
