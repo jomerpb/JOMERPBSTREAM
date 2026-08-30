@@ -188,7 +188,17 @@ All workflows in `.github/workflows/` are `workflow_dispatch` (manual) only — 
 1. `pcso-history-append.yml` (`0 15 * * *` UTC = 23:00 Asia/Manila, after that day's 9PM draws are posted) — appends the day's results to `pcso-history.json`.
 2. `oracle-snapshot.yml` (`5 16 * * *` UTC = 00:05 Asia/Manila, before that day's draws) — computes and logs the next day's pick, with the previous day's draws already in place.
 
-`tests.yml` is a third exception to the manual-only convention, in a different
+`mangafreak-scraper.yml` (`0 6 * * *` UTC = 14:00 Asia/Manila) is the third
+scheduled exception, for the same reason the append job is one: the Manga tab's
+**"Latest" sub-tab is that file**. Dispatch-only, it would show whichever day it
+was last run by hand and still call itself "Latest". The same run writes
+`mangafreak-index.json`, the slug index that lets the Read button open a manga's
+own page instead of a search page; it drifts as the site adds titles. Both
+outputs are metadata only — titles, slugs, cover URLs, chapter numbers — and the
+script refuses to overwrite a good file with a materially smaller one, so a
+partial scrape cannot silently empty the tab.
+
+`tests.yml` is a fourth exception to the manual-only convention, in a different
 direction: it has **no cron**, but it runs on every push and pull request. The
 convention removed *scheduled* runs; a test suite that only runs when someone
 remembers is the reason a broken engine could reach the two scheduled jobs
@@ -202,6 +212,9 @@ The append job's schedule is a deliberate exception: `pcso-history.json` feeds t
 - `pse-live-scraper.yml` → 4-way sharded matrix, `scrape_pse_live.js` (intraday quotes via `stockData.do`, not the settled EOD chart endpoint) → `merge_live_shards.js` → `pse-live-quotes.json`
 - `pse-backtest.yml` → read-only, `backtest_pse_signals.py` reads `pse-history.json`/`pse-full-history.json` → writes `pse-backtest.json`. Never touches scraper output.
 - Sharded scrapers each independently call `resolveAllIds()` (pages `companyDirectory/search.ax`) to get the full company list, then filter to their own slice — no cross-shard coordination needed.
+
+**MangaFreak** (`ww3.mangafreak.me`):
+- `mangafreak-scraper.yml` → `.github/scripts/scrape_mangafreak.py` → `mangafreak-latest.json` (the Latest sub-tab's feed) + `mangafreak-index.json` (~7.2k slugs). Exists because the site sends no `Access-Control-Allow-Origin`, so the browser cannot read it directly — same shape as the PCSO/PSE pipelines. Slug matching is deliberately strict (whole-token equality, ≥2 tokens, ≤1 extra token): a loose rule sent Attack on Titan to a prequel spin-off and Tokyo Ghoul to its sequel. Unresolved titles fall back to the `/Find/` search URL rather than guessing.
 
 **PCSO** (`businesslist.ph/lottery`):
 - `pcso-scraper.yml` → `.github/scripts/scrape_pcso.py` → `pcso-results.json`

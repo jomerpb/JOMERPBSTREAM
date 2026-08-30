@@ -203,7 +203,7 @@ function streamSeg(cat, el) {
   if (cat === 'anime'  && !document.getElementById('anime-grid').children.length)
     loadAnimeSub('trending', document.querySelector('#anime-tabs .ctab.active') || document.querySelectorAll('#anime-tabs .ctab')[1]);
   if (cat === 'manga'  && !document.getElementById('manga-grid').children.length)
-    loadMangaSub('trending', document.querySelector('#manga-tabs .ctab.active') || document.querySelectorAll('#manga-tabs .ctab')[1]);
+    loadMangaSub('latest', document.querySelector('#manga-tabs .ctab.active') || document.querySelectorAll('#manga-tabs .ctab')[1]);
   if (cat === 'tv'     && !document.getElementById('tv-grid').children.length)
     loadTVSub('popular', '', document.querySelector('#tv-tabs .ctab.active') || document.querySelectorAll('#tv-tabs .ctab')[1]);
   if (cat === 'movies' && !document.getElementById('movies-grid').children.length)
@@ -564,6 +564,7 @@ const MANGA_FIELDS = 'id idMal title{english romaji}coverImage{large}bannerImage
 // countryOfOrigin, and light novels as format:NOVEL. Every query below
 // therefore excludes NOVEL — a text novel in a cover-art grid is noise.
 const MANGA_SUBS = {
+  // 'latest' is handled by loadMangaLatest(), not by this table.
   trending:  {sort:'TRENDING_DESC'},
   popular:   {sort:'POPULARITY_DESC'},
   toprated:  {sort:'SCORE_DESC'},
@@ -611,16 +612,89 @@ function fromALManga(m) {
   };
 }
 
+const MANGA_ROW_TITLE = {
+  latest:'📖 Latest Manga', trending:'📖 Trending Manga', popular:'📖 Popular Manga',
+  toprated:'📖 Top Rated Manga', releasing:'📖 Ongoing Manga',
+  manhwa:'📖 Manhwa', manhua:'📖 Manhua', oneshot:'📖 One-shots',
+};
+
 async function loadMangaSub(sub, tabEl) {
   mangaPageState = {sub, page:1, hasMore:false};
   if (tabEl) { document.querySelectorAll('#manga-tabs .ctab').forEach(t=>t.classList.remove('active')); tabEl.classList.add('active'); }
+  const heading = document.getElementById('manga-row-title');
+  if (heading) heading.textContent = MANGA_ROW_TITLE[sub] || '📖 Manga';
   document.getElementById('manga-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
   document.getElementById('manga-more').style.display = 'none';
+  // "Latest" is the only sub-tab that is not an AniList query — it is
+  // MangaFreak's own release feed, scraped into mangafreak-latest.json because
+  // the site cannot be read from the browser.
+  if (sub === 'latest') return loadMangaLatest();
   const {items, hasMore} = await fetchManga(sub, 1);
   renderGrid('manga-grid', items);
   mangaPageState.hasMore = hasMore;
   document.getElementById('manga-more').style.display = hasMore ? 'block' : 'none';
   if (hasMore) attachInfiniteScroll();
+}
+
+// A MangaFreak release row is not an AniList record: no score, no genres, no
+// id. It carries a cover, the newest chapter and how long ago that landed, so
+// those take the slots the score/year/genre badges normally use.
+function buildLatestCard(entry) {
+  const chapter = entry.chapter && entry.title && entry.chapter.startsWith(entry.title)
+    ? entry.chapter.slice(entry.title.length).trim()
+    : (entry.chapter || '');
+  const card = buildGridCard({
+    type: 'manga',
+    title: entry.title,
+    // The release feed links the 55x85 thumbnail, which is soft blown up to a
+    // grid card. 100x140 is the largest size the host actually serves (200x300
+    // and above come back empty), so ask for that and fall back to whatever the
+    // feed gave if the path shape ever changes.
+    img: (entry.cover || '').replace(/\/55x85$/, '/100x140'),
+    year: entry.when || '',
+    genre: chapter ? `Ch ${chapter}` : '',
+    origin: 'JP',
+    mfSlug: entry.slug,
+  });
+  card.href = MANGA_SOURCES.mangafreak.manga(entry.slug);
+  card.onclick = (e) => { e.preventDefault(); openMangaFromLatest(entry); };
+  return card;
+}
+
+// Tapping a Latest card should land on the app's own detail page, so it is
+// looked up on AniList by title first. Titles MangaFreak carries and AniList
+// does not (or names differently) fall through to the MangaFreak page itself
+// rather than a dead end.
+async function openMangaFromLatest(entry) {
+  const Q = `query($s:String){Page(perPage:1){media(type:MANGA,search:$s,isAdult:false,format_not_in:[NOVEL],sort:SEARCH_MATCH){${MANGA_FIELDS}}}}`;
+  const d = await al(Q, {s: entry.title});
+  const m = d?.data?.Page?.media?.[0];
+  if (m) {
+    const item = fromALManga(m);
+    item.mfSlug = entry.slug;          // we already know the exact page
+    return openDetail(item);
+  }
+  window.open(MANGA_SOURCES.mangafreak.manga(entry.slug), '_blank', 'noopener');
+}
+
+async function loadMangaLatest() {
+  ensureMangafreakIndex();             // warm it for the Read button
+  const grid = document.getElementById('manga-grid');
+  let items = [];
+  try {
+    const r = await fetch(`mangafreak-latest.json?nocache=${Date.now()}`);
+    if (r.ok) items = (await r.json()).items || [];
+  } catch {}
+  grid.innerHTML = '';
+  if (!items.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>Latest is unavailable</h3></div>`;
+    mangaPageState.hasMore = false;
+    return;
+  }
+  items.forEach(entry => grid.appendChild(buildLatestCard(entry)));
+  // The whole feed is one committed file, so there is no next page to fetch.
+  mangaPageState.hasMore = false;
+  document.getElementById('manga-more').style.display = 'none';
 }
 
 async function fetchManga(sub, page) {
@@ -951,7 +1025,10 @@ async function openAnimeDetail(item) {
 const MANGA_SOURCES = {
   mangafreak: {
     label: 'MangaFreak ↗',
-    url: q => 'https://ww3.mangafreak.me/Find/' + encodeURIComponent(q),
+    url:   q    => 'https://ww3.mangafreak.me/Find/' + encodeURIComponent(q),
+    // The direct page. Preferred over the search URL whenever the title can be
+    // resolved to a slug — see mangafreakSlugFor().
+    manga: slug => 'https://ww3.mangafreak.me/Manga/' + encodeURIComponent(slug),
   },
   orchisasia: {
     label: 'Orchisasia 18+ ↗',
@@ -983,9 +1060,75 @@ function mangaSourceUrl(key, item) {
   return MANGA_SOURCES[key].url(mangaSearchQuery(item?.title));
 }
 
+// ── MANGAFREAK SLUG INDEX ──
+// Read used to dump you on a search results page because the site sends no
+// Access-Control-Allow-Origin — the page cannot query it. So .github/scripts/
+// scrape_mangafreak.py walks its A-Z list in Actions and commits the slugs
+// here, and the lookup happens locally against that file.
+//
+// Matching is deliberately strict. A wrong direct link is worse than a search
+// page: measured over 80 real AniList titles, a loose "candidate contains every
+// query word" rule sent Attack on Titan to Attack_On_Titan_Before_The_Fall and
+// Tokyo Ghoul to Tokyo_Ghoulre, both wrong. Requiring whole-token equality, at
+// least two tokens, and at most one extra token in the candidate leaves exactly
+// one fuzzy match across those 80 — The Swordmaster's Son ->
+// Swordmasters_Youngest_Son, which is correct — and drops the hit rate only
+// from 64% to 61%. Anything unresolved falls back to the search URL.
+let mfIndex = null;          // {exact:Map, table:[...]} once loaded
+let mfIndexLoading = null;
+
+const mfNorm   = t => String(t||'').toLowerCase().replace(/[’']/g,'')
+                        .replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+const mfStrip  = t => t.replace(/^(?:the|a|an)\s+/,'');
+const mfSquash = t => t.replace(/\s+/g,'');
+
+function ensureMangafreakIndex() {
+  if (mfIndex || mfIndexLoading) return mfIndexLoading || Promise.resolve(mfIndex);
+  mfIndexLoading = fetch(`mangafreak-index.json?nocache=${Date.now()}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      const slugs = d?.slugs || [];
+      if (!slugs.length) return null;
+      const table = slugs.map(slug => {
+        const n = mfNorm(slug), a = mfStrip(n);
+        return {slug, a, toks: a.split(' ')};
+      });
+      const exact = new Map();
+      for (const e of table) for (const k of [e.a, mfSquash(e.a)]) if (!exact.has(k)) exact.set(k, e.slug);
+      mfIndex = {exact, table};
+      return mfIndex;
+    })
+    .catch(() => null)
+    .finally(() => { mfIndexLoading = null; });
+  return mfIndexLoading;
+}
+
+// Synchronous on purpose: it runs inside the Read tap so window.open is not
+// separated from the gesture by an await, which mobile popup blockers reject.
+// If the index has not arrived yet the caller just uses the search URL.
+function mangafreakSlugFor(title) {
+  if (!mfIndex || !title) return null;
+  const n = mfNorm(title), a = mfStrip(n);
+  for (const k of [n, a, mfSquash(a)]) { const hit = mfIndex.exact.get(k); if (hit) return hit; }
+  const toks = a.split(' ').filter(t => t.length > 1);
+  if (toks.length < 2) return null;          // one word matches far too much
+  let best = null;
+  for (const e of mfIndex.table) {
+    if (!toks.every(t => e.toks.includes(t))) continue;
+    const extra = e.toks.filter(t => !toks.includes(t)).length;
+    if (extra > 1) continue;
+    if (!best || extra < best.extra || (extra === best.extra && e.a.length < best.len))
+      best = {slug:e.slug, extra, len:e.a.length};
+  }
+  return best ? best.slug : null;
+}
+
 function openMangaReader(item) {
   saveMangaToHistory(item);
-  window.open(mangaSourceUrl('mangafreak', item), '_blank', 'noopener');
+  const slug = item.mfSlug || mangafreakSlugFor(item.title) || mangafreakSlugFor(item.titleRomaji);
+  const url = slug ? MANGA_SOURCES.mangafreak.manga(slug)
+                   : mangaSourceUrl('mangafreak', item);
+  window.open(url, '_blank', 'noopener');
 }
 
 // Outbound links for the detail page's collapsible block: AniList for the
@@ -1003,6 +1146,9 @@ function mangaDetailLinks(item) {
 }
 
 async function openMangaDetail(item) {
+  // Fire and forget: by the time Read is tapped the slug lookup is usually
+  // ready, and if it is not the search URL still works.
+  ensureMangafreakIndex();
   const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:MANGA){
     id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description
     chapters volumes averageScore status startDate{year}endDate{year}format genres countryOfOrigin siteUrl
