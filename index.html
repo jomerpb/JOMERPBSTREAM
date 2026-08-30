@@ -33,11 +33,11 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260830c"/>
+  <link rel="stylesheet" href="styles.css?v=20260830e"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260830c"></script>
+  <script defer src="stream.js?v=20260830e"></script>
   <script defer src="oracle.js?v=20260819a"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -64,7 +64,7 @@
   <!-- Continue Watching -->
   <div id="cw-section" style="display:none;margin-bottom:24px;">
     <div class="row-header">
-      <div class="row-title">▶ Continue Watching</div>
+      <div class="row-title" id="cw-title">▶ Continue Watching</div>
       <div class="row-see-all" onclick="clearHistory()" style="color:var(--muted);">Clear all</div>
     </div>
     <div class="row-scroll" id="cw-row"></div>
@@ -737,6 +737,20 @@
         </div>
         <div class="row-scroll" style="padding:0;" id="rec-grid-3"></div>
       </div>
+    </div>
+
+    <!-- Infinite "Similar" grid, for EVERY type. The player page has its own
+         copy (#similar-movies-section) which is untouched; that one only
+         appears once you are actually watching something, which is why the
+         detail page looked like it had nothing. Same shape either way:
+         results-grid + sentinel + end message. -->
+    <div id="detail-similar-section" style="display:none;margin-top:24px;">
+      <div class="row-header" style="padding:0;margin-bottom:10px;">
+        <div class="row-title" id="detail-similar-title">✨ Similar</div>
+      </div>
+      <div class="results-grid" id="detail-similar-grid" style="padding:0;margin:0;"></div>
+      <div id="detail-similar-sentinel" style="height:1px;"></div>
+      <div id="detail-similar-end" style="display:none;text-align:center;padding:16px 0;color:var(--muted);font-size:13px;">No more titles</div>
     </div>
   </div>
 </div>

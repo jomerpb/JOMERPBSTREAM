@@ -31,6 +31,13 @@ let similarMoviesState = {list:[], shown:0, forId:null};
 // can restore that position instead of always snapping to the top.
 let scrollPositions = {};
 
+// Which Stream segment the home page is showing. The Continue Watching /
+// Continue Reading row keys off this so it always matches the tab in view.
+// Seeded from the same value streamSeg() persists, so a reload is consistent.
+let currentStreamSeg = (() => {
+  try { return localStorage.getItem('lastStreamSeg') || 'anime'; } catch { return 'anime'; }
+})();
+
 // Opt out of the browser's own automatic scroll restoration on history
 // navigation (back/forward/swipe-back). Left on 'auto' (the default), the
 // browser tries to restore scroll itself and can race with/override the
@@ -69,7 +76,58 @@ async function al(query, variables={}) {
 // ═══════════════════════════════════════════
 // NAV — Browser History API
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// STATUS BAR TINT
+// ═══════════════════════════════════════════
+// In an installed PWA the Android status bar (clock, wifi, battery) is painted
+// by the OS using <meta name="theme-color">. A web page cannot make that bar
+// genuinely translucent — it is not part of the document — so "glass" here means
+// painting it the same colour as whatever sits directly beneath it, which is
+// what makes the page read as edge-to-edge instead of starting under a black
+// band. Chrome on Android re-reads the meta tag when it changes, so this can
+// follow the page.
+const THEME_DEFAULT = '#07090f';   // === --bg, the colour behind every other page
+
+function setThemeColor(hex) {
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m && m.getAttribute('content') !== hex) m.setAttribute('content', hex);
+}
+
+// Average the TOP STRIP of the detail backdrop so the bar continues the artwork.
+// Reading pixels back needs the image to be CORS-readable: s4.anilist.co echoes
+// this origin and image.tmdb.org sends *, both verified. Any failure — a tainted
+// canvas, a dead URL, no image at all — just leaves the default in place, so the
+// worst case is exactly today's behaviour.
+function tintStatusBarFrom(src) {
+  if (!src) { setThemeColor(THEME_DEFAULT); return; }
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onerror = () => setThemeColor(THEME_DEFAULT);
+  img.onload = () => {
+    try {
+      const w = 32, h = 32;
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d', {willReadFrequently:true});
+      ctx.drawImage(img, 0, 0, w, h);
+      const rows = Math.max(1, Math.round(h * 0.18));      // just the top edge
+      const d = ctx.getImageData(0, 0, w, rows).data;
+      let r=0, g=0, b=0, n=0;
+      for (let i = 0; i < d.length; i += 4) { r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++; }
+      // The backdrop renders under .detail-backdrop-overlay, which darkens it.
+      // Matching the raw pixels would leave the bar visibly brighter than the
+      // image right below it, which is the opposite of seamless.
+      const DIM = 0.72;
+      setThemeColor('#' + [r,g,b]
+        .map(v => Math.round((v / n) * DIM).toString(16).padStart(2,'0')).join(''));
+    } catch { setThemeColor(THEME_DEFAULT); }
+  };
+  img.src = src;
+}
+
 function showPage(id, restore) {
+  // Only the detail page tints the bar; everything else sits on --bg.
+  if (id !== 'detail-page') setThemeColor(THEME_DEFAULT);
   // Remember exactly where the page we're leaving was scrolled to.
   const outgoing = document.querySelector('.page.active');
   if (outgoing) scrollPositions[outgoing.id] = window.scrollY;
@@ -132,6 +190,8 @@ window.addEventListener('resize', () => {
 
 function streamSeg(cat, el) {
   localStorage.setItem('lastStreamSeg', cat);
+  currentStreamSeg = cat;
+  renderContinueWatching();   // Watching <-> Reading follows the segment
   document.querySelectorAll('#stream-seg .seg-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   updateSegSlide(el);
@@ -796,6 +856,10 @@ async function openDetail(item, restore=false) {
   document.getElementById('detail-tags-row').innerHTML = '';
   document.getElementById('eps-grid').innerHTML = '';
   document.getElementById('seasons-row').innerHTML = '';
+  // Hide up front so a detail page never briefly shows the previous title's
+  // grid while the new one is still loading.
+  const detailSim = document.getElementById('detail-similar-section');
+  if (detailSim) { detailSim.style.display = 'none'; detailSimilarState.type = null; }
 
   if (item.type === 'anime') {
     await openAnimeDetail(item);
@@ -920,6 +984,7 @@ function mangaSourceUrl(key, item) {
 }
 
 function openMangaReader(item) {
+  saveMangaToHistory(item);
   window.open(mangaSourceUrl('mangafreak', item), '_blank', 'noopener');
 }
 
@@ -1058,6 +1123,7 @@ async function openMovieDetail(item) {
 }
 
 function renderDetailBackdrop(img, title) {
+  tintStatusBarFrom(img);
   document.getElementById('detail-backdrop-wrap').innerHTML = `
     <img src="${img||''}" alt="${title}" style="width:100%;height:100%;object-fit:cover;display:block;"/>
     <div class="detail-backdrop-overlay"></div>
@@ -1343,101 +1409,25 @@ async function loadRecommendations(item) {
   ['rec-row-1','rec-row-2','rec-row-3'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display='none'; });
   ['rec-grid-1','rec-grid-2','rec-grid-3'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=''; });
 
-  const type = item.type;
-
-  if (type === 'anime') {
-    // Row 1: AniList recommendations
-    const Q1 = `query($id:Int){Media(id:$id){recommendations(perPage:10,sort:RATING_DESC){nodes{mediaRecommendation{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}}}`;
-    const r1 = await al(Q1, {id: item.al_id});
-    const recList = (r1?.data?.Media?.recommendations?.nodes||[])
-      .map(n=>n.mediaRecommendation).filter(Boolean)
-      .map(m=>({...fromAL(m), al_id:m.id}));
-
-    // Row 2: Same genre anime
-    const genre = item.genres?.[0] || null;
-    const Q2 = `query($genre:String){Page(perPage:10){media(type:ANIME,isAdult:false,genre:$genre,sort:POPULARITY_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`;
-    const r2 = await al(Q2, {genre});
-    const genreList = (r2?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(m=>({...fromAL(m),al_id:m.id}));
-
-    // Row 3: Trending anime
-    const Q3 = `{Page(perPage:10){media(type:ANIME,isAdult:false,sort:TRENDING_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`;
-    const r3 = await al(Q3);
-    const trendList = (r3?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(m=>({...fromAL(m),al_id:m.id}));
-
-    renderRecRow(1, '✨ Similar Anime', recList);
-    renderRecRow(2, '🎌 More Like This', genreList);
-    renderRecRow(3, '🔥 Trending Anime', trendList);
-
-  } else if (type === 'manga') {
-    // Row 1: the anime adaptation, when there is one. This is the one row that
-    // crosses tabs — the Anime tab can actually play what it links to.
-    const Q1 = `query($id:Int){Media(id:$id,type:MANGA){relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres type nextAiringEpisode{episode}}}}}}`;
-    const r1 = await al(Q1, {id: item.al_id});
-    const adaptations = (r1?.data?.Media?.relations?.edges||[])
+  // "Similar X" used to be a fixed 12-item horizontal row here, per type, plus
+  // a "Trending/Popular" row that just repeated that tab's own default listing
+  // on every detail page. Both are gone: Similar is now the infinite grid below
+  // (loadDetailSimilar), which is what the player page has always had, and the
+  // trending row added nothing you could not see on the tab itself.
+  //
+  // One horizontal row survives, and only for manga: the anime adaptation. It
+  // is short by nature and it is the one link that crosses into a tab that can
+  // actually play what it points at.
+  if (item.type === 'manga' && item.al_id) {
+    const Q = `query($id:Int){Media(id:$id,type:MANGA){relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres type nextAiringEpisode{episode}}}}}}`;
+    const r = await al(Q, {id: item.al_id});
+    const adaptations = (r?.data?.Media?.relations?.edges||[])
       .filter(e => e.node?.type === 'ANIME' && ['ADAPTATION','ALTERNATIVE','SIDE_STORY','SPIN_OFF'].includes(e.relationType))
       .map(e => ({...fromAL(e.node), al_id:e.node.id, mal_id:e.node.idMal}));
-
-    // Row 2: AniList's own reader recommendations
-    const Q2 = `query($id:Int){Media(id:$id,type:MANGA){recommendations(perPage:12,sort:RATING_DESC){nodes{mediaRecommendation{${MANGA_FIELDS}}}}}}`;
-    const r2 = await al(Q2, {id: item.al_id});
-    const recList = (r2?.data?.Media?.recommendations?.nodes||[])
-      .map(n=>n.mediaRecommendation).filter(n=>n && n.format !== 'NOVEL')
-      .map(fromALManga);
-
-    // Row 3: what everyone else is reading right now
-    const Q3 = `{Page(perPage:12){media(type:MANGA,isAdult:false,format_not_in:[NOVEL],sort:TRENDING_DESC){${MANGA_FIELDS}}}}`;
-    const r3 = await al(Q3);
-    const trendList = (r3?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(fromALManga);
-
-    // Only slots 1 and 3 exist in the markup — renderRecRow silently drops
-    // anything addressed to the removed slot 2. So the three candidate rows are
-    // ranked and the best two that actually have items take the two real slots;
-    // otherwise a title with no anime adaptation would lose "Similar Manga"
-    // as well and show nothing but the generic trending row.
-    const rows = [
-      ['🎌 Anime Adaptation', adaptations],
-      ['✨ Similar Manga',    recList],
-      ['🔥 Trending Manga',   trendList],
-    ].filter(([, list]) => list.length);
-    renderRecRow(1, ...(rows[0] || ['', []]));
-    renderRecRow(3, ...(rows[1] || ['', []]));
-
-  } else if (type === 'tv') {
-    const id = item.tmdb_id || item.id;
-    // Row 1: TMDB similar
-    const d1 = await tmdb(`/tv/${id}/similar`);
-    const simList = (d1?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
-
-    // Row 2: TMDB recommendations
-    const d2 = await tmdb(`/tv/${id}/recommendations`);
-    const recList = (d2?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
-
-    // Row 3: Popular TV
-    const d3 = await tmdb('/tv/popular');
-    const popList = (d3?.results||[]).filter(m=>m.id!==id).slice(0,15).map(m=>fromTMDB(m,'tv'));
-
-    renderRecRow(1, '📺 Similar Series', simList);
-    renderRecRow(2, '👍 Recommended For You', recList);
-    renderRecRow(3, '🔥 Popular Right Now', popList);
-
-  } else if (type === 'movie') {
-    const id = item.tmdb_id || item.id;
-    // Row 1: Similar movies
-    const d1 = await tmdb(`/movie/${id}/similar`);
-    const simList = (d1?.results||[]).slice(0,15).map(m=>fromTMDB(m,'movie'));
-
-    // Row 2: Recommendations
-    const d2 = await tmdb(`/movie/${id}/recommendations`);
-    const recList = (d2?.results||[]).slice(0,15).map(m=>fromTMDB(m,'movie'));
-
-    // Row 3: Popular movies
-    const d3 = await tmdb('/movie/popular');
-    const popList = (d3?.results||[]).filter(m=>m.id!==id).slice(0,15).map(m=>fromTMDB(m,'movie'));
-
-    renderRecRow(1, '🎬 Similar Movies', simList);
-    renderRecRow(2, '👍 Recommended For You', recList);
-    renderRecRow(3, '🔥 Popular Movies', popList);
+    renderRecRow(1, '🎌 Anime Adaptation', adaptations);
   }
+
+  loadDetailSimilar(item);
 }
 
 function renderRecRow(num, title, items) {
@@ -1534,6 +1524,148 @@ function renderMoreSimilarItems() {
   similarMoviesState.shown += batch.length;
   endMsg.style.display = similarMoviesState.shown >= list.length ? 'block' : 'none';
 }
+
+// ── SIMILAR (detail page, infinite, every type) ──
+// The player page has its own Similar grid (#similar-movies-section) and keeps
+// it. But that one only appears once you are watching something, so the DETAIL
+// page had nothing — which is why anime/TV/movies looked like they had lost a
+// feature they in fact never had here. This is the detail-page equivalent, and
+// it works for all four types.
+//
+// Each type pages through its best source first, then falls back to a second
+// one so the feed does not stop after a screenful:
+//   anime/manga  AniList recommendations  -> same-genre popular
+//   tv/movie     TMDB /similar            -> TMDB /recommendations
+const ANIME_FIELDS = 'id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres';
+
+const DETAIL_SIMILAR_TITLE = {
+  anime: '✨ Similar Anime',
+  manga: '✨ Similar Manga',
+  tv:    '📺 Similar Series',
+  movie: '🎬 Similar Movies',
+};
+
+let detailSimilarState = {type:null, alId:null, tmdbId:null, list:[], shown:0,
+                          page:1, phase:'primary', genre:null, done:false, loading:false, seen:new Set()};
+
+async function fetchMoreDetailSimilar() {
+  const st = detailSimilarState;
+  if (st.done || st.loading || !st.type) return 0;
+  st.loading = true;
+  try {
+    let batch = [];
+
+    if (st.type === 'manga' || st.type === 'anime') {
+      const isManga = st.type === 'manga';
+      const media = isManga ? 'MANGA' : 'ANIME';
+      const fields = isManga ? MANGA_FIELDS : ANIME_FIELDS;
+      const toItem = isManga ? fromALManga : (m => ({...fromAL(m), al_id:m.id, mal_id:m.idMal}));
+
+      if (st.phase === 'primary') {
+        const Q = `query($id:Int,$page:Int){Media(id:$id,type:${media}){recommendations(page:$page,perPage:24,sort:RATING_DESC){pageInfo{hasNextPage}nodes{mediaRecommendation{${fields}}}}}}`;
+        const r = await al(Q, {id: st.alId, page: st.page});
+        const conn = r?.data?.Media?.recommendations;
+        const nodes = (conn?.nodes||[]).map(n => n.mediaRecommendation)
+          .filter(m => m && (!isManga || m.format !== 'NOVEL'));
+        if (conn?.pageInfo?.hasNextPage) st.page++; else { st.phase = 'fallback'; st.page = 1; }
+        batch = nodes.filter(m => !st.seen.has(m.id));
+        batch.forEach(m => st.seen.add(m.id));
+        st.list.push(...batch.map(toItem));
+        return batch.length;
+      }
+      if (!st.genre) { st.done = true; return 0; }
+      const Q = `query($genre:String,$page:Int){Page(page:$page,perPage:24){pageInfo{hasNextPage}media(type:${media},isAdult:false${isManga?',format_not_in:[NOVEL]':''},genre:$genre,sort:POPULARITY_DESC){${fields}}}}`;
+      const r = await al(Q, {genre: st.genre, page: st.page});
+      const nodes = r?.data?.Page?.media || [];
+      if (r?.data?.Page?.pageInfo?.hasNextPage) st.page++; else st.done = true;
+      batch = nodes.filter(m => !st.seen.has(m.id));
+      batch.forEach(m => st.seen.add(m.id));
+      st.list.push(...batch.map(toItem));
+      return batch.length;
+    }
+
+    // tv / movie — TMDB
+    const endpoint = st.phase === 'primary' ? 'similar' : 'recommendations';
+    const d = await tmdb(`/${st.type}/${st.tmdbId}/${endpoint}`, {page: st.page});
+    const results = d?.results || [];
+    const total = d?.total_pages || 1;
+    if (st.page < total) st.page++;
+    else if (st.phase === 'primary') { st.phase = 'fallback'; st.page = 1; }
+    else st.done = true;
+    batch = results.filter(m => m && !st.seen.has(m.id));
+    batch.forEach(m => st.seen.add(m.id));
+    st.list.push(...batch.map(m => fromTMDB(m, st.type)));
+    return batch.length;
+  } catch {
+    st.done = true;
+    return 0;
+  } finally {
+    st.loading = false;
+  }
+}
+
+function renderMoreDetailSimilar() {
+  const grid = document.getElementById('detail-similar-grid');
+  const end  = document.getElementById('detail-similar-end');
+  if (!grid) return;
+  const st = detailSimilarState;
+  const batch = st.list.slice(st.shown, st.shown + 12);
+  batch.forEach(m => grid.appendChild(buildGridCard(m)));
+  st.shown += batch.length;
+  if (end) end.style.display = (st.done && st.shown >= st.list.length) ? 'block' : 'none';
+}
+
+async function loadDetailSimilar(item) {
+  const section = document.getElementById('detail-similar-section');
+  const grid = document.getElementById('detail-similar-grid');
+  const titleEl = document.getElementById('detail-similar-title');
+  const selfId = item?.al_id || item?.tmdb_id || item?.id;
+  if (!section || !grid || !item || !DETAIL_SIMILAR_TITLE[item.type] || !selfId) {
+    if (section) section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  if (titleEl) titleEl.textContent = DETAIL_SIMILAR_TITLE[item.type];
+  grid.innerHTML = skRow(6);
+  const end = document.getElementById('detail-similar-end');
+  if (end) end.style.display = 'none';
+
+  // Always rebuilt rather than cached per title: the grid is one shared
+  // element, so a stale cache would show the previous title's results.
+  detailSimilarState = {
+    type: item.type,
+    alId: item.al_id || null,
+    tmdbId: item.tmdb_id || item.id || null,
+    list: [], shown: 0, page: 1, phase: 'primary',
+    genre: item.genres?.[0] || item.genre || null,
+    done: false, loading: false, seen: new Set([selfId]),
+  };
+
+  // A title with no recommendations at all must still fall through to the
+  // second source before we conclude there is nothing to show.
+  let added = 0, guard = 0;
+  while (!added && !detailSimilarState.done && guard++ < 4) added = await fetchMoreDetailSimilar();
+
+  grid.innerHTML = '';
+  if (!detailSimilarState.list.length) { section.style.display = 'none'; return; }
+  renderMoreDetailSimilar();
+}
+
+const detailSimilarObserver = new IntersectionObserver(async (entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    const st = detailSimilarState;
+    if (!st.type) continue;
+    if (st.shown < st.list.length) { renderMoreDetailSimilar(); continue; }
+    if (!st.done && !st.loading) { await fetchMoreDetailSimilar(); renderMoreDetailSimilar(); }
+  }
+}, {rootMargin:'300px'});
+
+(function attachDetailSimilarObserver() {
+  const sentinel = document.getElementById('detail-similar-sentinel');
+  if (sentinel) detailSimilarObserver.observe(sentinel);
+})();
 
 const similarMoviesObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
@@ -2369,11 +2501,43 @@ function attachInfiniteScroll() {
 // WATCH HISTORY — localStorage
 // ═══════════════════════════════════════════
 const HISTORY_KEY = 'jomerpb_history';
+// Manga is kept in its own bucket rather than sharing the watch list: the two
+// rows are shown separately, cleared separately, and a manga entry has no
+// season/episode/progress for the watch card to read.
+const MANGA_HISTORY_KEY = 'jomerpb_manga_history';
 const MAX_HISTORY = 20;
 
 function getHistory() {
   try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
   catch { return []; }
+}
+
+function getMangaHistory() {
+  try { return JSON.parse(localStorage.getItem(MANGA_HISTORY_KEY) || '[]'); }
+  catch { return []; }
+}
+
+// Manga never opens the player, so nothing ever calls saveToHistory for it.
+// Tapping Read is the one unambiguous "I started this" signal available, so
+// that is what records it.
+function saveMangaToHistory(item) {
+  try {
+    const key = item?.al_id || item?.mal_id;
+    if (!key) return;
+    const id = `manga-${key}`;
+    const list = getMangaHistory().filter(h => h.id !== id);
+    list.unshift({
+      id, type:'manga',
+      al_id: item.al_id, mal_id: item.mal_id,
+      title: item.title,
+      img: item.img || item.banner || '',
+      origin: item.origin || 'JP',
+      chapters: item.chapters || null,
+      ts: Date.now(),
+    });
+    localStorage.setItem(MANGA_HISTORY_KEY, JSON.stringify(list.slice(0, MAX_HISTORY)));
+    renderContinueWatching();
+  } catch {}
 }
 
 function saveToHistory(item, season, ep) {
@@ -2403,33 +2567,45 @@ function saveToHistory(item, season, ep) {
   } catch {}
 }
 
+// One row, two modes. On the Manga segment it becomes Continue Reading and
+// reads the manga bucket; on Anime/TV/Movies it is Continue Watching as before.
+// The two never mix, so a manga cannot appear under "Watching".
+const CW_PLAY_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="#111"><path d="M8 5v14l11-7z"/></svg>`;
+const CW_READ_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="#111"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/></svg>`;
+
 function renderContinueWatching() {
-  const history = getHistory();
+  const reading = currentStreamSeg === 'manga';
+  const history = reading ? getMangaHistory() : getHistory();
   const section = document.getElementById('cw-section');
   const row = document.getElementById('cw-row');
+  const title = document.getElementById('cw-title');
+  if (!section || !row) return;
+  if (title) title.textContent = reading ? '📖 Continue Reading' : '▶ Continue Watching';
   if (!history.length) { section.style.display = 'none'; return; }
   section.style.display = 'block';
   row.innerHTML = '';
   history.forEach(h => {
     const card = document.createElement('div');
     card.className = 'cw-card';
-    const progress = Math.min((h.ep / (h.totalEps||1)) * 100, 100);
-    const typeLabel = h.type==='anime'?'ANIME':h.type==='movie'?'MOVIE':'TV';
-    const epLabel = h.type==='movie' ? 'Movie' : `S${h.seasonNum||1} · EP ${h.ep}`;
+    const isManga = h.type === 'manga';
+    // A manga entry has no episode count to be a fraction of, so it gets no
+    // progress bar rather than a meaningless full or empty one.
+    const progress = isManga ? null : Math.min((h.ep / (h.totalEps||1)) * 100, 100);
+    const sub = isManga
+      ? [mangaKind(h), h.chapters ? `${h.chapters} ch` : ''].filter(Boolean).join(' · ')
+      : (h.type === 'movie' ? 'Movie' : `S${h.seasonNum||1} · EP ${h.ep}`);
     card.innerHTML = `
       <div class="cw-img">
         <img src="${h.img}" alt="${h.title}" loading="lazy"/>
         <div class="cw-play">
-          <div class="cw-play-btn">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="#111"><path d="M8 5v14l11-7z"/></svg>
-          </div>
+          <div class="cw-play-btn">${isManga ? CW_READ_ICON : CW_PLAY_ICON}</div>
         </div>
-        <div class="cw-progress"><div class="cw-progress-fill" style="width:${progress}%"></div></div>
+        ${progress === null ? '' : `<div class="cw-progress"><div class="cw-progress-fill" style="width:${progress}%"></div></div>`}
         <button class="cw-remove" onclick="removeFromHistory(event,'${h.id}')">✕</button>
       </div>
       <div class="cw-info">
         <div class="cw-title">${h.title}</div>
-        <div class="cw-sub">${epLabel}</div>
+        <div class="cw-sub">${sub}</div>
       </div>`;
     card.onclick = () => resumeItem(h);
     row.appendChild(card);
@@ -2437,6 +2613,16 @@ function renderContinueWatching() {
 }
 
 async function resumeItem(h) {
+  if (h.type === 'manga') {
+    // No player to resume into — the detail page, with its Read button, is the
+    // whole of what "resume" can mean for a manga.
+    await openDetail({
+      type:'manga', al_id:h.al_id, mal_id:h.mal_id, id:h.al_id,
+      title:h.title, img:h.img, banner:h.img,
+      origin:h.origin, chapters:h.chapters,
+    });
+    return;
+  }
   // Rebuild item from history data
   const item = {
     type: h.type,
@@ -2456,15 +2642,24 @@ async function resumeItem(h) {
 function removeFromHistory(e, id) {
   e.stopPropagation();
   try {
-    let history = getHistory().filter(h => h.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    // Ids are `${type}-${id}`, and manga only ever lands in the manga bucket,
+    // so the prefix is enough to pick the list to write back.
+    const isManga = id.startsWith('manga-');
+    const key = isManga ? MANGA_HISTORY_KEY : HISTORY_KEY;
+    const list = (isManga ? getMangaHistory() : getHistory()).filter(h => h.id !== id);
+    localStorage.setItem(key, JSON.stringify(list));
     renderContinueWatching();
   } catch {}
 }
 
 function clearHistory() {
-  if (!confirm('Clear all watch history?')) return;
-  try { localStorage.removeItem(HISTORY_KEY); renderContinueWatching(); } catch {}
+  // Clears whichever list is on screen — the button sits in that row's header.
+  const reading = currentStreamSeg === 'manga';
+  if (!confirm(reading ? 'Clear all reading history?' : 'Clear all watch history?')) return;
+  try {
+    localStorage.removeItem(reading ? MANGA_HISTORY_KEY : HISTORY_KEY);
+    renderContinueWatching();
+  } catch {}
 }
 
 // ═══════════════════════════════════════════
