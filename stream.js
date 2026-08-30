@@ -856,10 +856,10 @@ async function openDetail(item, restore=false) {
   document.getElementById('detail-tags-row').innerHTML = '';
   document.getElementById('eps-grid').innerHTML = '';
   document.getElementById('seasons-row').innerHTML = '';
-  // Manga-only section: hide it up front so a TV/movie detail never inherits
-  // the previous manga's grid.
-  const mangaSim = document.getElementById('manga-similar-section');
-  if (mangaSim) { mangaSim.style.display = 'none'; mangaSimilarState.alId = null; }
+  // Hide up front so a detail page never briefly shows the previous title's
+  // grid while the new one is still loading.
+  const detailSim = document.getElementById('detail-similar-section');
+  if (detailSim) { detailSim.style.display = 'none'; detailSimilarState.type = null; }
 
   if (item.type === 'anime') {
     await openAnimeDetail(item);
@@ -1409,81 +1409,25 @@ async function loadRecommendations(item) {
   ['rec-row-1','rec-row-2','rec-row-3'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display='none'; });
   ['rec-grid-1','rec-grid-2','rec-grid-3'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=''; });
 
-  const type = item.type;
-
-  if (type === 'anime') {
-    // Row 1: AniList recommendations
-    const Q1 = `query($id:Int){Media(id:$id){recommendations(perPage:10,sort:RATING_DESC){nodes{mediaRecommendation{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}}}`;
-    const r1 = await al(Q1, {id: item.al_id});
-    const recList = (r1?.data?.Media?.recommendations?.nodes||[])
-      .map(n=>n.mediaRecommendation).filter(Boolean)
-      .map(m=>({...fromAL(m), al_id:m.id}));
-
-    // Row 2: Same genre anime
-    const genre = item.genres?.[0] || null;
-    const Q2 = `query($genre:String){Page(perPage:10){media(type:ANIME,isAdult:false,genre:$genre,sort:POPULARITY_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`;
-    const r2 = await al(Q2, {genre});
-    const genreList = (r2?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(m=>({...fromAL(m),al_id:m.id}));
-
-    // Row 3: Trending anime
-    const Q3 = `{Page(perPage:10){media(type:ANIME,isAdult:false,sort:TRENDING_DESC){id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}`;
-    const r3 = await al(Q3);
-    const trendList = (r3?.data?.Page?.media||[]).filter(m=>m.id!==item.al_id).map(m=>({...fromAL(m),al_id:m.id}));
-
-    renderRecRow(1, '✨ Similar Anime', recList);
-    renderRecRow(2, '🎌 More Like This', genreList);
-    renderRecRow(3, '🔥 Trending Anime', trendList);
-
-  } else if (type === 'manga') {
-    // Only the anime adaptation stays as a horizontal row — it is short by
-    // nature and it is the one link that crosses into a tab that can play what
-    // it points at. "Similar Manga" moved to its own infinite grid below, and
-    // the old "Trending Manga" row is gone: it repeated the Manga tab's own
-    // default listing on every single detail page.
-    const Q1 = `query($id:Int){Media(id:$id,type:MANGA){relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres type nextAiringEpisode{episode}}}}}}`;
-    const r1 = await al(Q1, {id: item.al_id});
-    const adaptations = (r1?.data?.Media?.relations?.edges||[])
+  // "Similar X" used to be a fixed 12-item horizontal row here, per type, plus
+  // a "Trending/Popular" row that just repeated that tab's own default listing
+  // on every detail page. Both are gone: Similar is now the infinite grid below
+  // (loadDetailSimilar), which is what the player page has always had, and the
+  // trending row added nothing you could not see on the tab itself.
+  //
+  // One horizontal row survives, and only for manga: the anime adaptation. It
+  // is short by nature and it is the one link that crosses into a tab that can
+  // actually play what it points at.
+  if (item.type === 'manga' && item.al_id) {
+    const Q = `query($id:Int){Media(id:$id,type:MANGA){relations{edges{relationType node{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres type nextAiringEpisode{episode}}}}}}`;
+    const r = await al(Q, {id: item.al_id});
+    const adaptations = (r?.data?.Media?.relations?.edges||[])
       .filter(e => e.node?.type === 'ANIME' && ['ADAPTATION','ALTERNATIVE','SIDE_STORY','SPIN_OFF'].includes(e.relationType))
       .map(e => ({...fromAL(e.node), al_id:e.node.id, mal_id:e.node.idMal}));
     renderRecRow(1, '🎌 Anime Adaptation', adaptations);
-    loadMangaSimilar(item);
-
-  } else if (type === 'tv') {
-    const id = item.tmdb_id || item.id;
-    // Row 1: TMDB similar
-    const d1 = await tmdb(`/tv/${id}/similar`);
-    const simList = (d1?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
-
-    // Row 2: TMDB recommendations
-    const d2 = await tmdb(`/tv/${id}/recommendations`);
-    const recList = (d2?.results||[]).slice(0,15).map(m=>fromTMDB(m,'tv'));
-
-    // Row 3: Popular TV
-    const d3 = await tmdb('/tv/popular');
-    const popList = (d3?.results||[]).filter(m=>m.id!==id).slice(0,15).map(m=>fromTMDB(m,'tv'));
-
-    renderRecRow(1, '📺 Similar Series', simList);
-    renderRecRow(2, '👍 Recommended For You', recList);
-    renderRecRow(3, '🔥 Popular Right Now', popList);
-
-  } else if (type === 'movie') {
-    const id = item.tmdb_id || item.id;
-    // Row 1: Similar movies
-    const d1 = await tmdb(`/movie/${id}/similar`);
-    const simList = (d1?.results||[]).slice(0,15).map(m=>fromTMDB(m,'movie'));
-
-    // Row 2: Recommendations
-    const d2 = await tmdb(`/movie/${id}/recommendations`);
-    const recList = (d2?.results||[]).slice(0,15).map(m=>fromTMDB(m,'movie'));
-
-    // Row 3: Popular movies
-    const d3 = await tmdb('/movie/popular');
-    const popList = (d3?.results||[]).filter(m=>m.id!==id).slice(0,15).map(m=>fromTMDB(m,'movie'));
-
-    renderRecRow(1, '🎬 Similar Movies', simList);
-    renderRecRow(2, '👍 Recommended For You', recList);
-    renderRecRow(3, '🔥 Popular Movies', popList);
   }
+
+  loadDetailSimilar(item);
 }
 
 function renderRecRow(num, title, items) {
@@ -1581,39 +1525,77 @@ function renderMoreSimilarItems() {
   endMsg.style.display = similarMoviesState.shown >= list.length ? 'block' : 'none';
 }
 
-// ── SIMILAR MANGA (detail page, infinite) ──
-// Anime/TV/Movies get their infinite Similar grid on the player page. Manga has
-// no player, so it gets the same treatment here. AniList's recommendations run
-// out fast on niche titles — often under one screenful — so once they are
-// exhausted the feed continues with same-genre popular manga rather than
-// stopping dead. Everything is de-duplicated against what is already shown.
-let mangaSimilarState = {alId:null, list:[], shown:0, page:1, phase:'recs', genre:null, done:false, loading:false, seen:new Set()};
+// ── SIMILAR (detail page, infinite, every type) ──
+// The player page has its own Similar grid (#similar-movies-section) and keeps
+// it. But that one only appears once you are watching something, so the DETAIL
+// page had nothing — which is why anime/TV/movies looked like they had lost a
+// feature they in fact never had here. This is the detail-page equivalent, and
+// it works for all four types.
+//
+// Each type pages through its best source first, then falls back to a second
+// one so the feed does not stop after a screenful:
+//   anime/manga  AniList recommendations  -> same-genre popular
+//   tv/movie     TMDB /similar            -> TMDB /recommendations
+const ANIME_FIELDS = 'id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres';
 
-async function fetchMoreMangaSimilar() {
-  const st = mangaSimilarState;
-  if (st.done || st.loading || !st.alId) return 0;
+const DETAIL_SIMILAR_TITLE = {
+  anime: '✨ Similar Anime',
+  manga: '✨ Similar Manga',
+  tv:    '📺 Similar Series',
+  movie: '🎬 Similar Movies',
+};
+
+let detailSimilarState = {type:null, alId:null, tmdbId:null, list:[], shown:0,
+                          page:1, phase:'primary', genre:null, done:false, loading:false, seen:new Set()};
+
+async function fetchMoreDetailSimilar() {
+  const st = detailSimilarState;
+  if (st.done || st.loading || !st.type) return 0;
   st.loading = true;
   try {
     let batch = [];
-    if (st.phase === 'recs') {
-      const Q = `query($id:Int,$page:Int){Media(id:$id,type:MANGA){recommendations(page:$page,perPage:24,sort:RATING_DESC){pageInfo{hasNextPage}nodes{mediaRecommendation{${MANGA_FIELDS}}}}}}`;
-      const r = await al(Q, {id: st.alId, page: st.page});
-      const conn = r?.data?.Media?.recommendations;
-      batch = (conn?.nodes||[]).map(n => n.mediaRecommendation).filter(m => m && m.format !== 'NOVEL');
-      if (conn?.pageInfo?.hasNextPage) st.page++;
-      else { st.phase = 'genre'; st.page = 1; }        // fall through to genre next time
-    } else if (st.genre) {
-      const Q = `query($genre:String,$page:Int){Page(page:$page,perPage:24){pageInfo{hasNextPage}media(type:MANGA,isAdult:false,format_not_in:[NOVEL],genre:$genre,sort:POPULARITY_DESC){${MANGA_FIELDS}}}}`;
+
+    if (st.type === 'manga' || st.type === 'anime') {
+      const isManga = st.type === 'manga';
+      const media = isManga ? 'MANGA' : 'ANIME';
+      const fields = isManga ? MANGA_FIELDS : ANIME_FIELDS;
+      const toItem = isManga ? fromALManga : (m => ({...fromAL(m), al_id:m.id, mal_id:m.idMal}));
+
+      if (st.phase === 'primary') {
+        const Q = `query($id:Int,$page:Int){Media(id:$id,type:${media}){recommendations(page:$page,perPage:24,sort:RATING_DESC){pageInfo{hasNextPage}nodes{mediaRecommendation{${fields}}}}}}`;
+        const r = await al(Q, {id: st.alId, page: st.page});
+        const conn = r?.data?.Media?.recommendations;
+        const nodes = (conn?.nodes||[]).map(n => n.mediaRecommendation)
+          .filter(m => m && (!isManga || m.format !== 'NOVEL'));
+        if (conn?.pageInfo?.hasNextPage) st.page++; else { st.phase = 'fallback'; st.page = 1; }
+        batch = nodes.filter(m => !st.seen.has(m.id));
+        batch.forEach(m => st.seen.add(m.id));
+        st.list.push(...batch.map(toItem));
+        return batch.length;
+      }
+      if (!st.genre) { st.done = true; return 0; }
+      const Q = `query($genre:String,$page:Int){Page(page:$page,perPage:24){pageInfo{hasNextPage}media(type:${media},isAdult:false${isManga?',format_not_in:[NOVEL]':''},genre:$genre,sort:POPULARITY_DESC){${fields}}}}`;
       const r = await al(Q, {genre: st.genre, page: st.page});
-      batch = r?.data?.Page?.media || [];
+      const nodes = r?.data?.Page?.media || [];
       if (r?.data?.Page?.pageInfo?.hasNextPage) st.page++; else st.done = true;
-    } else {
-      st.done = true;
+      batch = nodes.filter(m => !st.seen.has(m.id));
+      batch.forEach(m => st.seen.add(m.id));
+      st.list.push(...batch.map(toItem));
+      return batch.length;
     }
-    const fresh = batch.filter(m => m && !st.seen.has(m.id));
-    fresh.forEach(m => st.seen.add(m.id));
-    st.list.push(...fresh.map(fromALManga));
-    return fresh.length;
+
+    // tv / movie — TMDB
+    const endpoint = st.phase === 'primary' ? 'similar' : 'recommendations';
+    const d = await tmdb(`/${st.type}/${st.tmdbId}/${endpoint}`, {page: st.page});
+    const results = d?.results || [];
+    const total = d?.total_pages || 1;
+    if (st.page < total) st.page++;
+    else if (st.phase === 'primary') { st.phase = 'fallback'; st.page = 1; }
+    else st.done = true;
+    batch = results.filter(m => m && !st.seen.has(m.id));
+    batch.forEach(m => st.seen.add(m.id));
+    st.list.push(...batch.map(m => fromTMDB(m, st.type)));
+    return batch.length;
   } catch {
     st.done = true;
     return 0;
@@ -1622,58 +1604,67 @@ async function fetchMoreMangaSimilar() {
   }
 }
 
-function renderMoreMangaSimilar() {
-  const grid = document.getElementById('manga-similar-grid');
-  const end  = document.getElementById('manga-similar-end');
+function renderMoreDetailSimilar() {
+  const grid = document.getElementById('detail-similar-grid');
+  const end  = document.getElementById('detail-similar-end');
   if (!grid) return;
-  const st = mangaSimilarState;
+  const st = detailSimilarState;
   const batch = st.list.slice(st.shown, st.shown + 12);
   batch.forEach(m => grid.appendChild(buildGridCard(m)));
   st.shown += batch.length;
   if (end) end.style.display = (st.done && st.shown >= st.list.length) ? 'block' : 'none';
 }
 
-async function loadMangaSimilar(item) {
-  const section = document.getElementById('manga-similar-section');
-  const grid = document.getElementById('manga-similar-grid');
-  if (!section || !grid || !item?.al_id) { if (section) section.style.display = 'none'; return; }
+async function loadDetailSimilar(item) {
+  const section = document.getElementById('detail-similar-section');
+  const grid = document.getElementById('detail-similar-grid');
+  const titleEl = document.getElementById('detail-similar-title');
+  const selfId = item?.al_id || item?.tmdb_id || item?.id;
+  if (!section || !grid || !item || !DETAIL_SIMILAR_TITLE[item.type] || !selfId) {
+    if (section) section.style.display = 'none';
+    return;
+  }
 
   section.style.display = 'block';
+  if (titleEl) titleEl.textContent = DETAIL_SIMILAR_TITLE[item.type];
   grid.innerHTML = skRow(6);
-  const end = document.getElementById('manga-similar-end');
+  const end = document.getElementById('detail-similar-end');
   if (end) end.style.display = 'none';
 
-  // Always rebuilt rather than cached per title: the grid is a single shared
-  // element, so a stale cache would show the previous manga's results.
-  mangaSimilarState = {
-    alId: item.al_id, list: [], shown: 0, page: 1, phase: 'recs',
+  // Always rebuilt rather than cached per title: the grid is one shared
+  // element, so a stale cache would show the previous title's results.
+  detailSimilarState = {
+    type: item.type,
+    alId: item.al_id || null,
+    tmdbId: item.tmdb_id || item.id || null,
+    list: [], shown: 0, page: 1, phase: 'primary',
     genre: item.genres?.[0] || item.genre || null,
-    done: false, loading: false, seen: new Set([item.al_id]),
+    done: false, loading: false, seen: new Set([selfId]),
   };
 
-  // A title with zero recommendations must still fall through to the genre
-  // pages before we conclude there is nothing to show.
+  // A title with no recommendations at all must still fall through to the
+  // second source before we conclude there is nothing to show.
   let added = 0, guard = 0;
-  while (!added && !mangaSimilarState.done && guard++ < 4) added = await fetchMoreMangaSimilar();
+  while (!added && !detailSimilarState.done && guard++ < 4) added = await fetchMoreDetailSimilar();
 
   grid.innerHTML = '';
-  if (!mangaSimilarState.list.length) { section.style.display = 'none'; return; }
-  renderMoreMangaSimilar();
+  if (!detailSimilarState.list.length) { section.style.display = 'none'; return; }
+  renderMoreDetailSimilar();
 }
 
-const mangaSimilarObserver = new IntersectionObserver(async (entries) => {
+const detailSimilarObserver = new IntersectionObserver(async (entries) => {
   for (const entry of entries) {
     if (!entry.isIntersecting) continue;
-    const st = mangaSimilarState;
-    if (!st.alId) continue;
-    if (st.shown < st.list.length) { renderMoreMangaSimilar(); continue; }
-    if (!st.done && !st.loading) { await fetchMoreMangaSimilar(); renderMoreMangaSimilar(); }
+    const st = detailSimilarState;
+    if (!st.type) continue;
+    if (st.shown < st.list.length) { renderMoreDetailSimilar(); continue; }
+    if (!st.done && !st.loading) { await fetchMoreDetailSimilar(); renderMoreDetailSimilar(); }
   }
 }, {rootMargin:'300px'});
 
-(function attachMangaSimilarObserver() {
-  const sentinel = document.getElementById('manga-similar-sentinel');
-  if (sentinel) mangaSimilarObserver.observe(sentinel);
+(function attachDetailSimilarObserver() {
+  const sentinel = document.getElementById('detail-similar-sentinel');
+  if (sentinel) detailSimilarObserver.observe(sentinel);
 })();
 
 const similarMoviesObserver = new IntersectionObserver((entries) => {
