@@ -36,8 +36,33 @@
     .nav-item.active{opacity:1;}
     .nav-item svg{width:20px;height:20px;}
     .nav-item span{font-size:9px;font-weight:600;letter-spacing:0.5px;}
-    .nav-dot{width:4px;height:4px;border-radius:50%;background:var(--accent);margin-top:1px;display:none;}
-    .nav-item.active .nav-dot{display:block;}
+    /* The active-tab dot glows rather than sitting flat: a soft halo that
+       breathes. The colour is spelled out in rgba here instead of reusing
+       --accent, because a box-shadow needs the alpha ramp and the Oracle and
+       Trade pages redefine --accent to their own purple — the dot belongs to
+       the nav, so it keeps one colour on every tab. */
+    .nav-dot{width:4px;height:4px;border-radius:50%;background:#ff4d5a;margin-top:1px;display:none;
+      box-shadow:0 0 4px 1px rgba(230,57,70,0.95), 0 0 9px 2px rgba(230,57,70,0.5), 0 0 15px 3px rgba(230,57,70,0.22);}
+    .nav-item.active .nav-dot{display:block;animation:nav-dot-glow 1.9s ease-in-out infinite;}
+    /* The radii and alphas are deliberately heavy. Measured against the real
+       frosted nav sitting over cover art — the only condition that matters —
+       a gentler ramp lifted the red channel by 15/255 at its brightest and
+       varied by 3/255 across the whole cycle, i.e. present in the computed
+       style and invisible on the device. */
+    @keyframes nav-dot-glow{
+      0%,100%{box-shadow:0 0 3px 0   rgba(230,57,70,0.8),  0 0 7px 1px  rgba(230,57,70,0.32),
+                         0 0 12px 1px rgba(230,57,70,0.12);}
+      50%    {box-shadow:0 0 5px 1px  rgba(255,77,90,1),   0 0 11px 3px rgba(230,57,70,0.7),
+                         0 0 18px 4px rgba(230,57,70,0.36), 0 0 26px 5px rgba(230,57,70,0.14);}
+    }
+    /* Someone who has asked the OS for less motion still gets the glow, just
+       held near its bright end instead of pulsing. Same spread-bearing layers
+       as the 50% keyframe — a blur-only version measured invisible. */
+    @media (prefers-reduced-motion: reduce){
+      .nav-item.active .nav-dot{animation:none;
+        box-shadow:0 0 5px 1px  rgba(255,77,90,1),   0 0 11px 3px rgba(230,57,70,0.7),
+                   0 0 18px 4px rgba(230,57,70,0.36), 0 0 26px 5px rgba(230,57,70,0.14);}
+    }
 
     /* HERO */
     .hero{position:relative;width:100%;aspect-ratio:16/9;max-height:230px;overflow:hidden;}
