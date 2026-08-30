@@ -24,8 +24,10 @@ let tvPageState     = {sub:'popular',  region:'', page:1, hasMore:false};
 let moviePageState  = {sub:'popular',  page:1, hasMore:false};
 let searchState     = {q:'', type:'all', page:1, hasMore:false};
 
-// Similar Movies (player page) state
-let similarMoviesState = {list:[], shown:0, forId:null};
+// True once the inline player on the detail page has actually been handed a
+// stream URL. Until then the frame shows its poster placeholder and no
+// provider request has been made — see openPlayer()/resetInlinePlayer().
+let playerLoaded = false;
 
 // Remembers how far each page was scrolled, so a back/swipe-back navigation
 // can restore that position instead of always snapping to the top.
@@ -134,10 +136,9 @@ function showPage(id, restore) {
 
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  const isPlayer = id === 'player-page';
-  document.querySelector('.bottom-nav').style.display = isPlayer ? 'none' : 'flex';
-  // Remove bottom padding on player page so fullscreen button isn't blocked
-  document.body.style.paddingBottom = isPlayer ? '0' : 'var(--nav-h)';
+  // The player lives on the detail page now, so navigating anywhere else has
+  // to stop it — otherwise the iframe keeps playing audio under the next tab.
+  if (id !== 'detail-page') resetInlinePlayer();
   // Only restore a remembered scroll position on back/forward navigation
   // (restore===true, set from the popstate handler). Fresh forward
   // navigation (tapping a card/tab) always starts at the top, as expected.
@@ -238,40 +239,23 @@ window.addEventListener('popstate', async (e) => {
     showPage('home-page', true); setNav('home'); return;
   }
   const page = state.page;
-  if (page !== 'player-page') document.getElementById('player-iframe').src = '';
   showPage(page, true);
   const navMap = {'home-page':'home','anime-page':'anime','manga-page':'manga','tv-page':'tv','movies-page':'movies','search-page':'search','oracle-page':'oracle','trade-page':'trade'};
   if (navMap[page]) setNav(navMap[page]);
   if (page === 'detail-page' && state.item) await openDetail(state.item, true);
-  if (page === 'player-page' && state.item) {
-    currentItem=state.item; currentSeason=state.season; currentEp=state.ep; currentLang=state.lang||'sub';
-    currentServer=state.srv||localStorage.getItem('preferredServer')||'vidlink';
-    const isAnime=state.item.type==='anime', isMovie=state.item.type==='movie';
-    document.getElementById('player-title').textContent=state.item.title;
-    document.getElementById('player-subtitle').textContent=isMovie?(state.item.year||''):`Episode ${state.ep}`;
-    document.getElementById('player-lang-row').style.display=isAnime?'flex':'none';
-    document.getElementById('psub').classList.toggle('active',currentLang==='sub');
-    document.getElementById('pdub').classList.toggle('active',currentLang==='dub');
-    updateServerButtons();
-    document.querySelector('.bottom-nav').style.display='none';
-    playStream(); updateEpNav();
-    loadSimilarItems(state.item);
-  }
 });
 
 // ═══════════════════════════════════════════
 // LANG
 // ═══════════════════════════════════════════
 function setLang(lang) {
+  if (lang === currentLang && playerLoaded) return;
   currentLang = lang;
   document.getElementById('det-sub')?.classList.toggle('active', lang==='sub');
   document.getElementById('det-dub')?.classList.toggle('active', lang==='dub');
-}
-function switchLang(lang) {
-  currentLang = lang;
-  document.getElementById('psub').classList.toggle('active', lang==='sub');
-  document.getElementById('pdub').classList.toggle('active', lang==='dub');
-  playStream();
+  // Only anime has a sub/dub split in the stream URL, and only a player that
+  // is already showing something needs re-pointing at it.
+  if (playerLoaded) playStream();
 }
 
 // ═══════════════════════════════════════════
@@ -924,12 +908,22 @@ async function openDetail(item, restore=false) {
   document.getElementById('detail-castprod-body').classList.add('collapsed');
   document.getElementById('detail-castprod-chev').classList.add('collapsed');
   document.getElementById('detail-lang').style.display = 'none';
+  // currentLang was just reset to 'sub' above; the toggle has to follow it.
+  // It never used to, because the toggle was hidden behind a Watch button and
+  // a second copy on the player page overrode it — now it sits in the EPISODES
+  // header of every title, so a leftover lit DUB would be read as fact.
+  document.getElementById('det-sub')?.classList.add('active');
+  document.getElementById('det-dub')?.classList.remove('active');
   document.getElementById('detail-seasons-wrap').style.display = 'none';
-  document.getElementById('eps-label-row').style.display = 'none';
-  document.getElementById('eps-label').style.display = 'block';
-  document.getElementById('detail-tags-row').innerHTML = '';
+  showEpsSection(false);
   document.getElementById('eps-grid').innerHTML = '';
   document.getElementById('seasons-row').innerHTML = '';
+  // Both collapsible sections re-close on every detail open, so a title never
+  // inherits the previous one's expanded state.
+  collapseSection('eps-grid', 'eps-chev', true);
+  collapseSection('detail-similar-body', 'detail-similar-chev', true);
+  // Player back to its placeholder, pointing at this title's art.
+  resetInlinePlayer(item);
   // Hide up front so a detail page never briefly shows the previous title's
   // grid while the new one is still loading.
   const detailSim = document.getElementById('detail-similar-section');
@@ -965,7 +959,7 @@ async function openAnimeDetail(item) {
   const full = {...fromAL(m), al_id:m.id, mal_id:m.idMal||item.mal_id};
   currentItem = full;
   const animeTags = matchAnimeTags(m.tags);
-  renderDetailTagsRow(animeTags, true);
+  showEpsSection(true);
   renderCastProduction('anime', [], []); // no Cast & Production for anime — AniList has no reliable cast data
 
   // Seasons from relations
@@ -1167,9 +1161,9 @@ async function openMangaDetail(item) {
   renderDetailBackdrop(full.banner || full.img, full.title);
   renderDetailHero(full, 'manga', matchMangaTags(m.tags));
 
-  // No chapter grid to label, so the EPISODES heading stays hidden — same
+  // No chapter grid to label, so the EPISODES block stays hidden — same
   // treatment movies get.
-  renderDetailTagsRow([], false);
+  showEpsSection(false);
 
   // AniList staff roles are free text ("Story & Art", "Story", "Art",
   // "Original Creator", "Assistant"). Assistants are dropped: on a long
@@ -1215,7 +1209,7 @@ async function openTVDetail(item) {
   renderDetailBackdrop(full.banner, full.title);
   renderDetailHero(full, 'tv', tvTags);
 
-  renderDetailTagsRow(tvTags, true);
+  showEpsSection(true);
   const castNames = (data.credits?.cast||[]).slice(0,8).map(c=>c.name);
   const prodNames = [...new Set([...(data.networks||[]).map(n=>n.name), ...(data.production_companies||[]).map(p=>p.name)])];
   renderCastProduction('tv', castNames, prodNames);
@@ -1235,7 +1229,7 @@ async function openTVDetail(item) {
     selectTVSeason(tvSeasons[0]);
   } else {
     allSeasons = [{...full, season_number:1}];
-    document.getElementById('eps-label').style.display = 'block';
+    showEpsSection(true);
     buildEpGrid(data.number_of_episodes||20, null);
   }
   loadRecommendations(full);
@@ -1254,9 +1248,9 @@ async function openMovieDetail(item) {
   renderDetailBackdrop(full.banner, full.title);
   renderDetailHero(full, 'movie', movieTags);
 
-  // Movies have no episode grid, so the "EPISODES" heading stays hidden —
-  // the tag pills now live up in the hero row instead.
-  renderDetailTagsRow(movieTags, false);
+  // Movies have no episode grid, so the "EPISODES" block stays hidden — the
+  // tag pills live up in the hero row instead, and a movie has no dub toggle.
+  showEpsSection(false);
   const castNames = (data?.credits?.cast||[]).slice(0,8).map(c=>c.name);
   const prodNames = (data?.production_companies||[]).map(p=>p.name);
   renderCastProduction('movie', castNames, prodNames);
@@ -1270,6 +1264,11 @@ async function openMovieDetail(item) {
 
 function renderDetailBackdrop(img, title) {
   tintStatusBarFrom(img);
+  // The inline player's placeholder shows the same art. openDetail seeds it
+  // from the card the user tapped, which is the low-res poster; this is the
+  // one point every detail renderer passes through with the real banner.
+  const phImg = document.getElementById('player-placeholder-img');
+  if (phImg && !playerLoaded) phImg.src = img || '';
   document.getElementById('detail-backdrop-wrap').innerHTML = `
     <img src="${img||''}" alt="${title}" style="width:100%;height:100%;object-fit:cover;display:block;"/>
     <div class="detail-backdrop-overlay"></div>
@@ -1326,6 +1325,13 @@ function renderSeasonTabs() {
     b.textContent = s.name || s.title || `Season ${i+1}`;
     b.dataset.idx = i;
     b.onclick = () => {
+      // The stream URL carries the season, so a season change makes whatever
+      // is loaded wrong. Reset to the placeholder rather than leave the old
+      // season playing under new episode buttons. Deliberately here and not
+      // inside selectSeason/selectTVSeason: those also run during the initial
+      // detail load, and selectTVSeason awaits TMDB, so a reset in there could
+      // land after a resume-from-history has already started playing.
+      resetInlinePlayer(currentItem);
       if (s.type === 'anime') selectSeason(s);
       else selectTVSeason(s);
     };
@@ -1338,7 +1344,7 @@ function selectSeason(s) {
   // For ongoing anime with no episode count, fetch actual count from AniList
   if (!s.episodes && s.al_id) {
     totalEps = 9999; // allow next button while loading
-    document.getElementById('eps-label').style.display = 'block';
+    showEpsSection(true);
     buildEpGrid(9999, null);
     // Fetch real episode count in background
     al(`query($id:Int){Media(id:$id){episodes nextAiringEpisode{episode}}}`, {id: s.al_id}).then(r => {
@@ -1348,7 +1354,7 @@ function selectSeason(s) {
     });
   } else {
     totalEps = s.episodes || 100;
-    document.getElementById('eps-label').style.display = 'block';
+    showEpsSection(true);
     buildEpGrid(totalEps, null);
   }
   document.querySelectorAll('.spill').forEach((b,i) => b.classList.toggle('active', parseInt(b.dataset.idx)===allSeasons.indexOf(s)));
@@ -1358,7 +1364,7 @@ function selectSeason(s) {
 async function selectTVSeason(s) {
   currentSeason = s;
   document.querySelectorAll('.spill').forEach((b,i) => b.classList.toggle('active', parseInt(b.dataset.idx)===allSeasons.indexOf(s)));
-  document.getElementById('eps-label').style.display = 'block';
+  showEpsSection(true);
 
   // Fetch episode count for this season
   const data = await tmdb(`/tv/${s.tmdb_id}/season/${s.season_number}`);
@@ -1380,6 +1386,11 @@ function buildEpGrid(count, seasonNum) {
     b.onclick = () => openPlayer(i);
     eg.appendChild(b);
   }
+  // Every caller sets totalEps immediately before calling this — including the
+  // async AniList episode-count fetch — so this is the one place that knows the
+  // count has settled. Without it the player's "Episode 1 / 1" sat stale under
+  // a grid of 12 buttons until something was actually played.
+  updateEpNav();
 }
 
 function renderSimpleDetail(item, type) {
@@ -1388,7 +1399,7 @@ function renderSimpleDetail(item, type) {
   const episodic = type === 'anime' || type === 'tv';
   renderDetailBackdrop(item.banner||item.img, item.title);
   renderDetailHero(item, type);
-  renderDetailTagsRow([], episodic);
+  showEpsSection(episodic);
   renderCastProduction(type, [], [], type === 'manga' ? mangaDetailLinks(item) : []);
   if (type === 'manga') {
     const readBtn = document.getElementById('detail-play-btn');
@@ -1485,18 +1496,41 @@ function matchTmdbTags(keywordNames) {
   return out;
 }
 
-// Controls the "EPISODES" section heading above the episode grid. The
-// title's matched tag pills (Miniseries, Isekai, etc.) used to render here
-// too, but now show up in the hero pill row next to the episode count
-// instead (see renderDetailHero), so this just hides/shows the heading —
-// hidden entirely for movies, which have no episode grid.
-function renderDetailTagsRow(matchedTags, showEpisodesText) {
-  const row = document.getElementById('eps-label-row');
-  const label = document.getElementById('eps-label');
-  const tagsEl = document.getElementById('detail-tags-row');
-  label.style.display = showEpisodesText ? 'block' : 'none';
-  tagsEl.innerHTML = '';
-  row.style.display = showEpisodesText ? 'flex' : 'none';
+// Shows or hides the whole collapsible EPISODES block (header + grid).
+// Hidden for movies and manga, which have no episode grid — and with it goes
+// the SUB/DUB toggle that now lives in that header, which is correct: neither
+// type has a dub to switch to. This used to be renderDetailTagsRow(), which
+// also rendered the title's matched tag pills; those moved into the hero pill
+// row next to the episode count (see renderDetailHero) and the row it drew
+// them into is gone, so all that is left is the show/hide.
+function showEpsSection(show) {
+  const sec = document.getElementById('eps-section');
+  if (sec) sec.style.display = show ? 'block' : 'none';
+}
+
+// Shared collapse mechanics for the EPISODES grid and the Similar body. The
+// chevron and the body carry the same 'collapsed' class the Cast & Production
+// card already uses, so all three sections behave identically.
+// `force` omitted = toggle; true = collapse; false = expand.
+function collapseSection(bodyId, chevId, force) {
+  const body = document.getElementById(bodyId);
+  const chev = document.getElementById(chevId);
+  if (!body) return false;
+  const collapsed = force === undefined
+    ? body.classList.toggle('collapsed')
+    : (body.classList.toggle('collapsed', force), force);
+  if (chev) chev.classList.toggle('collapsed', collapsed);
+  return collapsed;
+}
+
+function toggleEpsSection() { collapseSection('eps-grid', 'eps-chev'); }
+
+function toggleSimilarSection() {
+  const collapsed = collapseSection('detail-similar-body', 'detail-similar-chev');
+  // Opening it can reveal a grid shorter than the viewport, in which case the
+  // sentinel is already on screen and no scroll event will ever fire to page
+  // the next batch in. Prime it once here instead.
+  if (!collapsed) fillDetailSimilar();
 }
 
 // Hidden for anime — AniList has no reliable cast data for it. TV/Movie fill
@@ -1589,94 +1623,11 @@ function renderRecRow(num, title, items) {
   row.style.display = 'block';
 }
 
-// ═══════════════════════════════════════════
-// SIMILAR ITEMS (player page, infinite scroll, sorted by rating) — movies, tv, anime
-// ═══════════════════════════════════════════
-async function loadSimilarItems(item) {
-  const section = document.getElementById('similar-movies-section');
-  if (!section) return;
-
-  if (!item || !['movie','tv','anime'].includes(item.type)) { section.style.display = 'none'; return; }
-
-  const selfId = item.al_id || item.tmdb_id || item.id;
-  const key = `${item.type}-${selfId}`;
-
-  // Already loaded for this title — just make sure it's visible
-  if (similarMoviesState.forId === key && similarMoviesState.list.length) {
-    section.style.display = 'block';
-    document.getElementById('similar-movies-end').style.display =
-      similarMoviesState.shown >= similarMoviesState.list.length ? 'block' : 'none';
-    return;
-  }
-
-  section.style.display = 'block';
-  document.getElementById('similar-title').textContent =
-    item.type === 'anime' ? '✨ Similar Anime' : item.type === 'tv' ? '📺 Similar Series' : '🎬 Similar Movies';
-  const grid = document.getElementById('similar-movies-grid');
-  const endMsg = document.getElementById('similar-movies-end');
-  grid.innerHTML = skRow(6);
-  endMsg.style.display = 'none';
-
-  try {
-    let combined = [];
-
-    if (item.type === 'anime') {
-      const Q = `query($id:Int,$page:Int){Media(id:$id){recommendations(page:$page,perPage:25,sort:RATING_DESC){pageInfo{hasNextPage}nodes{mediaRecommendation{id idMal title{english romaji}coverImage{large}episodes averageScore status seasonYear format genres}}}}}`;
-      for (let p = 1; p <= 3; p++) {
-        const r = await al(Q, {id: item.al_id, page: p});
-        const conn = r?.data?.Media?.recommendations;
-        const nodes = (conn?.nodes || []).map(n => n.mediaRecommendation).filter(Boolean);
-        combined.push(...nodes.map(m => ({...fromAL(m), al_id: m.id})));
-        if (!conn?.pageInfo?.hasNextPage) break;
-      }
-    } else {
-      const endpoint = item.type; // 'movie' or 'tv'
-      const rawId = item.tmdb_id || item.id;
-      const first = await tmdb(`/${endpoint}/${rawId}/similar`, {page:1});
-      const totalPages = Math.min(first?.total_pages || 1, 5); // cap ~5 pages (~100 titles)
-      const rest = [];
-      for (let p = 2; p <= totalPages; p++) rest.push(tmdb(`/${endpoint}/${rawId}/similar`, {page:p}));
-      const restData = await Promise.all(rest);
-      combined = [first, ...restData].flatMap(d => d?.results || []).map(m => fromTMDB(m, item.type));
-    }
-
-    const seen = new Set();
-    const list = combined
-      .filter(m => {
-        const mid = m.al_id || m.tmdb_id || m.id;
-        if (mid === selfId || seen.has(mid)) return false;
-        seen.add(mid);
-        return true;
-      })
-      .sort((a,b) => (parseFloat(b.score)||0) - (parseFloat(a.score)||0));
-
-    similarMoviesState = {list, shown:0, forId:key};
-    grid.innerHTML = '';
-    if (!list.length) { section.style.display = 'none'; return; }
-    renderMoreSimilarItems();
-  } catch {
-    grid.innerHTML = '';
-    section.style.display = 'none';
-  }
-}
-
-function renderMoreSimilarItems() {
-  const grid = document.getElementById('similar-movies-grid');
-  const endMsg = document.getElementById('similar-movies-end');
-  if (!grid) return;
-  const {list, shown} = similarMoviesState;
-  const batch = list.slice(shown, shown + 12);
-  batch.forEach(item => grid.appendChild(buildGridCard(item)));
-  similarMoviesState.shown += batch.length;
-  endMsg.style.display = similarMoviesState.shown >= list.length ? 'block' : 'none';
-}
-
 // ── SIMILAR (detail page, infinite, every type) ──
-// The player page has its own Similar grid (#similar-movies-section) and keeps
-// it. But that one only appears once you are watching something, so the DETAIL
-// page had nothing — which is why anime/TV/movies looked like they had lost a
-// feature they in fact never had here. This is the detail-page equivalent, and
-// it works for all four types.
+// This is the only Similar grid left. The player page had a second copy of it
+// (#similar-movies-section), which went with the page itself — the player is
+// now a section of the detail page, so both grids would have been on screen at
+// once, showing the same titles twice.
 //
 // Each type pages through its best source first, then falls back to a second
 // one so the feed does not stop after a screenful:
@@ -1813,58 +1764,93 @@ const detailSimilarObserver = new IntersectionObserver(async (entries) => {
   if (sentinel) detailSimilarObserver.observe(sentinel);
 })();
 
-const similarMoviesObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting && similarMoviesState.shown < similarMoviesState.list.length) {
-      renderMoreSimilarItems();
-    }
-  });
-}, {rootMargin:'200px'});
-
-(function attachSimilarMoviesObserver() {
-  const sentinel = document.getElementById('similar-movies-sentinel');
-  if (sentinel) similarMoviesObserver.observe(sentinel);
-})();
+// The section is collapsed by default, so its sentinel starts at display:none
+// and the observer has nothing to watch. Expanding it can leave a grid shorter
+// than the viewport — sentinel already on screen, no scroll to come — so this
+// pages batches in until the sentinel is pushed below the fold or the feed
+// runs out. Bounded at 4 rounds so a source that returns nothing cannot spin.
+async function fillDetailSimilar() {
+  const st = detailSimilarState;
+  const sentinel = document.getElementById('detail-similar-sentinel');
+  if (!st.type || !sentinel) return;
+  for (let i = 0; i < 4; i++) {
+    if (st.shown < st.list.length) renderMoreDetailSimilar();
+    else if (!st.done && !st.loading) { await fetchMoreDetailSimilar(); renderMoreDetailSimilar(); }
+    else break;
+    await new Promise(r => requestAnimationFrame(r));
+    if (sentinel.getBoundingClientRect().top > window.innerHeight) break;
+  }
+}
 
 // ═══════════════════════════════════════════
 // PLAYER
 // ═══════════════════════════════════════════
+// Plays an episode in the detail page's own player. This used to push a
+// separate #player-page onto the history stack; it does not any more, so the
+// URL stays on the title and Back goes where the user came from rather than
+// bouncing them through a page they never asked to leave.
 function openPlayer(ep) {
-  currentEp = ep;
   const item = currentItem;
-  const season = currentSeason;
-  const isAnime = item.type === 'anime';
-  const isMovie = item.type === 'movie';
-  history.pushState({page:'player-page', item, season, ep, lang:currentLang, srv:currentServer}, '', `#player-${item.type}-${item.al_id||item.tmdb_id||item.id}-s${season?.season_number||1}-e${ep}`);
-  showPage('player-page');
+  if (!item || item.type === 'manga') return;
+  currentEp = ep;
 
-  // Title display
-  let subtitle = '';
-  if (isMovie) subtitle = item.year || '';
-  else {
-    const sLabel = allSeasons.length > 1 ? `S${allSeasons.indexOf(season)+1} · ` : '';
-    subtitle = `${sLabel}Episode ${ep}`;
-  }
+  const wrap = document.getElementById('detail-player-wrap');
+  if (wrap) wrap.style.display = 'block';
+  const ph = document.getElementById('player-placeholder');
+  if (ph) ph.style.display = 'none';
+  playerLoaded = true;
 
-  document.getElementById('player-title').textContent = item.title;
-  document.getElementById('player-subtitle').textContent = subtitle;
-
-  // Show/hide lang toggle (anime only)
-  const langRow = document.getElementById('player-lang-row');
-  langRow.style.display = isAnime ? 'flex' : 'none';
-  document.getElementById('psub').classList.toggle('active', currentLang==='sub');
-  document.getElementById('pdub').classList.toggle('active', currentLang==='dub');
-
-  // Set server label
-  updateServerButtons();
-
-  playStream();
+  playStream();                 // also draws the server picker
   updateEpNav();
   document.querySelectorAll('.ep-btn').forEach((b,i) => b.classList.toggle('active', i+1===ep));
-  // Save to watch history
-  saveToHistory(item, season, ep);
-  // Load similar items (movies, tv, anime)
-  loadSimilarItems(item);
+  saveToHistory(item, currentSeason, ep);
+  scrollPlayerIntoView();
+}
+
+// The player sits below the synopsis and the season pills, so a tap on Watch
+// or on an episode has to bring it into view or nothing visibly happens.
+function scrollPlayerIntoView() {
+  const wrap = document.getElementById('detail-player-wrap');
+  if (!wrap) return;
+  requestAnimationFrame(() => wrap.scrollIntoView({behavior:'smooth', block:'start'}));
+}
+
+// What the placeholder's play button does: start whatever episode is queued
+// (EP 1 on a fresh detail page).
+function playCurrent() { openPlayer(currentEp || 1); }
+
+// Puts the inline player back to "nothing is playing".
+//   resetInlinePlayer(item) — a new title has been opened: stop the stream and
+//     re-arm the placeholder with that title's artwork.
+//   resetInlinePlayer()     — we are leaving the detail page: stop the stream
+//     and leave the section configured as it is.
+// Stopping means clearing iframe.src, which is the only way to make a
+// cross-origin provider stop playing audio; nothing else reaches into it.
+function resetInlinePlayer(item) {
+  clearTimeout(serverLoadTimer);
+  stopWatchTimer();
+  hideResume();
+  setPlayerFrame(null);
+  playerLoaded = false;
+  if (item === undefined) return;
+
+  const wrap = document.getElementById('detail-player-wrap');
+  const playable = !!item && item.type !== 'manga';
+  if (wrap) wrap.style.display = playable ? 'block' : 'none';
+
+  const ph = document.getElementById('player-placeholder');
+  if (ph) {
+    ph.style.display = playable ? 'flex' : 'none';
+    const img = document.getElementById('player-placeholder-img');
+    if (img) img.src = (item && (item.banner || item.img)) || '';
+    const lbl = document.getElementById('player-placeholder-lbl');
+    if (lbl) lbl.textContent = item && item.type === 'movie' ? 'Tap to play' : 'Tap to play EP 1';
+  }
+
+  currentEp = 1;
+  const srv = document.getElementById('server-btns');
+  if (srv) srv.innerHTML = '';
+  updateEpNav();
 }
 
 // ─── SERVER STATE ───
@@ -1958,7 +1944,26 @@ function updateServerButtons() {
   `;
 }
 
-// Loads the current server's URL into the iframe, with a load-timeout fallback.
+// Points the player at a URL by REPLACING the iframe element instead of
+// assigning to its src. Measured in Chromium on this page: three `iframe.src =`
+// assignments push three session-history entries, three element swaps push
+// none. That mattered little while the player was its own page; now that
+// episodes, servers and sub/dub all reload in place on the detail page, every
+// one of those would have been a Back press that did nothing visible before
+// the user finally got off the page. Pass no url to park the frame empty,
+// which is also how the stream is stopped — the old iframe's browsing context
+// goes with the element.
+// Returns the live iframe so the caller can hang onload/onerror on it.
+function setPlayerFrame(url) {
+  const old = document.getElementById('player-iframe');
+  if (!old) return null;
+  const frame = old.cloneNode(false);
+  if (url) frame.setAttribute('src', url); else frame.removeAttribute('src');
+  old.replaceWith(frame);
+  return frame;
+}
+
+// Loads the current server's URL into the player, with a load-timeout fallback.
 // Note: cross-origin iframes can't be inspected for app-level errors (e.g. a provider's
 // own "not found" page) — only network-level failures (onerror) and a load timeout are
 // detectable. That's the best available signal without per-provider integration.
@@ -1966,7 +1971,6 @@ function loadServerUrl() {
   clearTimeout(serverLoadTimer);
   const item = currentItem;
   const isAnime = item?.type === 'anime';
-  const iframe = document.getElementById('player-iframe');
   const status = document.getElementById('server-status');
   const url = buildUrl(currentServer);
 
@@ -1978,9 +1982,10 @@ function loadServerUrl() {
   }
 
   if (status) status.style.display = 'none';
+  const iframe = setPlayerFrame(url);
+  if (!iframe) return;
   iframe.onerror = function() { autoFallback(); };
   iframe.onload = function() { clearTimeout(serverLoadTimer); };
-  iframe.src = url;
 
   if (!isAnime) {
     serverLoadTimer = setTimeout(autoFallback, 10000); // no 'load' fired in 10s → assume dead/blocked
@@ -2066,7 +2071,7 @@ function resumeFromTracked() {
   }
   if (url) {
     clearTimeout(serverLoadTimer);
-    document.getElementById('player-iframe').src = url;
+    setPlayerFrame(url);
   } else {
     loadServerUrl(); // provider has no confirmed resume param; reload from start
   }
@@ -2105,6 +2110,10 @@ function playStream() {
 
 function updateEpNav() {
   const isMovie = currentItem?.type === 'movie';
+  const row = document.querySelector('#detail-player-wrap .ep-nav-row');
+  // A movie is one item — prev/next would be two permanently dead buttons, so
+  // the whole row goes rather than sitting there greyed out.
+  if (row) row.style.display = isMovie ? 'none' : 'flex';
   document.getElementById('ep-indicator').textContent = isMovie ? '' : `Episode ${currentEp} / ${totalEps||'?'}`;
   document.getElementById('prev-ep').disabled = currentEp <= 1 || isMovie;
   document.getElementById('next-ep').disabled = currentEp >= totalEps || isMovie;
@@ -2843,25 +2852,26 @@ async function initFromHash() {
     return;
   }
 
-  // Player page
+  // Old #player-<type>-<id>-s<n>-e<n> links, from before the player moved onto
+  // the detail page. The page they named no longer exists, so they open the
+  // title's detail page and start that episode in its inline player — a
+  // bookmark or a shared link still lands on the same episode.
   const playerM = hash.match(/^player-(anime|tv|movie)-(\d+)-s(\d+)-e(\d+)$/);
   if (playerM) {
-    showPage('player-page');
-    document.querySelector('.bottom-nav').style.display='none';
+    showPage('detail-page');
     loadHome();
     const item = await fetchItem(playerM[1], playerM[2]);
     if (item) {
-      currentItem   = item;
-      currentEp     = parseInt(playerM[4]);
-      currentSeason = {type:playerM[1], season_number:parseInt(playerM[3]), mal_id:item.mal_id, tmdb_id:item.tmdb_id||item.id};
-      allSeasons    = [currentSeason];
-      totalEps      = item.episodes||1;
-      const isAnime = item.type==='anime', isMovie = item.type==='movie';
-      document.getElementById('player-title').textContent    = item.title;
-      document.getElementById('player-subtitle').textContent = isMovie?(item.year||''):`Episode ${currentEp}`;
-      document.getElementById('player-lang-row').style.display = isAnime?'flex':'none';
-      playStream(); updateEpNav();
-      loadSimilarItems(item);
+      await openDetail(item);
+      // openDetail resolves the real season list; only then is it safe to ask
+      // for an episode, and only if that season actually still lines up.
+      const wantSeason = parseInt(playerM[3]);
+      const seasonIdx = allSeasons.findIndex(x => (x.season_number||1) === wantSeason);
+      if (seasonIdx > 0) {
+        const s2 = allSeasons[seasonIdx];
+        if (s2.type === 'anime') selectSeason(s2); else await selectTVSeason(s2);
+      }
+      openPlayer(parseInt(playerM[4]));
     } else { showPage('home-page'); setNav('home'); }
     return;
   }
