@@ -900,13 +900,11 @@ async function openDetail(item, restore=false) {
   document.getElementById('detail-poster').innerHTML = `<div class="sk" style="width:100%;height:100%;border-radius:7px;"></div>`;
   document.getElementById('detail-info').innerHTML = `<div class="sk" style="width:80%;height:16px;margin-bottom:8px;border-radius:4px;"></div><div class="sk" style="width:60%;height:10px;border-radius:4px;"></div>`;
   document.getElementById('detail-synopsis').textContent = '';
-  document.getElementById('detail-synopsis').classList.remove('expanded');
-  document.getElementById('synopsis-toggle').style.display = 'none';
-  document.getElementById('synopsis-toggle').textContent = 'Show more';
+  document.getElementById('detail-cta-row').style.display = 'none';
   document.getElementById('detail-castprod').style.display = 'none';
   document.getElementById('detail-castprod-body').innerHTML = '';
-  document.getElementById('detail-castprod-body').classList.add('collapsed');
-  document.getElementById('detail-castprod-chev').classList.add('collapsed');
+  collapseSection('detail-castprod-body', 'detail-castprod-chev', true);
+  collapseSection('detail-details-body', 'detail-details-chev', true);
   document.getElementById('detail-lang').style.display = 'none';
   // currentLang was just reset to 'sub' above; the toggle has to follow it.
   // It never used to, because the toggle was hidden behind a Watch button and
@@ -917,10 +915,11 @@ async function openDetail(item, restore=false) {
   document.getElementById('detail-seasons-wrap').style.display = 'none';
   showEpsSection(false);
   document.getElementById('eps-grid').innerHTML = '';
-  document.getElementById('seasons-row').innerHTML = '';
-  // Both collapsible sections re-close on every detail open, so a title never
-  // inherits the previous one's expanded state.
-  collapseSection('eps-grid', 'eps-chev', true);
+  document.getElementById('seasons-select').innerHTML = '';
+  // Every collapsible resets on each detail open, so a title never inherits
+  // the previous one's state. Episodes open, the rest shut: the grid is the
+  // one you came to use, and it is also what makes a season change visible.
+  collapseSection('eps-grid', 'eps-chev', false);
   collapseSection('detail-similar-body', 'detail-similar-chev', true);
   // Player back to its placeholder, pointing at this title's art.
   resetInlinePlayer(item);
@@ -980,8 +979,14 @@ async function openAnimeDetail(item) {
   renderDetailBackdrop(full.banner||full.img, full.title);
   renderDetailHero(full, 'anime', animeTags);
   document.getElementById('detail-lang').style.display = 'flex';
-  renderSeasonTabs();
-  selectSeason(allSeasons[0]);
+  renderSeasonPicker();
+  // Open on the season the user actually tapped, not the earliest one. The list
+  // is sorted by year, so allSeasons[0] is season 1 — which meant tapping a
+  // "Season 2" card gave you Season 2's banner, title and episode count in the
+  // header sitting above Season 1's episode grid and Season 1's stream. The
+  // pills hid it (the active one could be scrolled off); the picklist names the
+  // selected season outright, so the mismatch is now in plain sight.
+  selectSeason(allSeasons.find(x => x.al_id === full.al_id) || allSeasons[0]);
   loadRecommendations(full);
 }
 
@@ -1188,9 +1193,7 @@ async function openMangaDetail(item) {
   allSeasons = [];
   currentSeason = null;
 
-  const readBtn = document.getElementById('detail-play-btn');
-  readBtn.textContent = '📖 Read ↗';
-  readBtn.onclick = () => openMangaReader(full);
+  showReadButton(full);
 
   loadRecommendations(full);
 }
@@ -1224,8 +1227,7 @@ async function openTVDetail(item) {
 
   if (tvSeasons.length > 0) {
     allSeasons = tvSeasons;
-    document.getElementById('detail-seasons-wrap').style.display = 'block';
-    renderSeasonTabs();
+    renderSeasonPicker();
     selectTVSeason(tvSeasons[0]);
   } else {
     allSeasons = [{...full, season_number:1}];
@@ -1254,8 +1256,6 @@ async function openMovieDetail(item) {
   const castNames = (data?.credits?.cast||[]).slice(0,8).map(c=>c.name);
   const prodNames = (data?.production_companies||[]).map(p=>p.name);
   renderCastProduction('movie', castNames, prodNames);
-  document.getElementById('detail-play-btn').onclick = () => openPlayer(1);
-  document.getElementById('detail-play-btn').textContent = '▶ Watch Movie';
   allSeasons = [{...full, season_number:0}];
   currentSeason = allSeasons[0];
   totalEps = 1;
@@ -1301,42 +1301,59 @@ function renderDetailHero(item, type, extraTags=[]) {
     <div class="detail-title">${item.title}</div>
     <div class="detail-pills">${pills.map(p=>`<span class="dpill ${p.cls}">${p.label}</span>`).join('')}</div>`;
 
-  const synEl = document.getElementById('detail-synopsis');
-  synEl.textContent = item.synopsis || 'No synopsis available.';
-  synEl.classList.remove('expanded');
-  const toggleBtn = document.getElementById('synopsis-toggle');
-  toggleBtn.textContent = 'Show more';
-  // Only offer the toggle if the text actually overflows the 4-line clamp —
-  // scrollHeight vs clientHeight is measured after the browser reflows the
-  // clamped box, so this reflects the real rendered overflow, not a guess.
-  toggleBtn.style.display = synEl.scrollHeight > synEl.clientHeight + 1 ? 'block' : 'none';
-  document.getElementById('detail-play-btn').onclick = () => openPlayer(1);
-  document.getElementById('detail-play-btn').textContent = '▶ Watch EP 1';
+  document.getElementById('detail-synopsis').textContent = item.synopsis || 'No synopsis available.';
 }
 
-function renderSeasonTabs() {
-  const row = document.getElementById('seasons-row');
-  row.innerHTML = '';
-  if (allSeasons.length <= 1) { document.getElementById('detail-seasons-wrap').style.display='none'; return; }
-  document.getElementById('detail-seasons-wrap').style.display = 'block';
+// The CTA row survives for manga alone. Anime/TV/movies used to open with a
+// "Watch EP 1" button here; the inline player has its own play control and the
+// episode grid under it is open by default, so that was a third control for
+// one action. Manga has neither, so Read stays exactly where it was.
+function showReadButton(item) {
+  const row = document.getElementById('detail-cta-row');
+  const btn = document.getElementById('detail-play-btn');
+  if (!row || !btn) return;
+  row.style.display = 'flex';
+  btn.textContent = '📖 Read ↗';
+  btn.onclick = () => openMangaReader(item);
+}
+
+// One <select> beside the SEASONS label. It replaced a horizontally scrolling
+// row of pills, where the active pill could sit off-screen — so on a show whose
+// seasons run the same length, picking one changed nothing you could see.
+function renderSeasonPicker() {
+  const wrap = document.getElementById('detail-seasons-wrap');
+  const sel = document.getElementById('seasons-select');
+  sel.innerHTML = '';
+  if (allSeasons.length <= 1) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
   allSeasons.forEach((s,i) => {
-    const b = document.createElement('div');
-    b.className = 'spill';
-    b.textContent = s.name || s.title || `Season ${i+1}`;
-    b.dataset.idx = i;
-    b.onclick = () => {
-      // The stream URL carries the season, so a season change makes whatever
-      // is loaded wrong. Reset to the placeholder rather than leave the old
-      // season playing under new episode buttons. Deliberately here and not
-      // inside selectSeason/selectTVSeason: those also run during the initial
-      // detail load, and selectTVSeason awaits TMDB, so a reset in there could
-      // land after a resume-from-history has already started playing.
-      resetInlinePlayer(currentItem);
-      if (s.type === 'anime') selectSeason(s);
-      else selectTVSeason(s);
-    };
-    row.appendChild(b);
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = s.name || s.title || `Season ${i+1}`;
+    sel.appendChild(o);
   });
+}
+
+// Keeps the picklist showing whichever season the code selected, including the
+// first one chosen for you when the page opens.
+function syncSeasonPicker(s) {
+  const sel = document.getElementById('seasons-select');
+  const i = allSeasons.indexOf(s);
+  if (sel && i >= 0 && sel.options.length) sel.value = String(i);
+}
+
+function onSeasonPick(idx) {
+  const s = allSeasons[Number(idx)];
+  if (!s) return;
+  // The stream URL carries the season, so a season change makes whatever is
+  // loaded wrong. Reset to the placeholder rather than leave the old season
+  // playing under new episode buttons. Deliberately here and not inside
+  // selectSeason/selectTVSeason: those also run during the initial detail
+  // load, and selectTVSeason awaits TMDB, so a reset in there could land
+  // after a resume-from-history has already started playing.
+  resetInlinePlayer(currentItem);
+  if (s.type === 'anime') selectSeason(s);
+  else selectTVSeason(s);
 }
 
 function selectSeason(s) {
@@ -1357,20 +1374,18 @@ function selectSeason(s) {
     showEpsSection(true);
     buildEpGrid(totalEps, null);
   }
-  document.querySelectorAll('.spill').forEach((b,i) => b.classList.toggle('active', parseInt(b.dataset.idx)===allSeasons.indexOf(s)));
-  document.getElementById('detail-play-btn').onclick = () => openPlayer(1);
+  syncSeasonPicker(s);
 }
 
 async function selectTVSeason(s) {
   currentSeason = s;
-  document.querySelectorAll('.spill').forEach((b,i) => b.classList.toggle('active', parseInt(b.dataset.idx)===allSeasons.indexOf(s)));
+  syncSeasonPicker(s);
   showEpsSection(true);
 
   // Fetch episode count for this season
   const data = await tmdb(`/tv/${s.tmdb_id}/season/${s.season_number}`);
   totalEps = data?.episodes?.length || s.episodes || 10;
   buildEpGrid(totalEps, s.season_number);
-  document.getElementById('detail-play-btn').onclick = () => openPlayer(1);
 }
 
 function buildEpGrid(count, seasonNum) {
@@ -1402,9 +1417,7 @@ function renderSimpleDetail(item, type) {
   showEpsSection(episodic);
   renderCastProduction(type, [], [], type === 'manga' ? mangaDetailLinks(item) : []);
   if (type === 'manga') {
-    const readBtn = document.getElementById('detail-play-btn');
-    readBtn.textContent = '📖 Read ↗';
-    readBtn.onclick = () => openMangaReader(item);
+    showReadButton(item);
     document.getElementById('eps-grid').innerHTML = '';
     allSeasons = [];
     currentSeason = null;
@@ -1564,17 +1577,8 @@ function renderCastProduction(type, castNames, prodNames, links=[]) {
     ${linkHtml}`;
 }
 
-function toggleDcSection() {
-  document.getElementById('detail-castprod-body').classList.toggle('collapsed');
-  document.getElementById('detail-castprod-chev').classList.toggle('collapsed');
-}
-
-function toggleSynopsis() {
-  const el = document.getElementById('detail-synopsis');
-  const btn = document.getElementById('synopsis-toggle');
-  const expanded = el.classList.toggle('expanded');
-  btn.textContent = expanded ? 'Show less' : 'Show more';
-}
+function toggleDcSection() { collapseSection('detail-castprod-body', 'detail-castprod-chev'); }
+function toggleDetailsSection() { collapseSection('detail-details-body', 'detail-details-chev'); }
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1875,7 +1879,13 @@ function buildUrl(server) {
   const season = currentSeason;
 
   if (item.type === 'anime') {
-    const malId = item.mal_id || season?.mal_id;
+    // The picked season wins over the title the page was opened with. For anime
+    // a "season" is a different AniList/MAL entry entirely (sequels are their
+    // own titles), so `item.mal_id || season?.mal_id` — which is what this was
+    // — always resolved to the parent, because the parent's id is always set.
+    // Measured: Attack on Titan season 2 (mal 25781) played mal 16498, i.e.
+    // season 1, while the episode grid correctly showed season 2's count.
+    const malId = season?.mal_id || item.mal_id;
     return `https://megaplay.buzz/stream/mal/${malId}/${currentEp}/${currentLang}`;
   }
 

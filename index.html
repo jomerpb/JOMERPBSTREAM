@@ -33,11 +33,11 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260830g"/>
+  <link rel="stylesheet" href="styles.css?v=20260830h"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260830g"></script>
+  <script defer src="stream.js?v=20260830h"></script>
   <script defer src="oracle.js?v=20260819a"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -703,20 +703,39 @@
         <div class="sk" style="width:60%;height:10px;border-radius:4px;"></div>
       </div>
     </div>
-    <div id="detail-synopsis" class="detail-synopsis"></div>
-    <div class="synopsis-toggle" id="synopsis-toggle" onclick="toggleSynopsis()">Show more</div>
-    <div class="cta-row">
+    <!-- CTA row: manga only. Anime/TV/movies lost their Watch button — the
+         player is right there on the page with its own play control, and the
+         episode grid below it is open by default, so the button was a third
+         way to do the same thing. Manga has no player, so Read stays. -->
+    <div class="cta-row" id="detail-cta-row" style="display:none;">
       <button class="btn-play" id="detail-play-btn">&#9654; Watch</button>
     </div>
-    <div class="dc-section" id="detail-castprod" style="display:none;">
-      <div class="dc-head" onclick="toggleDcSection()">
-        <span id="detail-castprod-title">Cast &amp; Production</span><span class="dc-chev collapsed" id="detail-castprod-chev">&#9662;</span>
+
+    <!-- DETAILS — collapsible, collapsed by default. Holds the synopsis and,
+         nested inside it as its own card, Cast &amp; Production. The synopsis
+         is NOT line-clamped in here: this section already is the "show more",
+         and a second one inside it would be two toggles for one paragraph. -->
+    <div class="dc-section" id="detail-details">
+      <div class="dc-head sec-toggle" onclick="toggleDetailsSection()">
+        <span>Details</span><span class="dc-chev collapsed" id="detail-details-chev">&#9662;</span>
       </div>
-      <div class="dc-body collapsed" id="detail-castprod-body"></div>
+      <div class="dc-body collapsed" id="detail-details-body">
+        <div id="detail-synopsis" class="detail-synopsis"></div>
+        <div class="dc-section" id="detail-castprod" style="display:none;">
+          <div class="dc-head sec-toggle" onclick="toggleDcSection()">
+            <span id="detail-castprod-title">Cast &amp; Production</span><span class="dc-chev collapsed" id="detail-castprod-chev">&#9662;</span>
+          </div>
+          <div class="dc-body collapsed" id="detail-castprod-body"></div>
+        </div>
+      </div>
     </div>
-    <div id="detail-seasons-wrap" style="display:none;">
+
+    <!-- SEASONS — a picklist beside the label, not a row of pills. The pills
+         scrolled sideways, so on a long-running show the selected season could
+         sit off-screen and the page looked unchanged after picking one. -->
+    <div id="detail-seasons-wrap" class="seasons-row" style="display:none;">
       <div class="sec-label">SEASONS</div>
-      <div class="seasons-scroll" id="seasons-row"></div>
+      <select id="seasons-select" class="season-select" onchange="onSeasonPick(this.value)"></select>
     </div>
 
     <!-- PLAYER — inline, right above the episodes. Hidden for manga (nothing
@@ -760,10 +779,10 @@
             <button class="ltbtn active" id="det-sub" onclick="event.stopPropagation();setLang('sub')">SUB</button>
             <button class="ltbtn" id="det-dub" onclick="event.stopPropagation();setLang('dub')">DUB</button>
           </div>
-          <span class="dc-chev collapsed" id="eps-chev">&#9662;</span>
+          <span class="dc-chev" id="eps-chev">&#9662;</span>
         </div>
       </div>
-      <div class="eps-grid collapsed" id="eps-grid"></div>
+      <div class="eps-grid" id="eps-grid"></div>
     </div>
 
     <!-- RECOMMENDATIONS -->
