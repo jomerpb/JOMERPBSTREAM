@@ -1,7 +1,7 @@
 /* ═══════════ GLOBAL / STREAM ═══════════ */
     :root{
       --bg:#07090f;--surface:#0d1117;--card:#111827;
-      --accent:#e63946;--accent2:#3b82f6;--accent3:#8b5cf6;
+      --accent:#e63946;--accent2:#3b82f6;--accent3:#8b5cf6;--accent4:#10b981;
       --text:#f1f5f9;--muted:#64748b;--border:#1e293b;
       --skeleton:#1e293b;--nav-h:60px;--top-h:52px;
     }
@@ -87,6 +87,14 @@
     @media (prefers-reduced-motion: reduce){
       #stream-seg .seg-slide{animation:none;transition:none;}
     }
+    /* Anime · Manga · TV Series · Movies — four labels now share the same
+       fixed-width bar three used to. "TV Series" is the widest and is the one
+       that stops fitting first, so the type steps down on narrow phones
+       rather than letting a nowrap label push the bar into a horizontal
+       overflow. Measured: fits at 320px at 11.5px. */
+    @media (max-width:420px){ #stream-seg .seg-btn{font-size:12.5px;} }
+    @media (max-width:360px){ #stream-seg .seg-btn{font-size:11.5px;padding:11px 1px;} }
+
     /* Extra bottom clearance on the Stream page so scrolled content
        doesn't sit underneath the floating filter bar. */
     #home-page{padding-bottom:68px;}
@@ -105,6 +113,7 @@
     .card-sm-type.anime{background:rgba(139,92,246,0.9);color:#fff;}
     .card-sm-type.tv{background:rgba(59,130,246,0.9);color:#fff;}
     .card-sm-type.movie{background:rgba(230,57,70,0.9);color:#fff;}
+    .card-sm-type.manga{background:rgba(16,185,129,0.9);color:#fff;}
     .card-sm-info{padding:5px 1px 0;}
     .card-sm-title{font-size:10px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
     .card-sm-sub{font-size:9px;color:var(--muted);margin-top:2px;}
@@ -157,6 +166,7 @@
     .dropdown-type.anime{background:rgba(139,92,246,0.2);color:var(--accent3);}
     .dropdown-type.tv{background:rgba(59,130,246,0.2);color:var(--accent2);}
     .dropdown-type.movie{background:rgba(230,57,70,0.2);color:var(--accent);}
+    .dropdown-type.manga{background:rgba(16,185,129,0.2);color:#34d399;}
     .dropdown-view-all{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;background:var(--accent2);color:#fff;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.5px;}
 
     /* SEARCH PAGE */
@@ -222,6 +232,7 @@
     .dpill.anime{background:rgba(139,92,246,0.15);border-color:var(--accent3);color:var(--accent3);}
     .dpill.tv{background:rgba(59,130,246,0.15);border-color:var(--accent2);color:var(--accent2);}
     .dpill.movie{background:rgba(230,57,70,0.15);border-color:var(--accent);color:var(--accent);}
+    .dpill.manga{background:rgba(16,185,129,0.15);border-color:var(--accent4);color:#34d399;}
     .detail-synopsis{font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
     .detail-synopsis.expanded{-webkit-line-clamp:unset;overflow:visible;}
     .synopsis-toggle{display:none;font-size:11px;font-weight:700;color:var(--accent2);cursor:pointer;margin-bottom:14px;-webkit-tap-highlight-color:transparent;}
@@ -251,6 +262,7 @@
     .dc-chiplist{display:flex;flex-wrap:wrap;gap:5px;}
     .dc-chiplist span{background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text);font-size:10.5px;padding:3px 9px;border-radius:20px;}
     .dc-empty{font-size:11px;color:var(--muted);}
+    .dc-chiplist .dc-link{background:rgba(16,185,129,0.12);border:1px solid var(--accent4);color:#34d399;font-size:10.5px;padding:3px 9px;border-radius:20px;text-decoration:none;}
 
     /* SEASONS / EPISODES */
     .sec-label{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;}
