@@ -233,9 +233,9 @@
     .dpill.tv{background:rgba(59,130,246,0.15);border-color:var(--accent2);color:var(--accent2);}
     .dpill.movie{background:rgba(230,57,70,0.15);border-color:var(--accent);color:var(--accent);}
     .dpill.manga{background:rgba(16,185,129,0.15);border-color:var(--accent4);color:#34d399;}
-    .detail-synopsis{font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
-    .detail-synopsis.expanded{-webkit-line-clamp:unset;overflow:visible;}
-    .synopsis-toggle{display:none;font-size:11px;font-weight:700;color:var(--accent2);cursor:pointer;margin-bottom:14px;-webkit-tap-highlight-color:transparent;}
+    /* Lives inside the collapsed-by-default Details card, so it is shown in
+       full — the card is the "show more" that the 4-line clamp used to be. */
+    .detail-synopsis{font-size:11.5px;color:var(--muted);line-height:1.75;}
     /* EPISODES header row: the section label on the left, then SUB/DUB and the
        collapse chevron on the right. SUB/DUB used to sit beside the Watch
        button (and a second copy lived in the player bar); it is one control
@@ -260,6 +260,10 @@
     .dc-chev.collapsed{transform:rotate(-90deg);}
     .dc-body{margin-top:10px;}
     .dc-body.collapsed{display:none;}
+    /* Cast & Production nested inside Details. Still a card — one step lighter
+       than its parent so the nesting reads as depth rather than as a seam. */
+    .dc-section .dc-section{background:rgba(255,255,255,0.035);margin:12px 0 0;}
+    .dc-section .dc-section .dc-head{font-size:11.5px;}
     .dc-block{margin-bottom:10px;}
     .dc-block:last-child{margin-bottom:0;}
     .dc-block-label{font-size:9.5px;font-weight:700;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:5px;}
@@ -273,10 +277,13 @@
 
     /* SEASONS / EPISODES */
     .sec-label{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;}
-    .seasons-scroll{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;margin-bottom:14px;}
-    .seasons-scroll::-webkit-scrollbar{display:none;}
-    .spill{flex-shrink:0;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;}
-    .spill.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+    /* SEASONS is a label and a picklist on one line. It was a sideways-
+       scrolling row of pills, which could park the selected season off-screen. */
+    .seasons-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+    .seasons-row .sec-label{margin-bottom:0;flex-shrink:0;}
+    .season-select{flex:1;min-width:0;background:var(--surface);color:var(--text);
+      border:1px solid var(--border);border-radius:9px;padding:9px 10px;
+      font-size:12px;font-weight:600;cursor:pointer;}
     .eps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;max-height:220px;overflow-y:auto;padding-right:2px;margin-bottom:16px;}
     .eps-grid.collapsed{display:none;}
     .eps-grid::-webkit-scrollbar{width:3px;}
