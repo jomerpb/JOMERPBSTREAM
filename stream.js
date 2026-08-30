@@ -866,7 +866,37 @@ async function openAnimeDetail(item) {
 // is not evidence here: reading would work on the test server and fail on the
 // deployed page. Three public CORS relays were tried as a way round it and all
 // three were down or paywalled (522, 522, 401). So the Read button hands the
-// title off to MangaDex's own search instead of pretending to open it.
+// title off to MangaFreak's own search instead of pretending to open it.
+// MangaFreak's search lives at /Find/<query> (its own search box posts there),
+// and its matcher requires EVERY word of the query to appear in the title it has
+// indexed — punctuation it ignores, extra words it does not. Two consequences,
+// both measured rather than assumed:
+//   * its index stores titles without a leading article, so "The Infinite Mage"
+//     returns nothing while "Infinite Mage" finds the series;
+//   * a trailing subtitle after ": " is usually absent from its title too.
+// Hence the two trims below. Each is skipped when it would leave nothing useful.
+// The separator has to require whitespace AFTER the colon so that a name with an
+// internal colon ("Re:Zero") is not truncated to "Re".
+const MANGAFREAK_SEARCH = 'https://ww3.mangafreak.me/Find/';
+
+function mangafreakQuery(title) {
+  const tidy = t => String(t || '').trim().replace(/\s+/g, ' ');
+  let q = tidy(title);
+  const noArticle = tidy(q.replace(/^(?:the|a|an)\s+/i, ''));
+  if (noArticle.length >= 2) q = noArticle;
+  const noSubtitle = tidy(q.split(/\s*[:–—]\s+|\s+-\s+/)[0]);
+  if (noSubtitle.length >= 2) q = noSubtitle;
+  // MangaFreak's own search box lowercases before navigating; the server is
+  // case-insensitive either way, but this keeps the URL identical to the one
+  // the site would have produced itself.
+  return q.toLowerCase();
+}
+
+function openMangaReader(item) {
+  window.open(MANGAFREAK_SEARCH + encodeURIComponent(mangafreakQuery(item.title)),
+              '_blank', 'noopener');
+}
+
 async function openMangaDetail(item) {
   const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:MANGA){
     id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description
@@ -916,9 +946,7 @@ async function openMangaDetail(item) {
 
   const readBtn = document.getElementById('detail-play-btn');
   readBtn.textContent = '📖 Read ↗';
-  readBtn.onclick = () => window.open(
-    `https://mangadex.org/search?q=${encodeURIComponent(full.title)}`,
-    '_blank', 'noopener');
+  readBtn.onclick = () => openMangaReader(full);
 
   loadRecommendations(full);
 }
@@ -1114,9 +1142,7 @@ function renderSimpleDetail(item, type) {
   if (type === 'manga') {
     const readBtn = document.getElementById('detail-play-btn');
     readBtn.textContent = '📖 Read ↗';
-    readBtn.onclick = () => window.open(
-      `https://mangadex.org/search?q=${encodeURIComponent(item.title)}`,
-      '_blank', 'noopener');
+    readBtn.onclick = () => openMangaReader(item);
     document.getElementById('eps-grid').innerHTML = '';
     allSeasons = [];
     currentSeason = null;
