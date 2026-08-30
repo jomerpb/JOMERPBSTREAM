@@ -263,6 +263,9 @@
     .dc-chiplist span{background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text);font-size:10.5px;padding:3px 9px;border-radius:20px;}
     .dc-empty{font-size:11px;color:var(--muted);}
     .dc-chiplist .dc-link{background:rgba(16,185,129,0.12);border:1px solid var(--accent4);color:#34d399;font-size:10.5px;padding:3px 9px;border-radius:20px;text-decoration:none;}
+    /* An 18+ source is deliberately NOT styled like the others — it reads as a
+       warning chip so nobody taps it expecting an ordinary reading link. */
+    .dc-chiplist .dc-link.adult{background:rgba(244,63,94,0.12);border-color:#f43f5e;color:#fb7185;}
 
     /* SEASONS / EPISODES */
     .sec-label{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;}
