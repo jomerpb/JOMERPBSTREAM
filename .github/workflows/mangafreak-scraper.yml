@@ -1,0 +1,45 @@
+name: MangaFreak Scraper
+
+# Third exception to the repo's manual-only workflow convention, for the same
+# reason pcso-history-append.yml is one: the Manga tab's "Latest" sub-tab IS
+# this file. Dispatch-only, it would show whichever day it was last run by hand
+# and quietly call it "Latest". The slug index in the same run is what lets the
+# Read button open a manga directly instead of a search page, and it drifts as
+# the site adds titles.
+on:
+  schedule:
+    - cron: '0 6 * * *'      # 14:00 Asia/Manila — clear of the two PCSO jobs
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run MangaFreak scraper
+        run: python3 .github/scripts/scrape_mangafreak.py
+
+      - name: Commit results
+        run: |
+          git config user.name "MangaFreak Bot"
+          git config user.email "mangafreak-bot@jomerpb.github.io"
+          git add mangafreak-latest.json mangafreak-index.json
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: update MangaFreak latest + slug index $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+          fi

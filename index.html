@@ -33,11 +33,11 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260830e"/>
+  <link rel="stylesheet" href="styles.css?v=20260830f"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260830e"></script>
+  <script defer src="stream.js?v=20260830f"></script>
   <script defer src="oracle.js?v=20260819a"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -208,11 +208,12 @@
        taken by Anime/TV/Movies, and scheduleAutoApply() dispatches purely on
        the first two characters of the picker id. -->
   <div class="row-section" id="sec-manga" style="display:none;">
-    <div class="row-header"><div class="row-title">📖 Trending Manga</div></div>
+    <div class="row-header"><div class="row-title" id="manga-row-title">📖 Latest Manga</div></div>
   <div style="padding:0;">
     <div class="content-tabs" id="manga-tabs">
       <div class="ctab" onclick="togglePageFilter('manga-filter')">⚙ Filter</div>
-      <div class="ctab active" onclick="loadMangaSub('trending',this)">Trending</div>
+      <div class="ctab active" onclick="loadMangaSub('latest',this)">Latest</div>
+      <div class="ctab" onclick="loadMangaSub('trending',this)">Trending</div>
       <div class="ctab" onclick="loadMangaSub('popular',this)">Popular</div>
       <div class="ctab" onclick="loadMangaSub('toprated',this)">Top Rated</div>
       <div class="ctab" onclick="loadMangaSub('releasing',this)">Ongoing</div>
