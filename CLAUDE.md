@@ -34,6 +34,7 @@ run all three, not the same one three times:
    python3 .github/scripts/tests/test_sphere_palette.py     # styles.css still matches its generator
    python3 .github/scripts/tests/test_scrape_pcso.py
    python3 .github/scripts/tests/test_append_pcso_history.py
+   python3 .github/scripts/tests/test_scrape_mangafreak.py  # parsers, the shrink guard, --latest-only
    ```
 
    The Python ones need `beautifulsoup4` installed or they cannot even import.
@@ -188,15 +189,34 @@ All workflows in `.github/workflows/` are `workflow_dispatch` (manual) only — 
 1. `pcso-history-append.yml` (`0 15 * * *` UTC = 23:00 Asia/Manila, after that day's 9PM draws are posted) — appends the day's results to `pcso-history.json`.
 2. `oracle-snapshot.yml` (`5 16 * * *` UTC = 00:05 Asia/Manila, before that day's draws) — computes and logs the next day's pick, with the previous day's draws already in place.
 
-`mangafreak-scraper.yml` (`0 6 * * *` UTC = 14:00 Asia/Manila) is the third
-scheduled exception, for the same reason the append job is one: the Manga tab's
-**"Latest" sub-tab is that file**. Dispatch-only, it would show whichever day it
-was last run by hand and still call itself "Latest". The same run writes
-`mangafreak-index.json`, the slug index that lets the Read button open a manga's
-own page instead of a search page; it drifts as the site adds titles. Both
-outputs are metadata only — titles, slugs, cover URLs, chapter numbers — and the
-script refuses to overwrite a good file with a materially smaller one, so a
-partial scrape cannot silently empty the tab.
+`mangafreak-scraper.yml` is the third scheduled exception, for the same reason
+the append job is one: the Manga tab's **"Latest" sub-tab is that file**.
+Dispatch-only, it would show whichever day it was last run by hand and still call
+itself "Latest". The same pipeline writes `mangafreak-index.json`, the slug index
+that lets the Read button open a manga's own page instead of a search page; it
+drifts as the site adds titles. Both outputs are metadata only — titles, slugs,
+cover URLs, chapter numbers — and the script refuses to overwrite a good file
+with a materially smaller one, so a partial scrape cannot silently empty the tab.
+
+It runs on **two** schedules, because the two halves cost wildly different
+amounts. Measured against the live site: the Latest feed is 4 requests and
+**0.9s**; the A-Z index is **402 pages and ~54s** (a full run end to end is
+~95s). So:
+
+- `0 0-5,7-23 * * *` — hourly, `--latest-only`: refreshes the feed alone.
+- `0 6 * * *` (14:00 Asia/Manila) — the full run, feed **and** slug index.
+
+Hour 6 is excluded from the hourly expression deliberately: GitHub fires one run
+per *matching* cron, so a plain `0 * * * *` beside `0 6 * * *` would double up at
+06:00. The split exists because daily-only left the feed up to 24 hours behind
+and that feed turns over fast — measured, **57 of 119 rows (48%) were new within
+14 hours** of a scrape, so "Latest" was routinely showing yesterday. Hourly is
+the cheap half only; do not "simplify" this back into one daily job, and do not
+run the 402-page index walk hourly to get there.
+
+Because it now commits hourly it shares `main` with the two PCSO jobs, so its
+commit step **rebases and retries** (5 attempts) and pushes an explicit
+`HEAD:${GITHUB_REF_NAME}` refspec. A bare `git push` loses that race.
 
 `tests.yml` is a fourth exception to the manual-only convention, in a different
 direction: it has **no cron**, but it runs on every push and pull request. The
@@ -214,7 +234,60 @@ The append job's schedule is a deliberate exception: `pcso-history.json` feeds t
 - Sharded scrapers each independently call `resolveAllIds()` (pages `companyDirectory/search.ax`) to get the full company list, then filter to their own slice — no cross-shard coordination needed.
 
 **MangaFreak** (`ww3.mangafreak.me`):
-- `mangafreak-scraper.yml` → `.github/scripts/scrape_mangafreak.py` → `mangafreak-latest.json` (the Latest sub-tab's feed) + `mangafreak-index.json` (~7.2k slugs). Exists because the site sends no `Access-Control-Allow-Origin`, so the browser cannot read it directly — same shape as the PCSO/PSE pipelines. Slug matching is deliberately strict (whole-token equality, ≥2 tokens, ≤1 extra token): a loose rule sent Attack on Titan to a prequel spin-off and Tokyo Ghoul to its sequel. Unresolved titles fall back to the `/Find/` search URL rather than guessing.
+- `mangafreak-scraper.yml` → `.github/scripts/scrape_mangafreak.py` → `mangafreak-latest.json` (the Latest sub-tab's feed) + `mangafreak-index.json` (~7.2k slugs). Exists because the site sends no `Access-Control-Allow-Origin`, so the browser cannot read it directly — same shape as the PCSO/PSE pipelines. `--latest-only` skips the index walk; see the two-schedule note above. Slug matching is deliberately strict (whole-token equality, ≥2 tokens, ≤1 extra token): a loose rule sent Attack on Titan to a prequel spin-off and Tokyo Ghoul to its sequel. Unresolved titles fall back to the `/Find/` search URL rather than guessing.
+
+**Latest cards resolve to AniList through a gated ladder, not one search.**
+MangaFreak's titles are rebuilt from its URL slugs, so they arrive Title Cased
+with every particle split out and all punctuation gone — `Kagurabachi` becomes
+"Kagura Bachi", `Seijo-sama wo Osagashi deshitara…` becomes "Seijo Sama Wo
+Osagashi De Shitara…". One search on that string missed **33 of 119** titles in a
+day's feed, and each miss used to eject the user to MangaFreak instead of opening
+a detail page. `openMangaFromLatest` now sends the full title, the first 6/4/3
+words, and (for short titles) the de-spaced form as **aliases in one request** —
+same round trip — and scores every candidate against the **full** MangaFreak
+title, never the truncated query that found it.
+
+Both halves are load-bearing. Truncation alone is actively harmful: a bare 3-word
+prefix sent "The Other World's Wizard Does Not Chant" to *Yasashi Isekai e
+Youkoso* and "Reincarnation Of The Hero Party Archmage" to *Reincarnation of the
+Fist King*. The gate (`mfTitleScore`, Dice over character bigrams, floor
+`MF_TITLE_FLOOR = 0.80`) rejects both. Scoring reads **synonyms** as well as
+english/romaji — that is what keeps the honest localisations which share no words
+at all with MangaFreak's title ("True Education" → *Get Schooled*, "Player Who
+Returned 10000 Years Later" → *After Ten Millennia in Hell*, whose synonym list
+carries MangaFreak's title verbatim). Without synonyms those 11 look like
+mismatches and any gate strict enough to catch the two real errors discards them
+too. Measured: **86 → 102 of 119 resolved**; the sweep was 0.95→97, 0.90→100,
+0.80→102, and 0.75 adds nothing, so the floor sits at 0.80.
+
+Re-measured on a **hold-out of 52 titles the floor was never tuned against:
+45/52 (87%)** — so 85% is a property of the matcher, not of the day it was
+fitted on.
+
+Three things not to "clean up":
+- The `if (!b) continue` guard in `mfTitleScore`. A Japanese/Korean/Chinese
+  synonym squashes to the empty string and `"".startsWith` is vacuously true, so
+  without it **every CJK synonym scores a perfect 1 and matches anything**.
+- The **length floor on the prefix shortcut** (`shortLen >= 10` and at least 25%
+  of the longer). One title extending the other is a real signal, but only when
+  the shorter side is substantial — otherwise a stubby generic title prefixes
+  half the catalogue. "Trash Of The Counts Family" scored a perfect 1 against a
+  manga literally called **"trash."** and beat the correct answer on list order;
+  the correct answer was in the same response, *Lout of Count's Family*, whose
+  synonyms carry "Trash of the Count's Family" verbatim. Across 171 titles in
+  two independent samples the floor changes exactly that one match, wrong to
+  right, and loses none. Note what caught it: a resolution *count* is blind to
+  this — recall was 102/119 either way. Audit which record a title resolves to,
+  not how many resolve.
+- The ladder order. Longest rung first — a longer prefix is always the safer
+  answer, and "Reincarnation Of The Hero" (4 words) finds the right book where
+  "Reincarnation Of The" (3) finds the wrong one.
+
+The ~17 that still resolve to nothing are genuinely absent from AniList under any
+title. They no longer redirect: `mfFallbackItem` builds an in-app detail page out
+of the MangaFreak row itself — cover, title, newest chapter, when it landed — and
+`mfOnly` short-circuits `openMangaDetail`, which would otherwise fire a
+`Media(id:null,idMal:null)` lookup that is a coin toss rather than a query.
 
 **PCSO** (`businesslist.ph/lottery`):
 - `pcso-scraper.yml` → `.github/scripts/scrape_pcso.py` → `pcso-results.json`
