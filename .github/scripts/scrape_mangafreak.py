@@ -20,6 +20,14 @@ numbers) — no chapter content is fetched or stored:
 The index is slugs only. A slug round-trips to a title well enough to match
 against ("Swordmasters_Youngest_Son" -> "swordmasters youngest son"), and
 storing titles as well would roughly double a file every visitor downloads.
+
+The two halves cost wildly different amounts, which is why `--latest-only`
+exists. Measured against the live site: the Latest feed is 4 requests and
+**0.9s**; the A-Z index is 402 pages and **~54s**. A once-a-day run was leaving
+the "Latest" tab up to 24 hours behind, and that feed turns over fast enough for
+it to matter -- 57 of 119 rows (48%) were new within 14 hours of a scrape. So
+the cheap half runs hourly on its own and the expensive half stays daily,
+instead of hammering 402 pages 24 times a day to refresh 4.
 """
 
 import json, re, sys, time
@@ -147,18 +155,27 @@ def write(path, payload, *, floor, label):
 
 
 def main():
+    # --latest-only skips the 402-page index walk. The hourly job passes it; the
+    # daily one does not, so the index still gets refreshed once a day.
+    latest_only = '--latest-only' in sys.argv
     now = datetime.now(timezone.utc).isoformat()
+
     print('Latest Releases:')
     latest = scrape_latest()
-    print('Manga index:')
-    slugs = scrape_index()
-
     ok_latest = write('mangafreak-latest.json',
                       {'generatedAt': now, 'source': BASE, 'items': latest},
                       floor=30, label='mangafreak-latest.json')
-    ok_index = write('mangafreak-index.json',
-                     {'generatedAt': now, 'source': BASE, 'slugs': slugs},
-                     floor=1000, label='mangafreak-index.json')
+
+    ok_index = True
+    if latest_only:
+        print('Manga index: skipped (--latest-only)')
+    else:
+        print('Manga index:')
+        slugs = scrape_index()
+        ok_index = write('mangafreak-index.json',
+                         {'generatedAt': now, 'source': BASE, 'slugs': slugs},
+                         floor=1000, label='mangafreak-index.json')
+
     if not (ok_latest and ok_index):
         sys.exit(1)
 

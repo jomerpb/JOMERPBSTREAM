@@ -6,10 +6,25 @@ name: MangaFreak Scraper
 # and quietly call it "Latest". The slug index in the same run is what lets the
 # Read button open a manga directly instead of a search page, and it drifts as
 # the site adds titles.
+#
+# TWO schedules, because the two halves cost wildly different amounts. Measured
+# against the live site: the Latest feed is 4 requests and 0.9s, the A-Z index is
+# 402 pages and ~54s. Daily-only left the feed up to 24h stale, and it turns over
+# fast — 57 of 119 rows were new within 14 hours of a scrape — so the cheap half
+# runs hourly and the expensive half stays daily. Hour 6 is excluded from the
+# hourly expression on purpose: GitHub fires one run per MATCHING cron, so
+# '0 * * * *' alongside '0 6 * * *' would double up at 06:00.
 on:
   schedule:
-    - cron: '0 6 * * *'      # 14:00 Asia/Manila — clear of the two PCSO jobs
+    - cron: '0 0-5,7-23 * * *'   # hourly, Latest feed only (~1s, 4 requests)
+    - cron: '0 6 * * *'          # 14:00 Asia/Manila — full run, incl. slug index
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'What to scrape'
+        type: choice
+        default: full
+        options: [full, latest-only]
 
 jobs:
   scrape:
@@ -29,9 +44,22 @@ jobs:
       - name: Install dependencies
         run: pip install requests beautifulsoup4
 
+      # The hourly schedule refreshes only the feed; the daily one and a manual
+      # "full" dispatch also rebuild the slug index.
       - name: Run MangaFreak scraper
-        run: python3 .github/scripts/scrape_mangafreak.py
+        run: |
+          if [ "${{ github.event.schedule }}" = '0 0-5,7-23 * * *' ] \
+          || [ "${{ inputs.mode }}" = 'latest-only' ]; then
+            echo "mode: latest-only"
+            python3 .github/scripts/scrape_mangafreak.py --latest-only
+          else
+            echo "mode: full"
+            python3 .github/scripts/scrape_mangafreak.py
+          fi
 
+      # Rebase-and-retry, which a daily job could get away without and an hourly
+      # one cannot: this now shares main with pcso-history-append (15:00 UTC) and
+      # oracle-snapshot (16:05 UTC), so a plain push loses the race outright.
       - name: Commit results
         run: |
           git config user.name "MangaFreak Bot"
@@ -39,7 +67,20 @@ jobs:
           git add mangafreak-latest.json mangafreak-index.json
           if git diff --staged --quiet; then
             echo "No changes"
-          else
-            git commit -m "chore: update MangaFreak latest + slug index $(date -u '+%Y-%m-%d %H:%M UTC')"
-            git push
+            exit 0
           fi
+          git commit -m "chore: update MangaFreak latest + slug index $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3 4 5; do
+            # Explicit refspec rather than a bare `git push`: checkout@v4 on a
+            # schedule can leave HEAD detached, where a bare push has no upstream
+            # to resolve and fails outright.
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push $i failed — rebasing onto origin/${GITHUB_REF_NAME} and retrying"
+            git pull --rebase origin "${GITHUB_REF_NAME}" || exit 1
+            sleep $((i * 3))
+          done
+          echo "could not push after 5 attempts" >&2
+          exit 1
