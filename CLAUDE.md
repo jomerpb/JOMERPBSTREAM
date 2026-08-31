@@ -193,8 +193,8 @@ All workflows in `.github/workflows/` are `workflow_dispatch` (manual) only — 
 the append job is one: the Manga tab's **"Latest" sub-tab is that file**.
 Dispatch-only, it would show whichever day it was last run by hand and still call
 itself "Latest". The same pipeline writes `mangafreak-index.json`, the slug index
-that lets the Read button open a manga's own page instead of a search page; it
-drifts as the site adds titles. Both outputs are metadata only — titles, slugs,
+that lets the embedded reader open a manga's own page instead of a search page;
+it drifts as the site adds titles. Both outputs are metadata only — titles, slugs,
 cover URLs, chapter numbers — and the script refuses to overwrite a good file
 with a materially smaller one, so a partial scrape cannot silently empty the tab.
 
@@ -288,6 +288,54 @@ title. They no longer redirect: `mfFallbackItem` builds an in-app detail page ou
 of the MangaFreak row itself — cover, title, newest chapter, when it landed — and
 `mfOnly` short-circuits `openMangaDetail`, which would otherwise fire a
 `Media(id:null,idMal:null)` lookup that is a coin toss rather than a query.
+
+**The manga detail page reads MangaFreak inline — there is no Read button.**
+`showMangaEmbed` puts MangaFreak's own series page in an iframe between the
+Details card and Similar Manga; tapping a chapter inside it opens the chapter in
+the same frame. It replaced a `📖 Read ↗` button that handed the whole tab over
+to the site in a new window.
+
+Measured before any of it was written, because the whole feature turns on it:
+MangaFreak sends **no `X-Frame-Options` and no CSP `frame-ancestors`** on its
+series pages, its `/Read1_…` chapter pages *or* its `/Find/` search pages, and
+none of its own scripts try to break out of a frame — verified in Chromium, top
+window still on our origin after a chapter tap.
+
+Three things not to "simplify":
+
+- **The `sandbox` attribute.** `allow-same-origin allow-scripts allow-forms`,
+  and the two it withholds are the point: without `allow-top-navigation` and
+  `allow-popups` the site's ad scripts (acscdn, revolthem) cannot redirect the
+  app out from under the reader or throw a popunder. `allow-same-origin` is safe
+  here only because the framed document is cross-origin — it would not be on a
+  page of ours.
+- **`setMangaFrame` replaces the iframe element instead of assigning `.src`**,
+  for the reason `setPlayerFrame` already documents: measured in Chromium, an
+  element swap costs **0** session-history entries where an assignment costs one.
+  That is what makes the bar's ↺ Chapters button free.
+- **`showPage` parks the frame when you leave the detail page** (alongside
+  `resetInlinePlayer`). Without it a whole third-party page, ad scripts included,
+  stays alive behind the next tab.
+
+Known consequence, not a bug: a chapter tap inside the frame is an ordinary
+navigation, so it **does** push one history entry (measured: exactly 1). After
+reading N chapters, Back walks out through them before leaving the detail page.
+That is what any embedded browser does; ↺ Chapters is the zero-cost way home.
+
+Related fix, same line of code: `mangaReadUrl` has always fallen back to
+`item.titleRomaji` when the English title finds no slug, and **nothing had ever
+set that field** — `fromALManga` did not emit it, so the fallback had never once
+fired. It matters because MangaFreak files Japanese series under their romaji
+while AniList shows the English licence title, and the two often share no words
+at all: *Attack on Titan* is `Shingeki_No_Kyojin`. With the field wired up,
+measured against the committed index over three independent 300-title AniList
+slices: **139→206 (46.3%→68.7%)**, **123→179 (41.0%→59.7%)** on a hold-out slice,
+**117→170 (39.0%→56.7%)** by score. Zero titles that already resolved changed
+their answer in any slice, and all 67 gains in the first were hand-checked — per
+the audit rule above, a resolution *count* cannot see a title resolving to the
+wrong record. What it does not fix: roughly a third still resolve to nothing and
+get MangaFreak's search page — now embedded in the frame, so that is a search box
+inside the app rather than a dead end.
 
 **PCSO** (`businesslist.ph/lottery`):
 - `pcso-scraper.yml` → `.github/scripts/scrape_pcso.py` → `pcso-results.json`

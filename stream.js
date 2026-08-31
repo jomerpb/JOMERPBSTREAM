@@ -136,9 +136,11 @@ function showPage(id, restore) {
 
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  // The player lives on the detail page now, so navigating anywhere else has
-  // to stop it — otherwise the iframe keeps playing audio under the next tab.
-  if (id !== 'detail-page') resetInlinePlayer();
+  // The player and the manga reader both live on the detail page now, so
+  // navigating anywhere else has to stop them — otherwise the player keeps
+  // playing audio under the next tab, and the reader keeps a whole third-party
+  // page (ad scripts included) alive behind it.
+  if (id !== 'detail-page') { resetInlinePlayer(); hideMangaEmbed(); }
   // Only restore a remembered scroll position on back/forward navigation
   // (restore===true, set from the popstate handler). Fresh forward
   // navigation (tapping a card/tab) always starts at the top, as expected.
@@ -535,9 +537,10 @@ async function loadMoreAnime() {
 // MANGA PAGE
 // ═══════════════════════════════════════════
 // Manga rides the same AniList endpoint the Anime tab already uses — one API
-// client, one rate limit, one grid renderer. It is a browse-and-discover tab,
-// NOT a reader: see openMangaDetail() for why the chapter images cannot be
-// fetched from this origin, and what the Read button does instead.
+// client, one rate limit, one grid renderer. AniList carries the records, not
+// the pages: the chapter images cannot be fetched from this origin at all, so
+// the reading itself is MangaFreak's own site embedded in the detail page —
+// see showMangaEmbed() for why that is possible and what makes it safe.
 
 // Every manga list query selects the same fields. Declared once so the grid,
 // the filter and the recommendation rows cannot drift apart in what they ask
@@ -576,6 +579,16 @@ function fromALManga(m) {
     al_id:    m.id,
     mal_id:   m.idMal,
     title:    m.title?.english || m.title?.romaji || 'Unknown',
+    // Kept beside the display title purely so the MangaFreak slug lookup has a
+    // second name to try. MangaFreak files Japanese series under their romaji
+    // while AniList shows the English licence title, and the two often share no
+    // words at all: "Attack on Titan" is Shingeki_No_Kyojin. mangaReadUrl has
+    // always had this fallback — titleRomaji is the field it reads, nothing ever
+    // set it, so the fallback had never once fired. Measured over 300 popular
+    // AniList manga against the committed index: 139 -> 206 resolve to their own
+    // page rather than a search page (46.3% -> 68.7%), 0 titles that already
+    // resolved changed their answer, and all 67 gains were hand-checked.
+    titleRomaji: m.title?.romaji || '',
     year:     m.startDate?.year || '',
     score:    m.averageScore ? (m.averageScore/10).toFixed(1) : null,
     img:      m.coverImage?.large || m.coverImage?.medium || '',
@@ -753,7 +766,7 @@ function mfQueryLadder(title) {
 
 // A MangaFreak row with no AniList record still deserves a detail page. It has a
 // cover, a title, the newest chapter and when that landed — enough for the hero,
-// and the Read button already knows the exact slug. mfOnly stops
+// and the reader frame already knows the exact slug. mfOnly stops
 // openMangaDetail() from firing a Media() lookup that cannot succeed.
 function mfFallbackItem(entry) {
   const chapter = entry.chapter && entry.title && entry.chapter.startsWith(entry.title)
@@ -1084,7 +1097,7 @@ async function openDetail(item, restore=false) {
   document.getElementById('detail-poster').innerHTML = `<div class="sk" style="width:100%;height:100%;border-radius:7px;"></div>`;
   document.getElementById('detail-info').innerHTML = `<div class="sk" style="width:80%;height:16px;margin-bottom:8px;border-radius:4px;"></div><div class="sk" style="width:60%;height:10px;border-radius:4px;"></div>`;
   document.getElementById('detail-synopsis').textContent = '';
-  document.getElementById('detail-cta-row').style.display = 'none';
+  hideMangaEmbed();
   document.getElementById('detail-castprod').style.display = 'none';
   document.getElementById('detail-castprod-body').innerHTML = '';
   collapseSection('detail-castprod-body', 'detail-castprod-chev', true);
@@ -1198,9 +1211,9 @@ async function openAnimeDetail(item) {
 // Hence the two trims below. Each is skipped when it would leave nothing useful.
 // The separator has to require whitespace AFTER the colon so that a name with an
 // internal colon ("Re:Zero") is not truncated to "Re".
-// Where a manga can be read. MangaFreak is the primary — it is what the Read
-// button opens. Orchisasia is offered only as a link chip further down the
-// page, never as the default: it is an 18+ BL/yaoi catalogue, and this tab
+// Where a manga can be read. MangaFreak is the primary — it is what the
+// embedded reader frame loads. Orchisasia is offered only as a link chip
+// further down the page, never as the default: it is an 18+ BL/yaoi catalogue, and this tab
 // queries AniList with isAdult:false, so the two catalogues barely overlap —
 // measured 5/20 of the Manhwa sub-tab and 0/20 of Trending. Marked adult:true
 // so the chip can be styled and labelled as such rather than looking like an
@@ -1244,8 +1257,8 @@ function mangaSourceUrl(key, item) {
 }
 
 // ── MANGAFREAK SLUG INDEX ──
-// Read used to dump you on a search results page because the site sends no
-// Access-Control-Allow-Origin — the page cannot query it. So .github/scripts/
+// The reader used to dump you on a search results page because the site sends
+// no Access-Control-Allow-Origin — the page cannot query it. So .github/scripts/
 // scrape_mangafreak.py walks its A-Z list in Actions and commits the slugs
 // here, and the lookup happens locally against that file.
 //
@@ -1286,9 +1299,11 @@ function ensureMangafreakIndex() {
   return mfIndexLoading;
 }
 
-// Synchronous on purpose: it runs inside the Read tap so window.open is not
-// separated from the gesture by an await, which mobile popup blockers reject.
-// If the index has not arrived yet the caller just uses the search URL.
+// Synchronous on purpose: it was written to run inside the Read tap, where an
+// await between the gesture and window.open got the popup blocked. The embed
+// awaits the index before calling it instead, so it now always answers from a
+// loaded table — but it keeps the null-safe contract, since a failed fetch
+// still leaves mfIndex empty and the search URL is still the fallback.
 function mangafreakSlugFor(title) {
   if (!mfIndex || !title) return null;
   const n = mfNorm(title), a = mfStrip(n);
@@ -1306,17 +1321,19 @@ function mangafreakSlugFor(title) {
   return best ? best.slug : null;
 }
 
-function openMangaReader(item) {
-  saveMangaToHistory(item);
-  const slug = item.mfSlug || mangafreakSlugFor(item.title) || mangafreakSlugFor(item.titleRomaji);
-  const url = slug ? MANGA_SOURCES.mangafreak.manga(slug)
-                   : mangaSourceUrl('mangafreak', item);
-  window.open(url, '_blank', 'noopener');
+// Where this title is read. The direct /Manga/<Slug> page whenever the index
+// resolves one, MangaFreak's own search page when it does not — both are
+// embeddable, so an unresolved title still lands in the frame rather than
+// bouncing the user out of the app.
+function mangaReadUrl(item) {
+  const slug = item?.mfSlug || mangafreakSlugFor(item?.title) || mangafreakSlugFor(item?.titleRomaji);
+  return slug ? MANGA_SOURCES.mangafreak.manga(slug)
+              : mangaSourceUrl('mangafreak', item);
 }
 
 // Outbound links for the detail page's collapsible block: AniList for the
 // record itself, then every alternate reading source. MangaFreak is omitted —
-// the Read button above is already that link.
+// the reader frame below is already that page, and its bar carries the link.
 function mangaDetailLinks(item) {
   const links = [];
   if (item?.siteUrl) links.push({label:'View on AniList ↗', href:item.siteUrl});
@@ -1329,8 +1346,8 @@ function mangaDetailLinks(item) {
 }
 
 async function openMangaDetail(item) {
-  // Fire and forget: by the time Read is tapped the slug lookup is usually
-  // ready, and if it is not the search URL still works.
+  // Kick the slug index off next to the AniList request rather than after it:
+  // showMangaEmbed awaits the same promise, so the two round trips overlap.
   ensureMangafreakIndex();
   const Q = `query($alId:Int,$malId:Int){Media(id:$alId,idMal:$malId,type:MANGA){
     id idMal title{english romaji native}coverImage{extraLarge large}bannerImage description
@@ -1381,7 +1398,7 @@ async function openMangaDetail(item) {
   allSeasons = [];
   currentSeason = null;
 
-  showReadButton(full);
+  showMangaEmbed(full);
 
   loadRecommendations(full);
 }
@@ -1492,17 +1509,83 @@ function renderDetailHero(item, type, extraTags=[]) {
   document.getElementById('detail-synopsis').textContent = item.synopsis || 'No synopsis available.';
 }
 
-// The CTA row survives for manga alone. Anime/TV/movies used to open with a
-// "Watch EP 1" button here; the inline player has its own play control and the
-// episode grid under it is open by default, so that was a third control for
-// one action. Manga has neither, so Read stays exactly where it was.
-function showReadButton(item) {
-  const row = document.getElementById('detail-cta-row');
-  const btn = document.getElementById('detail-play-btn');
-  if (!row || !btn) return;
-  row.style.display = 'flex';
-  btn.textContent = '📖 Read ↗';
-  btn.onclick = () => openMangaReader(item);
+// ── EMBEDDED READER (manga only) ──
+// This used to be a "📖 Read ↗" button in the CTA row above Details, and the
+// CTA row went with it — manga was its last user. Measured before writing any
+// of this, because the whole feature turns on it: MangaFreak sends no
+// X-Frame-Options and no CSP frame-ancestors on either its series pages or its
+// chapter pages, and nothing in its own JS tries to break out of a frame. So
+// the series page embeds, and a chapter tapped inside it opens in the same
+// frame.
+//
+// The sandbox attribute in the markup is load-bearing, not boilerplate. It
+// withholds allow-top-navigation and allow-popups, which is exactly what the
+// site's ad scripts (acscdn, revolthem) need to redirect the app out from
+// under the reader or throw a popunder. allow-same-origin is safe here for the
+// same reason it would not be on our own pages: the framed document is
+// cross-origin, so keeping its own origin gives it nothing of ours.
+//
+// Known consequence, stated rather than papered over: tapping a chapter inside
+// the frame is an ordinary navigation, so it pushes a session-history entry.
+// After reading N chapters, Back walks out through them before it leaves the
+// detail page. That is what any embedded browser does — the bar's ↺ Chapters
+// button is the way back to the series page that spends no history at all.
+let mangaEmbedRun = 0;
+
+// Same element-swap as setPlayerFrame, for the same measured reason: assigning
+// .src pushes a session-history entry per assignment, replacing the element
+// pushes none. Parking it with no url also stops whatever the frame is loading.
+function setMangaFrame(url) {
+  const old = document.getElementById('manga-read-iframe');
+  if (!old) return null;
+  const frame = old.cloneNode(false);
+  if (url) frame.setAttribute('src', url); else frame.removeAttribute('src');
+  old.replaceWith(frame);
+  return frame;
+}
+
+// A cross-origin frame reports exactly one thing to us: that it loaded
+// something. The first load is the series page we pointed it at, so a second
+// one means a chapter was opened — the only "started reading" signal available
+// here, and a truer one than the old button, which recorded the tap that
+// merely opened MangaFreak.
+function armMangaFrame(url, item) {
+  const frame = setMangaFrame(url);
+  if (!frame) return;
+  let loads = 0;
+  frame.addEventListener('load', () => { if (++loads > 1) saveMangaToHistory(item); });
+}
+
+// The bar's ↺ button: back to the chapter list from wherever the frame wandered.
+function resetMangaFrame() {
+  const wrap = document.getElementById('manga-read-wrap');
+  if (wrap?.dataset.url) armMangaFrame(wrap.dataset.url, currentItem);
+}
+
+function hideMangaEmbed() {
+  mangaEmbedRun++;            // cancels a slug lookup still in flight
+  setMangaFrame(null);        // and stops whatever the frame was loading
+  const wrap = document.getElementById('manga-read-wrap');
+  if (wrap) { wrap.style.display = 'none'; delete wrap.dataset.url; }
+}
+
+async function showMangaEmbed(item) {
+  const wrap = document.getElementById('manga-read-wrap');
+  if (!wrap) return;
+  const run = ++mangaEmbedRun;
+  // Nothing here runs inside a tap gesture any more, so the slug index can be
+  // awaited instead of guessed at. The button could not: window.open had to be
+  // called synchronously or mobile blocked it, so a title whose slug had not
+  // arrived yet was dumped on a search page even though the index was seconds
+  // away. Now it waits, and the direct page is what opens.
+  await ensureMangafreakIndex();
+  if (run !== mangaEmbedRun) return;   // another title was opened while we waited
+  const url = mangaReadUrl(item);
+  wrap.dataset.url = url;
+  const open = document.getElementById('manga-read-open');
+  if (open) open.href = url;
+  wrap.style.display = 'block';
+  armMangaFrame(url, item);
 }
 
 // One <select> beside the SEASONS label. It replaced a horizontally scrolling
@@ -1605,7 +1688,7 @@ function renderSimpleDetail(item, type) {
   showEpsSection(episodic);
   renderCastProduction(type, [], [], type === 'manga' ? mangaDetailLinks(item) : []);
   if (type === 'manga') {
-    showReadButton(item);
+    showMangaEmbed(item);
     document.getElementById('eps-grid').innerHTML = '';
     allSeasons = [];
     currentSeason = null;

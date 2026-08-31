@@ -268,8 +268,6 @@
     .eps-label-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 10px;margin-bottom:8px;}
     .eps-label-row .sec-label{margin-bottom:0;}
     .eps-head-right{display:flex;align-items:center;gap:10px;}
-    .cta-row{display:flex;gap:8px;margin-bottom:18px;}
-    .btn-play{flex:1;background:var(--accent);color:#fff;border:none;padding:11px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;}
     .lang-toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
     /* Compact now that it rides in a section header rather than a CTA row. */
     .ltbtn{background:none;border:none;color:var(--muted);padding:6px 12px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;}
@@ -299,6 +297,26 @@
     /* An 18+ source is deliberately NOT styled like the others — it reads as a
        warning chip so nobody taps it expecting an ordinary reading link. */
     .dc-chiplist .dc-link.adult{background:rgba(244,63,94,0.12);border-color:#f43f5e;color:#fb7185;}
+
+    /* READ — MangaFreak embedded, manga only. Same card shell as the player
+       above it, in .detail-body's normal gutter.
+
+       The frame's height is viewport-relative and fixed because it has to be:
+       a cross-origin document cannot be measured, so there is no content
+       height to size to and no postMessage to ask for one. The wrapper, not
+       the iframe, is what scrolls — iOS ignores a height on an iframe and
+       expands it to its content instead, which without this would turn a
+       200-chapter list into 4,000px of detail page. */
+    .mread-wrap{background:var(--bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+    .mread-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 10px;padding:10px 12px;background:var(--surface);border-bottom:1px solid var(--border);}
+    .mread-bar .sec-label{margin-bottom:0;}
+    .mread-actions{display:flex;align-items:center;gap:6px;}
+    /* Styled like the reading-source chips in Cast & Production, because that
+       is what they are — one resets the frame, one leaves for the same site. */
+    .mread-btn{background:rgba(16,185,129,0.12);border:1px solid var(--accent4);color:#34d399;font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:20px;cursor:pointer;text-decoration:none;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+    .mread-frame{height:min(78vh,900px);min-height:360px;overflow:auto;-webkit-overflow-scrolling:touch;background:#fff;}
+    .mread-frame iframe{display:block;width:100%;height:100%;border:none;background:#fff;}
+    .mread-note{font-size:10px;color:var(--muted);line-height:1.6;padding:8px 12px;}
 
     /* SEASONS / EPISODES */
     .sec-label{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;}

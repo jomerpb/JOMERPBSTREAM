@@ -33,11 +33,11 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260830i"/>
+  <link rel="stylesheet" href="styles.css?v=20260831a"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260831a"></script>
+  <script defer src="stream.js?v=20260831b"></script>
   <script defer src="oracle.js?v=20260819a"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -703,14 +703,6 @@
         <div class="sk" style="width:60%;height:10px;border-radius:4px;"></div>
       </div>
     </div>
-    <!-- CTA row: manga only. Anime/TV/movies lost their Watch button — the
-         player is right there on the page with its own play control, and the
-         episode grid below it is open by default, so the button was a third
-         way to do the same thing. Manga has no player, so Read stays. -->
-    <div class="cta-row" id="detail-cta-row" style="display:none;">
-      <button class="btn-play" id="detail-play-btn">&#9654; Watch</button>
-    </div>
-
     <!-- DETAILS — collapsible, collapsed by default. Holds the synopsis and,
          nested inside it as its own card, Cast &amp; Production. The synopsis
          is NOT line-clamped in here: this section already is the "show more",
@@ -728,6 +720,36 @@
           <div class="dc-body collapsed" id="detail-castprod-body"></div>
         </div>
       </div>
+    </div>
+
+    <!-- READ — MangaFreak's own series page, embedded. Manga only; every other
+         type leaves it hidden. It replaced a "Read ↗" button that sat above
+         Details and handed the whole tab over to MangaFreak in a new window:
+         the chapter list, and the chapters themselves, now open in this frame
+         without leaving the app. It sits BELOW Details rather than where the
+         button was because the frame is 78vh tall — above Details it would
+         have pushed the synopsis and the whole rest of the page off-screen —
+         and above Similar because that is where the reading happens.
+
+         Sandboxed WITHOUT allow-top-navigation and WITHOUT allow-popups. That
+         is not caution for its own sake: it is precisely what MangaFreak's ad
+         scripts need to redirect or popunder the page, and the sandbox is the
+         only thing standing between an embedded aggregator and the app. -->
+    <div id="manga-read-wrap" class="mread-wrap" style="display:none;">
+      <div class="mread-bar">
+        <div class="sec-label">READ</div>
+        <div class="mread-actions">
+          <button class="mread-btn" id="manga-read-reset" onclick="resetMangaFrame()">&#8634; Chapters</button>
+          <a class="mread-btn" id="manga-read-open" href="#" target="_blank" rel="noopener"
+             onclick="saveMangaToHistory(currentItem)">MangaFreak &#8599;</a>
+        </div>
+      </div>
+      <div class="mread-frame">
+        <iframe id="manga-read-iframe" title="MangaFreak reader"
+                sandbox="allow-same-origin allow-scripts allow-forms"
+                allow="fullscreen"></iframe>
+      </div>
+      <div class="mread-note">Tap a chapter to read it here. Not loading? Open it on MangaFreak with the link above.</div>
     </div>
 
     <!-- SEASONS — a picklist beside the label, not a row of pills. The pills
