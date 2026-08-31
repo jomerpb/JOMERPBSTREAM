@@ -105,6 +105,42 @@ try:
 finally:
     os.chdir(old)
 
+# ── 4. --latest-only writes the feed and leaves the index alone ──
+# The hourly schedule runs this mode. If it ever started rebuilding the index it
+# would walk 402 pages 23 times a day for no reason; if it stopped writing the
+# feed, the whole point of the hourly job would be gone. Both directions matter,
+# so both are asserted. No network: the two scrapers are stubbed.
+print('\n4. --latest-only mode')
+old = os.getcwd()
+tmp = tempfile.mkdtemp()
+os.chdir(tmp)
+real_latest, real_index, real_argv = mf.scrape_latest, mf.scrape_index, sys.argv
+index_calls = []
+try:
+    mf.scrape_latest = lambda: [{'title': f't{i}', 'slug': f's{i}'} for i in range(60)]
+    mf.scrape_index  = lambda: (index_calls.append(1), [f'x{i}' for i in range(2000)])[1]
+
+    # Seed an index file so a skipped rebuild is distinguishable from a wipe.
+    with open('mangafreak-index.json', 'w') as f:
+        json.dump({'generatedAt': 'seed', 'source': 'x', 'slugs': ['keep']}, f)
+
+    sys.argv = ['scrape_mangafreak.py', '--latest-only']
+    mf.main()
+    check(index_calls == [], 'latest-only never walks the 402-page index')
+    check(len(json.load(open('mangafreak-latest.json'))['items']) == 60, 'latest-only still writes the feed')
+    check(json.load(open('mangafreak-index.json'))['slugs'] == ['keep'],
+          'latest-only leaves the committed index untouched')
+
+    # And the full run — the daily 06:00 job — still does both halves.
+    sys.argv = ['scrape_mangafreak.py']
+    mf.main()
+    check(index_calls == [1], 'a full run does walk the index')
+    check(len(json.load(open('mangafreak-index.json'))['slugs']) == 2000, 'a full run rewrites the index')
+    check(len(json.load(open('mangafreak-latest.json'))['items']) == 60, 'a full run still writes the feed too')
+finally:
+    mf.scrape_latest, mf.scrape_index, sys.argv = real_latest, real_index, real_argv
+    os.chdir(old)
+
 print('\n' + '=' * 60)
 print(f'{len(fails)} failure(s)' + ('' if not fails else ': ' + ', '.join(fails)))
 sys.exit(1 if fails else 0)

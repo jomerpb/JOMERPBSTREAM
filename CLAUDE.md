@@ -34,6 +34,7 @@ run all three, not the same one three times:
    python3 .github/scripts/tests/test_sphere_palette.py     # styles.css still matches its generator
    python3 .github/scripts/tests/test_scrape_pcso.py
    python3 .github/scripts/tests/test_append_pcso_history.py
+   python3 .github/scripts/tests/test_scrape_mangafreak.py  # parsers, the shrink guard, --latest-only
    ```
 
    The Python ones need `beautifulsoup4` installed or they cannot even import.
