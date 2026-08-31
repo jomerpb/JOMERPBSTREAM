@@ -260,10 +260,25 @@ mismatches and any gate strict enough to catch the two real errors discards them
 too. Measured: **86 → 102 of 119 resolved**; the sweep was 0.95→97, 0.90→100,
 0.80→102, and 0.75 adds nothing, so the floor sits at 0.80.
 
-Two things not to "clean up":
+Re-measured on a **hold-out of 52 titles the floor was never tuned against:
+45/52 (87%)** — so 85% is a property of the matcher, not of the day it was
+fitted on.
+
+Three things not to "clean up":
 - The `if (!b) continue` guard in `mfTitleScore`. A Japanese/Korean/Chinese
   synonym squashes to the empty string and `"".startsWith` is vacuously true, so
   without it **every CJK synonym scores a perfect 1 and matches anything**.
+- The **length floor on the prefix shortcut** (`shortLen >= 10` and at least 25%
+  of the longer). One title extending the other is a real signal, but only when
+  the shorter side is substantial — otherwise a stubby generic title prefixes
+  half the catalogue. "Trash Of The Counts Family" scored a perfect 1 against a
+  manga literally called **"trash."** and beat the correct answer on list order;
+  the correct answer was in the same response, *Lout of Count's Family*, whose
+  synonyms carry "Trash of the Count's Family" verbatim. Across 171 titles in
+  two independent samples the floor changes exactly that one match, wrong to
+  right, and loses none. Note what caught it: a resolution *count* is blind to
+  this — recall was 102/119 either way. Audit which record a title resolves to,
+  not how many resolve.
 - The ladder order. Longest rung first — a longer prefix is always the safer
   answer, and "Reincarnation Of The Hero" (4 words) finds the right book where
   "Reincarnation Of The" (3) finds the wrong one.

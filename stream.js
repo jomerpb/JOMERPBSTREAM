@@ -679,9 +679,11 @@ function buildLatestCard(entry) {
 // enough to reject the two real errors would throw them away too.
 //
 // Measured on one full 119-title feed: 86 → 102 resolved (72% → 85%), with both
-// wrong matches above rejected. The 17 that still miss are genuinely not on
-// AniList under any title, so they get an in-app detail page instead (see
-// mfFallbackItem) rather than being thrown at an external site.
+// wrong matches above rejected. Re-measured on a HOLD-OUT of 52 titles the floor
+// was never tuned against: 45/52 (87%) — so the number is a property of the
+// matcher, not of the day it was fitted on. The ~17 that still miss are
+// genuinely not on AniList under any title, so they get an in-app detail page
+// instead (see mfFallbackItem) rather than being thrown at an external site.
 const MF_TITLE_FLOOR = 0.80;   // see the sweep in the comment above: 0.95→97,
                                // 0.90→100, 0.80→102 of 119, and 0.75 adds
                                // nothing. Every match admitted between 0.80 and
@@ -722,8 +724,16 @@ function mfTitleScore(mfTitle, m) {
     // CJK synonym would score a perfect 1 and match literally anything.
     if (!b) continue;
     // One title extending the other is a full match: MangaFreak routinely drops
-    // a subtitle AniList keeps, and vice versa.
-    if (a.startsWith(b) || b.startsWith(a)) return 1;
+    // a subtitle AniList keeps, and vice versa. But the shorter side has to be
+    // SUBSTANTIAL, or a stubby generic title prefixes half the catalogue —
+    // "Trash Of The Counts Family" scored a perfect 1 against a manga literally
+    // called "trash." and beat the right answer on list order. The right answer
+    // was in the same response: "Lout of Count's Family", whose synonyms carry
+    // "Trash of the Count's Family" verbatim. Measured over 171 titles across
+    // two independent feed samples, this guard changes exactly one match — that
+    // one, from wrong to right — and loses none.
+    const shortLen = Math.min(a.length, b.length), longLen = Math.max(a.length, b.length);
+    if ((a.startsWith(b) || b.startsWith(a)) && shortLen >= 10 && shortLen / longLen >= 0.25) return 1;
     const d = mfDice(a, b);
     if (d > best) best = d;
   }
