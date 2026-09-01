@@ -501,10 +501,28 @@ def load_history():
         return json.load(f)
 
 
-def save_history(data):
-    data["updated"] = datetime.now(timezone(timedelta(hours=8))).isoformat()
+def save_history(data, changed=True):
+    """Two stamps, and the distinction is load-bearing for the Oracle header.
+
+    `checked` is written on EVERY run, including the ones that find nothing
+    new; `updated` moves only when an entry was actually added or repaired.
+    The page's "Last Fetched" label reads `checked`, so a scheduled tick that
+    found nothing still proves the pipeline is alive — before this the file
+    was only rewritten on a run that changed something, so the label sat on
+    the last manual fetch for days at a time.
+    """
+    now = datetime.now(timezone(timedelta(hours=8))).isoformat()
+    data["checked"] = now
+    if changed:
+        data["updated"] = now
+    # Keep both stamps at the top of the file so a check-only run is a
+    # two-line diff instead of a key appended past 400KB of draws.
+    ordered = {"updated": data.get("updated"), "checked": data["checked"]}
+    for k, v in data.items():
+        if k not in ordered:
+            ordered[k] = v
     with open(HISTORY_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+        json.dump(ordered, f, indent=2)
 
 
 def _insert_sorted(lst, entry):
@@ -653,11 +671,15 @@ def main():
     check_gap("ez2", "ez2", history)
     print("--- END GAP CHECK ---\n")
 
-    if added > 0 or repaired > 0:
-        save_history(history)
+    # Always write: even a run that found nothing records that it ran, which
+    # is what the page's freshness label reports. `updated` stays put unless
+    # the data itself moved.
+    changed = added > 0 or repaired > 0
+    save_history(history, changed)
+    if changed:
         print(f"Done. Added {added} new entries, repaired {repaired} entries.")
     else:
-        print("Done. No new entries or repairs (nothing to commit).")
+        print("Done. No new entries or repairs — recorded the check only.")
 
 
 if __name__ == "__main__":

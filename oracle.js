@@ -60,9 +60,107 @@ var GAMES={
 // fails for any reason, the hardcoded fallback arrays above remain in use —
 // the Oracle always has *something* to compute from, it just may be stale.
 // ══════════════════════════
+// ══════════════════════════
+// DATA FRESHNESS STAMP
+// The Look Up header's label answers "how fresh is this?", so it has to move
+// when a SCHEDULED run refreshes the data, not only when someone taps Fetch
+// Live. It used to print pcso-results.json's `updated` alone — a file only
+// pcso-scraper.yml writes, and that workflow is workflow_dispatch only. So the
+// label froze at the last manual fetch: measured on 2026-08-31 11:10 PH it read
+// "Aug 30, 11:06 PM" while the scheduled append job had already run at 08:48
+// that morning.
+//
+// Two stamps per file, and the distinction is the point:
+//   checked — written on EVERY pipeline run, including the ones that find
+//             nothing new. This is "last fetched" and it is what shows.
+//   updated — moves only when the data itself changed.
+// Note max(updated) alone does NOT fix this: on 2026-08-31 the newest change
+// across both files was still Aug 30 23:08, because that day's scheduled ticks
+// found nothing to append and so never rewrote the file. `checked` exists
+// precisely to record the run that changed nothing.
+//
+// `checked` falls back to `updated` for a file written before it existed, so
+// the label is right immediately on deploy and sharpens at the next run.
+var PCSO_STAMPS={results:{checked:null,updated:null},history:{checked:null,updated:null}};
+var PCSO_STATUS_BUSY=false; // a fetch is narrating in this label — don't clobber it
+
+function pcsoStampNote(src,data){
+  if(!data||!PCSO_STAMPS[src]) return;
+  PCSO_STAMPS[src]={checked:data.checked||data.updated||null,updated:data.updated||null};
+}
+
+// Newest `checked` across both files, as ms. Compared through Date.parse
+// rather than by string: the two files agree on +08:00 today, but a raw ISO
+// compare silently stops being chronological the moment one offset differs.
+function pcsoNewestCheck(){
+  var best=null;
+  ['results','history'].forEach(function(k){
+    var v=PCSO_STAMPS[k]&&PCSO_STAMPS[k].checked;
+    if(!v) return;
+    var t=Date.parse(v);
+    if(!isNaN(t)&&(best===null||t>best)) best=t;
+  });
+  return best;
+}
+
+// When the DATA last moved — read from pcso-history.json alone, deliberately.
+// That file is append-only, so its `updated` only advances when a draw was
+// actually added. pcso-results.json is rewritten wholesale every run, so its
+// `updated` is really a second `checked`; folding it in here made the staleness
+// clause mathematically unable to fire (caught by lane-1 test 3 — the clause
+// compared a value against itself).
+function pcsoLastChange(){
+  var v=PCSO_STAMPS.history&&PCSO_STAMPS.history.updated;
+  if(!v) return null;
+  var t=Date.parse(v);
+  return isNaN(t)?null:t;
+}
+
+function pcsoFmtStamp(ms,dateOnly){
+  var d=new Date(ms);
+  if(isNaN(d.getTime())) return '';
+  var opt={timeZone:'Asia/Manila',month:'short',day:'numeric'};
+  if(!dateOnly){opt.hour='2-digit';opt.minute='2-digit';}
+  // The header truncates with an ellipsis instead of wrapping, so the year is
+  // only worth its width when the stamp is not from the current Manila year.
+  var yOpt={timeZone:'Asia/Manila',year:'numeric'};
+  if(d.toLocaleString('en-PH',yOpt)!==new Date().toLocaleString('en-PH',yOpt)) opt.year='numeric';
+  return d.toLocaleString('en-PH',opt);
+}
+
+// force=true is for the end of a fetch, which owns the label and must have the
+// last word over its own progress messages.
+function pcsoRenderStamp(force){
+  var el=pcsoStatusEl();
+  if(!el) return;
+  if(PCSO_STATUS_BUSY&&!force) return;
+  var fetched=pcsoNewestCheck();
+  // Plain property assignment, not removeAttribute/setAttribute: this runs at
+  // load through tryPcso(), and the repo's vm harnesses (snapshot_oracle.mjs,
+  // test_oracle_layers.mjs) stub elements without the attribute methods.
+  if(fetched===null){ el.textContent='Data timestamp unavailable'; el.title=''; return; }
+  var txt='Last Fetched '+pcsoFmtStamp(fetched)+' PH';
+  var full=txt;
+  // Loud only when it matters: the pipeline running while the data stands
+  // still for over a day is the failure a freshness label should surface, and
+  // reporting the fetch alone would hide it.
+  var changed=pcsoLastChange();
+  if(changed!==null&&(fetched-changed)>86400000){
+    txt+=' · data '+pcsoFmtStamp(changed,true);
+    full='Last fetched '+pcsoFmtStamp(fetched)+' PH — no new results since '+pcsoFmtStamp(changed,true);
+  }
+  el.textContent=txt;
+  el.title=full;
+}
+
 var PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:null};
 var PCSO_HISTORY_LOAD_FAILED=false; // lets pcsoHistRender() tell "genuinely no draw" apart from "fetch failed"
-var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
+// Declared rather than inlined as an IIFE so a Fetch Live can re-run it: the
+// dispatch appends to pcso-history.json, and without a second read the Look Up
+// panel kept serving the copy fetched at page load. Re-running is safe — it
+// rebuilds GAMES/PCSO_HISTORY from the response each time and re-renders both
+// panels itself. snapshot_oracle.mjs still awaits the PCSO_HISTORY_READY promise.
+async function loadPcsoHistoryIntoGames(){
   var RAW_URL='pcso-history.json'; // same-origin via GitHub Pages — raw.githubusercontent.com rate-limits anonymous requests
   var MAX_ATTEMPTS=3;
   var TIMEOUT_MS=8000;
@@ -85,6 +183,8 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
         throw new Error('HTTP '+resp.status);
       }
       data=await resp.json();
+      pcsoStampNote('history',data);
+      pcsoRenderStamp();
       break;
     }catch(e){
       lastErr=e;
@@ -94,8 +194,13 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
 
   if(!data){
     var reason=(lastErr&&lastErr.message?lastErr.message:'unknown error')+(lastWas429?' — rate limited by GitHub':'');
-    PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:reason};
-    PCSO_HISTORY_LOAD_FAILED=true;
+    // Only demote to the fallback if we never had live data. A re-run from
+    // Fetch Live that fails leaves the copy already loaded in place, so
+    // claiming "fetch failed" in the panel would be wrong.
+    if(!PCSO_HISTORY_STATUS.loaded){
+      PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:reason};
+      PCSO_HISTORY_LOAD_FAILED=true;
+    }
     console.error('PCSO history fetch failed after '+MAX_ATTEMPTS+' attempts, using hardcoded fallback:', reason);
     if(typeof pcsoHistRender==='function'&&document.getElementById('pcso-hist-result')){
       pcsoHistRender();
@@ -200,7 +305,8 @@ var PCSO_HISTORY_READY=(async function loadPcsoHistoryIntoGames(){
       pcsoHistRender();
     }
   }
-})();
+}
+var PCSO_HISTORY_READY=loadPcsoHistoryIntoGames();
 
 // ══════════════════════════
 // ORACLE PICK LOG (oracle-history.json)
@@ -2376,7 +2482,14 @@ function pcsoRender(){
 // that no longer exists would have silently never fetched at all.
 (function tryPcso(){
   var el=document.getElementById('pcso-date-lbl');
-  if(el){pcsoRender();pcsoRefreshFromRaw();}
+  if(el){
+    // The history load can resolve before this element exists, in which case
+    // its own pcsoRenderStamp() found nothing to write to. Paint what it
+    // recorded first, so the label is never blank while the results fetch runs.
+    pcsoRenderStamp();
+    pcsoRender();
+    pcsoRefreshFromRaw();
+  }
   else{setTimeout(tryPcso,200);}
 })();
 
@@ -3377,6 +3490,9 @@ async function pcsoRefreshFromRaw(){
   var fetchStatusEl=pcsoStatusEl();
   var lastErr=null;
   var lastWas429=false;
+  // Claim the label for the duration: the history load resolves independently
+  // and would otherwise overwrite "Retrying…" with a timestamp mid-run.
+  PCSO_STATUS_BUSY=true;
 
   for(var attempt=1; attempt<=MAX_ATTEMPTS; attempt++){
     if(attempt>1){
@@ -3407,14 +3523,13 @@ async function pcsoRefreshFromRaw(){
       }
       if(data.date) PCSO_DATA.date=data.date;
       pcsoRender();
-      // One surface, one message: the full timestamp that used to sit on its
-      // own line under the card now replaces the running status in the header.
-      if(data.updated){
-        var upd=new Date(data.updated);
-        if(fetchStatusEl) fetchStatusEl.textContent='Data Updated '+upd.toLocaleString('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' PH';
-      } else if(fetchStatusEl){
-        fetchStatusEl.textContent='Data timestamp unavailable';
-      }
+      // One surface, one message: the running status in the header is replaced
+      // by the freshness stamp, which reads BOTH PCSO files — this one and
+      // pcso-history.json, whose scheduled job is the only thing that moves on
+      // a day nobody taps Fetch Live. See the DATA FRESHNESS STAMP block above.
+      pcsoStampNote('results',data);
+      PCSO_STATUS_BUSY=false;
+      pcsoRenderStamp(true);
       return;
     } catch(err){
       lastErr=err;
@@ -3423,6 +3538,7 @@ async function pcsoRefreshFromRaw(){
   }
 
   pcsoRender();
+  PCSO_STATUS_BUSY=false;
   var fetchStatusElErr=pcsoStatusEl();
   if(fetchStatusElErr){
     fetchStatusElErr.textContent=lastWas429
@@ -3439,6 +3555,7 @@ async function pcsoAIFetch(){
   if (!token) { if(statusEl) statusEl.textContent='Cancelled — no token entered.'; return; }
 
   if(btn){btn.disabled=true;btn.innerHTML='⏳ Fetching...';}
+  PCSO_STATUS_BUSY=true; // this run narrates in the label until it lands
   if(statusEl) statusEl.textContent='Triggering scraper + history append...';
 
   var ghHeaders = {
@@ -3464,6 +3581,13 @@ async function pcsoAIFetch(){
     if (statusEl) statusEl.textContent = (allOk ? 'Both done ✅' : 'Finished with issues ❌ (' + results.join(', ') + ')') + ' — refreshing data...';
 
     await pcsoRefreshFromRaw();
+    // The dispatch appended to pcso-history.json too, and that file is what the
+    // Look Up panel reads. Without this second read the panel kept serving the
+    // copy fetched at page load — the just-fetched draw only appeared on reload.
+    try{ await loadPcsoHistoryIntoGames(); }
+    catch(e2){ console.error('history reload after Fetch Live:', e2); }
+    PCSO_STATUS_BUSY=false;
+    pcsoRenderStamp(true);
 
     if(btn){btn.style.color = allOk ? 'var(--green)' : 'var(--accent)'; setTimeout(function(){if(btn)btn.style.color='';},3000);}
     if (!allOk && statusEl) statusEl.textContent = 'Refreshed, but a workflow reported issues ❌ — check Actions tab.';
@@ -3472,6 +3596,7 @@ async function pcsoAIFetch(){
     try { await pcsoRefreshFromRaw(); } catch(e2) { /* already logged */ }
     if (statusEl) statusEl.textContent = 'Error ❌ — ' + (e && e.message ? e.message : 'see console');
   } finally {
+    PCSO_STATUS_BUSY=false;
     if(btn){btn.disabled=false;btn.innerHTML='&#9889; Fetch Live';}
   }
 }

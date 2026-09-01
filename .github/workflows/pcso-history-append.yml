@@ -56,10 +56,36 @@ jobs:
       - name: Append new PCSO results (never overwrites existing data)
         run: python3 .github/scripts/append_pcso_history.py
 
-      - name: Commit results (only if something changed)
+      # Commits on EVERY run now, not only when a draw was added: the script
+      # stamps a `checked` timestamp each time, and that stamp is what the
+      # Oracle header's "Last Fetched" label reads. A run that found nothing
+      # still has to reach the page, otherwise the label reports the last
+      # manual fetch and looks days stale while the pipeline is fine.
+      #
+      # That makes this job share `main` with the hourly MangaFreak scraper
+      # far more often, so the push rebases and retries the same way that one
+      # does — a bare `git push` loses the race.
+      - name: Commit results
         run: |
           git config user.name "PCSO History Bot"
           git config user.email "pcso-history-bot@jomerpb.github.io"
           git add pcso-history.json
-          git diff --staged --quiet || git commit -m "chore: append new PCSO history $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "chore: sync PCSO history $(date -u +'%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3 4 5; do
+            # Explicit refspec rather than a bare `git push`: checkout@v4 on a
+            # schedule can leave HEAD detached, where a bare push has no
+            # upstream to resolve and fails outright.
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push $i failed — rebasing onto origin/${GITHUB_REF_NAME} and retrying"
+            git pull --rebase origin "${GITHUB_REF_NAME}" || exit 1
+            sleep $((i * 3))
+          done
+          echo "could not push after 5 attempts" >&2
+          exit 1

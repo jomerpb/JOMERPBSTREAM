@@ -145,6 +145,49 @@ check('full precision float', games['6/58']['jackpot'] == 206672120.91,
 check("'*' winners parsed as None", games['6/58']['winners'] is None,
       f"{games['6/58']['winners']!r}")
 
+print('\n12. save_history records a run that changed nothing')
+# The Oracle header's "Last Fetched" label reads `checked`, so a scheduled tick
+# that finds no new draw must still stamp the file. Before this, save_history
+# only ran when something was appended, and the label sat on the last MANUAL
+# fetch: on 2026-08-31 it read "Aug 30, 11:06 PM" while that morning's
+# scheduled run had already happened. `updated` must NOT move on such a run —
+# it is the only honest "the data itself changed" signal the page has.
+import json as _json, tempfile as _tf, os as _os
+_fixture = {'updated': '2026-08-30T23:08:00+08:00',
+            '6/58': [entry(d='2026-08-30')], 'ez2': []}
+_dir = _tf.mkdtemp()
+_path = _os.path.join(_dir, 'hist.json')
+_real_file = ah.HISTORY_FILE
+ah.HISTORY_FILE = _path
+try:
+    with open(_path, 'w') as _f:
+        _json.dump(_fixture, _f)
+
+    ah.save_history(ah.load_history(), changed=False)
+    _after = _json.load(open(_path))
+    check('check-only run leaves `updated` alone',
+          _after['updated'] == _fixture['updated'], _after['updated'])
+    check('check-only run writes `checked`', bool(_after.get('checked')),
+          repr(_after.get('checked')))
+    check('check-only run touches no draw',
+          _after['6/58'] == _fixture['6/58'])
+    check('both stamps lead the file (one-line diff, not a key past 400KB)',
+          list(_after.keys())[:2] == ['updated', 'checked'],
+          str(list(_after.keys())[:3]))
+
+    ah.save_history(ah.load_history(), changed=True)
+    _after2 = _json.load(open(_path))
+    check('a run that changed something moves `updated`',
+          _after2['updated'] != _fixture['updated'], _after2['updated'])
+    check('and both stamps agree on that run',
+          _after2['updated'] == _after2['checked'])
+    check('`checked` never goes backwards',
+          _after2['checked'] >= _after['checked'])
+finally:
+    ah.HISTORY_FILE = _real_file
+    _os.remove(_path)
+    _os.rmdir(_dir)
+
 print('\n' + '=' * 60)
 print(f'{len(failures)} failure(s)' + (': ' + ', '.join(failures) if failures else ' — all guarantees hold'))
 sys.exit(1 if failures else 0)
