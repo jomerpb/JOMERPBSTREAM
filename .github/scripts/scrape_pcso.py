@@ -346,7 +346,12 @@ def merge_lottopcso(ez2_map, balls_map, today_ph):
 def build_output(ez2_map, balls_map):
     now_ph = datetime.now(PH_TZ)
     return {
+        # This script rewrites the whole file every run, so both stamps are the
+        # same moment here. `checked` exists so the page can read one field name
+        # across both PCSO files — pcso-history.json is append-only and there
+        # the two genuinely differ. See save_history() in append_pcso_history.py.
         'updated': now_ph.isoformat(),
+        'checked': now_ph.isoformat(),
         'date': now_ph.strftime('%B %d, %Y').replace(' 0', ' '),
         'ez2': [
             {'draw': d, 'nums': ez2_map.get(d, []), 'cutoff': c}

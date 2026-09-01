@@ -152,6 +152,52 @@ The Oracle tab has **two** date pickers, deliberately distinct, and the split is
 
 Both prefer the immutable `oracle-history.json` entry over a live recompute, tagged 📌 recorded vs ↻ recomputed.
 
+**The Look Up header's freshness label reads `checked`, not `updated`.** It is
+the page's only fetch-status surface (`#pcso-date-lbl`), and it used to print
+`pcso-results.json`'s `updated` alone — a file only `pcso-scraper.yml` writes,
+and that workflow is `workflow_dispatch` only. So it reported the last *manual*
+Fetch Live and nothing else: measured on 2026-08-31 11:10 PH it read "Aug 30,
+11:06 PM" while that day's scheduled append job had already run at 08:48.
+
+Note what does **not** fix it: taking the newest `updated` across both PCSO
+files. On that same date the newest change across both was still Aug 30 23:08,
+because the scheduled ticks that day found nothing new to append and
+`save_history` only ran when something changed — so the file was never
+rewritten. Hence a second stamp:
+
+- **`checked`** — written by **every** run of a pipeline, including the ones
+  that find nothing. This is "last fetched" and it is what the label shows.
+  `append_pcso_history.py` therefore always saves, and its workflow commits on
+  every run (a one-line diff), which is why that step now rebases and retries
+  its push the way the hourly MangaFreak job does.
+- **`updated`** — moves only when a draw was actually added or repaired.
+
+The staleness clause (`· data Aug 31`, appended when the last change is more
+than 24h behind the last fetch) reads `updated` from **`pcso-history.json`
+alone**. `pcso-results.json` is rewritten wholesale on every run, so its
+`updated` is really a second `checked`; folding it in made the clause compare a
+value against itself and it could never fire — caught by lane-1 test 3, not by
+reading the code. `oracle-history.json` is excluded from the label for the
+opposite reason: the snapshot job logs a pick every single day whether or not
+any draw landed, so including it would pin the label to "today" and mask a dead
+results pipeline.
+
+Two details in `pcsoRenderStamp`: it writes `el.title`/`el.textContent` by
+property assignment rather than `setAttribute`/`removeAttribute`, because it
+runs at load through `tryPcso()` and the repo's `vm` harnesses
+(`snapshot_oracle.mjs`, `test_oracle_layers.mjs`) stub elements without the
+attribute methods — using them took all three `.mjs` suites down at once. And
+`PCSO_STATUS_BUSY` exists so the independently-resolving history load cannot
+overwrite a running fetch's "Retrying…" message with a timestamp.
+
+Related, same path: a **Fetch Live now re-reads `pcso-history.json`** rather
+than only `pcso-results.json`. The dispatch runs the append job, so without the
+second read the Look Up panel kept serving the copy fetched at page load and
+the just-fetched draw only appeared on reload. `loadPcsoHistoryIntoGames` is a
+function declaration for this reason (it was an IIFE); it is idempotent, and a
+re-run that *fails* no longer flips the panel to "fetch failed" when a good
+copy is already loaded.
+
 A third panel, **"Analyze My Own Personal Numbers"** (`<details id="personal-card">`), is collapsed by default and contains everything the personal analysis needs: the game selector (`#gameGrid`), `#ez2wrap`, the six inputs (`#personal-wrap`), the ANALYZE MY NUMBERS button, and the `#loader`/`#results` it renders into. Those elements are no longer page-level — code that reaches for `#gameGrid` or `#results` is reaching inside that card.
 
 **One scorer, two surfaces.** The alignment percentage is `oracleAlignment(nums, digitScores, meaning, poolMax)` — digit convergence ×0.70 blended with meaning capture ×0.30 — and both the Oracle Pick panel and Analyze My Numbers call it. It exists because they drifted: the pick panel blended both halves while the personal view reported the digit half alone, so identical numbers read 54% in one place and 67% in the other. Never re-inline either half; and per the statistics rule above, never tune the two weights for hit rate.
