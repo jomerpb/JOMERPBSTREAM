@@ -1235,6 +1235,23 @@ const MANGA_SOURCES = {
     // every segment the sitemap emits is already URL-safe.
     book:  path => 'https://www.webcomicsapp.com/en/' + path,
   },
+  comix: {
+    label: 'Comix ↗',
+    // Lifted from the site's own search form rather than guessed: its submit
+    // handler navigates to /browse?q=…&sort=relevance:desc. The obvious
+    // /search?q= is NOT a route — it answers 200 with page:"error", while
+    // /browse answers page:"browse", which is how this was settled.
+    //
+    // There is no `book:` here and that is deliberate, not an omission. A
+    // direct title link needs comix.ws's opaque per-title id (/title/13r19-jinx)
+    // which can only come from a scraped index, and its robots.txt disallows
+    // ClaudeBot by name alongside GPTBot/CCBot/Google-Extended, with
+    // Content-Signal: ai-train=no. The embed is the user's own browser and is
+    // unaffected by that; building a crawler would not be. So this card is
+    // search-only, on the repo owner's explicit instruction. Do not add an
+    // index pipeline for it without asking them again.
+    url:   q    => 'https://comix.ws/browse?q=' + encodeURIComponent(q) + '&sort=relevance%3Adesc',
+  },
   orchisasia: {
     label: 'Orchisasia 18+ ↗',
     adult: true,
@@ -1653,6 +1670,22 @@ const MANGA_READERS = {
           frame:'wc-read-iframe', open:'wc-read-open'},
     ensure: () => ensureWebcomicsIndex(),
     url:    item => webcomicsReadUrl(item),
+  },
+  // Search-only: no index, so nothing to await and every title lands on
+  // comix.ws's own results page. See MANGA_SOURCES.comix for why there is no
+  // direct-title path. Collapsed by default like WebComics — it is the third
+  // 78vh frame on the page, and a collapsed card costs zero requests, which
+  // matters more here than anywhere because whether the site renders inside a
+  // frame at all could not be verified from CI (Cloudflare's bot challenge
+  // breaks its hydration in a headless browser, top-level as well as framed).
+  comix: {
+    label: 'Comix',
+    store: 'comixReadOpen',
+    openByDefault: false,
+    ids: {wrap:'cx-read-wrap', body:'cx-read-body', chev:'cx-read-chev',
+          frame:'cx-read-iframe', open:'cx-read-open'},
+    ensure: () => Promise.resolve(),
+    url:    item => mangaSourceUrl('comix', item),
   },
 };
 
