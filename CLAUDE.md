@@ -347,6 +347,20 @@ series pages, its `/Read1_…` chapter pages *or* its `/Find/` search pages, and
 none of its own scripts try to break out of a frame — verified in Chromium, top
 window still on our origin after a chapter tap.
 
+The same gate was run for WebComics before its card was written, and headers
+alone were not accepted as proof: it is a Nuxt SPA, so it was loaded into this
+exact `sandbox` in Chromium and confirmed to hydrate and render (80 images, 52
+links on a series page; real results on a search page), with the top window
+still on our origin.
+
+**WebComics picks its layout from the User-Agent, not the viewport** — its HTML
+carries `class="is-pc"` for a desktop UA and nothing for a mobile one. Headless
+Chromium's default UA therefore frames the *desktop* site, which overflows a
+phone-width card and looks like a bug in our CSS. It is not: under a real mobile
+UA the framed document fits exactly (382/382 on Pixel 7, 360/360 on iPhone 13,
+no internal overflow, no page overflow). Any future measurement of this frame
+has to emulate a mobile device or it measures the harness.
+
 Three things not to "simplify":
 
 - **The `sandbox` attribute.** `allow-same-origin allow-scripts allow-forms`,
@@ -363,11 +377,68 @@ Three things not to "simplify":
   `resetInlinePlayer`). Without it a whole third-party page, ad scripts included,
   stays alive behind the next tab.
 
-**The READ card is collapsible, and its three rules are each load-bearing.**
-The bar is the toggle (`toggleMangaRead`), the frame and the note live in
-`#manga-read-body`, and the card is **open by default** — a card that opened
-collapsed would be the `📖 Read ↗` button again, which is the thing the embed
-replaced.
+**There are TWO reader cards — MangaFreak and WebComics — and one mechanism.**
+`MANGA_READERS` in `stream.js` holds the entire difference between them: the
+element ids each owns, its `localStorage` key, how a title becomes a URL, and
+whether it starts open. Everything else (`setMangaFrame`, `armMangaFrame`,
+`toggleMangaRead`, `setMangaReadOpen`, `resetMangaFrame`, `showOneMangaEmbed`)
+takes a reader key. Do not fork these into a second copy; the refactor was
+verified to leave the MangaFreak card behaving identically to the one-card
+version — same src, same 754px height, same request count, same open state.
+
+**WebComics starts COLLAPSED and MangaFreak does not, and the asymmetry is
+measured, not aesthetic.** WebComics is a licensed platform carrying its own
+originals, and its catalogue barely intersects the one this app browses:
+
+| | measured |
+|---|---|
+| WebComics English catalogue | 3,132 titles (its own sitemap) |
+| AniList titles resolving to a WebComics page | **41 of 967 (4.2%)** on a hold-out |
+| The rest | WebComics' own search page, which renders in the frame |
+
+So an open-by-default WebComics card would load a third-party page showing
+nothing relevant on ~96% of titles, *on top of* MangaFreak's 78vh frame.
+Collapsed it costs nothing at all — measured as **zero network requests**, not
+an absent `src` — and the choice is remembered the moment anyone opens it.
+
+The obvious suspicion is that the matcher, not the catalogue, is the weak link.
+It was tested directly rather than assumed: WebComics' own search endpoint was
+asked for 18 titles the matcher missed, with 5 known-present titles as a
+control. Control 5/5; of the 18, **0 were genuinely present** — 5 returned an
+empty search page and 11 only unrelated rails (*One Piece* →
+`one-night-one-love`, *Berserk* → `her-ladyship-s-going-berserk-again`). No
+better matcher changes that number. **Do not try to raise the hit rate by
+loosening `webcomicsPathFor`** — that direction produces exactly the two errors
+below.
+
+**`webcomicsPathFor` requires two DISTINCT tokens, and applies that gate BEFORE
+the exact lookup, not only to the fuzzy walk.** Both halves came out of auditing
+hits by hand rather than counting them, which is the only way either was visible:
+
+- *Hunter x Hunter* normalises to one distinct token (`x` is dropped as too
+  short, `hunter` repeats), and the ≤1-extra-token rule then matched WebComics'
+  `dark-hunter`. Counting distinct tokens rejects it and loses nothing else —
+  measured over 362 titles, it drops exactly that one hit.
+- *Kingdom* matched `kingdom` **exactly** and is a different comic — WebComics'
+  is Ancaellar's "Landon Colfield III becomes king at 17", not Hara's. In a
+  catalogue this disjoint a one-word agreement is a coincidence; it was the only
+  single-word hit in 362 titles, and gating the exact path too drops it while
+  keeping all six correct answers. The hold-out confirms: **zero** single-word
+  titles resolve.
+
+Known residual, stated rather than papered over: the ≤1-extra-token rule still
+produces about **1 wrong answer in 41** hold-out hits (*Super Doctor K* →
+`the-reborn-super-doctor`, a different work). A proportional variant — allow an
+extra token only when the query has three or more — was measured and **rejected**:
+over the same 967 titles it goes 41 → 39 hits, removing that one wrong answer
+and losing one right one (*Lovers Royale* → `lovers-battle-royale`). A 1-for-1
+trade is not an improvement, so the simpler rule stays, matching MangaFreak's.
+
+**Both cards are collapsible, and the three rules are each load-bearing.**
+The bar is the toggle (`toggleMangaRead(key, event)`), the frame and the note
+live in that reader's `…-read-body`, and MangaFreak is **open by default** — a
+MangaFreak card that opened collapsed would be the `📖 Read ↗` button again,
+which is the thing the embed replaced.
 
 - **The open/shut choice is remembered, across titles and across reloads**
   (`localStorage.mangaReadOpen`, same pattern as `lastStreamSeg`), where the
@@ -415,6 +486,28 @@ the audit rule above, a resolution *count* cannot see a title resolving to the
 wrong record. What it does not fix: roughly a third still resolve to nothing and
 get MangaFreak's search page — now embedded in the frame, so that is a search box
 inside the app rather than a dead end.
+
+**WebComics** (`www.webcomicsapp.com`):
+- `webcomics-scraper.yml` → `.github/scripts/scrape_webcomics.py` →
+  `webcomics-index.json` (~3.1k `genre/slug/id` entries). Exists for the same
+  reason the MangaFreak pipeline does — no `Access-Control-Allow-Origin`, so the
+  browser cannot query it — but the scrape is far cheaper: the site publishes a
+  sitemap, so it is **2 requests** against MangaFreak's 402-page A-Z walk. The
+  shards are read from `/sitemap.xml` rather than hardcoded as `book_detail1/2`,
+  so a third shard added as the catalogue grows is picked up instead of silently
+  missed. Same shrink guard as MangaFreak's: a partial scrape cannot replace a
+  good index.
+- **Dispatch-only, deliberately** — this is the convention, and unlike the three
+  scheduled exceptions it earns it. Those exist because something user-visible
+  goes stale on its own; this index is a slug table for a catalogue that grows by
+  a handful of titles a week, and a title missing from it falls back to a search
+  page, which is where ~96% of this app's titles land anyway. A stale index costs
+  a direct link, not a broken tab.
+- The `/en/` anchor in the URL regex is load-bearing: the same shards carry
+  `pt/fr/id/es` rows for the same books, and those are pages this app has no way
+  to ask for. The genre segment is stored even though `/en/comic/<slug>/<id>`
+  301s to the right one — inside an iframe that redirect is a second round trip
+  on every open.
 
 **PCSO** (`businesslist.ph/lottery`):
 - `pcso-scraper.yml` → `.github/scripts/scrape_pcso.py` → `pcso-results.json`

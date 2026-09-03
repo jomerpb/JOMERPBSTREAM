@@ -1226,6 +1226,15 @@ const MANGA_SOURCES = {
     // resolved to a slug — see mangafreakSlugFor().
     manga: slug => 'https://ww3.mangafreak.me/Manga/' + encodeURIComponent(slug),
   },
+  webcomics: {
+    label: 'WebComics ↗',
+    // /en/search/<q> 302s to this, so point at the settled URL directly.
+    url:   q    => 'https://www.webcomicsapp.com/en/search?q=' + encodeURIComponent(q),
+    // "<genre>/<slug>/<id>" straight out of webcomics-index.json. Not
+    // encodeURIComponent'd as a whole: the slashes are path separators, and
+    // every segment the sitemap emits is already URL-safe.
+    book:  path => 'https://www.webcomicsapp.com/en/' + path,
+  },
   orchisasia: {
     label: 'Orchisasia 18+ ↗',
     adult: true,
@@ -1329,6 +1338,85 @@ function mangaReadUrl(item) {
   const slug = item?.mfSlug || mangafreakSlugFor(item?.title) || mangafreakSlugFor(item?.titleRomaji);
   return slug ? MANGA_SOURCES.mangafreak.manga(slug)
               : mangaSourceUrl('mangafreak', item);
+}
+
+// ── WEBCOMICS INDEX ──
+// webcomics-index.json is "<genre>/<slug>/<24-hex id>" per entry, built from
+// the site's own sitemap (see .github/scripts/scrape_webcomics.py). The id is
+// opaque and cannot be derived from a title, which is the whole reason an index
+// exists; the genre could be dropped — /en/comic/<slug>/<id> 301s to the right
+// one — but inside an iframe that redirect is a second round trip on every
+// open, for no saving worth having.
+let wcIndex = null;              // {exact:Map, table:[...]} once loaded
+let wcIndexLoading = null;
+
+function ensureWebcomicsIndex() {
+  if (wcIndex || wcIndexLoading) return wcIndexLoading || Promise.resolve(wcIndex);
+  wcIndexLoading = fetch(`webcomics-index.json?nocache=${Date.now()}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      const books = d?.books || [];
+      if (!books.length) return null;
+      const table = books.map(path => {
+        const slug = path.split('/')[1] || '';
+        const a = mfStrip(mfNorm(slug));
+        return {path, a, toks: a.split(' ')};
+      });
+      const exact = new Map();
+      for (const e of table) for (const k of [e.a, mfSquash(e.a)]) if (!exact.has(k)) exact.set(k, e.path);
+      wcIndex = {exact, table};
+      return wcIndex;
+    })
+    .catch(() => null)
+    .finally(() => { wcIndexLoading = null; });
+  return wcIndexLoading;
+}
+
+// Same shape as mangafreakSlugFor, with ONE deliberate difference: the token
+// gate counts DISTINCT tokens, not tokens.
+//
+// That is not a tidy-up, it is a bug this catalogue exposes. "Hunter x Hunter"
+// normalises to three tokens, but "x" is dropped as too short and the other two
+// are the same word — one distinct token, "hunter". The ≤1-extra-token rule
+// then happily matches WebComics' "dark-hunter", a completely different comic,
+// and it was one of only 8 hits in the whole 264-title sample. Counting
+// distinct tokens rejects it for exactly the reason the rule already states
+// about single words: one word matches far too much.
+function webcomicsPathFor(title) {
+  if (!wcIndex || !title) return null;
+  const n = mfNorm(title), a = mfStrip(n);
+  // The gate is applied BEFORE the exact lookup, not only to the fuzzy walk,
+  // and that is the second thing this catalogue taught. "Kingdom" matches
+  // WebComics' "kingdom" exactly and is a completely different comic — theirs
+  // is Ancaellar's "Landon Colfield III becomes king at 17", not Hara's. In a
+  // catalogue that barely overlaps this app's, a one-word title agreeing is
+  // near enough always a coincidence, and it was the only single-word hit in
+  // 362 titles. Requiring two distinct words drops exactly that one and keeps
+  // all six correct answers.
+  const toks = a.split(' ').filter(t => t.length > 1);
+  if (new Set(toks).size < 2) return null;
+  for (const k of [n, a, mfSquash(a)]) { const hit = wcIndex.exact.get(k); if (hit) return hit; }
+  let best = null;
+  for (const e of wcIndex.table) {
+    if (!toks.every(t => e.toks.includes(t))) continue;
+    const extra = e.toks.filter(t => !toks.includes(t)).length;
+    if (extra > 1) continue;
+    if (!best || extra < best.extra || (extra === best.extra && e.a.length < best.len))
+      best = {path:e.path, extra, len:e.a.length};
+  }
+  return best ? best.path : null;
+}
+
+// Where this title is read on WebComics. The direct /en/<genre>/<slug>/<id>
+// page when the index resolves one, WebComics' own search page when it does
+// not — and that is the common case here, ~97% measured, because the platform
+// carries its own originals rather than the catalogue this app browses. Both
+// render inside the frame, so an unresolved title lands on a search box in the
+// app instead of a dead end.
+function webcomicsReadUrl(item) {
+  const path = webcomicsPathFor(item?.title) || webcomicsPathFor(item?.titleRomaji);
+  return path ? MANGA_SOURCES.webcomics.book(path)
+              : mangaSourceUrl('webcomics', item);
 }
 
 // Outbound links for the detail page's collapsible block: AniList for the
@@ -1530,35 +1618,69 @@ function renderDetailHero(item, type, extraTags=[]) {
 // After reading N chapters, Back walks out through them before it leaves the
 // detail page. That is what any embedded browser does — the bar's ↺ Chapters
 // button is the way back to the series page that spends no history at all.
-let mangaEmbedRun = 0;
+// TWO readers, one mechanism. MangaFreak and WebComics get identical cards —
+// same collapse, same lazy arming, same sandbox — so this is parametrised over
+// a reader key rather than written twice. MANGA_READERS is the whole difference
+// between them: which element ids it owns, where it remembers its open/shut
+// state, how a title becomes a URL, and whether it starts open.
+//
+// WHY WEBCOMICS STARTS COLLAPSED AND MANGAFREAK DOES NOT. Measured against 264
+// unique AniList manga before either card was written: MangaFreak's index
+// resolves a direct series page for most of them, WebComics' for **8, 3.0%**.
+// WebComics is a licensed platform carrying its own originals and its catalogue
+// barely intersects the one this app browses — confirmed by asking WebComics'
+// own search for 18 titles the matcher missed, with 5 known-present titles as a
+// control: control 5/5, and 0 of the 18 genuinely present. So an open-by-default
+// WebComics card would load a third-party search page showing nothing relevant
+// on ~97% of titles, on top of MangaFreak's 78vh frame. Collapsed it costs
+// nothing at all (measured as zero requests, not an absent src), and the choice
+// is remembered the moment anyone opens it.
+const MANGA_READERS = {
+  mangafreak: {
+    label: 'MangaFreak',
+    store: 'mangaReadOpen',
+    openByDefault: true,
+    ids: {wrap:'manga-read-wrap', body:'manga-read-body', chev:'manga-read-chev',
+          frame:'manga-read-iframe', open:'manga-read-open'},
+    ensure: () => ensureMangafreakIndex(),
+    url:    item => mangaReadUrl(item),
+  },
+  webcomics: {
+    label: 'WebComics',
+    store: 'webcomicsReadOpen',
+    openByDefault: false,
+    ids: {wrap:'wc-read-wrap', body:'wc-read-body', chev:'wc-read-chev',
+          frame:'wc-read-iframe', open:'wc-read-open'},
+    ensure: () => ensureWebcomicsIndex(),
+    url:    item => webcomicsReadUrl(item),
+  },
+};
 
-// Collapse state for the READ card, and whether the frame has been pointed at
-// anything yet. Both live at module scope because the state is deliberately
-// STICKY ACROSS TITLES: someone who collapses a 78vh third-party page is
-// saying "not this", and re-opening it on the next manga fights them. The
-// Details card resets per title instead, which is the opposite choice for the
-// opposite reason — it costs nothing to reopen.
-//
-// It is persisted for the same reason currentStreamSeg above is: a preference
-// set by hand should survive a reload rather than be undone by one. Absent or
-// unreadable storage reads as OPEN, so nobody who never touches it sees any
-// change, and every access is in a try — measured under a localStorage that
-// throws on every call, the card still renders and still toggles.
-//
-// Sticky-collapsed also buys a real saving: showMangaEmbed only arms the frame
-// when the card is open, so a collapsed card never fetches MangaFreak at all —
-// no page, no ad scripts, measured as zero requests rather than an absent src.
-// mangaFrameArmed is what makes the first expand load it late instead of never.
-let mangaReadOpen = (() => {
-  try { return localStorage.getItem('mangaReadOpen') !== '0'; } catch { return true; }
-})();
-let mangaFrameArmed = false;
+// Per-reader runtime state. `open` is seeded from storage the same way
+// currentStreamSeg is: a preference set by hand should survive a reload rather
+// than be undone by one, and absent or unreadable storage falls back to the
+// reader's own default so nobody who never touches it sees a change. Every
+// access is in a try — measured under a localStorage that throws on every call
+// both cards still render and still toggle.
+const mangaReaderState = {};
+for (const [key, cfg] of Object.entries(MANGA_READERS)) {
+  mangaReaderState[key] = {
+    open: (() => {
+      try {
+        const v = localStorage.getItem(cfg.store);
+        return v === null ? cfg.openByDefault : v !== '0';
+      } catch { return cfg.openByDefault; }
+    })(),
+    armed: false,   // has the frame been pointed at anything yet?
+    run: 0,         // cancels a slug lookup still in flight
+  };
+}
 
 // Same element-swap as setPlayerFrame, for the same measured reason: assigning
 // .src pushes a session-history entry per assignment, replacing the element
 // pushes none. Parking it with no url also stops whatever the frame is loading.
-function setMangaFrame(url) {
-  const old = document.getElementById('manga-read-iframe');
+function setMangaFrame(key, url) {
+  const old = document.getElementById(MANGA_READERS[key].ids.frame);
   if (!old) return null;
   const frame = old.cloneNode(false);
   if (url) frame.setAttribute('src', url); else frame.removeAttribute('src');
@@ -1567,14 +1689,14 @@ function setMangaFrame(url) {
 }
 
 // A cross-origin frame reports exactly one thing to us: that it loaded
-// something. The first load is the series page we pointed it at, so a second
-// one means a chapter was opened — the only "started reading" signal available
-// here, and a truer one than the old button, which recorded the tap that
-// merely opened MangaFreak.
-function armMangaFrame(url, item) {
-  const frame = setMangaFrame(url);
+// something. The first load is the page we pointed it at, so a second one means
+// a chapter was opened — the only "started reading" signal available here, and
+// a truer one than the old button, which recorded the tap that merely opened
+// the site.
+function armMangaFrame(key, url, item) {
+  const frame = setMangaFrame(key, url);
   if (!frame) return;
-  mangaFrameArmed = true;
+  mangaReaderState[key].armed = true;
   let loads = 0;
   frame.addEventListener('load', () => { if (++loads > 1) saveMangaToHistory(item); });
 }
@@ -1584,63 +1706,75 @@ function armMangaFrame(url, item) {
 // you back on the chapter and scroll position you left — parking it would
 // reload the series page and lose your place, which is a worse trade for a
 // card you are still sitting on. showPage() still parks it on the way out.
-function setMangaReadOpen(open) {
-  mangaReadOpen = !!open;
-  try { localStorage.setItem('mangaReadOpen', mangaReadOpen ? '1' : '0'); } catch {}
-  collapseSection('manga-read-body', 'manga-read-chev', !mangaReadOpen);
-  document.getElementById('manga-read-wrap')?.classList.toggle('mread-shut', !mangaReadOpen);
+function setMangaReadOpen(key, open) {
+  const cfg = MANGA_READERS[key], st = mangaReaderState[key];
+  st.open = !!open;
+  try { localStorage.setItem(cfg.store, st.open ? '1' : '0'); } catch {}
+  collapseSection(cfg.ids.body, cfg.ids.chev, !st.open);
+  document.getElementById(cfg.ids.wrap)?.classList.toggle('mread-shut', !st.open);
 }
 
-// Takes the event so it can bow out for the two chips. Measured at 320px the
-// bar wraps and .mread-actions then spans the full width, so a stopPropagation
-// on that container made most of the bar dead to the touch.
-function toggleMangaRead(ev) {
+// Takes the event so it can bow out for the chips. Measured at 320px the bar
+// wraps and .mread-actions then spans the full width, so a stopPropagation on
+// that container made most of the bar dead to the touch.
+function toggleMangaRead(key, ev) {
   if (ev?.target?.closest?.('.mread-btn')) return;
-  const wrap = document.getElementById('manga-read-wrap');
-  setMangaReadOpen(!mangaReadOpen);
-  // The lazy half: a card that opened collapsed never loaded MangaFreak, so
-  // the first reveal is where it gets pointed at the series page.
-  if (mangaReadOpen && !mangaFrameArmed && wrap?.dataset.url) armMangaFrame(wrap.dataset.url, currentItem);
+  const wrap = document.getElementById(MANGA_READERS[key].ids.wrap);
+  const st = mangaReaderState[key];
+  setMangaReadOpen(key, !st.open);
+  // The lazy half: a card that opened collapsed never loaded the site at all,
+  // so the first reveal is where it gets pointed at the page.
+  if (st.open && !st.armed && wrap?.dataset.url) armMangaFrame(key, wrap.dataset.url, currentItem);
 }
 
 // The bar's ↺ button: back to the chapter list from wherever the frame wandered.
 // Asking for the chapter list implies wanting to see it, so it opens the card
 // too rather than resetting a frame nobody can look at.
-function resetMangaFrame() {
-  const wrap = document.getElementById('manga-read-wrap');
+function resetMangaFrame(key) {
+  const wrap = document.getElementById(MANGA_READERS[key].ids.wrap);
   if (!wrap?.dataset.url) return;
-  if (!mangaReadOpen) setMangaReadOpen(true);
-  armMangaFrame(wrap.dataset.url, currentItem);
+  if (!mangaReaderState[key].open) setMangaReadOpen(key, true);
+  armMangaFrame(key, wrap.dataset.url, currentItem);
 }
 
 function hideMangaEmbed() {
-  mangaEmbedRun++;            // cancels a slug lookup still in flight
-  setMangaFrame(null);        // and stops whatever the frame was loading
-  mangaFrameArmed = false;    // so the next reveal re-points it
-  const wrap = document.getElementById('manga-read-wrap');
-  if (wrap) { wrap.style.display = 'none'; delete wrap.dataset.url; }
+  for (const key of Object.keys(MANGA_READERS)) {
+    const st = mangaReaderState[key];
+    st.run++;                  // cancels a slug lookup still in flight
+    setMangaFrame(key, null);  // and stops whatever the frame was loading
+    st.armed = false;          // so the next reveal re-points it
+    const wrap = document.getElementById(MANGA_READERS[key].ids.wrap);
+    if (wrap) { wrap.style.display = 'none'; delete wrap.dataset.url; }
+  }
 }
 
-async function showMangaEmbed(item) {
-  const wrap = document.getElementById('manga-read-wrap');
+// Both cards are shown together; their index fetches run in parallel rather
+// than one after the other, so the second card costs no extra wall time.
+function showMangaEmbed(item) {
+  return Promise.all(Object.keys(MANGA_READERS).map(key => showOneMangaEmbed(key, item)));
+}
+
+async function showOneMangaEmbed(key, item) {
+  const cfg = MANGA_READERS[key], st = mangaReaderState[key];
+  const wrap = document.getElementById(cfg.ids.wrap);
   if (!wrap) return;
-  const run = ++mangaEmbedRun;
+  const run = ++st.run;
   // Nothing here runs inside a tap gesture any more, so the slug index can be
-  // awaited instead of guessed at. The button could not: window.open had to be
-  // called synchronously or mobile blocked it, so a title whose slug had not
+  // awaited instead of guessed at. The old button could not: window.open had to
+  // be called synchronously or mobile blocked it, so a title whose slug had not
   // arrived yet was dumped on a search page even though the index was seconds
   // away. Now it waits, and the direct page is what opens.
-  await ensureMangafreakIndex();
-  if (run !== mangaEmbedRun) return;   // another title was opened while we waited
-  const url = mangaReadUrl(item);
+  await cfg.ensure();
+  if (run !== st.run) return;   // another title was opened while we waited
+  const url = cfg.url(item);
   wrap.dataset.url = url;
-  const open = document.getElementById('manga-read-open');
+  const open = document.getElementById(cfg.ids.open);
   if (open) open.href = url;
   wrap.style.display = 'block';
-  // Carries whatever the last title was left on. Open is the default and the
-  // usual case, so the frame is normally armed right here as before.
-  setMangaReadOpen(mangaReadOpen);
-  if (mangaReadOpen) armMangaFrame(url, item);
+  // Carries whatever the last title was left on, seeded from this reader's own
+  // default the first time round.
+  setMangaReadOpen(key, st.open);
+  if (st.open) armMangaFrame(key, url, item);
 }
 
 // One <select> beside the SEASONS label. It replaced a horizontally scrolling
