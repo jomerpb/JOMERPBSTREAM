@@ -1532,6 +1532,28 @@ function renderDetailHero(item, type, extraTags=[]) {
 // button is the way back to the series page that spends no history at all.
 let mangaEmbedRun = 0;
 
+// Collapse state for the READ card, and whether the frame has been pointed at
+// anything yet. Both live at module scope because the state is deliberately
+// STICKY ACROSS TITLES: someone who collapses a 78vh third-party page is
+// saying "not this", and re-opening it on the next manga fights them. The
+// Details card resets per title instead, which is the opposite choice for the
+// opposite reason — it costs nothing to reopen.
+//
+// It is persisted for the same reason currentStreamSeg above is: a preference
+// set by hand should survive a reload rather than be undone by one. Absent or
+// unreadable storage reads as OPEN, so nobody who never touches it sees any
+// change, and every access is in a try — measured under a localStorage that
+// throws on every call, the card still renders and still toggles.
+//
+// Sticky-collapsed also buys a real saving: showMangaEmbed only arms the frame
+// when the card is open, so a collapsed card never fetches MangaFreak at all —
+// no page, no ad scripts, measured as zero requests rather than an absent src.
+// mangaFrameArmed is what makes the first expand load it late instead of never.
+let mangaReadOpen = (() => {
+  try { return localStorage.getItem('mangaReadOpen') !== '0'; } catch { return true; }
+})();
+let mangaFrameArmed = false;
+
 // Same element-swap as setPlayerFrame, for the same measured reason: assigning
 // .src pushes a session-history entry per assignment, replacing the element
 // pushes none. Parking it with no url also stops whatever the frame is loading.
@@ -1552,19 +1574,49 @@ function setMangaFrame(url) {
 function armMangaFrame(url, item) {
   const frame = setMangaFrame(url);
   if (!frame) return;
+  mangaFrameArmed = true;
   let loads = 0;
   frame.addEventListener('load', () => { if (++loads > 1) saveMangaToHistory(item); });
 }
 
+// Collapsing hides the frame but does NOT park it, unlike leaving the detail
+// page. Toggling display keeps the iframe's document alive, so re-opening puts
+// you back on the chapter and scroll position you left — parking it would
+// reload the series page and lose your place, which is a worse trade for a
+// card you are still sitting on. showPage() still parks it on the way out.
+function setMangaReadOpen(open) {
+  mangaReadOpen = !!open;
+  try { localStorage.setItem('mangaReadOpen', mangaReadOpen ? '1' : '0'); } catch {}
+  collapseSection('manga-read-body', 'manga-read-chev', !mangaReadOpen);
+  document.getElementById('manga-read-wrap')?.classList.toggle('mread-shut', !mangaReadOpen);
+}
+
+// Takes the event so it can bow out for the two chips. Measured at 320px the
+// bar wraps and .mread-actions then spans the full width, so a stopPropagation
+// on that container made most of the bar dead to the touch.
+function toggleMangaRead(ev) {
+  if (ev?.target?.closest?.('.mread-btn')) return;
+  const wrap = document.getElementById('manga-read-wrap');
+  setMangaReadOpen(!mangaReadOpen);
+  // The lazy half: a card that opened collapsed never loaded MangaFreak, so
+  // the first reveal is where it gets pointed at the series page.
+  if (mangaReadOpen && !mangaFrameArmed && wrap?.dataset.url) armMangaFrame(wrap.dataset.url, currentItem);
+}
+
 // The bar's ↺ button: back to the chapter list from wherever the frame wandered.
+// Asking for the chapter list implies wanting to see it, so it opens the card
+// too rather than resetting a frame nobody can look at.
 function resetMangaFrame() {
   const wrap = document.getElementById('manga-read-wrap');
-  if (wrap?.dataset.url) armMangaFrame(wrap.dataset.url, currentItem);
+  if (!wrap?.dataset.url) return;
+  if (!mangaReadOpen) setMangaReadOpen(true);
+  armMangaFrame(wrap.dataset.url, currentItem);
 }
 
 function hideMangaEmbed() {
   mangaEmbedRun++;            // cancels a slug lookup still in flight
   setMangaFrame(null);        // and stops whatever the frame was loading
+  mangaFrameArmed = false;    // so the next reveal re-points it
   const wrap = document.getElementById('manga-read-wrap');
   if (wrap) { wrap.style.display = 'none'; delete wrap.dataset.url; }
 }
@@ -1585,7 +1637,10 @@ async function showMangaEmbed(item) {
   const open = document.getElementById('manga-read-open');
   if (open) open.href = url;
   wrap.style.display = 'block';
-  armMangaFrame(url, item);
+  // Carries whatever the last title was left on. Open is the default and the
+  // usual case, so the frame is normally armed right here as before.
+  setMangaReadOpen(mangaReadOpen);
+  if (mangaReadOpen) armMangaFrame(url, item);
 }
 
 // One <select> beside the SEASONS label. It replaced a horizontally scrolling
