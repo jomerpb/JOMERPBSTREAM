@@ -33,11 +33,11 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260831a"/>
+  <link rel="stylesheet" href="styles.css?v=20260903a"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260831b"></script>
+  <script defer src="stream.js?v=20260903a"></script>
   <script defer src="oracle.js?v=20260901a"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -734,22 +734,37 @@
          Sandboxed WITHOUT allow-top-navigation and WITHOUT allow-popups. That
          is not caution for its own sake: it is precisely what MangaFreak's ad
          scripts need to redirect or popunder the page, and the sandbox is the
-         only thing standing between an embedded aggregator and the app. -->
+         only thing standing between an embedded aggregator and the app.
+
+         Collapsible, open by default, and the open/shut state sticks across
+         titles AND across reloads — see setMangaReadOpen() in stream.js for why
+         this is the one collapsible card here that does not reset per title. -->
     <div id="manga-read-wrap" class="mread-wrap" style="display:none;">
-      <div class="mread-bar">
-        <div class="sec-label">READ</div>
+      <!-- The whole bar is the toggle, not just the caret: on a phone the caret
+           alone is a ~20px target. Only the two chips are exempt, and that
+           exemption is decided in toggleMangaRead() by what was actually hit,
+           NOT by stopPropagation on the actions container — measured at 320px,
+           the bar wraps onto two lines and that container then spans the full
+           width, so swallowing its clicks killed most of the bar. -->
+      <div class="mread-bar sec-toggle" onclick="toggleMangaRead(event)">
+        <div class="mread-lead">
+          <div class="sec-label">READ</div>
+          <span class="dc-chev" id="manga-read-chev">&#9662;</span>
+        </div>
         <div class="mread-actions">
           <button class="mread-btn" id="manga-read-reset" onclick="resetMangaFrame()">&#8634; Chapters</button>
           <a class="mread-btn" id="manga-read-open" href="#" target="_blank" rel="noopener"
              onclick="saveMangaToHistory(currentItem)">MangaFreak &#8599;</a>
         </div>
       </div>
-      <div class="mread-frame">
-        <iframe id="manga-read-iframe" title="MangaFreak reader"
-                sandbox="allow-same-origin allow-scripts allow-forms"
-                allow="fullscreen"></iframe>
+      <div class="mread-body" id="manga-read-body">
+        <div class="mread-frame">
+          <iframe id="manga-read-iframe" title="MangaFreak reader"
+                  sandbox="allow-same-origin allow-scripts allow-forms"
+                  allow="fullscreen"></iframe>
+        </div>
+        <div class="mread-note">Tap a chapter to read it here. Not loading? Open it on MangaFreak with the link above.</div>
       </div>
-      <div class="mread-note">Tap a chapter to read it here. Not loading? Open it on MangaFreak with the link above.</div>
     </div>
 
     <!-- SEASONS — a picklist beside the label, not a row of pills. The pills

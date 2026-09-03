@@ -363,6 +363,39 @@ Three things not to "simplify":
   `resetInlinePlayer`). Without it a whole third-party page, ad scripts included,
   stays alive behind the next tab.
 
+**The READ card is collapsible, and its three rules are each load-bearing.**
+The bar is the toggle (`toggleMangaRead`), the frame and the note live in
+`#manga-read-body`, and the card is **open by default** — a card that opened
+collapsed would be the `📖 Read ↗` button again, which is the thing the embed
+replaced.
+
+- **The open/shut choice is remembered, across titles and across reloads**
+  (`localStorage.mangaReadOpen`, same pattern as `lastStreamSeg`), where the
+  Details card resets per title. The asymmetry is deliberate: re-opening a 78vh
+  third-party page on every manga fights someone who just closed it, whereas
+  Details costs nothing to reopen. Absent or unreadable storage reads as open,
+  so nobody who never touches it sees a change. Every access is in a `try`,
+  and under a `localStorage` that throws on every access the card still renders
+  and still toggles — measured 6 pageerrors on this branch and **6 on main**,
+  i.e. the pre-existing unguarded reads elsewhere in `stream.js`, none new.
+- **Collapsing hides the frame but does NOT park it**, unlike leaving the page.
+  Toggling `display` keeps the iframe's document alive, so re-opening lands back
+  on the chapter you left — measured: frame on `/Read1_Nano_Machine_296`,
+  collapse, expand, still `/Read1_Nano_Machine_296`. Parking it would reload the
+  series page and lose your place, a worse trade for a card you are still on.
+  The saving is taken at the other end instead: `showMangaEmbed` only arms the
+  frame when the card is open, so a card that opens collapsed makes **zero**
+  MangaFreak requests (measured, not inferred from the `src` attribute), and
+  `toggleMangaRead` loads it late on the first reveal.
+- **The chips are exempted by hit-testing, not by `stopPropagation`, and they
+  hide when the card is shut.** Both come out of one measurement at 320px: the
+  bar wraps, `.mread-actions` then spans the full width, and the geometric
+  centre of the bar is the MangaFreak chip. A `stopPropagation` on that
+  container therefore killed most of the bar — so `toggleMangaRead(event)` bows
+  out only for `.mread-btn` itself. Even so the free strip is 96×46px expanded,
+  which is why the chips (which act on a frame nobody can see) are hidden when
+  collapsed: the whole 290×37 bar becomes the target to get back in.
+
 Known consequence, not a bug: a chapter tap inside the frame is an ordinary
 navigation, so it **does** push one history entry (measured: exactly 1). After
 reading N chapters, Back walks out through them before leaving the detail page.
