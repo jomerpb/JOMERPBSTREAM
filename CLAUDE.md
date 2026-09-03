@@ -377,14 +377,50 @@ Three things not to "simplify":
   `resetInlinePlayer`). Without it a whole third-party page, ad scripts included,
   stays alive behind the next tab.
 
-**There are TWO reader cards — MangaFreak and WebComics — and one mechanism.**
-`MANGA_READERS` in `stream.js` holds the entire difference between them: the
-element ids each owns, its `localStorage` key, how a title becomes a URL, and
-whether it starts open. Everything else (`setMangaFrame`, `armMangaFrame`,
-`toggleMangaRead`, `setMangaReadOpen`, `resetMangaFrame`, `showOneMangaEmbed`)
-takes a reader key. Do not fork these into a second copy; the refactor was
-verified to leave the MangaFreak card behaving identically to the one-card
-version — same src, same 754px height, same request count, same open state.
+**There are THREE reader cards — MangaFreak, WebComics and Comix — and one
+mechanism.** `MANGA_READERS` in `stream.js` holds the entire difference between
+them: the element ids each owns, its `localStorage` key, how a title becomes a
+URL, and whether it starts open. Everything else (`setMangaFrame`,
+`armMangaFrame`, `toggleMangaRead`, `setMangaReadOpen`, `resetMangaFrame`,
+`showOneMangaEmbed`) takes a reader key. Do not fork these into another copy.
+Each addition was verified to leave the existing cards behaving identically —
+same src, same height, same request count, same open state, measured against
+the previous `main` both times.
+
+**Comix (`comix.ws`) is SEARCH-ONLY, and that is a decision, not a gap.** A
+direct title link needs its opaque per-title id (`/title/13r19-jinx`), which
+could only come from a scraped index — and its `robots.txt` disallows
+**ClaudeBot** by name alongside GPTBot, CCBot, Google-Extended and Bytespider,
+with `Content-Signal: search=yes, ai-train=no, use=reference`. The embed itself
+is the user's own browser and is unaffected by any of that; a crawler would not
+be. The repo owner was asked and chose search-only, so there is no
+`webcomics-index.json` equivalent, no scraper and no workflow for this source.
+**Do not add one without asking them again.**
+
+Its URL was read out of the site's own search form, not guessed:
+`/browse?q=<title>&sort=relevance%3Adesc`. The obvious `/search?q=` is not a
+route — measured, it answers **404 with `page:"error"`** while `/browse`
+answers **200 with `page:"browse"`**, which is how this was settled.
+
+**Whether comix.ws renders inside the frame is UNVERIFIED, and deliberately
+labelled as such.** It sends no `X-Frame-Options` and no CSP `frame-ancestors`,
+and the frame does load the URL — but the page stays blank in CI. That is *not*
+a framing verdict: the control shows it is equally blank **at top level** in the
+same browser, and the crash (`TypeError: Cannot read properties of undefined`)
+has a stack naming comix.ws's own `secure-*.js` bundle, thrown while
+Cloudflare's `cdn-cgi/challenge-platform` script is running. Attribution was
+confirmed by a second run that never opens the card: **zero** page errors
+without it, and the errors appear only once its frame loads. The clean path
+cannot be measured from this sandbox at all — direct TLS to comix.ws is reset by
+the egress proxy. Only loading it on a real device settles it. If it turns out
+to render blank in the wild, the card is collapsed by default so nobody pays for
+it, and the fix is a decision about the source, not about this code.
+
+**MangaFreak starts open; WebComics and Comix start collapsed.** For WebComics
+the asymmetry is measured, not aesthetic (below). For Comix it is that plus the
+unverified rendering above: it is the third 78vh frame on one page, and a
+collapsed card costs **zero requests**, measured rather than inferred from an
+absent `src`.
 
 **WebComics starts COLLAPSED and MangaFreak does not, and the asymmetry is
 measured, not aesthetic.** WebComics is a licensed platform carrying its own
