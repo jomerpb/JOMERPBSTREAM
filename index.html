@@ -33,11 +33,11 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260903c"/>
+  <link rel="stylesheet" href="styles.css?v=20260904a"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260903c"></script>
+  <script defer src="stream.js?v=20260904a"></script>
   <script defer src="oracle.js?v=20260901a"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -723,7 +723,7 @@
     </div>
 
     <!-- READ — two cards, one per source: MangaFreak's own series page and
-         WebComics'. Manga only; every other type leaves both hidden. They
+         Comix's search results. Manga only; every other type leaves both hidden. They
          replaced a "Read ↗" button that sat above Details and handed the whole
          tab over in a new window: the chapter lists, and the chapters
          themselves, now open in these frames without leaving the app. They sit
@@ -739,8 +739,8 @@
 
          Both are collapsible and both remember their own open/shut state
          across titles AND across reloads. MangaFreak opens by default and
-         WebComics does not — see MANGA_READERS in stream.js for the measured
-         reason, and note a collapsed card fetches nothing at all. -->
+         Comix does not — see MANGA_READERS in stream.js for the reason, and
+         note that a collapsed card fetches nothing at all. -->
     <div id="manga-read-wrap" class="mread-wrap" style="display:none;">
       <!-- The whole bar is the toggle, not just the caret: on a phone the caret
            alone is a ~20px target. Only the chips are exempt, and that
@@ -769,35 +769,7 @@
       </div>
     </div>
 
-    <!-- WebComics, same card in every respect. Measured before it was written,
-         because the whole thing turns on it: webcomicsapp.com sends no
-         X-Frame-Options and no CSP frame-ancestors on its series pages or its
-         search pages, and nothing in its own JS breaks out of a frame — its
-         Nuxt app hydrates and renders inside this exact sandbox, verified in
-         Chromium with the top window still on our origin. -->
-    <div id="wc-read-wrap" class="mread-wrap" style="display:none;">
-      <div class="mread-bar sec-toggle" onclick="toggleMangaRead('webcomics', event)">
-        <div class="mread-lead">
-          <div class="sec-label">Read in WebComics</div>
-          <span class="dc-chev" id="wc-read-chev">&#9662;</span>
-        </div>
-        <div class="mread-actions">
-          <button class="mread-btn" id="wc-read-reset" onclick="resetMangaFrame('webcomics')">&#8634; Chapters</button>
-          <a class="mread-btn" id="wc-read-open" href="#" target="_blank" rel="noopener"
-             onclick="saveMangaToHistory(currentItem)">WebComics &#8599;</a>
-        </div>
-      </div>
-      <div class="mread-body" id="wc-read-body">
-        <div class="mread-frame">
-          <iframe id="wc-read-iframe" title="WebComics reader"
-                  sandbox="allow-same-origin allow-scripts allow-forms"
-                  allow="fullscreen"></iframe>
-        </div>
-        <div class="mread-note">WebComics carries its own originals, so most titles here open its search page rather than a series page. Tap a chapter to read it here.</div>
-      </div>
-    </div>
-
-    <!-- Comix, the third reader. Search-only by design: a direct title link
+    <!-- Comix, the second reader. Search-only by design: a direct title link
          needs comix.ws's opaque per-title id (/title/13r19-jinx), which would
          take a scraped index, and its robots.txt disallows ClaudeBot by name
          with Content-Signal: ai-train=no. The frame below is the user's own

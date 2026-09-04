@@ -1226,21 +1226,12 @@ const MANGA_SOURCES = {
     // resolved to a slug — see mangafreakSlugFor().
     manga: slug => 'https://ww3.mangafreak.me/Manga/' + encodeURIComponent(slug),
   },
-  webcomics: {
-    label: 'WebComics ↗',
-    // /en/search/<q> 302s to this, so point at the settled URL directly.
-    url:   q    => 'https://www.webcomicsapp.com/en/search?q=' + encodeURIComponent(q),
-    // "<genre>/<slug>/<id>" straight out of webcomics-index.json. Not
-    // encodeURIComponent'd as a whole: the slashes are path separators, and
-    // every segment the sitemap emits is already URL-safe.
-    book:  path => 'https://www.webcomicsapp.com/en/' + path,
-  },
   comix: {
     label: 'Comix ↗',
     // Lifted from the site's own search form rather than guessed: its submit
     // handler navigates to /browse?q=…&sort=relevance:desc. The obvious
-    // /search?q= is NOT a route — it answers 200 with page:"error", while
-    // /browse answers page:"browse", which is how this was settled.
+    // /search?q= is not a route — it answers 404 with page:"error", while
+    // /browse answers 200 with page:"browse", which is how this was settled.
     //
     // There is no `book:` here and that is deliberate, not an omission. A
     // direct title link needs comix.ws's opaque per-title id (/title/13r19-jinx)
@@ -1355,85 +1346,6 @@ function mangaReadUrl(item) {
   const slug = item?.mfSlug || mangafreakSlugFor(item?.title) || mangafreakSlugFor(item?.titleRomaji);
   return slug ? MANGA_SOURCES.mangafreak.manga(slug)
               : mangaSourceUrl('mangafreak', item);
-}
-
-// ── WEBCOMICS INDEX ──
-// webcomics-index.json is "<genre>/<slug>/<24-hex id>" per entry, built from
-// the site's own sitemap (see .github/scripts/scrape_webcomics.py). The id is
-// opaque and cannot be derived from a title, which is the whole reason an index
-// exists; the genre could be dropped — /en/comic/<slug>/<id> 301s to the right
-// one — but inside an iframe that redirect is a second round trip on every
-// open, for no saving worth having.
-let wcIndex = null;              // {exact:Map, table:[...]} once loaded
-let wcIndexLoading = null;
-
-function ensureWebcomicsIndex() {
-  if (wcIndex || wcIndexLoading) return wcIndexLoading || Promise.resolve(wcIndex);
-  wcIndexLoading = fetch(`webcomics-index.json?nocache=${Date.now()}`)
-    .then(r => r.ok ? r.json() : null)
-    .then(d => {
-      const books = d?.books || [];
-      if (!books.length) return null;
-      const table = books.map(path => {
-        const slug = path.split('/')[1] || '';
-        const a = mfStrip(mfNorm(slug));
-        return {path, a, toks: a.split(' ')};
-      });
-      const exact = new Map();
-      for (const e of table) for (const k of [e.a, mfSquash(e.a)]) if (!exact.has(k)) exact.set(k, e.path);
-      wcIndex = {exact, table};
-      return wcIndex;
-    })
-    .catch(() => null)
-    .finally(() => { wcIndexLoading = null; });
-  return wcIndexLoading;
-}
-
-// Same shape as mangafreakSlugFor, with ONE deliberate difference: the token
-// gate counts DISTINCT tokens, not tokens.
-//
-// That is not a tidy-up, it is a bug this catalogue exposes. "Hunter x Hunter"
-// normalises to three tokens, but "x" is dropped as too short and the other two
-// are the same word — one distinct token, "hunter". The ≤1-extra-token rule
-// then happily matches WebComics' "dark-hunter", a completely different comic,
-// and it was one of only 8 hits in the whole 264-title sample. Counting
-// distinct tokens rejects it for exactly the reason the rule already states
-// about single words: one word matches far too much.
-function webcomicsPathFor(title) {
-  if (!wcIndex || !title) return null;
-  const n = mfNorm(title), a = mfStrip(n);
-  // The gate is applied BEFORE the exact lookup, not only to the fuzzy walk,
-  // and that is the second thing this catalogue taught. "Kingdom" matches
-  // WebComics' "kingdom" exactly and is a completely different comic — theirs
-  // is Ancaellar's "Landon Colfield III becomes king at 17", not Hara's. In a
-  // catalogue that barely overlaps this app's, a one-word title agreeing is
-  // near enough always a coincidence, and it was the only single-word hit in
-  // 362 titles. Requiring two distinct words drops exactly that one and keeps
-  // all six correct answers.
-  const toks = a.split(' ').filter(t => t.length > 1);
-  if (new Set(toks).size < 2) return null;
-  for (const k of [n, a, mfSquash(a)]) { const hit = wcIndex.exact.get(k); if (hit) return hit; }
-  let best = null;
-  for (const e of wcIndex.table) {
-    if (!toks.every(t => e.toks.includes(t))) continue;
-    const extra = e.toks.filter(t => !toks.includes(t)).length;
-    if (extra > 1) continue;
-    if (!best || extra < best.extra || (extra === best.extra && e.a.length < best.len))
-      best = {path:e.path, extra, len:e.a.length};
-  }
-  return best ? best.path : null;
-}
-
-// Where this title is read on WebComics. The direct /en/<genre>/<slug>/<id>
-// page when the index resolves one, WebComics' own search page when it does
-// not — and that is the common case here, ~97% measured, because the platform
-// carries its own originals rather than the catalogue this app browses. Both
-// render inside the frame, so an unresolved title lands on a search box in the
-// app instead of a dead end.
-function webcomicsReadUrl(item) {
-  const path = webcomicsPathFor(item?.title) || webcomicsPathFor(item?.titleRomaji);
-  return path ? MANGA_SOURCES.webcomics.book(path)
-              : mangaSourceUrl('webcomics', item);
 }
 
 // Outbound links for the detail page's collapsible block: AniList for the
@@ -1635,23 +1547,16 @@ function renderDetailHero(item, type, extraTags=[]) {
 // After reading N chapters, Back walks out through them before it leaves the
 // detail page. That is what any embedded browser does — the bar's ↺ Chapters
 // button is the way back to the series page that spends no history at all.
-// TWO readers, one mechanism. MangaFreak and WebComics get identical cards —
-// same collapse, same lazy arming, same sandbox — so this is parametrised over
-// a reader key rather than written twice. MANGA_READERS is the whole difference
+// TWO readers, one mechanism. MangaFreak and Comix get identical cards — same
+// collapse, same lazy arming, same sandbox — so this is parametrised over a
+// reader key rather than written twice. MANGA_READERS is the whole difference
 // between them: which element ids it owns, where it remembers its open/shut
-// state, how a title becomes a URL, and whether it starts open.
+// state, how a title becomes a URL, and whether it starts open. A third reader
+// is a new entry here plus its markup, nothing else.
 //
-// WHY WEBCOMICS STARTS COLLAPSED AND MANGAFREAK DOES NOT. Measured against 264
-// unique AniList manga before either card was written: MangaFreak's index
-// resolves a direct series page for most of them, WebComics' for **8, 3.0%**.
-// WebComics is a licensed platform carrying its own originals and its catalogue
-// barely intersects the one this app browses — confirmed by asking WebComics'
-// own search for 18 titles the matcher missed, with 5 known-present titles as a
-// control: control 5/5, and 0 of the 18 genuinely present. So an open-by-default
-// WebComics card would load a third-party search page showing nothing relevant
-// on ~97% of titles, on top of MangaFreak's 78vh frame. Collapsed it costs
-// nothing at all (measured as zero requests, not an absent src), and the choice
-// is remembered the moment anyone opens it.
+// (A WebComics card lived here too and was removed at the repo owner's request.
+// It is in the history if it is ever wanted back, along with the measurements
+// that shaped it — its catalogue resolved only ~4% of this app's titles.)
 const MANGA_READERS = {
   mangafreak: {
     label: 'MangaFreak',
@@ -1662,20 +1567,11 @@ const MANGA_READERS = {
     ensure: () => ensureMangafreakIndex(),
     url:    item => mangaReadUrl(item),
   },
-  webcomics: {
-    label: 'WebComics',
-    store: 'webcomicsReadOpen',
-    openByDefault: false,
-    ids: {wrap:'wc-read-wrap', body:'wc-read-body', chev:'wc-read-chev',
-          frame:'wc-read-iframe', open:'wc-read-open'},
-    ensure: () => ensureWebcomicsIndex(),
-    url:    item => webcomicsReadUrl(item),
-  },
   // Search-only: no index, so nothing to await and every title lands on
   // comix.ws's own results page. See MANGA_SOURCES.comix for why there is no
-  // direct-title path. Collapsed by default like WebComics — it is the third
-  // 78vh frame on the page, and a collapsed card costs zero requests, which
-  // matters more here than anywhere because whether the site renders inside a
+  // direct-title path. Collapsed by default, unlike MangaFreak: it is a second
+  // 78vh frame on the page, and a collapsed card costs zero requests — which
+  // matters more here than anywhere, because whether the site renders inside a
   // frame at all could not be verified from CI (Cloudflare's bot challenge
   // breaks its hydration in a headless browser, top-level as well as framed).
   comix: {

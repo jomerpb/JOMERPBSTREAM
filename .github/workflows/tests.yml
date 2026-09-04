@@ -67,9 +67,6 @@ jobs:
       - name: MangaFreak scraper — parsing, and a bad scrape cannot shrink a good file
         run: python3 .github/scripts/tests/test_scrape_mangafreak.py
 
-      - name: WebComics scraper — sitemap parsing, and the same shrink guard
-        run: python3 .github/scripts/tests/test_scrape_webcomics.py
-
       # The pipeline must not be left dirty by a test run.
       - name: Confirm the tests wrote nothing into the checkout
         run: |
