@@ -1,4 +1,4 @@
-name: IMDb Ratings
+name: IMDb Ratings & Browse Index
 
 # The fourth scheduled exception to the repo-wide dispatch-only convention, and
 # the slowest one on purpose.
@@ -10,10 +10,10 @@ name: IMDb Ratings
 # exists to stop showing.
 #
 # It runs WEEKLY rather than daily, and that is a size decision with a measured
-# number behind it. imdb-ratings.json is 2.42 MB of single-line JSON, so every
-# run that changes anything writes a fresh ~0.74 MB blob into git history —
-# there is no line-level delta to be had. Daily is ~270 MB of history a year;
-# weekly is ~38 MB. Against that, an IMDb rating on a title with 100+ votes
+# number behind it. The two outputs are 2.42 MB and 4.06 MB of single-line JSON,
+# so every run that changes anything writes fresh ~0.74 MB and ~0.96 MB blobs
+# into git history — there is no line-level delta to be had. Daily is ~620 MB of
+# history a year; weekly is ~89 MB. Against that, an IMDb rating on a title with 100+ votes
 # barely moves in seven days, and the only real cost of the gap is that a
 # brand-new release shows TMDB's rating for up to a week before IMDb's lands.
 # Dispatch it by hand after a big release week if that gap ever matters.
@@ -39,7 +39,10 @@ jobs:
 
       # No dependencies at all: the source is a gzipped TSV over HTTPS, so
       # urllib and the stdlib gzip module are the whole client.
-      - name: Build imdb-ratings.json
+      # Two outputs from one script: the ratings lookup every card uses, and the
+      # browse index behind the Genre/Year/Rating filters. Downloading
+      # title.basics (227 MB gzipped) is most of the ~22s runtime.
+      - name: Build imdb-ratings.json and imdb-browse.json
         run: python3 .github/scripts/build_imdb_ratings.py
 
       # Rebase-and-retry, like the MangaFreak and WebComics jobs: this shares
@@ -49,7 +52,7 @@ jobs:
         run: |
           git config user.name "IMDb Ratings Bot"
           git config user.email "imdb-ratings-bot@jomerpb.github.io"
-          git add imdb-ratings.json
+          git add imdb-ratings.json imdb-browse.json
           if git diff --staged --quiet; then
             echo "No changes"
             exit 0

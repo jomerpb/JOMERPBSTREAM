@@ -313,6 +313,25 @@
     .dc-chiplist .dc-person{background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.45);color:#93c5fd;font-size:10.5px;padding:3px 9px;border-radius:20px;font-family:inherit;cursor:pointer;}
     .dc-chiplist .dc-person:active{background:rgba(59,130,246,0.24);}
 
+    /* CAST LIST — a row per performer: circular headshot, name, character.
+       Replaced a row of name-only chips; the photo is what makes a long cast
+       scannable, and the character is the thing people are actually looking
+       for when they open it. */
+    .castlist{display:flex;flex-direction:column;gap:6px;}
+    .cast-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:7px 10px;font-family:inherit;cursor:pointer;}
+    .cast-row:active{background:var(--card);}
+    div.cast-row{cursor:default;}
+    .cast-face{width:42px;height:42px;flex-shrink:0;border-radius:50%;overflow:hidden;background:var(--card);display:flex;align-items:center;justify-content:center;}
+    .cast-face img{width:100%;height:100%;object-fit:cover;display:block;}
+    .cast-initial{font-size:16px;font-weight:800;color:var(--muted);}
+    .cast-meta{min-width:0;flex:1;}
+    .cast-name{font-size:12px;font-weight:700;color:var(--text);overflow-wrap:anywhere;}
+    .cast-role{font-size:10.5px;color:var(--muted);margin-top:1px;overflow-wrap:anywhere;}
+    .cast-all{margin-top:8px;width:100%;background:none;border:1px solid var(--border);border-radius:10px;padding:8px;color:var(--accent2);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;}
+    .cast-all:active{background:var(--surface);}
+    .cast-page-head{margin-bottom:12px;}
+    .cast-page-count{font-size:11px;color:var(--muted);margin-top:3px;}
+
     /* PERSON PAGE */
     .person-body{padding:12px 14px 30px;}
     .person-top{display:flex;align-items:center;gap:10px;margin-bottom:14px;}

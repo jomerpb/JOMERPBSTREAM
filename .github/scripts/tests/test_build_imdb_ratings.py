@@ -139,6 +139,57 @@ if os.path.exists(p):
 else:
     check(False, 'imdb-ratings.json is committed')
 
+print('\n8. parse_basics joins ratings and encodes genres as a bitmask')
+BASICS = '\n'.join([
+    'tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\tendYear\truntimeMinutes\tgenres',
+    'tt0000001\tmovie\tA\tA\t0\t1999\t\\N\t90\tHorror,Thriller',
+    'tt0000002\ttvSeries\tB\tB\t0\t2010\t2012\t45\tDrama',
+    'tt0000003\tshort\tC\tC\t0\t2001\t\\N\t9\tComedy',      # wrong type
+    'tt0000004\tmovie\tD\tD\t1\t2005\t\\N\t80\tHorror',     # adult
+    'tt0000005\tmovie\tE\tE\t0\t2003\t\\N\t95\tHorror',     # no rating
+    'tt0000006\ttvMiniSeries\tF\tF\t0\t\\N\t\\N\t50\t\\N',  # no year, no genre
+]) + '\n'
+RAT = {'tt0000001': (7.5, 5000), 'tt0000002': (8.1, 900),
+       'tt0000003': (6.0, 500), 'tt0000004': (5.0, 500), 'tt0000006': (6.2, 300)}
+brows, vocab = bir.parse_basics(gz(BASICS), RAT)
+ids = [r[0] for r in brows]
+check(ids == [1, 2, 6], 'kept only rated, non-adult, browsable types', ids)
+check(brows == sorted(brows), 'rows come back sorted')
+by = {r[0]: r for r in brows}
+check(by[1][1] == 0 and by[2][1] == 1 and by[6][1] == 2,
+      'movie/tvSeries/tvMiniSeries encode as 0/1/2')
+check(by[1][2] == 1999 and by[6][2] == 0, 'a missing startYear becomes 0', by[6][2])
+hb, tb = 1 << vocab.index('Horror'), 1 << vocab.index('Thriller')
+check(by[1][3] == (hb | tb), 'both genres are set in one bitmask', bin(by[1][3]))
+check(by[6][3] == 0, 'a genreless title gets mask 0 and is still kept (it keeps its rating)')
+check(by[1][4] == 7.5 and by[1][5] == 5000, 'rating and votes come from the ratings join')
+
+print('\n9. vote buckets keep the ordering that matters')
+b100, b1k, b400k = bir.vote_bucket(100), bir.vote_bucket(1000), bir.vote_bucket(400000)
+check(b100 < b1k < b400k, 'more votes -> a higher bucket', (b100, b1k, b400k))
+check(all(0 <= bir.vote_bucket(v) <= 255 for v in (1, 100, 10**7)), 'every bucket fits in one byte')
+check(bir.vote_bucket(0) == bir.vote_bucket(1), 'zero votes does not blow up the log')
+
+print('\n10. the committed imdb-browse.json is real and usable')
+pb = os.path.join(ROOT, 'imdb-browse.json')
+if os.path.exists(pb):
+    d = json.load(open(pb))
+    n = d['count']
+    check(all(len(d[k]) == n for k in ('d', 't', 'y', 'g', 'r', 'v')),
+          'every parallel array matches count')
+    check(len(d['genres']) >= 20, f"carries {len(d['genres'])} genre labels")
+    check(set(d['t']) <= {0, 1, 2}, 'only the three browsable type codes appear')
+    check(all(1 <= x <= 100 for x in d['r']), 'ratings stay within 1..100')
+    check(all(g > 0 for g in d['d']), 'gaps are positive, so ids are sorted and unique')
+    check(n > 100_000, f'holds {n} browsable titles')
+    ty = {}
+    for t in d['t']:
+        ty[t] = ty.get(t, 0) + 1
+    check(ty.get(1, 0) + ty.get(2, 0) > 20_000,
+          f"enough TV titles to browse ({ty.get(1,0)+ty.get(2,0)})")
+else:
+    check(False, 'imdb-browse.json is committed')
+
 print('\n' + '=' * 60)
 print(f'{len(fails)} failure(s)' + ('' if not fails else ': ' + ', '.join(fails)))
 sys.exit(1 if fails else 0)

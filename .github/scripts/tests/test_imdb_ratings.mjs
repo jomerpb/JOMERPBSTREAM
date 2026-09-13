@@ -174,6 +174,81 @@ console.log('\n7. the committed ratings file decodes through the real loader');
   check(keys.every((k, i) => i === 0 || k > keys[i - 1]), 'decoded ids come out strictly ascending');
 }
 
+console.log('\n8. the IMDb browse index answers genre/type/year/rating queries');
+{
+  const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'imdb-browse.json'), 'utf8'));
+  ctx.fetch = async () => ({ ok: true, json: async () => raw });
+  vm.runInContext('imdbBrowsePromise = null; imdbBrowse = null;', ctx);
+  const B = await S('loadImdbBrowse()');
+  check(!!B, 'the committed browse index loads');
+  check(await vm.runInContext('loadImdbBrowse().then(b => b.ids.length)', ctx) === raw.count,
+        `decoded all ${raw.count} browsable titles`);
+  check(await vm.runInContext('loadImdbBrowse().then(b => { const a=b.ids; for(let i=1;i<a.length;i++) if(a[i]<=a[i-1]) return false; return true; })', ctx),
+        'decoded ids are strictly ascending');
+
+  // Every genre id the filter UI can emit must map to a genre the index knows,
+  // or that checkbox silently returns nothing.
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const uiIds = new Set();
+  for (const m of html.matchAll(/id="(?:tf|mf)-genre"[\s\S]*?<\/div>\s*<\/div>/g)) {
+    for (const g of m[0].matchAll(/data-val="(\d+)"/g)) uiIds.add(Number(g[1]));
+  }
+  const map = S('TMDB_TO_IMDB_GENRE');
+  const vocab = new Set(raw.genres);
+  const unmapped = [...uiIds].filter(id => !map[id]);
+  const unknown = [...uiIds].flatMap(id => (map[id] || [])).filter(n => !vocab.has(n));
+  check(uiIds.size > 10, `found ${uiIds.size} genre checkboxes in the markup`, uiIds.size);
+  check(unmapped.length === 0, 'every filter genre id maps to IMDb genre names', unmapped.join(','));
+  check(unknown.length === 0, 'every mapped name exists in the index vocabulary', unknown.join(','));
+
+  // Horror, TV only.
+  const horror = await vm.runInContext("imdbBrowseQuery({kind:'tv', genreIds:[27]})", ctx);
+  check(horror.length > 100, `"Horror" on TV returns ${horror.length} titles`, horror.length);
+  const allHorror = await vm.runInContext(
+    "(() => { const b=imdbBrowse, bit=1<<b.genreIndex['Horror']; return imdbBrowseQuery({kind:'tv',genreIds:[27]}).every(i => (b.genre[i]&bit) && b.type[i]!==0); })()", ctx);
+  check(allHorror, 'every result is Horror AND a TV type, never a movie');
+
+  const movHorror = await vm.runInContext(
+    "(() => { const b=imdbBrowse; return imdbBrowseQuery({kind:'movie',genreIds:[27]}).every(i => b.type[i]===0); })()", ctx);
+  check(movHorror, 'the movie query never returns a series');
+
+  // Year and rating bounds.
+  const y = await vm.runInContext(
+    "(() => { const b=imdbBrowse; const r=imdbBrowseQuery({kind:'movie',yearGte:'2020-01-01',yearLte:'2021-12-31'}); return r.length && r.every(i => b.year[i]>=2020 && b.year[i]<=2021); })()", ctx);
+  check(y, 'a year envelope is respected on both ends');
+  const rr = await vm.runInContext(
+    "(() => { const b=imdbBrowse; const r=imdbBrowseQuery({kind:'tv',minRating:8}); return r.length && r.every(i => b.rating[i]>=80); })()", ctx);
+  check(rr, 'a Min Rating of 8 returns nothing below 8.0');
+
+  // A compound TMDB id must OR its two IMDb genres, not drop one.
+  const sf = await vm.runInContext(
+    "(() => { const b=imdbBrowse, s=1<<b.genreIndex['Sci-Fi'], f=1<<b.genreIndex['Fantasy']; return imdbBrowseQuery({kind:'tv',genreIds:[10765]}).every(i => b.genre[i]&(s|f)); })()", ctx);
+  check(sf, '"Sci-Fi & Fantasy" matches either IMDb genre');
+
+  // Sort: weighted, so a 9.4 from a handful of voters cannot lead.
+  const top = await vm.runInContext(
+    "(() => { const b=imdbBrowse; const r=imdbBrowseQuery({kind:'movie',genreIds:[27]}).slice(0,10); return r.map(i => [b.rating[i]/10, Math.round(Math.pow(2,b.votes[i]/8))]); })()", ctx);
+  check(top.every(([, v]) => v > 10000), 'the top 10 horror films all have >10k votes', JSON.stringify(top.slice(0,3)));
+  const scores = await vm.runInContext(
+    "(() => { const b=imdbBrowse; const r=imdbBrowseQuery({kind:'movie',genreIds:[27]}).slice(0,50); return r.map(i => imdbWeighted(b.rating[i],b.votes[i],b.meanRating)); })()", ctx);
+  check(scores.every((s, i) => i === 0 || s <= scores[i-1] + 1e-9), 'results come back in descending weighted order');
+}
+
+console.log('\n9. the cast list dedupes a performer credited twice');
+{
+  const out = await vm.runInContext(`tmdbCastList([
+    {id:1,name:'A',character:'Hero',profile_path:'/a.jpg'},
+    {id:1,name:'A',character:'Hero (young)'},
+    {id:2,name:'B',character:'Villain',profile_path:null},
+    {name:'C',character:'Extra'}
+  ])`, ctx);
+  check(out.length === 3, 'four credits collapse to three people', out.length);
+  check(out[0].character === 'Hero / Hero (young)', 'both roles are kept on one row', out[0].character);
+  check(out[0].img === '/a.jpg', 'the photo survives the merge');
+  check(out[1].img === '', 'a missing photo becomes an empty string, not null');
+  check(out[2].id === null, 'a credit with no person id keeps a null id');
+}
+
 console.log('\n' + '='.repeat(60));
 console.log(`${fails.length} failure(s)` + (fails.length ? ': ' + fails.join(', ') : ''));
 process.exit(fails.length ? 1 : 0);
