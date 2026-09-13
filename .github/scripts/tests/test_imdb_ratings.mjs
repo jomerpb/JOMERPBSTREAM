@@ -117,6 +117,20 @@ check(JSON.stringify(S('scoreOf({imdbScore:null, score:"8.0"})')) === '{"value":
       'falls back to TMDB when IMDb has no entry');
 check(S('scoreOf({}).value') === null, 'no score at all -> null');
 check(S('scoreOf(null).value') === null, 'a null item does not throw');
+// A TMDB mean off too few votes is not a rating. Resident Evil was scored 10.0
+// off ONE vote and led the whole Upcoming grid once the grids became ordered.
+check(S('scoreOf({score:"10.0", votes:1}).value') === null,
+      'a TMDB mean off 1 vote prints nothing', JSON.stringify(S('scoreOf({score:"10.0", votes:1})')));
+check(S(`scoreOf({score:"8.0", votes:${S('TMDB_VOTE_FLOOR')} - 1}).value`) === null,
+      'just under the floor is dropped');
+check(S(`scoreOf({score:"8.0", votes:${S('TMDB_VOTE_FLOOR')}}).value`) === '8.0',
+      'exactly at the floor is kept');
+check(S('scoreOf({score:"8.0"}).value') === '8.0',
+      'an unknown vote count is left alone, not treated as zero');
+// The floor must never touch IMDb's number — it cleared IMDb's own floor, and
+// 77 of 259 IMDb-rated titles in the sample carry under 100 TMDB votes.
+check(S('scoreOf({imdbScore:"8.4", score:"9.9", votes:2}).value') === '8.4',
+      'a thin TMDB vote count does not suppress IMDb\'s rating');
 
 console.log('\n4. the filter cuts on the DISPLAYED number, not TMDB\'s');
 {
@@ -294,7 +308,10 @@ console.log('\n11. genres TMDB\'s TV list refuses are held back, not dropped');
     {id:10763,name:'News'},{id:10764,name:'Reality'},{id:10765,name:'Sci-Fi & Fantasy'},
     {id:10766,name:'Soap'},{id:10767,name:'Talk'},{id:10768,name:'War & Politics'},
     {id:37,name:'Western'} ] };
-  vm.runInContext('tmdbTvGenrePromise = null; tmdbTvGenreIds = null; tmdb = async () => __tvGenres;', ctx);
+  // Stub tmdb() itself, and PUT IT BACK afterwards. Left in place it leaks into
+  // every later test: the genre list came back from /external_ids and a whole
+  // block silently scored against TMDB's number instead of IMDb's.
+  vm.runInContext('__realTmdb = tmdb; tmdbTvGenrePromise = null; tmdbTvGenreIds = null; tmdb = async () => __tvGenres;', ctx);
 
   const tv = await vm.runInContext("splitGenresForTmdb('tv',[27,18,53,80])", ctx);
   check(JSON.stringify(tv.server) === '[18,80]', 'Drama and Crime go to TMDB', JSON.stringify(tv.server));
@@ -306,6 +323,7 @@ console.log('\n11. genres TMDB\'s TV list refuses are held back, not dropped');
 
   const empty = await vm.runInContext("splitGenresForTmdb('tv',[])", ctx);
   check(empty.server.length === 0 && empty.client.length === 0, 'no genres in, none out');
+  vm.runInContext('tmdb = __realTmdb; tmdbTvGenrePromise = null; tmdbTvGenreIds = null;', ctx);
 }
 
 console.log('\n12. the held-back genres are matched against the IMDb index');
@@ -412,6 +430,163 @@ console.log('\n13. Status is filtered from IMDb dates, which TMDB cannot do at a
     "imdbBrowseQuery({kind:'tv', minRating:8, yearGte:'2026-01-01', yearLte:'2026-12-31'})", ctx);
   check(users.length > 100,
         `"TV, 2026, 8.0+" now returns ${users.length} candidates (TMDB path gave 21)`, users.length);
+}
+
+console.log('\n14. browse grids are sorted by the DISPLAYED rating, descending');
+{
+  // A RECORDING DOM. renderGrid() paints into it, so this reads the order the
+  // grid actually ended up in rather than trusting the comparator in isolation.
+  // href is reflected property → attribute the way a real <a> does it, because
+  // the scroll anchor reads it back with getAttribute.
+  const mkEl = () => {
+    const attrs = new Map();
+    const el = {
+      style: {}, dataset: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+      children: [], innerHTML: '', textContent: '', title: '',
+      appendChild(c) { el.children.push(c); return c; },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: k => (attrs.has(k) ? attrs.get(k) : null),
+      removeAttribute: k => attrs.delete(k),
+      addEventListener: noop, querySelector: () => null, querySelectorAll: () => [],
+      closest: () => null, remove: noop, scrollIntoView: noop,
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 0, height: 0 }),
+    };
+    Object.defineProperty(el, 'href', {
+      get: () => attrs.get('href') || '', set: v => attrs.set('href', String(v)),
+    });
+    // Assigning innerHTML replaces the element's contents, so the stub has to
+    // drop its children too — otherwise a repaint reads as an append and the
+    // test can no longer tell a sorted pool from a stack of sorted pages.
+    Object.defineProperty(el, 'innerHTML', { get: () => '', set: () => { el.children.length = 0; el.paints++; } });
+    el.paints = 0;
+    return el;
+  };
+  const grids = new Map();
+  const realGetById = ctx.document.getElementById;
+  const realCreate  = ctx.document.createElement;
+  ctx.document.getElementById = id => {
+    if (!grids.has(id)) grids.set(id, mkEl());
+    return grids.get(id);
+  };
+  ctx.document.createElement = () => mkEl();
+
+  // Ratings for tt0001001..tt0001010, gap-encoded the way the real file is.
+  const RATE = [72, 95, 61, 88, 88, 50, 99, 67, 83, 74];   // ×10
+  ctx.fetch = async (u) => {
+    const url = String(u);
+    if (url.includes('imdb-ratings.json')) {
+      return { ok: true, json: async () => ({ d: [1001, 1, 1, 1, 1, 1, 1, 1, 1, 1], r: RATE }) };
+    }
+    if (url.includes('/external_ids')) {
+      const id = parseInt(url.match(/\/(?:tv|movie)\/(\d+)\/external_ids/)[1], 10);
+      return { ok: true, json: async () => ({ imdb_id: 'tt' + String(1000 + id).padStart(7, '0') }) };
+    }
+    throw new Error('unexpected fetch ' + url);
+  };
+  vm.runInContext('imdbRatingsPromise = null; imdbRatings = null; imdbIdMap = {};', ctx);
+  store.clear();
+
+  // tmdb id N carries IMDb rating RATE[N-1]/10, and a TMDB vote_average that
+  // deliberately disagrees — sorting on the wrong one is visible immediately.
+  // Built INSIDE the vm so every item is an inner-realm object, the way a real
+  // fromTMDB() result is.
+  vm.runInContext(`function __mk(n, type){
+    return {type, id:n, tmdb_id:n, title:'T'+n, score:(10 - n/10).toFixed(1)};
+  }`, ctx);
+  const page = (from, to, type = 'tv') =>
+    vm.runInContext(`[${Array.from({length: to - from + 1}, (_, k) => `__mk(${from + k}, '${type}')`).join(',')}]`, ctx);
+
+  const shown = id => grids.get(id).children.map(c => c.getAttribute('href').replace('#detail-tv-', ''));
+  const rating = href => (RATE[parseInt(href, 10) - 1] / 10);
+
+  // (a) the key is the printed number, and unrated sinks below every rating
+  const key = vm.runInContext(`[gridRatingOf({score:'7.4'}), gridRatingOf({imdbScore:'6.6', score:'8.0'}), gridRatingOf({})]`, ctx);
+  check(key[0] === 7.4 && key[1] === 6.6 && key[2] === -1,
+        'gridRatingOf reads IMDb over TMDB, and unrated sorts last', JSON.stringify(key));
+
+  // (b) one page paints in descending order of the IMDb number
+  ctx.__p1 = page(1, 5);
+  await vm.runInContext("renderRatedGrid('tv-grid', __p1, false, undefined)", ctx);
+  const one = shown('tv-grid');
+  check(one.length === 5, 'page 1 painted every card', one.length);
+  check(one.every((h, i) => i === 0 || rating(one[i - 1]) >= rating(h)),
+        'page 1 is descending by the IMDb rating', one.map(h => `${h}=${rating(h)}`).join(' '));
+  check(rating(one[0]) === 9.5, 'the highest-rated title leads the grid', rating(one[0]));
+
+  // (c) THE SAWTOOTH TEST. Page 2 carries the best title in the set; appending
+  // must re-sort the whole pool, not stack a second descending run underneath.
+  ctx.__p2 = page(6, 10);
+  await vm.runInContext("renderRatedGrid('tv-grid', __p2, true, undefined)", ctx);
+  const two = shown('tv-grid');
+  check(two.length === 10, 'both pages are on screen', two.length);
+  check(two.every((h, i) => i === 0 || rating(two[i - 1]) >= rating(h)),
+        'the POOL is descending, not each page separately',
+        two.map(h => `${h}=${rating(h)}`).join(' '));
+  check(two[0] === '7', "page 2's 9.9 sorted to the very top", two[0]);
+  const perPage = [...one, ...page(6, 10).map(x => String(x.id))];
+  check(perPage.some((h, i) => i && rating(perPage[i - 1]) < rating(h)),
+        'control: sorting the pages separately really would sawtooth');
+
+  // (d) a title arriving twice is rendered once
+  await vm.runInContext("renderRatedGrid('tv-grid', __p1, true, undefined)", ctx);
+  check(shown('tv-grid').length === 10, 'a repeated page adds no duplicate cards', shown('tv-grid').length);
+
+  // (e) equal ratings keep the order the source ranked them in (4 and 5 are both 8.8)
+  const at4 = two.indexOf('4'), at5 = two.indexOf('5');
+  check(at4 >= 0 && at5 === at4 + 1, 'a tie keeps the source ranking (stable sort)', `${at4},${at5}`);
+
+  // (f) a render whose token is stale paints nothing — a second tab tap wins
+  const stale = vm.runInContext("nextGridRun('movies-grid')", ctx);
+  vm.runInContext("nextGridRun('movies-grid')", ctx);
+  ctx.__p3 = page(1, 3, 'movie');
+  await vm.runInContext(`renderRatedGrid('movies-grid', __p3, false, ${stale})`, ctx);
+  check(!grids.has('movies-grid') || grids.get('movies-grid').children.length === 0,
+        'a superseded load does not paint over the newer grid');
+
+  // (g) a resolved item marks its card done, so a repaint skips hydration
+  const done = vm.runInContext(`(() => {
+    const el = document.createElement('a');
+    markImdbTarget(el, {type:'tv', tmdb_id: 1, imdbScore: '7.2'});
+    const el2 = document.createElement('a');
+    markImdbTarget(el2, {type:'tv', tmdb_id: 2});
+    return [el.getAttribute('data-imdb-done'), el.getAttribute('data-imdb-key'),
+            el2.getAttribute('data-imdb-done'), el2.getAttribute('data-imdb-key')];
+  })()`, ctx);
+  check(done[0] === '1' && done[1] === 'tv:1', 'an already-resolved card is marked done', JSON.stringify(done));
+  check(done[2] === null && done[3] === 'tv:2', 'an unresolved card still queues for hydration', JSON.stringify(done));
+
+  // (h) THE PAINT COUNT IS THE DESIGN. An unresolved pool must paint once
+  // straight away and again when the lookups land — blocking on the lookup
+  // measured 14,042 ms of skeleton on a 1.5 Mbps profile. A pool with nothing
+  // left to resolve must paint exactly once, with no reshuffle to watch.
+  grids.delete('tv-grid');
+  vm.runInContext("nextGridRun('tv-grid')", ctx);
+  ctx.__p4 = page(1, 5);
+  await vm.runInContext("renderRatedGrid('tv-grid', __p4, false, undefined)", ctx);
+  check(grids.get('tv-grid').paints === 2,
+        'an unresolved page paints immediately, then repaints in order',
+        String(grids.get('tv-grid').paints));
+
+  // Same items, now carrying answers — one paint, no reshuffle.
+  grids.delete('tv-grid');
+  vm.runInContext("nextGridRun('tv-grid')", ctx);
+  await vm.runInContext("renderRatedGrid('tv-grid', __p4, false, undefined)", ctx);
+  check(grids.get('tv-grid').paints === 1,
+        'a pool with every score already known paints exactly once',
+        String(grids.get('tv-grid').paints));
+
+  // Anime never touches IMDb, so it is always the single-paint case.
+  grids.delete('anime-grid');
+  vm.runInContext(`__an = [{type:'anime',al_id:1,title:'A',score:'7.0'},
+                          {type:'anime',al_id:2,title:'B',score:'9.0'}]`, ctx);
+  await vm.runInContext("renderRatedGrid('anime-grid', __an, false, undefined)", ctx);
+  check(grids.get('anime-grid').paints === 1, 'an anime grid paints once',
+        String(grids.get('anime-grid').paints));
+  check(grids.get('anime-grid').children.map(c => c.getAttribute('href')).join() ===
+        '#detail-anime-2,#detail-anime-1', 'and is still sorted by AniList\'s score');
+
+  ctx.document.getElementById = realGetById;
+  ctx.document.createElement = realCreate;
 }
 
 console.log('\n' + '='.repeat(60));
