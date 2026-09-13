@@ -420,6 +420,57 @@ gzipped; a log scale keeps the ordering that matters. The file is 4.06 MB raw /
 **0.96 MB gzipped**, and it is fetched only when a filter is actually used — the
 default browse path never downloads it.
 
+### Status is a real filter now, and it used to filter nothing
+
+**TMDB's `/discover/tv` has no status parameter.** Not a limited one — none. The
+Stream tab was only ever force-*labelling* results "Completed" from
+`tvFilterStatuses` while the query itself ignored status entirely, so ticking
+the box changed the caption on the cards and not which cards came back.
+
+It cost more than it looked. Status was in the gate that decides IMDb index vs
+TMDB `/discover`, so ticking it pushed the whole query onto TMDB's much smaller
+catalogue. Measured on a real combination (TV, first aired 2026, IMDb 8.0+,
+Completed):
+
+| | titles |
+|---|---|
+| TMDB path, as shipped | TMDB had **128** matching rows at all; the filter pulls 4 pages (80), of which **21** cleared the IMDb 8.0 cut |
+| IMDb index, same query, Status served properly | **34** |
+| IMDb index, Status cleared | **169** |
+
+So Status is now answered from IMDb's own `startYear`/`endYear`, and only
+Country, Tags and Streaming still force the TMDB path — those three really have
+no IMDb equivalent.
+
+**The current year is the whole difficulty**, because IMDb publishes years and
+not dates:
+
+- A still-running series carries an **announced** final year. *The Boys* is
+  listed 2019-2026 and is still airing, so "endYear is set" is not "finished" —
+  that naive reading scores **9 of 10** against shows whose status is public.
+- But a mini-series whose run started and ended this year genuinely is finished.
+
+`imdbStatusOf` therefore treats an end year strictly in the past as finished,
+and an end year equal to this year as finished **only for `tvMiniSeries`**.
+That scores **10 of 10** on the same shows, and test 13 pins it to them by name
+so a future edit cannot quietly regress it.
+
+Films get the same year problem from the other side, so a film dated this year
+is returned as `'ambiguous'` and kept in the result set whichever status was
+asked for; `exactStatusOk` then settles it from the **real release date**, which
+`/find` already returned while building the card. No extra request.
+
+What this still cannot do: **IMDb draws no distinction between a series that
+ended and one that was cancelled**, so Canceled and Completed select the same
+titles. That is worse than a real answer and better than the previous state,
+where neither selected anything.
+
+The end year rides in the payload as an **offset from the start year** (`-1`
+meaning still open) rather than as an absolute year: runs are short, so the
+column is mostly single digits and gzip flattens it. The whole addition cost
+**0.03 MB gzipped** — `imdb-browse.json` went 0.96 → 0.99 MB — for 30,459
+titles carrying an end year.
+
 ### The Streaming filter, and the TV genre hole it exposed
 
 TV and Movies carry a **Streaming** picker — Netflix, HBO Max, Prime Video and

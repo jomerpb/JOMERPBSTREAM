@@ -144,25 +144,33 @@ BASICS = '\n'.join([
     'tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\tendYear\truntimeMinutes\tgenres',
     'tt0000001\tmovie\tA\tA\t0\t1999\t\\N\t90\tHorror,Thriller',
     'tt0000002\ttvSeries\tB\tB\t0\t2010\t2012\t45\tDrama',
+    'tt0000007\ttvSeries\tG\tG\t0\t2019\t\\N\t50\tDrama',       # still running
+    'tt0000008\ttvMiniSeries\tH\tH\t0\t2024\t2024\t50\tDrama',   # closed run
     'tt0000003\tshort\tC\tC\t0\t2001\t\\N\t9\tComedy',      # wrong type
     'tt0000004\tmovie\tD\tD\t1\t2005\t\\N\t80\tHorror',     # adult
     'tt0000005\tmovie\tE\tE\t0\t2003\t\\N\t95\tHorror',     # no rating
     'tt0000006\ttvMiniSeries\tF\tF\t0\t\\N\t\\N\t50\t\\N',  # no year, no genre
 ]) + '\n'
 RAT = {'tt0000001': (7.5, 5000), 'tt0000002': (8.1, 900),
-       'tt0000003': (6.0, 500), 'tt0000004': (5.0, 500), 'tt0000006': (6.2, 300)}
+       'tt0000003': (6.0, 500), 'tt0000004': (5.0, 500), 'tt0000006': (6.2, 300),
+       'tt0000007': (7.0, 400), 'tt0000008': (8.0, 400)}
 brows, vocab = bir.parse_basics(gz(BASICS), RAT)
 ids = [r[0] for r in brows]
-check(ids == [1, 2, 6], 'kept only rated, non-adult, browsable types', ids)
+check(ids == [1, 2, 6, 7, 8], 'kept only rated, non-adult, browsable types', ids)
 check(brows == sorted(brows), 'rows come back sorted')
 by = {r[0]: r for r in brows}
 check(by[1][1] == 0 and by[2][1] == 1 and by[6][1] == 2,
       'movie/tvSeries/tvMiniSeries encode as 0/1/2')
 check(by[1][2] == 1999 and by[6][2] == 0, 'a missing startYear becomes 0', by[6][2])
 hb, tb = 1 << vocab.index('Horror'), 1 << vocab.index('Thriller')
-check(by[1][3] == (hb | tb), 'both genres are set in one bitmask', bin(by[1][3]))
-check(by[6][3] == 0, 'a genreless title gets mask 0 and is still kept (it keeps its rating)')
-check(by[1][4] == 7.5 and by[1][5] == 5000, 'rating and votes come from the ratings join')
+check(by[1][4] == (hb | tb), 'both genres are set in one bitmask', bin(by[1][4]))
+check(by[6][4] == 0, 'a genreless title gets mask 0 and is still kept (it keeps its rating)')
+check(by[1][5] == 7.5 and by[1][6] == 5000, 'rating and votes come from the ratings join')
+
+print('\n1b. endYear is what makes Status a real filter')
+check(by[2][3] == 2012, 'a finished series carries its end year', by[2][3])
+check(by[7][3] == 0, 'a still-running series gets 0, not a guess', by[7][3])
+check(by[8][3] == 2024, 'a mini-series carries its (same-year) end', by[8][3])
 
 print('\n9. vote buckets keep the ordering that matters')
 b100, b1k, b400k = bir.vote_bucket(100), bir.vote_bucket(1000), bir.vote_bucket(400000)
@@ -170,12 +178,28 @@ check(b100 < b1k < b400k, 'more votes -> a higher bucket', (b100, b1k, b400k))
 check(all(0 <= bir.vote_bucket(v) <= 255 for v in (1, 100, 10**7)), 'every bucket fits in one byte')
 check(bir.vote_bucket(0) == bir.vote_bucket(1), 'zero votes does not blow up the log')
 
+print('\n9b. the end-year column round-trips as an offset')
+pb0 = os.path.join(ROOT, 'imdb-browse.json')
+if os.path.exists(pb0):
+    _d = json.load(open(pb0))
+    e, y = _d['e'], _d['y']
+    check(len(e) == _d['count'], 'the end-year column matches count')
+    check(all(v == -1 or v >= 0 for v in e), 'offsets are -1 (open) or non-negative')
+    ends = [(0 if e[i] < 0 else y[i] + e[i]) for i in range(len(e))]
+    check(all(v == 0 or v >= 1870 for v in ends), 'every decoded end year is 0 or a real year')
+    check(any(v == 0 for v in ends) and any(v > 0 for v in ends),
+          'both open and closed runs are present')
+    closed = sum(1 for v in ends if v)
+    check(closed > 20000, f'{closed} titles carry an end year')
+else:
+    check(False, 'imdb-browse.json is committed for the end-year check')
+
 print('\n10. the committed imdb-browse.json is real and usable')
 pb = os.path.join(ROOT, 'imdb-browse.json')
 if os.path.exists(pb):
     d = json.load(open(pb))
     n = d['count']
-    check(all(len(d[k]) == n for k in ('d', 't', 'y', 'g', 'r', 'v')),
+    check(all(len(d[k]) == n for k in ('d', 't', 'y', 'e', 'g', 'r', 'v')),
           'every parallel array matches count')
     check(len(d['genres']) >= 20, f"carries {len(d['genres'])} genre labels")
     check(set(d['t']) <= {0, 1, 2}, 'only the three browsable type codes appear')

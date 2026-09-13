@@ -381,10 +381,13 @@ function loadImdbBrowse() {
       // hardcoded, so it cannot drift as IMDb's catalogue shifts.
       let sum = 0;
       for (let i = 0; i < n; i++) sum += d.r[i];
+      // `e` is an OFFSET from the start year, -1 meaning "still open".
+      const endYear = Int16Array.from(d.e || [], (v, i) => (v < 0 ? 0 : d.y[i] + v));
       imdbBrowse = {
         ids,
         type:   Int8Array.from(d.t),
         year:   Int16Array.from(d.y),
+        endYear,
         genre:  Int32Array.from(d.g),
         rating: Int16Array.from(d.r),
         votes:  Int16Array.from(d.v),
@@ -398,6 +401,42 @@ function loadImdbBrowse() {
     }
   })();
   return imdbBrowsePromise;
+}
+
+// Status, read off IMDb's start and end years.
+//
+// This exists because TMDB cannot answer it. `/discover/tv` has NO status
+// parameter — measured, the Stream tab was only ever force-*labelling* results
+// "Completed" while filtering nothing at all, so ticking Status changed the
+// label on the cards and not which cards you got. Worse, it pushed the whole
+// query off the IMDb index onto TMDB's much smaller one: "TV, 2026, 8.0+,
+// Completed" returned 21 titles that way against 169 candidates in the index.
+//
+// The one subtlety is the CURRENT year, because IMDb publishes years and not
+// dates. A still-running series carries an ANNOUNCED final year — The Boys is
+// listed 2019-2026 while still airing — so an end year equal to this year does
+// not mean finished. A mini-series is a closed run by definition, so for those
+// it does. Checked against ten shows whose real status is known: the naive
+// "endYear is set" reading gets 9 of 10 (it calls The Boys finished), and this
+// one gets 10 of 10.
+//
+// What it cannot do: IMDb draws no distinction between a series that ended and
+// one that was cancelled, so Canceled and Completed select the same titles.
+// That is still strictly better than before, when neither selected anything.
+const IMDB_STATUS = {returning:'ongoing', ended:'done', planned:'upcoming', canceled:'done'};
+
+function imdbStatusOf(B, i, nowYear) {
+  const start = B.year[i], end = B.endYear[i];
+  if (start && start > nowYear) return 'upcoming';
+  if (B.type[i] === 0) {
+    // A film dated THIS year may or may not have opened yet, and the index only
+    // knows the year. Call it ambiguous so the query keeps it either way and
+    // exactStatusOk settles it from the real release date /find returns.
+    return start === nowYear ? 'ambiguous' : 'done';
+  }
+  if (end && end < nowYear) return 'done';
+  if (end && end === nowYear && B.type[i] === 2) return 'done';  // mini-series
+  return 'ongoing';
 }
 
 // Votes were stored log-bucketed (one byte) — this is the inverse. Only the
@@ -416,7 +455,7 @@ function imdbWeighted(rating, votes, mean) {
 
 // Run the filter over the whole index and return tconst numbers, best first.
 // One linear pass over typed arrays; measured in the browser lane below.
-function imdbBrowseQuery({kind, genreIds = [], yearGte, yearLte, minRating}) {
+function imdbBrowseQuery({kind, genreIds = [], yearGte, yearLte, minRating, statuses = []}) {
   const B = imdbBrowse;
   if (!B) return [];
   // The app's TV tab covers IMDb's tvSeries (1) and tvMiniSeries (2); Movies is
@@ -434,6 +473,9 @@ function imdbBrowseQuery({kind, genreIds = [], yearGte, yearLte, minRating}) {
   const gLo = yearGte ? parseInt(String(yearGte).slice(0, 4), 10) : 0;
   const gHi = yearLte ? parseInt(String(yearLte).slice(0, 4), 10) : 0;
   const minR = minRating === undefined ? 0 : minRating * 10;
+  // Several boxes ticked means OR, matching every other multi-select.
+  const wantStatus = new Set(statuses.map(s => IMDB_STATUS[s]).filter(Boolean));
+  const nowYear = new Date().getFullYear();
 
   const out = [];
   const n = B.ids.length;
@@ -445,12 +487,33 @@ function imdbBrowseQuery({kind, genreIds = [], yearGte, yearLte, minRating}) {
     const y = B.year[i];
     if (gLo && (!y || y < gLo)) continue;
     if (gHi && (!y || y > gHi)) continue;
+    if (wantStatus.size) {
+      const s = imdbStatusOf(B, i, nowYear);
+      if (s !== 'ambiguous' && !wantStatus.has(s)) continue;
+    }
     out.push(i);
   }
   out.sort((a, b) =>
     imdbWeighted(B.rating[b], B.votes[b], B.meanRating) -
     imdbWeighted(B.rating[a], B.votes[a], B.meanRating));
   return out;
+}
+
+// Settle the current-year ambiguity with the real date /find handed back.
+// Only titles dated this year are judged here — everything else was already
+// decided by year alone, which is unambiguous.
+function exactStatusOk(item, statuses) {
+  if (!statuses?.length || !item) return true;
+  const wants = new Set(statuses.map(s => IMDB_STATUS[s]).filter(Boolean));
+  if (wants.size > 1) return true;              // Ongoing OR Upcoming: no cut to make
+  const d = item.released;
+  if (!d) return true;
+  const year = parseInt(String(d).slice(0, 4), 10);
+  if (year !== new Date().getFullYear()) return true;
+  const out = new Date(d + 'T00:00:00Z') <= new Date();
+  if (wants.has('upcoming')) return !out;
+  if (wants.has('done') && item.type === 'movie') return out;
+  return true;
 }
 
 // Turn a page of index rows into cards. /find returns the SAME object shape a
@@ -3885,11 +3948,16 @@ async function applyImdbBrowseFilter(kind, page, opts) {
     st.list = imdbBrowseQuery({kind, ...opts});
     if (!st.list.length) return false;
     st.active = true;
+    st.statuses = opts.statuses || [];
   }
   if (!st.active) return false;
 
   const slice = st.list.slice((page - 1) * IMDB_PAGE, page * IMDB_PAGE);
-  const items = await imdbResolveCards(slice, kind);
+  let items = await imdbResolveCards(slice, kind);
+  // IMDb publishes years, not dates, so a title dated THIS year is ambiguous:
+  // it may or may not have come out yet. /find already returned the exact
+  // release date, so use it to settle those without another request.
+  items = items.filter(it => exactStatusOk(it, st.statuses));
   if (page === 1) renderGrid(gridId, items);
   else { items.forEach(a => document.getElementById(gridId).appendChild(buildGridCard(a))); hydrateImdbScores(document.getElementById(gridId)); }
 
@@ -3917,15 +3985,16 @@ async function applyTVFilter(page=1) {
 
     const providers = getTagVals('tf-provider');
 
-    // Genre / Year / Min Rating alone can be answered from IMDb's own data, and
-    // that is a materially different list — IMDb and TMDB agree on only 18 of
-    // ~33 Thrillers in a measured sample. Country, Tags, Status and Streaming
-    // cannot: IMDb's datasets carry no country, keyword or airing-status field,
-    // and no provider data at all, so those go to TMDB's /discover with the
-    // IMDb rating cut on top.
-    if (!countries.length && !tagVal && !statuses.length && !providers.length) {
+    // Genre / Year / Min Rating / Status can be answered from IMDb's own data,
+    // and that is a materially different list — IMDb and TMDB agree on only 18
+    // of ~33 Thrillers in a measured sample, and TMDB cannot answer Status for
+    // television at all (see imdbStatusOf). Country, Tags and Streaming it
+    // genuinely cannot: IMDb's datasets carry no country, keyword or provider
+    // field, so those go to TMDB's /discover with the IMDb rating cut on top.
+    if (!countries.length && !tagVal && !providers.length) {
       const done = await applyImdbBrowseFilter('tv', 1,
-        {genreIds: genres.map(Number), yearGte: yr.gte, yearLte: yr.lte, minRating: rating});
+        {genreIds: genres.map(Number), yearGte: yr.gte, yearLte: yr.lte,
+         minRating: rating, statuses});
       if (done) return;
     }
     imdbFilterState.tv.active = false;
@@ -4036,11 +4105,11 @@ async function applyMovieFilter(page=1) {
 
     const providers = getTagVals('mf-provider');
 
-    // Same split as the TV filter — see the note there. Streaming joins the
-    // list of things IMDb's datasets cannot answer.
-    if (!countries.length && !tagVal && !statuses.length && !providers.length) {
+    // Same split as the TV filter — see the note there.
+    if (!countries.length && !tagVal && !providers.length) {
       const done = await applyImdbBrowseFilter('movie', 1,
-        {genreIds: genres.map(Number), yearGte: yr.gte, yearLte: yr.lte, minRating: rating});
+        {genreIds: genres.map(Number), yearGte: yr.gte, yearLte: yr.lte,
+         minRating: rating, statuses: statuses.map(s => s === 'released' ? 'ended' : 'planned')});
       if (done) return;
     }
     imdbFilterState.movie.active = false;
