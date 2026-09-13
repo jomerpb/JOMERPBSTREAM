@@ -1,0 +1,70 @@
+name: IMDb Ratings
+
+# The fourth scheduled exception to the repo-wide dispatch-only convention, and
+# the slowest one on purpose.
+#
+# It earns a schedule for the same reason the MangaFreak and PCSO jobs do:
+# something user-visible goes stale on its own. The Stream tab's rating badge
+# IS this file, and a title released after the last run has no IMDb entry here
+# at all — it falls back to TMDB's number, which is the thing this pipeline
+# exists to stop showing.
+#
+# It runs WEEKLY rather than daily, and that is a size decision with a measured
+# number behind it. imdb-ratings.json is 2.42 MB of single-line JSON, so every
+# run that changes anything writes a fresh ~0.74 MB blob into git history —
+# there is no line-level delta to be had. Daily is ~270 MB of history a year;
+# weekly is ~38 MB. Against that, an IMDb rating on a title with 100+ votes
+# barely moves in seven days, and the only real cost of the gap is that a
+# brand-new release shows TMDB's rating for up to a week before IMDb's lands.
+# Dispatch it by hand after a big release week if that gap ever matters.
+on:
+  schedule:
+    - cron: '0 4 * * 1'   # Mondays 04:00 UTC = 12:00 Asia/Manila
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # No dependencies at all: the source is a gzipped TSV over HTTPS, so
+      # urllib and the stdlib gzip module are the whole client.
+      - name: Build imdb-ratings.json
+        run: python3 .github/scripts/build_imdb_ratings.py
+
+      # Rebase-and-retry, like the MangaFreak and WebComics jobs: this shares
+      # main with pcso-history-append (15:00 UTC), oracle-snapshot (16:05 UTC)
+      # and an hourly MangaFreak run, so a bare push can lose the race.
+      - name: Commit results
+        run: |
+          git config user.name "IMDb Ratings Bot"
+          git config user.email "imdb-ratings-bot@jomerpb.github.io"
+          git add imdb-ratings.json
+          if git diff --staged --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "chore: refresh IMDb ratings $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3 4 5; do
+            # Explicit refspec rather than a bare `git push`: checkout@v4 can
+            # leave HEAD detached, where a bare push has no upstream to resolve.
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push $i failed — rebasing onto origin/${GITHUB_REF_NAME} and retrying"
+            git pull --rebase origin "${GITHUB_REF_NAME}" || exit 1
+            sleep $((i * 3))
+          done
+          echo "could not push after 5 attempts" >&2
+          exit 1

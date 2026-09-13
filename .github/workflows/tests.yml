@@ -70,6 +70,12 @@ jobs:
       - name: WebComics scraper — sitemap parsing, and the same shrink guard
         run: python3 .github/scripts/tests/test_scrape_webcomics.py
 
+      - name: IMDb ratings pipeline — vote floor, gap encoding, shrink guard, stamps
+        run: python3 .github/scripts/tests/test_build_imdb_ratings.py
+
+      - name: IMDb ratings in the page — decoder, TMDB fallback, filter threshold
+        run: node .github/scripts/tests/test_imdb_ratings.mjs
+
       # The pipeline must not be left dirty by a test run.
       - name: Confirm the tests wrote nothing into the checkout
         run: |

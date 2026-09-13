@@ -76,6 +76,243 @@ async function al(query, variables={}) {
 }
 
 // ═══════════════════════════════════════════
+// IMDb RATINGS
+// ═══════════════════════════════════════════
+// The star on every TV/Movie card used to be TMDB's `vote_average` — TMDB's own
+// user poll, not IMDb's. They are not close. Measured over 234 titles pulled
+// from this app's own trending/popular/top-rated surfaces, the two disagree by a
+// full point on 30% of titles and by two points on 9%, and TMDB is the inflated
+// side 54% of the time — because TMDB publishes a mean off any number of votes
+// at all. One title in that sample served "9.0" off a SINGLE vote against IMDb's
+// 4.3 from twelve.
+//
+// TMDB cannot supply the IMDb number: `/tv/{id}?append_to_response=external_ids`
+// returns `external_ids.imdb_id` and no rating field of any kind, and neither
+// does TMDB's daily id export. So there are exactly two moving parts here:
+//
+//   1. tconst → rating, from imdb-ratings.json, which IMDb itself publishes and
+//      .github/workflows/imdb-ratings.yml reshapes weekly. One fetch per
+//      session, shared by every card on the page.
+//   2. tmdb_id → tconst, which only TMDB knows, so it costs one
+//      /external_ids call per title. That response is ~120-190 bytes and the
+//      mapping is immutable — a title's IMDb id never changes — which is why it
+//      is cached in localStorage forever rather than re-fetched per render.
+//
+// Anime and manga are deliberately NOT covered. AniList carries no IMDb id and
+// no IMDb external link (measured: 0 of 25 trending anime), so the only way to
+// reach one would be matching titles by text — the exact technique that sent
+// Attack on Titan to a prequel spin-off in the MangaFreak resolver. Those cards
+// keep AniList's own score, which is at least a real score of the same work.
+const IMDB_RATINGS_URL = 'imdb-ratings.json?nocache=1';
+const IMDB_ID_STORE    = 'imdbIdMap';
+
+// Fetched with ?nocache= so the service worker does not intercept it. That is
+// not a "don't cache" instruction to the browser: syncShell() deletes every
+// cache entry the current index.html does not name, so a shell-cached copy of
+// this file would be evicted on every navigation and re-downloaded. Left to the
+// HTTP cache it revalidates against its ETag instead, which costs a 304 and no
+// body on all but the one launch a week where the file actually changed.
+let imdbRatings = null;          // Map<tconst-as-int, rating × 10>
+let imdbRatingsPromise = null;
+
+function loadImdbRatings() {
+  if (imdbRatingsPromise) return imdbRatingsPromise;
+  imdbRatingsPromise = (async () => {
+    try {
+      const r = await fetch(IMDB_RATINGS_URL, {signal: AbortSignal.timeout(20000)});
+      if (!r.ok) throw new Error('http ' + r.status);
+      const d = await r.json();
+      // Inverse of build_imdb_ratings.encode(): the tconsts were sorted and
+      // stored as the GAPS between them, which is what takes the payload from
+      // 1.64 MB gzipped to 0.74 MB for the same 430k titles. Rebuild by
+      // running the sum back up. Ratings ride along times ten, as integers.
+      const gaps = d?.d, vals = d?.r;
+      if (!Array.isArray(gaps) || !Array.isArray(vals) || gaps.length !== vals.length) {
+        throw new Error('malformed ratings payload');
+      }
+      const m = new Map();
+      let run = 0;
+      for (let i = 0; i < gaps.length; i++) { run += gaps[i]; m.set(run, vals[i]); }
+      imdbRatings = m;
+      return m;
+    } catch {
+      // A miss is not an error state — every caller falls back to the TMDB
+      // number it already had, which is exactly today's behaviour.
+      imdbRatings = null;
+      return null;
+    }
+  })();
+  return imdbRatingsPromise;
+}
+
+// tmdb_id → tconst, remembered across sessions. A value of '' is a real answer
+// ("TMDB has no IMDb id for this"), cached just as hard as a hit so a title
+// without one is not re-queried on every scroll.
+let imdbIdMap = null;
+function imdbIdStore() {
+  if (imdbIdMap) return imdbIdMap;
+  try { imdbIdMap = JSON.parse(localStorage.getItem(IMDB_ID_STORE) || '{}'); }
+  catch { imdbIdMap = {}; }
+  if (!imdbIdMap || typeof imdbIdMap !== 'object') imdbIdMap = {};
+  return imdbIdMap;
+}
+let imdbIdSaveTimer = null;
+function imdbIdStoreSave() {
+  // Batched: a grid resolves twenty ids in a burst, and twenty synchronous
+  // localStorage writes on a phone is a jank source for no benefit.
+  clearTimeout(imdbIdSaveTimer);
+  imdbIdSaveTimer = setTimeout(() => {
+    try { localStorage.setItem(IMDB_ID_STORE, JSON.stringify(imdbIdMap || {})); } catch {}
+  }, 800);
+}
+
+const imdbIdInflight = new Map();   // de-dupe concurrent asks for the same title
+
+async function resolveImdbId(type, tmdbId) {
+  if ((type !== 'tv' && type !== 'movie') || !tmdbId) return '';
+  const key = `${type}:${tmdbId}`;
+  const store = imdbIdStore();
+  if (Object.prototype.hasOwnProperty.call(store, key)) return store[key];
+  if (imdbIdInflight.has(key)) return imdbIdInflight.get(key);
+  const p = (async () => {
+    const d = await tmdb(`/${type}/${tmdbId}/external_ids`);
+    // Only a real response is cached. A network failure must stay uncached, or
+    // one flaky moment pins a title to "no IMDb rating" on this device forever.
+    if (!d || typeof d !== 'object' || !('imdb_id' in d)) return null;
+    const v = d.imdb_id || '';
+    store[key] = v;
+    imdbIdStoreSave();
+    return v;
+  })().finally(() => imdbIdInflight.delete(key));
+  imdbIdInflight.set(key, p);
+  return p;
+}
+
+function imdbLookup(tconst) {
+  if (!imdbRatings || !tconst) return null;
+  const n = parseInt(String(tconst).replace(/^tt/, ''), 10);
+  if (!Number.isFinite(n)) return null;
+  const v = imdbRatings.get(n);
+  return v === undefined ? null : (v / 10).toFixed(1);
+}
+
+// Resolve one item's IMDb score, caching the answer onto the item so the detail
+// page and the card it was opened from never disagree.
+async function imdbScoreFor(item) {
+  if (!item || (item.type !== 'tv' && item.type !== 'movie')) return null;
+  if (item.imdbScore !== undefined) return item.imdbScore;
+  const id = item.tmdb_id || item.id;
+  if (!id) return null;
+  const [, tconst] = await Promise.all([loadImdbRatings(), resolveImdbId(item.type, id)]);
+  if (tconst) item.imdb_id = tconst;
+  const s = imdbLookup(tconst);
+  item.imdbScore = s;
+  return s;
+}
+
+// Which number a surface should print, and where it came from. IMDb wins when
+// it has one; otherwise the TMDB figure stands rather than showing a blank,
+// since 6.9% of this app's catalogue has no IMDb entry at the 100-vote floor.
+function scoreOf(item) {
+  if (item?.imdbScore) return {value: item.imdbScore, src: 'IMDb'};
+  if (item?.score)     return {value: item.score,     src: 'TMDB'};
+  return {value: null, src: ''};
+}
+
+// Fill in IMDb scores on already-rendered cards. Cards paint immediately from
+// the TMDB payload and the star is corrected in place a moment later, so a slow
+// external_ids round trip never delays the grid.
+// Cards past this many are not resolved until they scroll into view. Without
+// it the burst is unbounded and follows the longest list on the page, not the
+// visible one: an actor's page carries their whole filmography, and Matt Damon
+// alone fired 191 external_ids calls in one go — measured, in the browser lane.
+const IMDB_EAGER_CARDS = 24;
+
+const imdbLazyObserver = typeof IntersectionObserver === 'function'
+  ? new IntersectionObserver(entries => {
+      const hit = entries.filter(e => e.isIntersecting).map(e => e.target);
+      hit.forEach(el => imdbLazyObserver.unobserve(el));
+      if (hit.length) resolveImdbCards(hit);
+    }, { rootMargin: '300px' })
+  : null;
+
+async function hydrateImdbScores(root) {
+  const scope = root || document;
+  const cards = [...scope.querySelectorAll('[data-imdb-key]:not([data-imdb-done])')];
+  // querySelectorAll only walks DESCENDANTS, so a scope element that carries
+  // the key itself — the home hero, the detail page's own info block — would
+  // never be picked up. Measured: the detail page's star stayed on TMDB's
+  // number while the card it was opened from already showed IMDb's.
+  if (scope.nodeType === 1 && scope.matches?.('[data-imdb-key]:not([data-imdb-done])')) {
+    cards.unshift(scope);
+  }
+  if (!cards.length) return;
+  const eager = cards.slice(0, IMDB_EAGER_CARDS);
+  const lazy  = cards.slice(IMDB_EAGER_CARDS);
+  if (imdbLazyObserver) lazy.forEach(el => imdbLazyObserver.observe(el));
+  else eager.push(...lazy);
+  return resolveImdbCards(eager);
+}
+
+async function resolveImdbCards(cards) {
+  if (!cards.length) return;
+  await loadImdbRatings();
+  // Six at a time: twenty parallel requests per grid page is enough to get
+  // throttled, and the user only sees the first rows anyway.
+  let i = 0;
+  const worker = async () => {
+    while (i < cards.length) {
+      const el = cards[i++];
+      el.setAttribute('data-imdb-done', '1');
+      const [type, id] = (el.getAttribute('data-imdb-key') || '').split(':');
+      try {
+        const tconst = await resolveImdbId(type, id);
+        const s = imdbLookup(tconst);
+        if (!s) continue;
+        const badge = el.querySelector('.js-score');
+        if (badge) {
+          badge.textContent = '⭐' + (badge.dataset.sp || '') + s;
+          badge.title = 'IMDb ' + s;
+          badge.classList.add('is-imdb');
+        }
+      } catch {}
+    }
+  };
+  await Promise.all(Array(Math.min(6, cards.length)).fill(0).map(worker));
+}
+
+// How far BELOW the requested threshold the server-side TMDB pre-filter is
+// allowed to sit. The Min Rating control now filters the number actually on the
+// card, which is IMDb's — and TMDB cannot filter on that, so the pruning has to
+// happen here. Letting TMDB pre-prune at the same threshold looked free and is
+// not: measured over 234 titles from this app's own surfaces, `vote_average.gte`
+// at the asked-for value throws away EVERY title that qualifies at "9+" (26 of
+// 26, since TMDB's scale runs lower at the top) and 14% of them at "8+". At a
+// 3-point margin nothing qualifying was lost at any threshold, while TMDB still
+// drops the clearly-disqualified majority server-side instead of making us page
+// through it.
+const IMDB_FILTER_MARGIN = 3;
+
+// Minimum cards to gather before painting a filtered page, and the hard cap on
+// how many TMDB pages may be pulled to get there. Without a cap a strict filter
+// over a thin catalogue would walk the entire result set in one go.
+const FILTER_MIN_CARDS = 8;
+const FILTER_MAX_PAGES = 4;
+
+// Keep only the items whose DISPLAYED score clears the threshold — IMDb's when
+// there is one, otherwise the TMDB figure the card falls back to. Filtering on
+// the displayed value is the whole point: a grid that answers "8+" with a card
+// reading 6.6 is worse than no filter at all.
+async function filterByMinScore(items, min) {
+  if (min === undefined || min === null) return items;
+  await Promise.all(items.map(it => imdbScoreFor(it).catch(() => null)));
+  return items.filter(it => {
+    const v = parseFloat(scoreOf(it).value);
+    return Number.isFinite(v) && v >= min;
+  });
+}
+
+// ═══════════════════════════════════════════
 // NAV — Browser History API
 // ═══════════════════════════════════════════
 // ═══════════════════════════════════════════
@@ -245,6 +482,7 @@ window.addEventListener('popstate', async (e) => {
   const navMap = {'home-page':'home','anime-page':'anime','manga-page':'manga','tv-page':'tv','movies-page':'movies','search-page':'search','oracle-page':'oracle','trade-page':'trade'};
   if (navMap[page]) setNav(navMap[page]);
   if (page === 'detail-page' && state.item) await openDetail(state.item, true);
+  if (page === 'person-page' && state.personId) await loadPerson(state.personId, state.personName);
 });
 
 // ═══════════════════════════════════════════
@@ -284,7 +522,8 @@ function buildSmCard(item) {
   c.className = 'card-sm';
   c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
   c.style.cssText = 'text-decoration:none;color:inherit;';
-  const badge = item.score ? `<div class="card-sm-badge">⭐${item.score}</div>` : '';
+  const sc = scoreOf(item);
+  const badge = sc.value ? `<div class="card-sm-badge js-score${sc.src==='IMDb'?' is-imdb':''}" title="${sc.src} ${sc.value}">⭐${sc.value}</div>` : '';
   const typeBadge = `<div class="card-sm-type ${item.type}">${typeLabelShort(item)}</div>`;
   c.innerHTML = `
     <div class="card-sm-img">
@@ -295,6 +534,7 @@ function buildSmCard(item) {
       <div class="card-sm-title">${item.title}</div>
       <div class="card-sm-sub">${item.year||''}</div>
     </div>`;
+  markImdbTarget(c, item);
   c.onclick = (e) => { e.preventDefault(); openDetail(item); };
   return c;
 }
@@ -317,25 +557,38 @@ function buildGridCard(item) {
   if (item.genre)       metaParts.push(`<span>· ${item.genre}</span>`);
   if (statusText)       metaParts.push(`<span style="color:${statusColor};font-weight:700;">· ${statusText}</span>`);
   const meta = metaParts.length ? `<div class="grid-card-meta">${metaParts.join('')}</div>` : '';
+  const gsc = scoreOf(item);
 
   c.innerHTML = `
     <div class="grid-card-img">
       <img src="${item.img||''}" alt="${item.title}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;"/>
-      ${item.score?`<div class="grid-card-score">⭐${item.score}</div>`:''}
+      ${gsc.value?`<div class="grid-card-score js-score${gsc.src==='IMDb'?' is-imdb':''}" title="${gsc.src} ${gsc.value}">⭐${gsc.value}</div>`:''}
       <div class="grid-card-type ${typeColor}">${typeLabel}</div>
       <div class="grid-card-overlay">
         <div class="grid-card-title">${item.title}</div>
         ${meta}
       </div>
     </div>`;
+  markImdbTarget(c, item);
   c.onclick = (e) => { e.preventDefault(); openDetail(item); };
   return c;
+}
+
+// Tag a card so the IMDb pass can find it later. Only TV and movies carry a
+// key — anime and manga have no IMDb id to resolve, so they are skipped here
+// rather than queued and dropped, which keeps the request burst down to the
+// cards whose star can actually change.
+function markImdbTarget(el, item) {
+  if (item.type !== 'tv' && item.type !== 'movie') return;
+  const id = item.tmdb_id || item.id;
+  if (id) el.setAttribute('data-imdb-key', `${item.type}:${id}`);
 }
 
 function renderRow(id, items) {
   const el = document.getElementById(id);
   el.innerHTML = '';
   items.forEach(item => el.appendChild(buildSmCard(item)));
+  hydrateImdbScores(el);
 }
 
 function renderGrid(id, items, append=false) {
@@ -346,6 +599,7 @@ function renderGrid(id, items, append=false) {
     return;
   }
   items.forEach(item => el.appendChild(buildGridCard(item)));
+  hydrateImdbScores(el);
 }
 
 // ═══════════════════════════════════════════
@@ -408,6 +662,13 @@ function fromTMDB(m, type) {
     seasons:  m.number_of_seasons  || null,
     episodes: m.number_of_episodes || null,
     tmdb_id:  m.id,
+    // Facts table (renderDetailFacts). Only the detail endpoints carry these —
+    // a card built from a list row leaves them empty and the table hides the
+    // rows it has no value for.
+    runtime:  m.runtime || m.episode_run_time?.[0] || null,
+    language: m.original_language || '',
+    released: m.release_date || m.first_air_date || '',
+    statusRaw: m.status || '',
     genre, country: countryCode, countryFlag, status,
   };
 }
@@ -460,6 +721,7 @@ async function loadHome() {
   // Hero — use a trending anime or TV with backdrop
   const heroItem = animeList.find(a=>a.banner) || tvList.find(t=>t.banner) || animeList[0];
   if (heroItem) {
+    const hsc = scoreOf(heroItem);
     document.getElementById('hero-wrap').innerHTML = `
       <img src="${heroItem.banner||heroItem.img}" alt="${heroItem.title}"/>
       <div class="hero-overlay"></div>
@@ -468,11 +730,14 @@ async function loadHome() {
         <div class="hero-title">${heroItem.title}</div>
         <div class="hero-meta">
           <span>${heroItem.year||''}</span>
-          ${heroItem.score?`<div class="hero-dot"></div><span>⭐ ${heroItem.score}</span>`:''}
+          ${hsc.value?`<div class="hero-dot"></div><span class="js-score" data-sp=" " title="${hsc.src} ${hsc.value}">⭐ ${hsc.value}</span>`:''}
         </div>
         <button class="hero-play" onclick="openDetail(window.__heroItem)">▶ Watch Now</button>
       </div>`;
     window.__heroItem = heroItem;
+    const heroWrap = document.getElementById('hero-wrap');
+    markImdbTarget(heroWrap, heroItem);
+    hydrateImdbScores(heroWrap);
   }
 }
 
@@ -1100,6 +1365,8 @@ async function openDetail(item, restore=false) {
   hideMangaEmbed();
   document.getElementById('detail-castprod').style.display = 'none';
   document.getElementById('detail-castprod-body').innerHTML = '';
+  const factsEl = document.getElementById('detail-facts');
+  if (factsEl) factsEl.innerHTML = '';
   collapseSection('detail-castprod-body', 'detail-castprod-chev', true);
   collapseSection('detail-details-body', 'detail-details-chev', true);
   document.getElementById('detail-lang').style.display = 'none';
@@ -1523,9 +1790,10 @@ async function openTVDetail(item) {
   renderDetailHero(full, 'tv', tvTags);
 
   showEpsSection(true);
-  const castNames = (data.credits?.cast||[]).slice(0,8).map(c=>c.name);
+  const castNames = (data.credits?.cast||[]).slice(0,8).map(c=>({id:c.id, name:c.name}));
   const prodNames = [...new Set([...(data.networks||[]).map(n=>n.name), ...(data.production_companies||[]).map(p=>p.name)])];
   renderCastProduction('tv', castNames, prodNames);
+  renderDetailFacts(full);
 
   // TV seasons from TMDB
   const tvSeasons = (data.seasons||[]).filter(s=>s.season_number>0).map(s=>({
@@ -1563,9 +1831,10 @@ async function openMovieDetail(item) {
   // Movies have no episode grid, so the "EPISODES" block stays hidden — the
   // tag pills live up in the hero row instead, and a movie has no dub toggle.
   showEpsSection(false);
-  const castNames = (data?.credits?.cast||[]).slice(0,8).map(c=>c.name);
+  const castNames = (data?.credits?.cast||[]).slice(0,8).map(c=>({id:c.id, name:c.name}));
   const prodNames = (data?.production_companies||[]).map(p=>p.name);
   renderCastProduction('movie', castNames, prodNames);
+  renderDetailFacts(full);
   allSeasons = [{...full, season_number:0}];
   currentSeason = allSeasons[0];
   totalEps = 1;
@@ -1586,6 +1855,7 @@ function renderDetailBackdrop(img, title) {
 }
 
 function renderDetailHero(item, type, extraTags=[]) {
+  const dsc = scoreOf(item);
   const typeClass = {anime:'anime',manga:'manga',tv:'tv',movie:'movie'}[type];
   const typeLabel = {anime:'🎌 Anime',manga:`📖 ${mangaKind(item)}`,tv:'📺 TV Series',movie:'🎬 Movie'}[type];
 
@@ -1594,7 +1864,7 @@ function renderDetailHero(item, type, extraTags=[]) {
   const pills = [
     {label: typeLabel, cls: typeClass},
     {label: item.year||'', cls:''},
-    {label: item.score?`⭐ ${item.score}`:'', cls:'accent'},
+    {label: dsc.value?`⭐ ${dsc.value}`:'', cls:'accent', js:'score', sp:' '},
     {label: item.episodes?`${item.episodes} eps`:'', cls:''},
     // Manga-only counts. Anime/TV/movie items never carry these keys, so no
     // branch is needed — they simply filter out as empty below.
@@ -1609,7 +1879,21 @@ function renderDetailHero(item, type, extraTags=[]) {
 
   document.getElementById('detail-info').innerHTML = `
     <div class="detail-title">${item.title}</div>
-    <div class="detail-pills">${pills.map(p=>`<span class="dpill ${p.cls}">${p.label}</span>`).join('')}</div>`;
+    <div class="detail-pills">${pills.map(p=>`<span class="dpill ${p.cls}${p.js?' js-'+p.js:''}"${p.sp?` data-sp="${p.sp}"`:''}>${p.label}</span>`).join('')}</div>`;
+
+  // The star fills in from IMDb a moment after the page paints, same as a card
+  // — but the facts table below carries the same number AND names its source,
+  // so both are re-rendered together once the lookup lands. Doing this through
+  // the DOM walker alone left the Rating row reading "8.0/10 on TMDB" under a
+  // star that had already flipped to IMDb's 8.4.
+  const info = document.getElementById('detail-info');
+  markImdbTarget(info, item);
+  imdbScoreFor(item).then(s => {
+    if (!s || currentItem !== item) return;
+    const pill = info.querySelector('.js-score');
+    if (pill) pill.textContent = `⭐ ${s}`;
+    renderDetailFacts(item);
+  }).catch(() => {});
 
   document.getElementById('detail-synopsis').textContent = item.synopsis || 'No synopsis available.';
 }
@@ -1909,6 +2193,7 @@ function renderSimpleDetail(item, type) {
   renderDetailHero(item, type);
   showEpsSection(episodic);
   renderCastProduction(type, [], [], type === 'manga' ? mangaDetailLinks(item) : []);
+  renderDetailFacts(item);
   if (type === 'manga') {
     showMangaEmbed(item);
     document.getElementById('eps-grid').innerHTML = '';
@@ -2056,8 +2341,19 @@ function renderCastProduction(type, castNames, prodNames, links=[]) {
   const L = CASTPROD_LABELS[type] || CASTPROD_LABELS.tv;
   const head = document.getElementById('detail-castprod-title');
   if (head) head.textContent = L.head;
+  // A cast entry may arrive as a bare string (manga creators, and any caller
+  // that has no ids) or as {id, name}. Only the second becomes a link — a chip
+  // with no TMDB person id has nowhere to go, so it stays plain text rather
+  // than becoming a button that does nothing.
   const chips = (names, what) => (names||[]).length
-    ? `<div class="dc-chiplist">${names.map(n=>`<span>${escapeHtml(n)}</span>`).join('')}</div>`
+    ? `<div class="dc-chiplist">${names.map(n => {
+        const name = typeof n === 'string' ? n : (n?.name || '');
+        const id   = typeof n === 'string' ? null : n?.id;
+        if (!name) return '';
+        return id
+          ? `<button type="button" class="dc-person" onclick="openPersonFromCast(${Number(id)}, this.dataset.n)" data-n="${escapeHtml(name)}">${escapeHtml(name)}</button>`
+          : `<span>${escapeHtml(name)}</span>`;
+      }).join('')}</div>`
     : `<div class="dc-empty">No ${what} information available.</div>`;
   const linkHtml = (links||[]).length
     ? `<div class="dc-block"><div class="dc-block-label">Links</div><div class="dc-chiplist">${
@@ -2068,6 +2364,166 @@ function renderCastProduction(type, castNames, prodNames, links=[]) {
     <div class="dc-block"><div class="dc-block-label">${L.a}</div>${chips(castNames, L.a.toLowerCase())}</div>
     <div class="dc-block"><div class="dc-block-label">${L.b}</div>${chips(prodNames, L.b.toLowerCase())}</div>
     ${linkHtml}`;
+}
+
+
+// ═══════════════════════════════════════════
+// DETAIL FACTS — Status / Language / Released / Runtime
+// ═══════════════════════════════════════════
+// Every value here comes from the TMDB *detail* payload. A card built from a
+// list row carries none of them, so each row is dropped rather than printed
+// empty, and the whole table hides when nothing survives — which is what
+// happens for anime and manga, whose AniList payload has no equivalent fields.
+const LANG_NAMES = {
+  en:'English', ja:'Japanese', ko:'Korean', zh:'Chinese', cn:'Chinese',
+  th:'Thai', tl:'Filipino', fr:'French', de:'German', es:'Spanish',
+  it:'Italian', pt:'Portuguese', ru:'Russian', hi:'Hindi', tr:'Turkish',
+  id:'Indonesian', ar:'Arabic', sv:'Swedish', da:'Danish', nl:'Dutch',
+  pl:'Polish', no:'Norwegian', fi:'Finnish', he:'Hebrew', vi:'Vietnamese',
+};
+
+function fmtRuntime(mins) {
+  const m = Number(mins);
+  if (!Number.isFinite(m) || m <= 0) return '';
+  const h = Math.floor(m / 60), r = m % 60;
+  return h ? `${h}h ${r}m` : `${r}m`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  // Parsed as UTC on purpose: a bare YYYY-MM-DD read as local time prints the
+  // previous day for anyone west of UTC, which is most of the Americas.
+  const d = new Date(iso + 'T00:00:00Z');
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric', timeZone:'UTC'});
+}
+
+function renderDetailFacts(item) {
+  const el = document.getElementById('detail-facts');
+  if (!el) return;
+  if (!item || (item.type !== 'tv' && item.type !== 'movie')) { el.innerHTML = ''; return; }
+
+  const sc = scoreOf(item);
+  const rows = [
+    ['Status',   item.statusRaw || item.status || ''],
+    ['Language', LANG_NAMES[item.language] || (item.language ? item.language.toUpperCase() : '')],
+    ['Released', fmtDate(item.released)],
+    ['Runtime',  fmtRuntime(item.runtime)],
+    // Spelling the source out here is the honest half of this feature: the star
+    // up top is just a number, and ~7% of titles have no IMDb entry at the
+    // pipeline's 100-vote floor and quietly fall back to TMDB's. This row says
+    // which one you are actually looking at.
+    ['Rating',   sc.value ? `${sc.value}/10 on ${sc.src}` : ''],
+  ].filter(r => r[1]);
+
+  el.innerHTML = rows.length
+    ? rows.map(([k,v]) => `<div class="dfact"><span class="dfact-k">${escapeHtml(k)}</span><span class="dfact-v">${escapeHtml(v)}</span></div>`).join('')
+    : '';
+}
+
+// ═══════════════════════════════════════════
+// PERSON PAGE
+// ═══════════════════════════════════════════
+// A Cast chip is a link to the actor rather than dead text. TMDB gives the
+// person and everything they appear in from one call
+// (`/person/{id}?append_to_response=combined_credits`), so the page costs a
+// single request.
+let personBioOpen = false;
+
+function openPersonFromCast(id, name) {
+  if (!id) return;
+  history.pushState({page:'person-page', personId:id, personName:name}, '', `#person-${id}`);
+  showPage('person-page');
+  loadPerson(id, name);
+}
+
+async function loadPerson(id, fallbackName) {
+  personBioOpen = false;
+  const photoEl = document.getElementById('person-photo');
+  const infoEl  = document.getElementById('person-info');
+  const bioEl   = document.getElementById('person-bio');
+  const gridEl  = document.getElementById('person-grid');
+  const headEl  = document.getElementById('person-credits-head');
+  photoEl.innerHTML = `<div class="sk" style="width:100%;height:100%;border-radius:10px;"></div>`;
+  infoEl.innerHTML  = `<div class="sk" style="width:70%;height:18px;margin-bottom:9px;border-radius:4px;"></div>`;
+  bioEl.innerHTML = ''; gridEl.innerHTML = ''; headEl.style.display = 'none';
+
+  const d = await tmdb(`/person/${id}`, {append_to_response:'combined_credits'});
+  if (!d || d.success === false) {
+    infoEl.innerHTML = `<div class="detail-title">${escapeHtml(fallbackName||'Unknown')}</div>`;
+    bioEl.innerHTML  = `<div class="dc-empty">No profile available for this person.</div>`;
+    return;
+  }
+
+  photoEl.innerHTML = d.profile_path
+    ? `<img src="${TMDB_IMG}${d.profile_path}" alt="${escapeHtml(d.name||'')}" style="width:100%;height:100%;object-fit:cover;display:block;"/>`
+    : `<div class="person-photo-empty">${escapeHtml((d.name||'?').slice(0,1))}</div>`;
+
+  const pills = [
+    d.known_for_department || '',
+    personAge(d.birthday, d.deathday),
+    d.birthday ? `Born ${fmtDate(d.birthday)}` : '',
+    d.deathday ? `Died ${fmtDate(d.deathday)}` : '',
+    d.place_of_birth || '',
+  ].filter(Boolean);
+
+  // The IMDb link is the person's own page. Built from the id TMDB already
+  // returns — never guessed from the name, same rule the rest of this repo
+  // follows for external ids.
+  const imdbLink = d.imdb_id
+    ? `<a class="person-imdb" href="https://www.imdb.com/name/${encodeURIComponent(d.imdb_id)}/" target="_blank" rel="noopener noreferrer"><span class="person-imdb-tag">IMDb</span>Profile</a>`
+    : '';
+
+  infoEl.innerHTML = `
+    <div class="detail-title">${escapeHtml(d.name || fallbackName || 'Unknown')}</div>
+    <div class="detail-pills">${pills.map(p=>`<span class="dpill">${escapeHtml(p)}</span>`).join('')}</div>
+    ${imdbLink}`;
+
+  const bio = (d.biography || '').trim();
+  bioEl.innerHTML = bio
+    ? `<div class="person-bio-text clamped" id="person-bio-text">${escapeHtml(bio)}</div>
+       <button class="person-bio-more" id="person-bio-more" onclick="togglePersonBio()">Read more</button>`
+    : `<div class="dc-empty">No biography available.</div>`;
+
+  // Credits: the acting roles, newest first, deduped. combined_credits repeats
+  // a title once per character on it (an actor with two roles in one show, or a
+  // recurring guest spot), which would otherwise print the same poster twice.
+  const seen = new Set();
+  const credits = (d.combined_credits?.cast || [])
+    .filter(c => (c.media_type === 'movie' || c.media_type === 'tv') && c.poster_path)
+    .filter(c => { const k = `${c.media_type}:${c.id}`; if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a,b) => (b.release_date || b.first_air_date || '').localeCompare(a.release_date || a.first_air_date || ''))
+    .map(c => fromTMDB(c, c.media_type));
+
+  if (credits.length) {
+    headEl.style.display = '';
+    document.getElementById('person-credits-title').textContent =
+      `${d.name ? d.name.split(' ')[0] + "'s" : ''} Films & TV`.trim();
+    renderGrid('person-grid', credits);
+  } else {
+    gridEl.innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>Nothing on file</h3></div>`;
+  }
+}
+
+function personAge(birthday, deathday) {
+  if (!birthday) return '';
+  const b = new Date(birthday + 'T00:00:00Z');
+  if (isNaN(b)) return '';
+  const end = deathday ? new Date(deathday + 'T00:00:00Z') : new Date();
+  let age = end.getUTCFullYear() - b.getUTCFullYear();
+  const m = end.getUTCMonth() - b.getUTCMonth();
+  if (m < 0 || (m === 0 && end.getUTCDate() < b.getUTCDate())) age--;
+  if (age < 0 || age > 130) return '';
+  return deathday ? `Died at ${age}` : `Age ${age}`;
+}
+
+function togglePersonBio() {
+  personBioOpen = !personBioOpen;
+  const t = document.getElementById('person-bio-text');
+  const b = document.getElementById('person-bio-more');
+  if (!t || !b) return;
+  t.classList.toggle('clamped', !personBioOpen);
+  b.textContent = personBioOpen ? 'Read less' : 'Read more';
 }
 
 function toggleDcSection() { collapseSection('detail-castprod-body', 'detail-castprod-chev'); }
@@ -2117,6 +2573,7 @@ function renderRecRow(num, title, items) {
   titleEl.textContent = title;
   grid.innerHTML = '';
   items.forEach(item => grid.appendChild(buildSmCard(item)));
+  hydrateImdbScores(grid);
   row.style.display = 'block';
 }
 
@@ -2205,6 +2662,7 @@ function renderMoreDetailSimilar() {
   const st = detailSimilarState;
   const batch = st.list.slice(st.shown, st.shown + 12);
   batch.forEach(m => grid.appendChild(buildGridCard(m)));
+  hydrateImdbScores(grid);
   st.shown += batch.length;
   if (end) end.style.display = (st.done && st.shown >= st.list.length) ? 'block' : 'none';
 }
@@ -2682,7 +3140,7 @@ async function fetchLiveResults(q, dropdownId) {
           <span>${item.year||''}</span>
           ${item.episodes ? `<span>· ${item.episodes} eps</span>` : ''}
           ${item.chapters ? `<span>· ${item.chapters} ch</span>` : ''}
-          ${item.score ? `<span>· ⭐${item.score}</span>` : ''}
+          ${scoreOf(item).value ? `<span>· ⭐${scoreOf(item).value}</span>` : ''}
         </div>
       </div>`;
     el.onclick = () => { closeDropdown(); openDetail(item); };
@@ -2997,6 +3455,7 @@ async function applyMangaFilter(page=1) {
 // Store filter URL base for pagination
 let tvFilterUrl = null;
 let tvFilterStatuses = [];
+let tvFilterMinScore;
 
 async function applyTVFilter(page=1) {
   if (page === 1) {
@@ -3023,7 +3482,9 @@ async function applyTVFilter(page=1) {
     }
     if (countries.length) url.searchParams.set('with_origin_country', countries.join('|'));
     if (genres.length)    url.searchParams.set('with_genres', genres.join('|'));
-    if (rating !== undefined) url.searchParams.set('vote_average.gte', rating);
+    // Pre-prune only; the real cut is made against the IMDb value below.
+    if (rating !== undefined) url.searchParams.set('vote_average.gte', Math.max(0, rating - IMDB_FILTER_MARGIN));
+    tvFilterMinScore = rating;
     if (yr.gte)  url.searchParams.set('first_air_date.gte', yr.gte);
     if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
     // NOTE: TMDB's /discover/tv has no real "status" filter parameter — list
@@ -3052,19 +3513,31 @@ async function applyTVFilter(page=1) {
   }
 
   try {
-    const r = await fetch(`${tvFilterUrl}&page=${page}`, {signal: AbortSignal.timeout(10000)});
-    const d = await r.json();
     const statusMap = {'returning':'Ongoing','ended':'Completed','planned':'Upcoming','canceled':'Canceled'};
     const knownStatus = tvFilterStatuses.length === 1 ? (statusMap[tvFilterStatuses[0]] || '') : '';
-    const items = (d?.results||[]).map(m => {
-      const item = fromTMDB(m,'tv');
-      if (knownStatus) item.status = knownStatus;
-      return item;
-    });
-    if (page === 1) renderGrid('tv-grid', items);
-    else items.forEach(a => document.getElementById('tv-grid').appendChild(buildGridCard(a)));
-    const hasMore = (d?.page||1) < (d?.total_pages||1);
-    tvPageState = {sub:'filter', region:'', page, hasMore};
+    // With a Min Rating active the cut is made on the IMDb number, which TMDB
+    // cannot pre-filter — so a page comes back partly disqualified and one page
+    // can leave the grid nearly empty. Pull further pages until there is enough
+    // to fill a screen, bounded by FILTER_MAX_PAGES.
+    let cur = page, last = null, tries = 0;
+    const kept = [];
+    do {
+      const r = await fetch(`${tvFilterUrl}&page=${cur}`, {signal: AbortSignal.timeout(10000)});
+      last = await r.json();
+      const items = (last?.results||[]).map(m => {
+        const item = fromTMDB(m,'tv');
+        if (knownStatus) item.status = knownStatus;
+        return item;
+      });
+      kept.push(...await filterByMinScore(items, tvFilterMinScore));
+      cur++; tries++;
+    } while (tvFilterMinScore !== undefined && kept.length < FILTER_MIN_CARDS
+             && tries < FILTER_MAX_PAGES && (last?.page||1) < (last?.total_pages||1));
+
+    if (page === 1) renderGrid('tv-grid', kept);
+    else { kept.forEach(a => document.getElementById('tv-grid').appendChild(buildGridCard(a))); hydrateImdbScores(document.getElementById('tv-grid')); }
+    const hasMore = (last?.page||1) < (last?.total_pages||1);
+    tvPageState = {sub:'filter', region:'', page: cur - 1, hasMore};
     document.getElementById('tv-more').style.display = hasMore ? 'block' : 'none';
     if (hasMore) attachInfiniteScroll();
   } catch { renderGrid('tv-grid', []); }
@@ -3072,6 +3545,7 @@ async function applyTVFilter(page=1) {
 
 // ── MOVIE FILTER ──
 let movieFilterUrl = null;
+let movieFilterMinScore;
 
 async function applyMovieFilter(page=1) {
   if (page === 1) {
@@ -3097,7 +3571,9 @@ async function applyMovieFilter(page=1) {
     }
     if (countries.length) url.searchParams.set('with_origin_country', countries.join('|'));
     if (genres.length) url.searchParams.set('with_genres', genres.join('|'));
-    if (rating !== undefined) url.searchParams.set('vote_average.gte', rating);
+    // Pre-prune only; the real cut is made against the IMDb value below.
+    if (rating !== undefined) url.searchParams.set('vote_average.gte', Math.max(0, rating - IMDB_FILTER_MARGIN));
+    movieFilterMinScore = rating;
     if (yr.gte) url.searchParams.set('primary_release_date.gte', yr.gte);
     if (yr.lte) url.searchParams.set('primary_release_date.lte', yr.lte);
     if (statuses.length === 1) {
@@ -3122,13 +3598,22 @@ async function applyMovieFilter(page=1) {
   }
 
   try {
-    const r = await fetch(`${movieFilterUrl}&page=${page}`, {signal: AbortSignal.timeout(10000)});
-    const d = await r.json();
-    const items = (d?.results||[]).map(m=>fromTMDB(m,'movie'));
-    if (page === 1) renderGrid('movies-grid', items);
-    else items.forEach(a => document.getElementById('movies-grid').appendChild(buildGridCard(a)));
-    const hasMore = (d?.page||1) < (d?.total_pages||1);
-    moviePageState = {sub:'filter', page, hasMore};
+    // Same top-up as the TV filter — see the note there.
+    let cur = page, last = null, tries = 0;
+    const kept = [];
+    do {
+      const r = await fetch(`${movieFilterUrl}&page=${cur}`, {signal: AbortSignal.timeout(10000)});
+      last = await r.json();
+      const items = (last?.results||[]).map(m=>fromTMDB(m,'movie'));
+      kept.push(...await filterByMinScore(items, movieFilterMinScore));
+      cur++; tries++;
+    } while (movieFilterMinScore !== undefined && kept.length < FILTER_MIN_CARDS
+             && tries < FILTER_MAX_PAGES && (last?.page||1) < (last?.total_pages||1));
+
+    if (page === 1) renderGrid('movies-grid', kept);
+    else { kept.forEach(a => document.getElementById('movies-grid').appendChild(buildGridCard(a))); hydrateImdbScores(document.getElementById('movies-grid')); }
+    const hasMore = (last?.page||1) < (last?.total_pages||1);
+    moviePageState = {sub:'filter', page: cur - 1, hasMore};
     document.getElementById('movies-more').style.display = hasMore ? 'block' : 'none';
     if (hasMore) attachInfiniteScroll();
   } catch { renderGrid('movies-grid', []); }
