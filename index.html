@@ -33,11 +33,11 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260903c"/>
+  <link rel="stylesheet" href="styles.css?v=20260913a"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260903c"></script>
+  <script defer src="stream.js?v=20260913a"></script>
   <script defer src="oracle.js?v=20260901a"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -713,6 +713,11 @@
       </div>
       <div class="dc-body collapsed" id="detail-details-body">
         <div id="detail-synopsis" class="detail-synopsis"></div>
+        <!-- Status / Language / Released / Runtime. Only the TMDB detail
+             endpoints carry these fields, so renderDetailFacts hides any row it
+             has no value for rather than printing an empty one, and hides the
+             whole table for anime/manga, which have none of them. -->
+        <div id="detail-facts" class="dfacts"></div>
         <div class="dc-section" id="detail-castprod" style="display:none;">
           <div class="dc-head sec-toggle" onclick="toggleDcSection()">
             <span id="detail-castprod-title">Cast &amp; Production</span><span class="dc-chev collapsed" id="detail-castprod-chev">&#9662;</span>
@@ -942,6 +947,33 @@
 </div>
 
 <!-- ORACLE PAGE -->
+<!-- PERSON — an actor's own page: photo, the facts TMDB knows about them, a
+     biography, and everything they appear in. Opened from a Cast chip on a
+     TV/movie detail page, and pushed onto history like any other page so the
+     back gesture returns to the title you came from. -->
+<div id="person-page" class="page">
+  <div class="person-body">
+    <div class="person-top">
+      <div class="back-circle" style="position:relative;top:auto;left:auto;flex-shrink:0;" onclick="goBack()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      </div>
+      <div class="person-top-label">Cast</div>
+    </div>
+    <div class="person-head">
+      <div class="person-photo" id="person-photo"><div class="sk" style="width:100%;height:100%;border-radius:10px;"></div></div>
+      <div class="person-info" id="person-info">
+        <div class="sk" style="width:70%;height:18px;margin-bottom:9px;border-radius:4px;"></div>
+        <div class="sk" style="width:50%;height:11px;border-radius:4px;"></div>
+      </div>
+    </div>
+    <div id="person-bio" class="person-bio"></div>
+    <div class="section-head" id="person-credits-head" style="display:none;">
+      <h2 id="person-credits-title">Films &amp; TV</h2>
+    </div>
+    <div class="results-grid" id="person-grid"></div>
+  </div>
+</div>
+
 <div id="oracle-page" class="page">
 <div class="topbar-spacer" aria-hidden="true"></div>
 <!-- HERO -->

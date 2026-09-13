@@ -228,6 +228,165 @@ what costs it the remainder.
 
 Each JS file is large and self-contained per tab; don't assume shared modules/imports between them.
 
+## The Stream tab's star is IMDb's, not TMDB's
+
+The rating badge on every TV/movie card, the detail page's star pill and the
+Min Rating filter all read **IMDb's** number. They used to read TMDB's
+`vote_average`, which is TMDB's own user poll and a different number entirely.
+Measured over 234 titles pulled from this app's own trending/popular/top-rated
+surfaces, the two disagree by a **full point on 30%** of titles and by **two
+points on 9%**, and TMDB is the inflated side **54%** of the time — because TMDB
+publishes a mean off any number of votes at all. The worked example in the tests
+is *Newtopia*: **TMDB 8.0, IMDb 6.6**. The sample's worst case was a title TMDB
+scored **9.0 off a single vote** against IMDb's 4.3 from twelve.
+
+**TMDB cannot supply the IMDb figure, and that was checked before anything was
+built.** `/tv/{id}?append_to_response=external_ids` returns
+`external_ids.imdb_id` and no rating field of any kind; TMDB's daily id export
+(`files.tmdb.org/p/exports/`) carries only `id`, `original_name` and
+`popularity`. So there are exactly two moving parts:
+
+1. **tconst → rating** — `imdb-ratings.json`, which IMDb publishes itself and
+   `.github/workflows/imdb-ratings.yml` reshapes. One fetch per session, shared
+   by every card.
+2. **tmdb_id → tconst** — only TMDB knows this, so it costs one
+   `/external_ids` call per title (~120-190 bytes). The mapping is immutable, so
+   it is cached in `localStorage` (`imdbIdMap`) permanently. A `''` answer
+   ("TMDB has no IMDb id for this") is cached just as hard as a hit; a *network
+   failure* is deliberately not cached, or one flaky moment would pin a title to
+   "no IMDb rating" on that device forever.
+
+Two alternatives were measured and rejected, not assumed away:
+
+| route | mapping coverage | verdict |
+|---|---|---|
+| TMDB `external_ids` per title | **98.8%** of catalogue | in use |
+| Wikidata bulk dump (P4947/P4983 → P345) | 92.1% | fewer titles, and WDQS was actively rate-limiting to 1 req/min during an outage — too fragile for a scheduled job |
+| OMDb / MDBList per title | n/a | both are CORS-open and would work from a static page, but both are **key-gated** (401 without one) and rate-limited. A key in a public repo buys a daily cap this app can exhaust in one browsing session |
+
+MDBList is what a site showing IMDb + Rotten Tomatoes + popcorn in one row is
+almost certainly calling — it returns exactly that set keyed by TMDB id, which
+would also remove the per-card `external_ids` call. It was rejected on the key,
+not on the data. If those extra badges are ever wanted, that is the route, and
+it needs the owner's decision about holding a key.
+
+**Anime and manga are deliberately NOT covered** and keep AniList's
+`averageScore`. AniList carries no IMDb id and no IMDb external link — measured,
+**0 of 25** trending anime — so the only way to reach one would be matching
+titles by text, the exact technique that sent *Attack on Titan* to a prequel
+spin-off in the MangaFreak resolver. `imdbScoreFor` returns null for both types
+and `markImdbTarget` never tags their cards, so they cost no requests either.
+
+**~7% of the catalogue has no IMDb entry** at the pipeline's vote floor and
+falls back to TMDB's number rather than showing a blank. The two therefore
+coexist on one grid, so the badge is **tinted IMDb amber (`#f5c518`) when it came
+from IMDb** and left white when it did not, the `title` attribute names the
+source, and the detail page's facts table spells it out in full
+(`Rating — 8.4/10 on IMDb`).
+
+### The file format is not a micro-optimisation
+
+The obvious shape, `{"32199328":66,…}`, costs **5.50 MB raw / 1.64 MB gzipped**.
+Sorting the tconsts and storing the **gaps** between them in one array
+alongside a parallel array of ratings costs **2.42 MB raw / 0.74 MB gzipped**
+for the same 430,439 titles, because a sorted gap list is mostly single digits
+and gzip eats it. That is within 7% of a hand-rolled binary format (0.69 MB)
+while staying plain JSON. Do not "simplify" it back into an object keyed by
+tconst — it more than doubles what every phone downloads.
+
+The decoder is one running sum, and it is load-bearing: seeded wrong or off by
+one anywhere, **every card gets its neighbour's rating** — plausible-looking data
+that never throws. Test 1 in `test_imdb_ratings.mjs` pins the seed at zero and
+test 3 in `test_build_imdb_ratings.py` asserts `decode(encode(x)) == x`.
+
+**The 100-vote floor is a feature, not a size hack.** It drops titles nobody has
+rated enough for the rating to mean anything — the same defect this whole change
+fixes. Measured coverage of the app's own catalogue: 95.5% at no floor (6.20 MB
+gzipped), **93.1% at 100 votes (0.74 MB)**, 82.2% at 500, 78.5% at 1000. 100 is
+the knee.
+
+**The workflow runs weekly, not daily, and that is a size decision.** The file is
+single-line JSON, so any change writes a fresh ~0.74 MB blob into git history —
+there is no line-level delta to be had. Daily is ~270 MB of history a year;
+weekly is ~38 MB. An IMDb rating on a title with 100+ votes barely moves in seven
+days, and the only real cost of the gap is that a brand-new release shows TMDB's
+number for up to a week. Dispatch it by hand after a big release week.
+
+It is fetched with `?nocache=1` so the **service worker does not intercept it**.
+That is not a "don't cache" instruction to the browser: `syncShell()` deletes
+every cache entry the current `index.html` does not name, so a shell-cached copy
+would be evicted on every navigation and re-downloaded. Left to the HTTP cache it
+revalidates against its ETag — a 304 and no body on all but the one launch a week
+where the file actually changed.
+
+### Min Rating filters the number on the card
+
+TMDB's `vote_average.gte` cannot filter on IMDb, so the real cut is made
+client-side by `filterByMinScore` against the **displayed** value — a grid that
+answers "8+" with a card reading 6.6 is worse than no filter at all.
+
+TMDB still pre-prunes, but **only three points below** the asked-for threshold
+(`IMDB_FILTER_MARGIN`). Pre-filtering at the same threshold looked free and is
+not: measured over those 234 titles, `vote_average.gte` at the asked-for value
+throws away **every** title that qualifies at "9+" (26 of 26 — TMDB's scale runs
+lower at the top) and **14%** of them at "8+". The lowest TMDB score attached to
+a title IMDb rates 8.0+ was 5.7. At a 3-point margin nothing qualifying was lost
+at any threshold.
+
+Because pages come back partly disqualified, both filters pull up to
+`FILTER_MAX_PAGES` (4) pages until they have `FILTER_MIN_CARDS` (8), instead of
+painting a nearly-empty grid. Known and not papered over: results are still in
+**TMDB's** sort order while showing IMDb's numbers, so a filtered grid reads as
+roughly-descending rather than strictly so. Re-sorting each page client-side was
+considered and rejected — it produces a sawtooth across page boundaries, which is
+worse than a consistent order.
+
+**Hydration is lazy past the first 24 cards** (`IMDB_EAGER_CARDS`, then an
+`IntersectionObserver`). Without it the burst follows the longest list on the
+page rather than the visible one: an actor's page carries their whole
+filmography, and Matt Damon's fired **191** `external_ids` calls in one go —
+measured in the browser lane, and 43 after the fix.
+
+One trap worth not re-breaking: `hydrateImdbScores` has to check the scope
+element **itself**, not just its descendants. `querySelectorAll` only walks
+descendants, so the home hero and the detail page's own info block — which carry
+the key on the scope element — were never picked up, and the detail page's star
+sat on TMDB's number while the card it was opened from already showed IMDb's.
+The detail page additionally re-runs `renderDetailFacts` when its lookup lands,
+because the facts table names the source and would otherwise read
+"8.0/10 on TMDB" under a star that had already flipped to 8.4.
+
+## Details card: facts table, and cast names are links
+
+The Details card carries a **facts table** (`renderDetailFacts`) —
+Status / Language / Released / Runtime / Rating. Every value comes from the TMDB
+**detail** payload, so a card built from a list row has none of them; each row is
+dropped rather than printed empty, and the whole table hides for anime and manga,
+which have no equivalent fields. Dates are parsed as UTC on purpose: a bare
+`YYYY-MM-DD` read as local time prints the previous day for anyone west of UTC.
+
+**Cast chips are buttons that open the actor's own page** (`#person-page`,
+`openPersonFromCast` → `loadPerson`). TMDB returns the person and their entire
+filmography from one call (`/person/{id}?append_to_response=combined_credits`),
+so the page costs a single request. It shows the photo, department, age, birth
+date and place, a **collapsed** biography with Read more, an outbound IMDb
+profile link built from the `imdb_id` TMDB returns (never guessed from the name,
+same rule as everywhere else in this repo), and a grid of everything they appear
+in — which picks up IMDb ratings like any other grid.
+
+Three details not to "clean up":
+
+- `renderCastProduction` accepts **either** a bare string or `{id, name}`. Manga
+  creators arrive as strings and have no TMDB person id, so they stay plain text
+  rather than becoming a button that goes nowhere. Only an entry with an id
+  becomes a link.
+- `combined_credits` **repeats a title once per character**, so an actor with two
+  roles in one show, or a recurring guest spot, would print the same poster
+  twice. Credits are deduped on `media_type:id` and sorted newest-first.
+- The page pushes history like any other (`#person-<id>`) and `popstate`
+  restores it through `loadPerson`, so the back gesture returns to the title you
+  came from rather than the home page.
+
 ## Data pipelines (GitHub Actions)
 
 All workflows in `.github/workflows/` are `workflow_dispatch` (manual) only — repo-wide convention, cron was intentionally removed everywhere **except** these two, which run daily and must stay in this order:
@@ -544,6 +703,16 @@ inside the app rather than a dead end.
   to ask for. The genre segment is stored even though `/en/comic/<slug>/<id>`
   301s to the right one — inside an iframe that redirect is a second round trip
   on every open.
+
+**IMDb** (`datasets.imdbws.com`):
+- `imdb-ratings.yml` → `.github/scripts/build_imdb_ratings.py` → `imdb-ratings.json`
+  (430k titles at 100+ votes). IMDb's own daily ratings dump, reshaped. Exists
+  for the same reason the MangaFreak and PCSO pipelines do — the browser cannot
+  read an 8.6 MB gzipped TSV from a host that sends no
+  `Access-Control-Allow-Origin` — but the scrape is a **single request** and the
+  whole run takes ~2s. No API key, no rate limit, no third-party service in the
+  path. Same shrink guard as MangaFreak's, plus a 250,000-title floor. Weekly;
+  see the section above for why not daily.
 
 **PCSO** (`businesslist.ph/lottery`):
 - `pcso-scraper.yml` → `.github/scripts/scrape_pcso.py` → `pcso-results.json`

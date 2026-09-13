@@ -293,6 +293,41 @@
     .dc-chiplist{display:flex;flex-wrap:wrap;gap:5px;}
     .dc-chiplist span{background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text);font-size:10.5px;padding:3px 9px;border-radius:20px;}
     .dc-empty{font-size:11px;color:var(--muted);}
+
+    /* A star sourced from IMDb is tinted IMDb's own amber; one that fell back
+       to TMDB stays white. ~7% of this app's catalogue has no IMDb entry at the
+       pipeline's 100-vote floor, so the two really do coexist on one grid and
+       the colour is the only thing distinguishing them at card size. The full
+       answer is spelled out in the Details facts table and in the badge title. */
+    .js-score.is-imdb{color:#f5c518;}
+
+    /* FACTS TABLE — Status / Language / Released / Runtime / Rating. */
+    .dfacts{margin-top:10px;display:flex;flex-direction:column;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+    .dfacts:empty{display:none;border:0;margin-top:0;}
+    .dfact{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);padding:8px 10px;}
+    .dfact-k{font-size:10.5px;color:var(--muted);flex-shrink:0;}
+    .dfact-v{font-size:11px;color:var(--text);font-weight:600;text-align:right;overflow-wrap:anywhere;}
+
+    /* A cast chip that links to its actor. Styled as a chip, not a link, so the
+       row still reads as chips — the arrow-free affordance is the accent tint. */
+    .dc-chiplist .dc-person{background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.45);color:#93c5fd;font-size:10.5px;padding:3px 9px;border-radius:20px;font-family:inherit;cursor:pointer;}
+    .dc-chiplist .dc-person:active{background:rgba(59,130,246,0.24);}
+
+    /* PERSON PAGE */
+    .person-body{padding:12px 14px 30px;}
+    .person-top{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+    .person-top-label{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;}
+    .person-head{display:flex;gap:12px;align-items:flex-start;}
+    .person-photo{width:96px;flex-shrink:0;aspect-ratio:2/3;max-width:40%;border-radius:10px;overflow:hidden;background:var(--card);border:1px solid var(--border);}
+    .person-photo-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:var(--muted);}
+    .person-info{flex:1;min-width:0;}
+    .person-imdb{display:inline-flex;align-items:center;gap:6px;margin-top:2px;font-size:10.5px;font-weight:700;color:var(--text);text-decoration:none;background:var(--surface);border:1px solid var(--border);padding:4px 9px;border-radius:20px;}
+    .person-imdb-tag{background:#f5c518;color:#000;font-size:8.5px;font-weight:800;padding:1px 4px;border-radius:3px;letter-spacing:0.02em;}
+    .person-bio{margin-top:14px;}
+    .person-bio-text{font-size:11.5px;color:var(--muted);line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;}
+    .person-bio-text.clamped{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+    .person-bio-more{margin-top:6px;background:none;border:0;padding:0;color:var(--accent2);font-family:inherit;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer;}
+    #person-grid{margin-top:4px;}
     .dc-chiplist .dc-link{background:rgba(16,185,129,0.12);border:1px solid var(--accent4);color:#34d399;font-size:10.5px;padding:3px 9px;border-radius:20px;text-decoration:none;}
     /* An 18+ source is deliberately NOT styled like the others — it reads as a
        warning chip so nobody taps it expecting an ordinary reading link. */
