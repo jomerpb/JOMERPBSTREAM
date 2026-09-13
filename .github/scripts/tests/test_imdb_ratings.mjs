@@ -349,6 +349,71 @@ console.log('\n12. the held-back genres are matched against the IMDb index');
   })()`, ctx), 'binary search agrees with the index on 400 probes');
 }
 
+console.log('\n13. Status is filtered from IMDb dates, which TMDB cannot do at all');
+{
+  const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'imdb-browse.json'), 'utf8'));
+  ctx.fetch = async () => ({ ok: true, json: async () => raw });
+  vm.runInContext('imdbBrowsePromise = null; imdbBrowse = null;', ctx);
+  const B = await S('loadImdbBrowse()');
+  check(!!B, 'the index with the end-year column loads');
+  check(await vm.runInContext('loadImdbBrowse().then(b => b.endYear.length === b.ids.length)', ctx),
+        'the end-year column is decoded alongside the ids');
+
+  // Ten shows whose real status is public knowledge. The naive "endYear is set"
+  // reading gets 9 of these — it calls The Boys finished because IMDb records an
+  // announced final year. This rule must get all ten.
+  const KNOWN = [
+    ['tt0903747','Breaking Bad','done'], ['tt0944947','Game of Thrones','done'],
+    ['tt2560140','Attack on Titan','done'], ['tt1520211','The Walking Dead','done'],
+    ['tt5491994','Planet Earth II','done'], ['tt0096697','The Simpsons','ongoing'],
+    ['tt1190634','The Boys','ongoing'], ['tt13406094','The Last of Us','ongoing'],
+    ['tt11280740','Severance','ongoing'],
+  ];
+  let agree = 0, missing = 0;
+  for (const [tc, name, want] of KNOWN) {
+    const got = await vm.runInContext(`(() => {
+      const b = imdbBrowse, n = ${parseInt(tc.slice(2), 10)};
+      let lo = 0, hi = b.ids.length - 1;
+      while (lo <= hi) { const m = (lo+hi)>>1;
+        if (b.ids[m] === n) return imdbStatusOf(b, m, ${new Date().getFullYear()});
+        if (b.ids[m] < n) lo = m+1; else hi = m-1; }
+      return 'ABSENT';
+    })()`, ctx);
+    if (got === 'ABSENT') { missing++; continue; }
+    if (got === want) agree++;
+    else check(false, `${name} reads ${got}, expected ${want}`);
+  }
+  check(missing === 0, 'every known show is in the index', `${missing} absent`);
+  check(agree === KNOWN.length, `all ${KNOWN.length} known shows read correctly`, agree);
+
+  // The query must actually cut on it.
+  const done = await vm.runInContext("imdbBrowseQuery({kind:'tv', statuses:['ended']})", ctx);
+  const ongoing = await vm.runInContext("imdbBrowseQuery({kind:'tv', statuses:['returning']})", ctx);
+  const all = await vm.runInContext("imdbBrowseQuery({kind:'tv'})", ctx);
+  check(done.length > 1000 && ongoing.length > 1000, 'both statuses return a real catalogue',
+        `${done.length} / ${ongoing.length}`);
+  check(done.length + ongoing.length <= all.length + 5,
+        'the two partitions do not overlap meaningfully', `${done.length}+${ongoing.length} vs ${all.length}`);
+  check(await vm.runInContext(`(() => { const b=imdbBrowse, y=${new Date().getFullYear()};
+    return imdbBrowseQuery({kind:'tv',statuses:['ended']}).every(i => imdbStatusOf(b,i,y)==='done'); })()`, ctx),
+    'every "Completed" result really reads as finished');
+
+  // Canceled selects the same set as Completed — IMDb draws no distinction.
+  const canc = await vm.runInContext("imdbBrowseQuery({kind:'tv', statuses:['canceled']})", ctx);
+  check(canc.length === done.length, 'Canceled maps onto Completed (IMDb has no separate flag)');
+
+  // Two boxes ticked is OR, like every other multi-select.
+  const both = await vm.runInContext("imdbBrowseQuery({kind:'tv', statuses:['ended','returning']})", ctx);
+  check(both.length >= done.length && both.length >= ongoing.length,
+        'ticking both statuses widens rather than narrows', both.length);
+
+  // The regression this whole change is about.
+  const users = await vm.runInContext(
+    "imdbBrowseQuery({kind:'tv', minRating:8, yearGte:'2026-01-01', yearLte:'2026-12-31'})", ctx);
+  check(users.length > 100,
+        `"TV, 2026, 8.0+" now returns ${users.length} candidates (TMDB path gave 21)`, users.length);
+}
+
 console.log('\n' + '='.repeat(60));
 console.log(`${fails.length} failure(s)` + (fails.length ? ': ' + fails.join(', ') : ''));
 process.exit(fails.length ? 1 : 0);

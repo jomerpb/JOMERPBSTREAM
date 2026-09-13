@@ -141,7 +141,13 @@ def parse_basics(raw_gz, ratings, min_votes=MIN_VOTES):
     """Join title.basics against the ratings we already parsed.
 
     Returns (rows, genre_vocabulary) where each row is
-    (tconst_int, type_code, year, genre_bitmask, rating_x10, votes).
+    (tconst_int, type_code, year, end_year, genre_bitmask, rating_x10, votes).
+
+    `end_year` is what makes the Status filter real. TMDB's /discover/tv has no
+    status parameter at all — measured, the Stream tab was only ever *labelling*
+    results "Completed" while filtering nothing — so the only way to answer
+    "finished series" is IMDb's own endYear, which it publishes for 70.5% of
+    rated TV titles. 0 means the run is still open.
 
     Genres are stored as a BITMASK over a vocabulary emitted alongside the
     data, not as strings: IMDb uses 27 genre labels, so the whole set fits in
@@ -158,7 +164,7 @@ def parse_basics(raw_gz, ratings, min_votes=MIN_VOTES):
             p = line.rstrip('\n').split('\t')
             if len(p) != 9:
                 continue
-            tconst, ttype, _pt, _ot, adult, sy, _ey, _rt, genres = p
+            tconst, ttype, _pt, _ot, adult, sy, ey, _rt, genres = p
             if ttype not in BROWSE_TYPES or adult == '1':
                 continue
             rr = ratings.get(tconst)
@@ -175,10 +181,14 @@ def parse_basics(raw_gz, ratings, min_votes=MIN_VOTES):
             except ValueError:
                 year = 0
             try:
+                end_year = int(ey)
+            except ValueError:
+                end_year = 0
+            try:
                 n = int(tconst[2:])
             except ValueError:
                 continue
-            rows.append((n, BROWSE_TYPES[ttype], year, mask, rr[0], rr[1]))
+            rows.append((n, BROWSE_TYPES[ttype], year, end_year, mask, rr[0], rr[1]))
     rows.sort()
     order = [g for g, _ in sorted(vocab.items(), key=lambda kv: kv[1])]
     return rows, order
@@ -215,9 +225,14 @@ def write_browse(path, rows, vocab, *, floor=BROWSE_FLOOR):
         'd': gaps,
         't': [r[1] for r in rows],
         'y': [r[2] for r in rows],
-        'g': [r[3] for r in rows],
-        'r': [int(round(r[4] * 10)) for r in rows],
-        'v': [vote_bucket(r[5]) for r in rows],
+        # End year, as an OFFSET from the start year, and -1 when the run is
+        # still open. A series almost always ends within a few years of
+        # starting, so the column is mostly single digits and gzip flattens it,
+        # where absolute years would cost four characters apiece.
+        'e': [(r[3] - r[2]) if (r[3] and r[2]) else -1 for r in rows],
+        'g': [r[4] for r in rows],
+        'r': [int(round(r[5] * 10)) for r in rows],
+        'v': [vote_bucket(r[6]) for r in rows],
     }
     now = datetime.now(timezone.utc).isoformat(timespec='seconds')
     changed = any(old.get(k) != v for k, v in payload_core.items())
