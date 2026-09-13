@@ -420,6 +420,90 @@ gzipped; a log scale keeps the ordering that matters. The file is 4.06 MB raw /
 **0.96 MB gzipped**, and it is fetched only when a filter is actually used — the
 default browse path never downloads it.
 
+### The Streaming filter, and the TV genre hole it exposed
+
+TV and Movies carry a **Streaming** picker — Netflix, HBO Max, Prime Video and
+so on — built on TMDB's `with_watch_providers`. Three constants travel with it
+and each is load-bearing:
+
+- **`watch_region` is mandatory.** Without it TMDB ignores the provider
+  parameter entirely rather than erroring, so the grid silently comes back
+  unfiltered. It is `PH`, because provider availability is per-country and this
+  app's other two tabs are the PCSO and the PSE.
+- **`with_watch_monetization_types=flatrate`.** Only titles a subscription
+  already covers. Without it the list is led by storefronts, not services:
+  measured in PH, **Apple TV Store reports 18,845 movies but 2,071 at the
+  flatrate tier**, Plex 11,305 → 935, Google Play 4,585 → 812. Netflix, Prime
+  and HBO Max are unchanged because they are subscription-only.
+- Several checked services are **OR'd with a pipe**, matching every other
+  multi-select in the panel.
+
+**Nothing here names a provider or an id.** `.github/scripts/build_watch_providers.py`
+asks TMDB which services carry anything in the region and writes
+`watch-providers.json`; the page renders whatever is in it. The obvious
+alternative — calling `/watch/providers` from the page at load — hands back a
+list ordered by TMDB's `display_priority`, which does not reflect how much there
+is to watch: that ordering puts FilmBox+, Hayu and Sun Nxt above **HBO Max,
+which sits 22nd despite carrying 1,122 TV titles**. Ranking them honestly costs
+one `/discover` call per provider (30 for TV, 43 for movies) — fine once a week
+in a workflow, absurd on every page load. Providers under `MIN_CATALOGUE` (100)
+get no checkbox at all, because a checkbox that returns an empty grid is worse
+than no checkbox.
+
+**Disney+ will not appear for the Philippines, and that is TMDB's data, not an
+omission.** Measured: `with_watch_providers=337&watch_region=PH` returns **16**
+TV titles against Netflix's 3,745, and *The Mandalorian* has no PH flatrate
+entry at all while returning "Disney Plus" for US, SG and JP. It is dropped by
+the same catalogue floor as everything else, by count and never by name, so if
+TMDB's PH coverage improves the next weekly run picks it up on its own.
+
+**Streaming joins Country, Tags and Status as a TMDB-only filter** — IMDb
+publishes no provider data — so setting it routes the query through
+`/discover` rather than the IMDb browse index, with the IMDb rating cut still
+applied on top. It pairs itself with `sort_by=popularity.desc`, the way the
+Country branch already does, because sorting a single service's catalogue by
+rating is thin.
+
+#### TMDB's TV genre list is shorter than its movie one
+
+Building this surfaced a **pre-existing bug**, measured against the live API:
+
+| `with_genres` on `/discover/tv` | results |
+|---|---|
+| 27 (Horror) | **0** |
+| 53 (Thriller) | **0** |
+| 14 (Fantasy) | **0** |
+| 28 (Action) | **0** |
+
+TMDB files television under "Action & Adventure" (10759) and "Sci-Fi & Fantasy"
+(10765) and has **no Horror or Thriller id for TV at all**. The filter's
+checkboxes were built from the *movie* genre list, so those four have always
+returned an empty grid whenever the TMDB path ran — which is any time Country,
+Tags, Status or now Streaming is set. The IMDb browse path hides it only while
+all of those are untouched.
+
+So genre ids TMDB refuses are **held back rather than dropped**:
+`splitGenresForTmdb` splits the request against TMDB's live `/genre/tv/list`
+(fetched, not hardcoded), sends what it accepts, and `matchesImdbGenres` applies
+the rest against the IMDb browse index after the page arrives. That makes
+"Netflix + Horror" and "K-drama + Horror" work where both previously returned
+nothing.
+
+The lookup is a **binary search over the sorted id column**, not a Map built
+from 189,407 rows — the index is already sorted, and a filter change should not
+allocate a hundred thousand entries. Test 12 in `test_imdb_ratings.mjs` checks
+it against the index directly on 400 probes.
+
+Known limit, stated rather than papered over: a held-back genre is applied
+*after* TMDB has paged, so its yield is whatever that page happens to contain.
+Measured inside Netflix PH's TV catalogue: **Horror is 3.0% of titles, Thriller
+6.5%, Romance 11.6%** against Drama's 53.8%. At 20 results a page that is under
+one Horror card per page, so the top-up loop does the work and a narrow
+genre-plus-service combination returns a short grid rather than a full one.
+Filtering it properly needs the provider↔IMDb intersection precomputed in the
+pipeline — roughly 33,500 titles and 1,700 discover pages for PH — which is a
+bigger job than this one and has not been done.
+
 ## Cast is a list with faces, and a full-cast page
 
 The Cast block is a row per performer — circular headshot, name, character —
@@ -804,6 +888,13 @@ inside the app rather than a dead end.
   whole run takes ~2s. No API key, no rate limit, no third-party service in the
   path. Same shrink guard as MangaFreak's, plus a 250,000-title floor. Weekly;
   see the section above for why not daily.
+
+**TMDB watch providers** (`api.themoviedb.org`):
+- `watch-providers.yml` → `.github/scripts/build_watch_providers.py` →
+  `watch-providers.json` (the Streaming filter's options, ranked by real
+  catalogue size for the region). ~75 API calls, ~5s. Weekly, because services
+  arrive and leave a region on the timescale of licensing deals. Dispatch it by
+  hand when one launches locally.
 
 **PCSO** (`businesslist.ph/lottery`):
 - `pcso-scraper.yml` → `.github/scripts/scrape_pcso.py` → `pcso-results.json`

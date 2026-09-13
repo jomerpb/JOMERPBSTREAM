@@ -494,6 +494,146 @@ async function imdbResolveCards(indices, kind) {
   return out.filter(Boolean);
 }
 
+
+// ═══════════════════════════════════════════
+// STREAMING SERVICES — the Streaming filter
+// ═══════════════════════════════════════════
+// Options come from watch-providers.json, which a weekly workflow builds by
+// asking TMDB which services carry anything in this region. Nothing here names
+// a provider or an id: a service that arrives in the Philippines shows up on
+// the next run by itself, and one that leaves drops off.
+//
+// Disney+ is absent for the Philippines, and that is TMDB's data rather than an
+// omission here — measured, `with_watch_providers=337&watch_region=PH` returns
+// 16 TV titles against Netflix's 3,745, and a Disney+ exclusive has no PH entry
+// at all. See build_watch_providers.py.
+const WATCH_PROVIDERS_URL = 'watch-providers.json?nocache=1';
+const TMDB_LOGO = 'https://image.tmdb.org/t/p/w92';
+
+let watchProviders = null;
+let watchProvidersPromise = null;
+
+function loadWatchProviders() {
+  if (watchProvidersPromise) return watchProvidersPromise;
+  watchProvidersPromise = (async () => {
+    try {
+      const r = await fetch(WATCH_PROVIDERS_URL, {signal: AbortSignal.timeout(15000)});
+      if (!r.ok) throw new Error('http ' + r.status);
+      const d = await r.json();
+      if (!Array.isArray(d?.tv) || !Array.isArray(d?.movie)) throw new Error('malformed');
+      watchProviders = d;
+      return d;
+    } catch {
+      watchProviders = null;
+      return null;
+    }
+  })();
+  return watchProvidersPromise;
+}
+
+// Fill both pickers. Each option is a logo plus the service name; the grid
+// starts empty in the markup and the whole section stays hidden if the file
+// cannot be read, so a failed fetch costs a filter rather than a broken panel.
+async function initProviderPickers() {
+  const d = await loadWatchProviders();
+  for (const [prefix, list] of [['tf', d?.tv], ['mf', d?.movie]]) {
+    const grid = document.getElementById(`${prefix}-provider-grid`);
+    const section = document.getElementById(`${prefix}-provider`)?.closest('.filter-section');
+    if (!grid) continue;
+    if (!list?.length) { if (section) section.style.display = 'none'; continue; }
+    if (section) section.style.display = '';
+    grid.innerHTML = list.map(p => `
+      <label class="tag-picker-option provider-option">
+        <input type="checkbox" data-val="${Number(p.id)}" onchange="onTagCheck('${prefix}-provider')">
+        ${p.logo ? `<img class="provider-logo" src="${TMDB_LOGO}${escapeHtml(p.logo)}" alt="" loading="lazy"/>` : ''}
+        <span>${escapeHtml(p.name)}</span>
+      </label>`).join('');
+  }
+}
+
+// TMDB's TV genre vocabulary is SHORTER than its movie one, and the filter's
+// checkboxes were built from the movie list. Measured against the live API:
+// `with_genres=27` (Horror), 53 (Thriller), 14 (Fantasy) and 28 (Action) each
+// return **0 results** on /discover/tv, because TMDB files television under
+// "Action & Adventure" and "Sci-Fi & Fantasy" and has no Horror or Thriller id
+// for it at all. So those four checkboxes have always returned an empty grid
+// whenever the TMDB path ran — a pre-existing hole the IMDb browse path hides
+// only while Country, Tags, Status and Streaming are all untouched.
+//
+// Rather than drop the genre, ids TMDB refuses are held back from the query and
+// applied afterwards against the IMDb index, which does carry them.
+let tmdbTvGenreIds = null;
+let tmdbTvGenrePromise = null;
+
+function loadTmdbTvGenres() {
+  if (tmdbTvGenrePromise) return tmdbTvGenrePromise;
+  tmdbTvGenrePromise = (async () => {
+    const d = await tmdb('/genre/tv/list');
+    const ids = (d?.genres || []).map(g => g.id);
+    tmdbTvGenreIds = ids.length ? new Set(ids) : null;
+    return tmdbTvGenreIds;
+  })();
+  return tmdbTvGenrePromise;
+}
+
+// Split the requested genres into the ones TMDB's /discover can take for this
+// media type and the ones only the IMDb index knows. Movies use TMDB's full
+// list, so nothing is held back there.
+async function splitGenresForTmdb(kind, genreIds) {
+  const ids = (genreIds || []).map(Number).filter(Boolean);
+  if (!ids.length || kind !== 'tv') return {server: ids, client: []};
+  const ok = await loadTmdbTvGenres();
+  if (!ok) return {server: ids, client: []};
+  return {server: ids.filter(i => ok.has(i)), client: ids.filter(i => !ok.has(i))};
+}
+
+// Does this item satisfy the genres TMDB could not filter on? Read from the
+// IMDb browse index, which is loaded on demand for exactly this.
+function matchesImdbGenres(item, genreIds) {
+  if (!genreIds?.length) return true;
+  const B = imdbBrowse;
+  if (!B || !item?.imdb_id) return false;
+  const n = parseInt(String(item.imdb_id).replace(/^tt/, ''), 10);
+  if (!Number.isFinite(n)) return false;
+  let mask = 0;
+  for (const id of genreIds) {
+    for (const name of (TMDB_TO_IMDB_GENRE[id] || [])) {
+      const bit = B.genreIndex[name];
+      if (bit !== undefined) mask |= 1 << bit;
+    }
+  }
+  if (!mask) return true;
+  // Binary search the sorted id column rather than building a Map of 189k rows.
+  let lo = 0, hi = B.ids.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (B.ids[mid] === n) return !!(B.genre[mid] & mask);
+    if (B.ids[mid] < n) lo = mid + 1; else hi = mid - 1;
+  }
+  return false;
+}
+
+// Apply the held-back genres to a page of results, resolving each item's IMDb
+// id first (which the rating pass needs anyway, so it is not extra work).
+async function filterByImdbGenres(items, genreIds) {
+  if (!genreIds?.length) return items;
+  await loadImdbBrowse();
+  await Promise.all(items.map(it => imdbScoreFor(it).catch(() => null)));
+  return items.filter(it => matchesImdbGenres(it, genreIds));
+}
+
+// Apply the Streaming picker to a /discover URL. Several checked services are
+// OR'd, which is what TMDB's pipe syntax means, and `watch_region` is mandatory
+// alongside it — without it TMDB ignores the provider entirely.
+function applyProviderParams(url, providerIds) {
+  if (!providerIds?.length) return false;
+  url.searchParams.set('with_watch_providers', providerIds.join('|'));
+  url.searchParams.set('watch_region', watchProviders?.region || 'PH');
+  url.searchParams.set('with_watch_monetization_types',
+                       watchProviders?.monetization || 'flatrate');
+  return true;
+}
+
 // ═══════════════════════════════════════════
 // NAV — Browser History API
 // ═══════════════════════════════════════════
@@ -3591,7 +3731,9 @@ function getMinRatingVal(groupId) {
 function resetPageFilter(page) {
   const prefix = {anime:'af', manga:'gf', tv:'tf', movies:'mf'}[page];
   if (!prefix) return;
-  ['genre','year','rating','country','status','tag'].forEach(g => {
+  // 'provider' is in this list because Clear must clear it too — it only
+  // exists on the TV and Movie panels, and clearTagPicker no-ops elsewhere.
+  ['genre','year','rating','country','status','tag','provider'].forEach(g => {
     const el = document.getElementById(`${prefix}-${g}`);
     if (el) clearTagPicker(`${prefix}-${g}`);
   });
@@ -3718,6 +3860,9 @@ async function applyMangaFilter(page=1) {
 let tvFilterUrl = null;
 let tvFilterStatuses = [];
 let tvFilterMinScore;
+// Genres TMDB's /discover/tv cannot take (Horror, Thriller, Fantasy, Action),
+// held back and applied against the IMDb index once results come in.
+let tvFilterImdbGenres = [];
 
 // Which tab is currently browsing the IMDb index rather than TMDB's /discover,
 // and the query result it is paging through. The list is index rows, not cards
@@ -3770,12 +3915,15 @@ async function applyTVFilter(page=1) {
     const yr        = getYearEnvelope('tf-year'); // multi-select — combined into one min→max range
     tvFilterStatuses = statuses;
 
+    const providers = getTagVals('tf-provider');
+
     // Genre / Year / Min Rating alone can be answered from IMDb's own data, and
     // that is a materially different list — IMDb and TMDB agree on only 18 of
-    // ~33 Thrillers in a measured sample. Country, Tags and Status cannot:
-    // IMDb's datasets carry no country, keyword or airing-status field at all,
-    // so those still go to TMDB's /discover with the IMDb rating cut on top.
-    if (!countries.length && !tagVal && !statuses.length) {
+    // ~33 Thrillers in a measured sample. Country, Tags, Status and Streaming
+    // cannot: IMDb's datasets carry no country, keyword or airing-status field,
+    // and no provider data at all, so those go to TMDB's /discover with the
+    // IMDb rating cut on top.
+    if (!countries.length && !tagVal && !statuses.length && !providers.length) {
       const done = await applyImdbBrowseFilter('tv', 1,
         {genreIds: genres.map(Number), yearGte: yr.gte, yearLte: yr.lte, minRating: rating});
       if (done) return;
@@ -3793,10 +3941,23 @@ async function applyTVFilter(page=1) {
       url.searchParams.set('vote_count.gte', '50');
     }
     if (countries.length) url.searchParams.set('with_origin_country', countries.join('|'));
-    if (genres.length)    url.searchParams.set('with_genres', genres.join('|'));
+    // TMDB's TV genre list has no Horror, Thriller, Fantasy or Action id, so
+    // sending those returns zero. Hold them back and apply them from the IMDb
+    // index once the page is in.
+    {
+      const split = await splitGenresForTmdb('tv', genres);
+      tvFilterImdbGenres = split.client;
+      if (split.server.length) url.searchParams.set('with_genres', split.server.join('|'));
+    }
     // Pre-prune only; the real cut is made against the IMDb value below.
     if (rating !== undefined) url.searchParams.set('vote_average.gte', Math.max(0, rating - IMDB_FILTER_MARGIN));
     tvFilterMinScore = rating;
+    // Streaming services. Sorting by rating over a single service's catalogue
+    // is thin, so pair it with popularity the way the Country branch does.
+    if (applyProviderParams(url, providers)) {
+      url.searchParams.set('sort_by', 'popularity.desc');
+      url.searchParams.set('vote_count.gte', '0');
+    }
     if (yr.gte)  url.searchParams.set('first_air_date.gte', yr.gte);
     if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
     // NOTE: TMDB's /discover/tv has no real "status" filter parameter — list
@@ -3841,9 +4002,10 @@ async function applyTVFilter(page=1) {
         if (knownStatus) item.status = knownStatus;
         return item;
       });
-      kept.push(...await filterByMinScore(items, tvFilterMinScore));
+      const genreOk = await filterByImdbGenres(items, tvFilterImdbGenres);
+      kept.push(...await filterByMinScore(genreOk, tvFilterMinScore));
       cur++; tries++;
-    } while (tvFilterMinScore !== undefined && kept.length < FILTER_MIN_CARDS
+    } while ((tvFilterMinScore !== undefined || tvFilterImdbGenres.length) && kept.length < FILTER_MIN_CARDS
              && tries < FILTER_MAX_PAGES && (last?.page||1) < (last?.total_pages||1));
 
     if (page === 1) renderGrid('tv-grid', kept);
@@ -3872,8 +4034,11 @@ async function applyMovieFilter(page=1) {
     const tagVal    = getTagVals('mf-tag').join(','); // multi-select — resolveKeywordIds already OR-matches comma-separated terms
     const yr        = getYearEnvelope('mf-year'); // multi-select — combined into one min→max range
 
-    // Same split as the TV filter — see the note there.
-    if (!countries.length && !tagVal && !statuses.length) {
+    const providers = getTagVals('mf-provider');
+
+    // Same split as the TV filter — see the note there. Streaming joins the
+    // list of things IMDb's datasets cannot answer.
+    if (!countries.length && !tagVal && !statuses.length && !providers.length) {
       const done = await applyImdbBrowseFilter('movie', 1,
         {genreIds: genres.map(Number), yearGte: yr.gte, yearLte: yr.lte, minRating: rating});
       if (done) return;
@@ -3895,6 +4060,11 @@ async function applyMovieFilter(page=1) {
     // Pre-prune only; the real cut is made against the IMDb value below.
     if (rating !== undefined) url.searchParams.set('vote_average.gte', Math.max(0, rating - IMDB_FILTER_MARGIN));
     movieFilterMinScore = rating;
+    // Streaming services — same treatment as the TV filter.
+    if (applyProviderParams(url, providers)) {
+      url.searchParams.set('sort_by', 'popularity.desc');
+      url.searchParams.set('vote_count.gte', '0');
+    }
     if (yr.gte) url.searchParams.set('primary_release_date.gte', yr.gte);
     if (yr.lte) url.searchParams.set('primary_release_date.lte', yr.lte);
     if (statuses.length === 1) {
@@ -4220,5 +4390,9 @@ requestAnimationFrame(() => {
   const activeSegBtn = document.querySelector('#stream-seg .seg-btn.active');
   if (activeSegBtn) updateSegSlide(activeSegBtn, true);
 });
+
+// Fill the Streaming pickers from watch-providers.json. One small fetch, and a
+// failure just hides the section rather than breaking the panel.
+initProviderPickers();
 
 // initFromHash moved below oracle div

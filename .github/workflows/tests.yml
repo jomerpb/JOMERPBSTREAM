@@ -76,6 +76,9 @@ jobs:
       - name: IMDb ratings in the page — decoder, TMDB fallback, filter threshold
         run: node .github/scripts/tests/test_imdb_ratings.mjs
 
+      - name: Streaming providers — catalogue floor, ordering, shrink guard, stamps
+        run: python3 .github/scripts/tests/test_build_watch_providers.py
+
       # The pipeline must not be left dirty by a test run.
       - name: Confirm the tests wrote nothing into the checkout
         run: |

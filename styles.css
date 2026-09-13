@@ -313,6 +313,12 @@
     .dc-chiplist .dc-person{background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.45);color:#93c5fd;font-size:10.5px;padding:3px 9px;border-radius:20px;font-family:inherit;cursor:pointer;}
     .dc-chiplist .dc-person:active{background:rgba(59,130,246,0.24);}
 
+    /* Streaming picker options carry the service's own logo from TMDB. The
+       logo is decorative (the name is right beside it), so alt is empty and a
+       failed image leaves the row reading normally. */
+    .tag-picker-option.provider-option{display:flex;align-items:center;gap:7px;}
+    .provider-logo{width:20px;height:20px;border-radius:4px;object-fit:cover;flex-shrink:0;background:var(--card);}
+
     /* CAST LIST — a row per performer: circular headshot, name, character.
        Replaced a row of name-only chips; the photo is what makes a long cast
        scannable, and the character is the thing people are actually looking
