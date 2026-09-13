@@ -356,6 +356,95 @@ The detail page additionally re-runs `renderDetailFacts` when its lookup lands,
 because the facts table names the source and would otherwise read
 "8.0/10 on TMDB" under a star that had already flipped to 8.4.
 
+### Genre / Year / Min Rating read IMDb's labelling too
+
+The Genre filter used to ask TMDB's `/discover`, which answers with TMDB's own
+genre tags. **Those are not IMDb's tags, and the gap is not cosmetic.** Measured
+over 244 catalogue titles labelled by both services:
+
+| genre | TMDB says | IMDb says | on both lists |
+|---|---|---|---|
+| Thriller | 33 | 32 | **18** |
+| Romance | 19 | 27 | **10** |
+| Horror | 12 | 15 | 10 (5 titles only IMDb calls Horror) |
+| Animation | 46 | 48 | 46 |
+
+So "horror, per IMDb" is a genuinely different list, not a relabelling.
+`imdb-browse.json` carries IMDb's type, year, genre set, rating and vote weight
+for **189,407** titles and the query runs entirely in the page.
+
+**What this cannot do, and why — stated up front.** IMDb's non-commercial
+datasets have **no country field of any kind**. `title.basics` is nine columns
+(tconst, titleType, primaryTitle, originalTitle, isAdult, startYear, endYear,
+runtimeMinutes, genres) and nothing else; `title.akas` has a `region`, but that
+is where a title was *released*, not where it was made. There is no keyword
+dataset and no airing-status field either. So **Country** (the K-drama /
+J-drama / C-drama tabs), **Tags** and **Status** cannot come from IMDb. When any
+of those is set the filter falls back to TMDB's `/discover` with the IMDb rating
+cut applied on top, exactly as before. Genre + Year + Min Rating on their own
+take the IMDb path. Do not "finish the job" by deriving country from
+`original_language` or from `title.akas` — neither is country of origin.
+
+**The index costs no extra requests.** `/find/{tconst}?external_source=imdb_id`
+returns the same object shape a `/discover` row has — poster, overview,
+genre_ids, TMDB id — so one call per title yields a complete card *and* the
+usual `external_ids` lookup is skipped, because the IMDb id is where we started.
+Measured in the browser lane: the IMDb path made **20 `/find` calls and 0
+`/discover`** for a page, against the TMDB path's 1 discover + 20 external_ids.
+Same count, and the card paints with IMDb's rating already attached instead of
+flashing TMDB's and correcting itself.
+
+**Genres are a bitmask over a vocabulary shipped with the data**, not strings.
+IMDb uses 27 labels, so a title's whole genre set fits in one integer and the
+filter tests membership with a single `&` rather than comparing arrays 189,000
+times per change. The decoded columns are typed arrays for the same reason.
+`TMDB_TO_IMDB_GENRE` is many-to-many on purpose: several TMDB ids are compounds
+IMDb splits ("Sci-Fi & Fantasy" → Sci-Fi OR Fantasy, "War & Politics" → War OR
+History). Test 8 in `test_imdb_ratings.mjs` reads the genre checkboxes out of
+`index.html` and asserts every id maps to a name the index actually knows, so
+adding a checkbox without a mapping fails CI instead of silently returning
+nothing.
+
+**Results are sorted by IMDb's own weighted formula, not raw rating.** Sorting a
+genre by rating alone puts titles rated 9.4 by 120 people at the top, which is
+not what anyone means by "best horror". `imdbWeighted` blends a title's average
+toward the catalogue mean by vote mass (`IMDB_SORT_PRIOR = 5000`), and the mean
+is read out of the payload rather than hardcoded so it cannot drift. Measured:
+the top 10 horror films all carry more than 10,000 votes. This also fixes the
+sort-order caveat the TMDB path still has — on the IMDb path the ordering and
+the printed number finally come from the same source.
+
+Votes are stored **log-bucketed into one byte**. The page only uses them to rank
+within a filtered list, so the exact figure buys nothing and costs 110 KB
+gzipped; a log scale keeps the ordering that matters. The file is 4.06 MB raw /
+**0.96 MB gzipped**, and it is fetched only when a filter is actually used — the
+default browse path never downloads it.
+
+## Cast is a list with faces, and a full-cast page
+
+The Cast block is a row per performer — circular headshot, name, character —
+rather than the row of name-only chips it started as. The photo is what makes a
+long cast scannable and the character is what people open the card to find.
+Production companies stay chips: they are just names.
+
+- The Details card shows `CAST_PREVIEW` (8) rows, then a **See all N cast**
+  button opening `#cast-page`. That page renders from memory — `openTVDetail` /
+  `openMovieDetail` already fetched the whole `credits` array to build the
+  preview — so opening it **costs no request at all**.
+- `tmdbCastList` **dedupes on person id**. TMDB credits a performer once per
+  role, so a lead credited twice would appear twice in the list and twice in the
+  count; the extra character names are merged onto the first (highest-billed)
+  row as `Hero / Hero (young)` instead of being dropped.
+- Headshots load from `TMDB_PROFILE` (`w185`). They render at ~44px in a circle,
+  so `w500` would be four times the bytes for the same pixels.
+- A cast entry is either `{id, name, character, img}` or a bare string. Strings
+  (manga creators, which have no TMDB person id and no photo) stay plain chips —
+  a row with no id and no photo would be a portrait-shaped blank that goes
+  nowhere.
+- `#cast-page` pushes history like every other page, and landing on `#cast` with
+  nothing in memory (a reload, a shared link) bounces home rather than showing
+  an empty list.
+
 ## Details card: facts table, and cast names are links
 
 The Details card carries a **facts table** (`renderDetailFacts`) —
@@ -706,7 +795,9 @@ inside the app rather than a dead end.
 
 **IMDb** (`datasets.imdbws.com`):
 - `imdb-ratings.yml` → `.github/scripts/build_imdb_ratings.py` → `imdb-ratings.json`
-  (430k titles at 100+ votes). IMDb's own daily ratings dump, reshaped. Exists
+  (430k titles at 100+ votes, the rating every card shows) **and**
+  `imdb-browse.json` (189k titles with type/year/genre/vote weight, behind the
+  Genre/Year/Rating filters). IMDb's own daily dumps, reshaped. Exists
   for the same reason the MangaFreak and PCSO pipelines do — the browser cannot
   read an 8.6 MB gzipped TSV from a host that sends no
   `Access-Control-Allow-Origin` — but the scrape is a **single request** and the

@@ -5,6 +5,9 @@ const TMDB_KEY  = '06523e121afa0ea9002d8f8f1be31965';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_IMG  = 'https://image.tmdb.org/t/p/w500';
 const TMDB_BG   = 'https://image.tmdb.org/t/p/w780';
+// Cast headshots render at ~44px in a circle, so w185 is already generous —
+// w500 would be four times the bytes for the same pixels on screen.
+const TMDB_PROFILE = 'https://image.tmdb.org/t/p/w185';
 const ANILIST   = 'https://graphql.anilist.co';
 
 // ═══════════════════════════════════════════
@@ -312,6 +315,185 @@ async function filterByMinScore(items, min) {
   });
 }
 
+
+// ═══════════════════════════════════════════
+// IMDb BROWSE — Genre / Year / Min Rating read IMDb's labelling
+// ═══════════════════════════════════════════
+// The Genre filter used to ask TMDB's /discover, which answers with TMDB's own
+// genre tags. Those are NOT the same tags IMDb applies. Measured over 244
+// titles from this app's catalogue, both labelled by both services:
+//
+//   Thriller  TMDB 33  IMDb 32  — but only 18 titles are on BOTH lists
+//   Romance   TMDB 19  IMDb 27  — only 10 on both
+//   Horror    TMDB 12  IMDb 15  — 5 titles IMDb calls Horror that TMDB does not
+//
+// So "horror, per IMDb" is a genuinely different list, not a relabelling of the
+// same one. imdb-browse.json carries IMDb's type, year, genre set, rating and
+// vote weight for 189,407 titles, and the query runs entirely in the page.
+//
+// WHAT THIS CANNOT DO, stated up front: IMDb's non-commercial datasets have **no
+// country field of any kind** — not in title.basics, and title.akas' `region` is
+// where a title was RELEASED, not where it was made. There is also no keyword or
+// airing-status data. So Country (the K-drama / J-drama / C-drama tabs), Tags and
+// Status cannot be served from IMDb, and when any of them is set the filter falls
+// back to TMDB's /discover with the IMDb rating cut applied on top, exactly as
+// before. Genre + Year + Min Rating on their own take the IMDb path.
+const IMDB_BROWSE_URL = 'imdb-browse.json?nocache=1';
+
+// TMDB's genre ids → IMDb's genre names. Several TMDB ids are compounds that
+// IMDb splits ("Sci-Fi & Fantasy"), and a few have no IMDb equivalent and map to
+// the nearest real one, so this is many-to-many rather than a rename table.
+const TMDB_TO_IMDB_GENRE = {
+  28:['Action'], 12:['Adventure'], 16:['Animation'], 35:['Comedy'], 80:['Crime'],
+  99:['Documentary'], 18:['Drama'], 10751:['Family'], 14:['Fantasy'], 36:['History'],
+  27:['Horror'], 10402:['Music'], 9648:['Mystery'], 10749:['Romance'], 878:['Sci-Fi'],
+  53:['Thriller'], 10752:['War'], 37:['Western'],
+  10759:['Action','Adventure'],      // Action & Adventure
+  10765:['Sci-Fi','Fantasy'],        // Sci-Fi & Fantasy
+  10768:['War','History'],           // War & Politics
+  10762:['Family'],                  // Kids
+  10763:['News'], 10764:['Reality-TV'], 10766:['Drama'], 10767:['Talk-Show'],
+};
+
+let imdbBrowse = null;
+let imdbBrowsePromise = null;
+
+function loadImdbBrowse() {
+  if (imdbBrowsePromise) return imdbBrowsePromise;
+  imdbBrowsePromise = (async () => {
+    try {
+      const r = await fetch(IMDB_BROWSE_URL, {signal: AbortSignal.timeout(30000)});
+      if (!r.ok) throw new Error('http ' + r.status);
+      const d = await r.json();
+      if (!Array.isArray(d?.d) || !Array.isArray(d?.g) || !Array.isArray(d?.genres)) {
+        throw new Error('malformed browse payload');
+      }
+      // Same gap encoding as the ratings file — rebuild the ids with a running
+      // sum. Stored into a typed array because the filter walks all 189k rows on
+      // every change and a plain Array of that length is measurably worse.
+      const n = d.d.length;
+      const ids = new Int32Array(n);
+      let run = 0;
+      for (let i = 0; i < n; i++) { run += d.d[i]; ids[i] = run; }
+      const gi = {};
+      d.genres.forEach((g, i) => { gi[g] = i; });
+      // The prior for the weighted sort, taken from the data rather than
+      // hardcoded, so it cannot drift as IMDb's catalogue shifts.
+      let sum = 0;
+      for (let i = 0; i < n; i++) sum += d.r[i];
+      imdbBrowse = {
+        ids,
+        type:   Int8Array.from(d.t),
+        year:   Int16Array.from(d.y),
+        genre:  Int32Array.from(d.g),
+        rating: Int16Array.from(d.r),
+        votes:  Int16Array.from(d.v),
+        genreIndex: gi,
+        meanRating: (sum / n) / 10,
+      };
+      return imdbBrowse;
+    } catch {
+      imdbBrowse = null;
+      return null;
+    }
+  })();
+  return imdbBrowsePromise;
+}
+
+// Votes were stored log-bucketed (one byte) — this is the inverse. Only the
+// ordering matters, which is what the bucket preserves.
+function imdbVotesFrom(bucket) { return Math.pow(2, bucket / 8); }
+
+// IMDb's own Top-250 formula. Without it a "Horror" list is led by titles
+// rated 9.4 by 120 people, which is not what anyone means by best horror.
+// m is the vote mass at which a title's own average starts to dominate.
+const IMDB_SORT_PRIOR = 5000;
+
+function imdbWeighted(rating, votes, mean) {
+  const v = imdbVotesFrom(votes);
+  return (v / (v + IMDB_SORT_PRIOR)) * (rating / 10) + (IMDB_SORT_PRIOR / (v + IMDB_SORT_PRIOR)) * mean;
+}
+
+// Run the filter over the whole index and return tconst numbers, best first.
+// One linear pass over typed arrays; measured in the browser lane below.
+function imdbBrowseQuery({kind, genreIds = [], yearGte, yearLte, minRating}) {
+  const B = imdbBrowse;
+  if (!B) return [];
+  // The app's TV tab covers IMDb's tvSeries (1) and tvMiniSeries (2); Movies is
+  // plain movie (0).
+  const wantMovie = kind === 'movie';
+
+  // Genres are OR'd, matching how the TMDB path treated a multi-select.
+  let mask = 0;
+  for (const id of genreIds) {
+    for (const name of (TMDB_TO_IMDB_GENRE[id] || [])) {
+      const bit = B.genreIndex[name];
+      if (bit !== undefined) mask |= 1 << bit;
+    }
+  }
+  const gLo = yearGte ? parseInt(String(yearGte).slice(0, 4), 10) : 0;
+  const gHi = yearLte ? parseInt(String(yearLte).slice(0, 4), 10) : 0;
+  const minR = minRating === undefined ? 0 : minRating * 10;
+
+  const out = [];
+  const n = B.ids.length;
+  for (let i = 0; i < n; i++) {
+    const isMovie = B.type[i] === 0;
+    if (isMovie !== wantMovie) continue;
+    if (mask && !(B.genre[i] & mask)) continue;
+    if (minR && B.rating[i] < minR) continue;
+    const y = B.year[i];
+    if (gLo && (!y || y < gLo)) continue;
+    if (gHi && (!y || y > gHi)) continue;
+    out.push(i);
+  }
+  out.sort((a, b) =>
+    imdbWeighted(B.rating[b], B.votes[b], B.meanRating) -
+    imdbWeighted(B.rating[a], B.votes[a], B.meanRating));
+  return out;
+}
+
+// Turn a page of index rows into cards. /find returns the SAME object shape a
+// /discover row has — poster, overview, genre_ids, vote_average, TMDB id — so
+// one call per title yields a complete card and the usual external_ids lookup
+// is skipped entirely, because the IMDb id is what we started from. Net request
+// count per page is therefore the same as the TMDB path it replaces
+// (1 discover + 20 external_ids vs 20 finds), not higher.
+async function imdbResolveCards(indices, kind) {
+  const B = imdbBrowse;
+  if (!B) return [];
+  const out = new Array(indices.length).fill(null);
+  let i = 0;
+  const worker = async () => {
+    while (i < indices.length) {
+      const slot = i++;
+      const row = indices[slot];
+      const tconst = 'tt' + String(B.ids[row]).padStart(7, '0');
+      try {
+        const d = await tmdb(`/find/${tconst}`, {external_source: 'imdb_id'});
+        const hit = kind === 'movie' ? d?.movie_results?.[0] : d?.tv_results?.[0];
+        if (!hit) continue;
+        const item = fromTMDB(hit, kind);
+        // The rating is already known — seed it so the card paints with IMDb's
+        // number immediately instead of flashing TMDB's and correcting itself.
+        item.imdbScore = (B.rating[row] / 10).toFixed(1);
+        item.imdb_id = tconst;
+        // And remember the mapping, so opening this card costs no lookup later.
+        try {
+          const store = imdbIdStore();
+          store[`${kind}:${hit.id}`] = tconst;
+          imdbIdStoreSave();
+        } catch {}
+        out[slot] = item;
+      } catch {}
+    }
+  };
+  await Promise.all(Array(Math.min(6, indices.length)).fill(0).map(worker));
+  // Order is preserved by writing into fixed slots; titles TMDB does not know
+  // simply drop out.
+  return out.filter(Boolean);
+}
+
 // ═══════════════════════════════════════════
 // NAV — Browser History API
 // ═══════════════════════════════════════════
@@ -483,6 +665,10 @@ window.addEventListener('popstate', async (e) => {
   if (navMap[page]) setNav(navMap[page]);
   if (page === 'detail-page' && state.item) await openDetail(state.item, true);
   if (page === 'person-page' && state.personId) await loadPerson(state.personId, state.personName);
+  // The full-cast page renders from memory. Landing on #cast with nothing
+  // loaded (a reload, or a shared link) has nothing to show, so it bounces home
+  // rather than presenting an empty page.
+  if (page === 'cast-page') { if (currentCast.length) renderFullCast(); else goHome(); }
 });
 
 // ═══════════════════════════════════════════
@@ -1790,7 +1976,8 @@ async function openTVDetail(item) {
   renderDetailHero(full, 'tv', tvTags);
 
   showEpsSection(true);
-  const castNames = (data.credits?.cast||[]).slice(0,8).map(c=>({id:c.id, name:c.name}));
+  const castNames = tmdbCastList(data.credits?.cast);
+  currentCast = castNames; currentCastTitle = full.title;
   const prodNames = [...new Set([...(data.networks||[]).map(n=>n.name), ...(data.production_companies||[]).map(p=>p.name)])];
   renderCastProduction('tv', castNames, prodNames);
   renderDetailFacts(full);
@@ -1831,7 +2018,8 @@ async function openMovieDetail(item) {
   // Movies have no episode grid, so the "EPISODES" block stays hidden — the
   // tag pills live up in the hero row instead, and a movie has no dub toggle.
   showEpsSection(false);
-  const castNames = (data?.credits?.cast||[]).slice(0,8).map(c=>({id:c.id, name:c.name}));
+  const castNames = tmdbCastList(data?.credits?.cast);
+  currentCast = castNames; currentCastTitle = full.title;
   const prodNames = (data?.production_companies||[]).map(p=>p.name);
   renderCastProduction('movie', castNames, prodNames);
   renderDetailFacts(full);
@@ -2192,6 +2380,7 @@ function renderSimpleDetail(item, type) {
   renderDetailBackdrop(item.banner||item.img, item.title);
   renderDetailHero(item, type);
   showEpsSection(episodic);
+  currentCast = []; currentCastTitle = '';
   renderCastProduction(type, [], [], type === 'manga' ? mangaDetailLinks(item) : []);
   renderDetailFacts(item);
   if (type === 'manga') {
@@ -2341,18 +2530,12 @@ function renderCastProduction(type, castNames, prodNames, links=[]) {
   const L = CASTPROD_LABELS[type] || CASTPROD_LABELS.tv;
   const head = document.getElementById('detail-castprod-title');
   if (head) head.textContent = L.head;
-  // A cast entry may arrive as a bare string (manga creators, and any caller
-  // that has no ids) or as {id, name}. Only the second becomes a link — a chip
-  // with no TMDB person id has nowhere to go, so it stays plain text rather
-  // than becoming a button that does nothing.
+  // Production companies stay chips — they are just names.
   const chips = (names, what) => (names||[]).length
     ? `<div class="dc-chiplist">${names.map(n => {
         const name = typeof n === 'string' ? n : (n?.name || '');
-        const id   = typeof n === 'string' ? null : n?.id;
         if (!name) return '';
-        return id
-          ? `<button type="button" class="dc-person" onclick="openPersonFromCast(${Number(id)}, this.dataset.n)" data-n="${escapeHtml(name)}">${escapeHtml(name)}</button>`
-          : `<span>${escapeHtml(name)}</span>`;
+        return `<span>${escapeHtml(name)}</span>`;
       }).join('')}</div>`
     : `<div class="dc-empty">No ${what} information available.</div>`;
   const linkHtml = (links||[]).length
@@ -2361,9 +2544,88 @@ function renderCastProduction(type, castNames, prodNames, links=[]) {
       }</div></div>`
     : '';
   body.innerHTML = `
-    <div class="dc-block"><div class="dc-block-label">${L.a}</div>${chips(castNames, L.a.toLowerCase())}</div>
+    <div class="dc-block"><div class="dc-block-label">${L.a}</div>${castBlockHTML(castNames, L.a.toLowerCase())}</div>
     <div class="dc-block"><div class="dc-block-label">${L.b}</div>${chips(prodNames, L.b.toLowerCase())}</div>
     ${linkHtml}`;
+}
+
+// TMDB repeats a performer once per role they play, so a lead credited in two
+// capacities would otherwise appear twice in the list and twice in the count.
+// Deduped on person id, keeping the first (highest-billed) entry and merging
+// the extra character names into it.
+function tmdbCastList(cast) {
+  const out = [], seen = new Map();
+  for (const c of (cast || [])) {
+    if (!c?.name) continue;
+    const key = c.id ?? `n:${c.name}`;
+    if (seen.has(key)) {
+      const prev = seen.get(key);
+      if (c.character && prev.character && !prev.character.includes(c.character)) {
+        prev.character += ` / ${c.character}`;
+      }
+      continue;
+    }
+    const row = {id: c.id || null, name: c.name, character: c.character || '', img: c.profile_path || ''};
+    seen.set(key, row); out.push(row);
+  }
+  return out;
+}
+
+// How many cast rows the Details card shows before handing off to the full list.
+const CAST_PREVIEW = 8;
+
+// Everyone in the current title's cast, kept so the full-cast page can render
+// without asking TMDB again — openTVDetail/openMovieDetail already fetched the
+// whole `credits` array to build the preview.
+let currentCast = [];
+let currentCastTitle = '';
+
+// A cast entry is either a bare string (manga creators, which have no TMDB
+// person id and no photo) or {id, name, character, img}. Strings stay as plain
+// chips: a row with no id and no photo would be a portrait-shaped blank that
+// goes nowhere.
+function castBlockHTML(cast, what) {
+  const list = (cast || []).filter(Boolean);
+  if (!list.length) return `<div class="dc-empty">No ${what} information available.</div>`;
+  if (typeof list[0] === 'string') {
+    return `<div class="dc-chiplist">${list.map(n => `<span>${escapeHtml(n)}</span>`).join('')}</div>`;
+  }
+  const shown = list.slice(0, CAST_PREVIEW);
+  const more = list.length - shown.length;
+  return `<div class="castlist">${shown.map(castRowHTML).join('')}</div>` + (more > 0
+    ? `<button type="button" class="cast-all" onclick="openFullCast()">See all ${list.length} cast &rsaquo;</button>`
+    : '');
+}
+
+function castRowHTML(c) {
+  const name = c?.name || '';
+  if (!name) return '';
+  const photo = c.img
+    ? `<img src="${TMDB_PROFILE}${c.img}" alt="${escapeHtml(name)}" loading="lazy"/>`
+    : `<span class="cast-initial">${escapeHtml(name.slice(0, 1))}</span>`;
+  const sub = c.character ? `<div class="cast-role">${escapeHtml(c.character)}</div>` : '';
+  const tag = c.id ? 'button' : 'div';
+  const act = c.id ? ` type="button" onclick="openPersonFromCast(${Number(c.id)}, this.dataset.n)"` : '';
+  return `<${tag} class="cast-row"${act} data-n="${escapeHtml(name)}">
+      <div class="cast-face">${photo}</div>
+      <div class="cast-meta"><div class="cast-name">${escapeHtml(name)}</div>${sub}</div>
+    </${tag}>`;
+}
+
+// FULL CAST — its own page, pushed onto history like the person page. The data
+// is already in memory, so this costs no request at all.
+function openFullCast() {
+  if (!currentCast.length) return;
+  history.pushState({page:'cast-page'}, '', '#cast');
+  showPage('cast-page');
+  renderFullCast();
+}
+
+function renderFullCast() {
+  document.getElementById('cast-page-title').textContent = currentCastTitle || 'Cast';
+  document.getElementById('cast-page-count').textContent =
+    `${currentCast.length} ${currentCast.length === 1 ? 'person' : 'people'}`;
+  document.getElementById('cast-page-list').innerHTML = currentCast.map(castRowHTML).join('');
 }
 
 
@@ -3457,7 +3719,45 @@ let tvFilterUrl = null;
 let tvFilterStatuses = [];
 let tvFilterMinScore;
 
+// Which tab is currently browsing the IMDb index rather than TMDB's /discover,
+// and the query result it is paging through. The list is index rows, not cards
+// — cards are resolved 20 at a time as you scroll.
+const imdbFilterState = {tv: {list: [], active: false}, movie: {list: [], active: false}};
+const IMDB_PAGE = 20;
+
+// Returns true if it handled the page, false if the caller should fall back to
+// the TMDB path. Falling back is not an error: it is what happens when the
+// index cannot load, or when the query returns nothing at all.
+async function applyImdbBrowseFilter(kind, page, opts) {
+  const gridId = kind === 'movie' ? 'movies-grid' : 'tv-grid';
+  const moreId = kind === 'movie' ? 'movies-more' : 'tv-more';
+  const st = imdbFilterState[kind];
+
+  if (page === 1) {
+    st.active = false;
+    await loadImdbBrowse();
+    if (!imdbBrowse) return false;
+    st.list = imdbBrowseQuery({kind, ...opts});
+    if (!st.list.length) return false;
+    st.active = true;
+  }
+  if (!st.active) return false;
+
+  const slice = st.list.slice((page - 1) * IMDB_PAGE, page * IMDB_PAGE);
+  const items = await imdbResolveCards(slice, kind);
+  if (page === 1) renderGrid(gridId, items);
+  else { items.forEach(a => document.getElementById(gridId).appendChild(buildGridCard(a))); hydrateImdbScores(document.getElementById(gridId)); }
+
+  const hasMore = st.list.length > page * IMDB_PAGE;
+  if (kind === 'movie') moviePageState = {sub:'filter', page, hasMore};
+  else tvPageState = {sub:'filter', region:'', page, hasMore};
+  document.getElementById(moreId).style.display = hasMore ? 'block' : 'none';
+  if (hasMore) attachInfiniteScroll();
+  return true;
+}
+
 async function applyTVFilter(page=1) {
+  if (page > 1 && imdbFilterState.tv.active) { await applyImdbBrowseFilter('tv', page); return; }
   if (page === 1) {
     document.getElementById('tv-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
     document.getElementById('tv-more').style.display = 'none';
@@ -3469,6 +3769,18 @@ async function applyTVFilter(page=1) {
     const tagVal    = getTagVals('tf-tag').join(','); // multi-select — resolveKeywordIds already OR-matches comma-separated terms
     const yr        = getYearEnvelope('tf-year'); // multi-select — combined into one min→max range
     tvFilterStatuses = statuses;
+
+    // Genre / Year / Min Rating alone can be answered from IMDb's own data, and
+    // that is a materially different list — IMDb and TMDB agree on only 18 of
+    // ~33 Thrillers in a measured sample. Country, Tags and Status cannot:
+    // IMDb's datasets carry no country, keyword or airing-status field at all,
+    // so those still go to TMDB's /discover with the IMDb rating cut on top.
+    if (!countries.length && !tagVal && !statuses.length) {
+      const done = await applyImdbBrowseFilter('tv', 1,
+        {genreIds: genres.map(Number), yearGte: yr.gte, yearLte: yr.lte, minRating: rating});
+      if (done) return;
+    }
+    imdbFilterState.tv.active = false;
 
     const url = new URL(`${TMDB_BASE}/discover/tv`);
     url.searchParams.set('api_key', TMDB_KEY);
@@ -3548,6 +3860,7 @@ let movieFilterUrl = null;
 let movieFilterMinScore;
 
 async function applyMovieFilter(page=1) {
+  if (page > 1 && imdbFilterState.movie.active) { await applyImdbBrowseFilter('movie', page); return; }
   if (page === 1) {
     document.getElementById('movies-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
     document.getElementById('movies-more').style.display = 'none';
@@ -3558,6 +3871,14 @@ async function applyMovieFilter(page=1) {
     const statuses  = getTagVals('mf-status');   // multi-select — Released+Upcoming together (or neither) = no date filter
     const tagVal    = getTagVals('mf-tag').join(','); // multi-select — resolveKeywordIds already OR-matches comma-separated terms
     const yr        = getYearEnvelope('mf-year'); // multi-select — combined into one min→max range
+
+    // Same split as the TV filter — see the note there.
+    if (!countries.length && !tagVal && !statuses.length) {
+      const done = await applyImdbBrowseFilter('movie', 1,
+        {genreIds: genres.map(Number), yearGte: yr.gte, yearLte: yr.lte, minRating: rating});
+      if (done) return;
+    }
+    imdbFilterState.movie.active = false;
 
     const url = new URL(`${TMDB_BASE}/discover/movie`);
     url.searchParams.set('api_key', TMDB_KEY);

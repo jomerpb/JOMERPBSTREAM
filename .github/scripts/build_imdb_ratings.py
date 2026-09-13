@@ -42,13 +42,26 @@ gzipped. Raising it to 1000 saves 0.30 MB and costs 15 points of coverage.
 import gzip
 import io
 import json
+import math
 import os
 import sys
 import urllib.request
 from datetime import datetime, timezone
 
 DATASET = 'https://datasets.imdbws.com/title.ratings.tsv.gz'
+BASICS = 'https://datasets.imdbws.com/title.basics.tsv.gz'
 OUT = 'imdb-ratings.json'
+OUT_BROWSE = 'imdb-browse.json'
+
+# The browse index backs the Genre / Year / Min Rating filters, which read
+# IMDb's own labelling rather than TMDB's. Restricted to the three types this
+# app can actually show — measured, 244 of 244 catalogue titles are one of
+# these, so nothing is lost by excluding shorts, episodes and video releases,
+# and including them would more than double the file.
+BROWSE_TYPES = {'movie': 0, 'tvSeries': 1, 'tvMiniSeries': 2}
+
+# Shrink guard for the browse index; it sits around 189k titles.
+BROWSE_FLOOR = 100_000
 
 # See the module docstring — the knee of the coverage/size curve, not a guess.
 MIN_VOTES = 100
@@ -124,6 +137,105 @@ def decode(gaps, ratings):
     return out
 
 
+def parse_basics(raw_gz, ratings, min_votes=MIN_VOTES):
+    """Join title.basics against the ratings we already parsed.
+
+    Returns (rows, genre_vocabulary) where each row is
+    (tconst_int, type_code, year, genre_bitmask, rating_x10, votes).
+
+    Genres are stored as a BITMASK over a vocabulary emitted alongside the
+    data, not as strings: IMDb uses 27 genre labels, so the whole set fits in
+    one integer per title and the page tests membership with a single `&`
+    instead of comparing arrays of strings 189,000 times per filter change.
+    """
+    vocab = {}
+    rows = []
+    with gzip.open(io.BytesIO(raw_gz), 'rt', encoding='utf-8') as f:
+        header = next(f, '')
+        if not header.startswith('tconst'):
+            raise ValueError(f'unexpected basics header: {header!r}')
+        for line in f:
+            p = line.rstrip('\n').split('\t')
+            if len(p) != 9:
+                continue
+            tconst, ttype, _pt, _ot, adult, sy, _ey, _rt, genres = p
+            if ttype not in BROWSE_TYPES or adult == '1':
+                continue
+            rr = ratings.get(tconst)
+            if rr is None or rr[1] < min_votes:
+                continue
+            mask = 0
+            if genres and genres != '\\N':
+                for g in genres.split(','):
+                    if g not in vocab:
+                        vocab[g] = len(vocab)
+                    mask |= 1 << vocab[g]
+            try:
+                year = int(sy)
+            except ValueError:
+                year = 0
+            try:
+                n = int(tconst[2:])
+            except ValueError:
+                continue
+            rows.append((n, BROWSE_TYPES[ttype], year, mask, rr[0], rr[1]))
+    rows.sort()
+    order = [g for g, _ in sorted(vocab.items(), key=lambda kv: kv[1])]
+    return rows, order
+
+
+def vote_bucket(v):
+    """Votes, coarsened to one byte.
+
+    The page only uses vote counts to rank within a filtered list, so the exact
+    figure buys nothing and costs 110 KB gzipped. A log scale keeps the ordering
+    that matters (a 400,000-vote title still outranks a 400-vote one) while
+    collapsing differences nobody sorts on.
+    """
+    v = max(1, int(v))
+    return min(255, int(math.log2(v) * 8))
+
+
+def write_browse(path, rows, vocab, *, floor=BROWSE_FLOOR):
+    old = load_existing(path)
+    old_n = int(old.get('count') or 0)
+    new_n = len(rows)
+    if new_n < floor or (old_n and new_n < old_n * 0.6):
+        print(f'REFUSING to write {path}: got {new_n}, have {old_n} '
+              f'(floor {floor}) — keeping the existing file', file=sys.stderr)
+        return False
+
+    gaps = []
+    prev = 0
+    for n, *_ in rows:
+        gaps.append(n - prev)
+        prev = n
+    payload_core = {
+        'genres': vocab,
+        'd': gaps,
+        't': [r[1] for r in rows],
+        'y': [r[2] for r in rows],
+        'g': [r[3] for r in rows],
+        'r': [int(round(r[4] * 10)) for r in rows],
+        'v': [vote_bucket(r[5]) for r in rows],
+    }
+    now = datetime.now(timezone.utc).isoformat(timespec='seconds')
+    changed = any(old.get(k) != v for k, v in payload_core.items())
+    payload = {
+        'checked': now,
+        'updated': now if changed else (old.get('updated') or now),
+        'source': BASICS,
+        'minVotes': MIN_VOTES,
+        'count': new_n,
+        **payload_core,
+    }
+    with open(path, 'w') as f:
+        json.dump(payload, f, separators=(',', ':'))
+    print(f'{path}: wrote {new_n} titles (was {old_n}), '
+          f'{os.path.getsize(path)/1e6:.2f} MB raw, {len(vocab)} genres, changed={changed}')
+    return True
+
+
 def load_existing(path):
     try:
         with open(path) as f:
@@ -177,9 +289,29 @@ def main():
     print(f'  {len(raw)/1e6:.2f} MB gzipped')
     rows, skipped = parse(raw)
     print(f'  {len(rows)} titles at >={MIN_VOTES} votes ({skipped} malformed rows skipped)')
-    if not write(OUT, rows):
-        return 1
-    return 0
+    ok = write(OUT, rows)
+
+    # The browse index needs the ratings keyed by the raw tconst string to join
+    # against title.basics, which is why parse() is not reused wholesale here.
+    print(f'fetching {BASICS} ...')
+    raw_b = fetch(BASICS)
+    print(f'  {len(raw_b)/1e6:.2f} MB gzipped')
+    ratings = {}
+    with gzip.open(io.BytesIO(raw), 'rt', encoding='utf-8') as f:
+        next(f)
+        for line in f:
+            p = line.rstrip('\n').split('\t')
+            if len(p) != 3:
+                continue
+            try:
+                ratings[p[0]] = (float(p[1]), int(p[2]))
+            except ValueError:
+                continue
+    brows, vocab = parse_basics(raw_b, ratings)
+    print(f'  {len(brows)} browsable titles, {len(vocab)} genres')
+    ok_b = write_browse(OUT_BROWSE, brows, vocab)
+
+    return 0 if (ok and ok_b) else 1
 
 
 if __name__ == '__main__':
