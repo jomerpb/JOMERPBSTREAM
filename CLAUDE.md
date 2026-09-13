@@ -335,11 +335,9 @@ at any threshold.
 
 Because pages come back partly disqualified, both filters pull up to
 `FILTER_MAX_PAGES` (4) pages until they have `FILTER_MIN_CARDS` (8), instead of
-painting a nearly-empty grid. Known and not papered over: results are still in
-**TMDB's** sort order while showing IMDb's numbers, so a filtered grid reads as
-roughly-descending rather than strictly so. Re-sorting each page client-side was
-considered and rejected — it produces a sawtooth across page boundaries, which is
-worse than a consistent order.
+painting a nearly-empty grid. The order a filtered grid arrives in no longer
+decides the order it is shown in — see the rating sort below, which replaced the
+"roughly-descending" caveat that used to live here.
 
 **Hydration is lazy past the first 24 cards** (`IMDB_EAGER_CARDS`, then an
 `IntersectionObserver`). Without it the burst follows the longest list on the
@@ -355,6 +353,88 @@ sat on TMDB's number while the card it was opened from already showed IMDb's.
 The detail page additionally re-runs `renderDetailFacts` when its lookup lands,
 because the facts table names the source and would otherwise read
 "8.0/10 on TMDB" under a star that had already flipped to 8.4.
+
+### Every browse grid is ordered by the rating on the card
+
+Anime, TV and Movies all read top-down, highest first — every sub-tab and every
+filter result, not just the "Top Rated" ones. One helper does it
+(`renderRatedGrid`), and four things about it are load-bearing.
+
+**The pool is sorted, not the page.** Sorting each page as it arrives is what
+was rejected the first time this came up, and rightly: page 2 comes back in the
+source's own order, so the grid reads 9.2…6.0 and then 9.1…5.8 — descending in
+stripes. Every item fetched so far is therefore kept in `RATED_GRIDS[gridId]`,
+the whole pool is re-sorted on each append and the grid is repainted. Measured
+in the browser lane on TV "All Popular": **33 of the 40 cards from later pages
+sort above the last card of page 1**, so this is the difference between sorted
+and not, rather than a tidy-up.
+
+**Two paints, and the first one is why the tab is still usable.** The obvious
+shape — resolve every IMDb score, then paint once, perfectly ordered — was built
+first, measured, and thrown away: on a 1.5 Mbps / 150 ms profile, opening the TV
+tab went from **292 ms to 14,042 ms** of skeleton, because nothing can be sorted
+until the 0.74 MB ratings file *and* twenty `/external_ids` answers are all in.
+So the grid paints immediately, ordered by the number the card is showing at
+that moment, and repaints in the true order when the lookups land. The property
+holds at every instant: the grid is descending by the number actually printed on
+it, never by one that has not arrived.
+
+| same throttled profile | first card | badges read IMDb | grid descending |
+|---|---|---|---|
+| before | 533 ms | 20,149 ms | never |
+| after | 532 ms | 20,162 ms | **532 ms** |
+
+Read the 20 s column before concluding anything is slower: the IMDb numbers were
+always that late on a cold weak-LTE session — that is the ratings file, and it is
+untouched. The sort did not add a request or a byte; it used data already on its
+way. Warm (tconsts in `localStorage`, ratings file a 304) the second paint lands
+**140 ms** after the tap. A pool with nothing left to resolve paints **once** —
+that is every anime grid, since AniList ships `averageScore` in the list payload,
+and the IMDb browse filter, which seeds `imdbScore` as it builds each card.
+Request counts are unchanged: **40 `/external_ids` on both builds** for the same
+Movies grid, because `markImdbTarget` now stamps `data-imdb-done` on a card whose
+item is already resolved, so a repaint never re-queues the hydration pass.
+
+**A repaint moves the ground under the reader, so it is anchored.** Appended
+items sort in above the viewport and `scrollTop` stops pointing at what it
+pointed at. `readScrollAnchor`/`restoreScrollAnchor` pin the topmost visible card
+and correct the scroll by the difference — measured across an append, the card
+being read stayed at **-4px → -4px**.
+
+**Ties keep the source's own ranking.** The pool is held in arrival order and
+`Array#sort` is stable, so two titles on 8.8 stay in the order TMDB or AniList
+ranked them. That is also why `paintRatedGrid` sorts a `slice()` and never the
+pool itself. Anything with no rating sorts last, not first.
+
+One thing had to come with it: **a per-grid run token** (`nextGridRun`/
+`gridRunOf`, the same guard as `searchRunId`). Resolving scores before the final
+paint widens the window in which a second tab tap overtakes the first. This was
+already broken — measured on the previous build, tapping Trending then Top Rated
+left **Trending's** grid on screen under a lit "Top Rated" chip — and a longer
+window would have made it routine. A render whose token is stale now paints
+nothing, so the last tap always wins.
+
+Not covered, deliberately: Manga, Search, the actor filmography grid and the home
+page's rows. The ask was the three browse grids, and the other four are ordered by
+things other than rating for their own reasons.
+
+**A TMDB mean off too few votes is no longer printed at all** (`TMDB_VOTE_FLOOR`,
+100 — the same floor `imdb-ratings.json` is built with, for the same reason).
+This only became visible when the grids became ordered: a meaningless number
+stopped being one odd badge and became the top card. Measured over 280 titles
+from this app's own movie and TV surfaces, **15 (5.5%) have no IMDb entry** and
+fall back to TMDB's figure, and **12 of those 15 sit on fewer than ten votes**.
+The worst case was *Resident Evil*, which TMDB scores **10.0 off a single vote**
+and which duly led the entire Upcoming grid. The distribution is bimodal — under
+10 votes or over 200 — so the exact floor barely matters: 4.4% of carded titles
+lose a badge at a floor of 10 and 5.1% at 100.
+
+The floor applies **only to the fallback**. A card showing IMDb's number already
+cleared IMDb's own 100-vote floor, and **77 of 259** such titles in that sample
+carry fewer than 100 *TMDB* votes — gating those would blank a third of the grid
+for nothing. An unknown vote count is left alone rather than read as zero. Checked
+where it should bite hardest, the K-Drama tab, whose titles carry far fewer TMDB
+votes: **20 of 20 cards keep a rating**, none blanked.
 
 ### Genre / Year / Min Rating read IMDb's labelling too
 
