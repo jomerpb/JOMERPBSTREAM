@@ -59,6 +59,9 @@ const sandbox = {
   AbortSignal: { timeout: () => ({}) },
   IntersectionObserver: class { observe() {} unobserve() {} disconnect() {} },
   MutationObserver: class { observe() {} disconnect() {} },
+  // stream.js builds every TMDB request with `new URL(...)`, so the sandbox
+  // needs the real ones rather than a stub.
+  URL, URLSearchParams,
   setTimeout, clearTimeout, setInterval, clearInterval, Image: class {},
   requestAnimationFrame: cb => setTimeout(cb, 0),
 };
@@ -247,6 +250,103 @@ console.log('\n9. the cast list dedupes a performer credited twice');
   check(out[0].img === '/a.jpg', 'the photo survives the merge');
   check(out[1].img === '', 'a missing photo becomes an empty string, not null');
   check(out[2].id === null, 'a credit with no person id keeps a null id');
+}
+
+console.log('\n10. the Streaming filter builds the right TMDB query');
+{
+  const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'watch-providers.json'), 'utf8'));
+  ctx.fetch = async () => ({ ok: true, json: async () => raw });
+  vm.runInContext('watchProvidersPromise = null; watchProviders = null;', ctx);
+  const d = await S('loadWatchProviders()');
+  check(!!d, 'the committed provider list loads');
+  check(d.tv.length >= 5 && d.movie.length >= 5,
+        `carries ${d.tv.length} TV and ${d.movie.length} movie services`);
+
+  const built = await vm.runInContext(`(() => {
+    const u = new URL('https://api.themoviedb.org/3/discover/tv');
+    const used = applyProviderParams(u, ['8','1899']);
+    return { used, qs: u.search };
+  })()`, ctx);
+  check(built.used === true, 'applyProviderParams reports it changed the query');
+  check(/with_watch_providers=8%7C1899/.test(built.qs),
+        'several services are OR-joined with a pipe', built.qs);
+  check(/watch_region=/.test(built.qs),
+        'watch_region is always sent — TMDB ignores the provider without it', built.qs);
+  check(/with_watch_monetization_types=flatrate/.test(built.qs),
+        'only subscription titles, never rent/buy', built.qs);
+
+  const none = await vm.runInContext(`(() => {
+    const u = new URL('https://api.themoviedb.org/3/discover/tv');
+    return { used: applyProviderParams(u, []), qs: u.search };
+  })()`, ctx);
+  check(none.used === false && none.qs === '',
+        'no services checked leaves the query untouched');
+}
+
+console.log('\n11. genres TMDB\'s TV list refuses are held back, not dropped');
+{
+  // The real /genre/tv/list vocabulary. Horror(27), Thriller(53), Fantasy(14)
+  // and Action(28) are absent from it — measured, each returns 0 results.
+  ctx.__tvGenres = { genres: [
+    {id:10759,name:'Action & Adventure'},{id:16,name:'Animation'},{id:35,name:'Comedy'},
+    {id:80,name:'Crime'},{id:99,name:'Documentary'},{id:18,name:'Drama'},
+    {id:10751,name:'Family'},{id:10762,name:'Kids'},{id:9648,name:'Mystery'},
+    {id:10763,name:'News'},{id:10764,name:'Reality'},{id:10765,name:'Sci-Fi & Fantasy'},
+    {id:10766,name:'Soap'},{id:10767,name:'Talk'},{id:10768,name:'War & Politics'},
+    {id:37,name:'Western'} ] };
+  vm.runInContext('tmdbTvGenrePromise = null; tmdbTvGenreIds = null; tmdb = async () => __tvGenres;', ctx);
+
+  const tv = await vm.runInContext("splitGenresForTmdb('tv',[27,18,53,80])", ctx);
+  check(JSON.stringify(tv.server) === '[18,80]', 'Drama and Crime go to TMDB', JSON.stringify(tv.server));
+  check(JSON.stringify(tv.client) === '[27,53]', 'Horror and Thriller are held back', JSON.stringify(tv.client));
+
+  const mv = await vm.runInContext("splitGenresForTmdb('movie',[27,18,53])", ctx);
+  check(mv.client.length === 0 && mv.server.length === 3,
+        'movies use TMDB\'s full list, so nothing is held back');
+
+  const empty = await vm.runInContext("splitGenresForTmdb('tv',[])", ctx);
+  check(empty.server.length === 0 && empty.client.length === 0, 'no genres in, none out');
+}
+
+console.log('\n12. the held-back genres are matched against the IMDb index');
+{
+  const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'imdb-browse.json'), 'utf8'));
+  ctx.fetch = async () => ({ ok: true, json: async () => raw });
+  vm.runInContext('imdbBrowsePromise = null; imdbBrowse = null;', ctx);
+  await S('loadImdbBrowse()');
+
+  // Pick a real Horror row and a real non-Horror row straight out of the index.
+  const picked = await vm.runInContext(`(() => {
+    const b = imdbBrowse, bit = 1 << b.genreIndex['Horror'];
+    let yes = null, no = null;
+    for (let i = 0; i < b.ids.length && !(yes && no); i++) {
+      if ((b.genre[i] & bit) && !yes) yes = b.ids[i];
+      else if (!(b.genre[i] & bit) && b.genre[i] && !no) no = b.ids[i];
+    }
+    return { yes, no };
+  })()`, ctx);
+  const tt = n => 'tt' + String(n).padStart(7, '0');
+  check(await vm.runInContext(`matchesImdbGenres({imdb_id:'${tt(picked.yes)}'},[27])`, ctx),
+        'a Horror title matches the Horror filter', tt(picked.yes));
+  check(!(await vm.runInContext(`matchesImdbGenres({imdb_id:'${tt(picked.no)}'},[27])`, ctx)),
+        'a non-Horror title does not', tt(picked.no));
+  check(await vm.runInContext("matchesImdbGenres({imdb_id:'tt0000001'},[])", ctx),
+        'an empty genre list matches everything');
+  check(!(await vm.runInContext("matchesImdbGenres({},[27])", ctx)),
+        'an item with no IMDb id cannot match');
+  check(!(await vm.runInContext("matchesImdbGenres({imdb_id:'tt9999999999'},[27])", ctx)),
+        'an id absent from the index does not match');
+  // The binary search must agree with a linear scan on every probe.
+  check(await vm.runInContext(`(() => {
+    const b = imdbBrowse, bit = 1 << b.genreIndex['Horror'];
+    for (let k = 0; k < 400; k++) {
+      const i = (k * 457) % b.ids.length;
+      const want = !!(b.genre[i] & bit);
+      const got = matchesImdbGenres({imdb_id:'tt'+b.ids[i]}, [27]);
+      if (want !== got) return false;
+    }
+    return true;
+  })()`, ctx), 'binary search agrees with the index on 400 probes');
 }
 
 console.log('\n' + '='.repeat(60));
