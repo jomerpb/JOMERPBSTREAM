@@ -3683,6 +3683,13 @@ function oracleSeedPrevDrawDate(gameKey,dateStr){
 // "pending"; an older gap falls back to the most recent draw actually on file
 // and flags itself, so a hole in pcso-history.json cannot freeze the panel.
 function oracleSeedCompute(gameKey,dateStr){
+  // Shape guard. Every date on this panel comes from the in-page calendar, so
+  // a malformed one is not reachable through the UI — but the seed lookup
+  // compares dates as STRINGS, and '2026-09-13' < 'not-a-date' is true, so a
+  // garbage value would quietly come back with the newest draw on file and an
+  // answer that means nothing. Refuse instead.
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr||'')))
+    return {ok:false,waitingFor:null,reason:'baddate'};
   var need=(gameKey==='ez2')?2:6;
   var want=oracleSeedPrevDrawDate(gameKey,dateStr);
   var prev=pcsoHistPrevEntry(gameKey,dateStr);

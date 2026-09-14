@@ -200,6 +200,17 @@ console.log('\n8. A reading that has no seed refuses instead of inventing one');
   check(`and the seed is always strictly earlier than the date read (${wrongSeed} violations)`, wrongSeed === 0);
 }
 
+// ── 8b. a malformed date refuses rather than string-comparing its way in ──
+// The seed lookup compares dates as strings, so '2026-09-13' < 'not-a-date' is
+// true and a garbage value would come back with the newest draw on file.
+console.log('\n8b. A malformed date refuses');
+{
+  for (const bad of ['not-a-date', '', null, undefined, '2026-9-1', '20260914']) {
+    const r = sb.oracleSeedCompute('658', bad);
+    check(`oracleSeedCompute('658', ${JSON.stringify(bad)}) refuses`, !!r && r.ok === false && r.reason === 'baddate');
+  }
+}
+
 // ── 9. STABILITY — a seeded pick never moves once it exists ──────────────
 // The panel above is history-free so its picks cannot move. This one IS seeded
 // from history, so the equivalent promise has to be proved rather than assumed:
