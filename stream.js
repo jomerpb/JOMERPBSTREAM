@@ -3493,18 +3493,7 @@ const SERVER_LIST = [
   { key:'peachify',   label:'Peachify' },
   { key:'cinezo',     label:'Cinezo' },
   { key:'moviesapi',  label:'MoviesAPI' },
-  { key:'vidfast',    label:'VidFast' },
-  // VidMoly is a video FILE HOST ("Fast and Secure Video Storage Center"), not
-  // a TMDB-addressable provider like the nine above. Measured: every
-  // TMDB-shaped route 404s (/movie/550, /tv/294095/1/3, /embed/movie/550 and
-  // nine more), there is no search and no API, and the only routes the server
-  // recognises are /embed-<fileId>.html and /e/<fileId> — where <fileId> is a
-  // random token minted when someone uploads one specific file. The id for
-  // "A Bona fide Killer E01" is 6q2a5sx5tdis; its neighbours ...tdit and
-  // ...tdir are both 404, and so is the show's TMDB id. So nothing can derive
-  // it, which is why this one is `manual`: the link is pasted once per
-  // episode and remembered, rather than built from ids.
-  { key:'vidmoly',    label:'VidMoly (paste link)', manual:true }
+  { key:'vidfast',    label:'VidFast' }
 ];
 let currentServer = 'vidlink';
 let triedServers = new Set();
@@ -3566,127 +3555,9 @@ function buildUrl(server) {
       return isMovie
         ? `https://vidfast.vc/movie/${tmdbId}`
         : `https://vidfast.vc/tv/${tmdbId}/${seasonNum}/${currentEp}`;
-    case 'vidmoly': {
-      // Only ever built from the stored FILE ID, never from the pasted string:
-      // whatever was typed is reduced to an id first (vidmolyIdFrom) and the
-      // url is rebuilt here, so nothing a paste contains can reach the frame.
-      const id = vidmolyStoredId();
-      return id ? `${VIDMOLY_EMBED}${id}.html` : '';
-    }
     default:
       return '';
   }
-}
-
-// ── VIDMOLY: A PASTED LINK, REMEMBERED PER EPISODE ──────────────────────────
-// Everything else in SERVER_LIST answers to a TMDB id. VidMoly cannot — see
-// the note on its entry above — so the viewer supplies the link and the page
-// remembers which episode it belongs to. One paste per episode is the whole
-// cost, and it is the only shape this source can take: there is no index to
-// scrape (no search, no API, no catalogue), and a table of file ids in the
-// repo would be exactly the hardcoded-id rule this codebase forbids.
-const VIDMOLY_EMBED = 'https://vidmoly.biz/embed-';
-const VIDMOLY_STORE = 'vidmolyLinks';
-// Both routes serve the same page (measured), and people paste either, or the
-// whole <iframe> embed code, or just the id.
-const VIDMOLY_HOSTS   = ['vidmoly.biz', 'vidmoly.to', 'vidmoly.me'];
-const VIDMOLY_PATH_RE = /^\/(?:embed-([a-z0-9]{4,32})\.html|e\/([a-z0-9]{4,32}))$/i;
-const VIDMOLY_BARE_RE = /^[a-z0-9]{4,32}$/i;
-
-// Reduces whatever was pasted to a bare file id, or '' if it is not a VidMoly
-// link at all. The id is all that is kept — see the buildUrl case.
-//
-// The host is compared as a PARSED HOSTNAME against a list, never by searching
-// the string for "vidmoly.biz". A substring test passes `notvidmoly.biz` and
-// `vidmoly.biz.someone-else.com`, and this value ends up as the src of a frame
-// that carries `allow="fullscreen *; autoplay *"` and no sandbox — so a
-// lookalike domain would be handed real permissions on the strength of a
-// pasted string. Caught by its own test, which passed against the substring
-// version until the host check was made exact.
-function vidmolyIdFrom(text) {
-  const t = String(text || '').trim();
-  if (!t) return '';
-  // People paste the whole <iframe …> embed code as often as the bare address.
-  const embed = t.match(/src\s*=\s*["']([^"']+)["']/i);
-  const candidate = embed ? embed[1].trim() : t;
-  if (VIDMOLY_BARE_RE.test(candidate)) return candidate.toLowerCase();
-  let u;
-  try { u = new URL(/^https?:\/\//i.test(candidate) ? candidate : 'https://' + candidate); }
-  catch (e) { return ''; }
-  if (!VIDMOLY_HOSTS.includes(u.hostname.toLowerCase().replace(/^www\./, ''))) return '';
-  const m = u.pathname.match(VIDMOLY_PATH_RE);
-  return m ? (m[1] || m[2]).toLowerCase() : '';
-}
-
-// One slot per episode; a movie has a single slot.
-function vidmolyKey() {
-  const item = currentItem;
-  if (!item) return '';
-  const id = item.tmdb_id || item.id;
-  if (item.type === 'movie') return `${id}:movie`;
-  const sn = currentSeason ? (currentSeason.season_number || 1) : 1;
-  return `${id}:${sn}:${currentEp}`;
-}
-
-function vidmolyAll() {
-  try { return JSON.parse(localStorage.getItem(VIDMOLY_STORE)) || {}; }
-  catch (e) { return {}; }
-}
-function vidmolyStoredId() {
-  const k = vidmolyKey();
-  return k ? (vidmolyAll()[k] || '') : '';
-}
-function vidmolySetId(id) {
-  const k = vidmolyKey();
-  if (!k) return;
-  const all = vidmolyAll();
-  if (id) all[k] = id; else delete all[k];
-  try { localStorage.setItem(VIDMOLY_STORE, JSON.stringify(all)); } catch (e) {}
-}
-
-// Called by the Save button on the paste row.
-function vidmolySave() {
-  const input = document.getElementById('vidmoly-input');
-  const note  = document.getElementById('vidmoly-note');
-  const id = vidmolyIdFrom(input ? input.value : '');
-  if (!id) {
-    if (note) note.textContent = 'That is not a VidMoly link. Paste the vidmoly.biz/embed-….html address.';
-    return;
-  }
-  vidmolySetId(id);
-  triedServers = new Set([currentServer]);   // a fresh link deserves a fresh chain
-  updateServerButtons();
-  loadServerUrl();
-  startWatchTimer();
-}
-
-function vidmolyForget() {
-  vidmolySetId('');
-  setPlayerFrame(null);
-  updateServerButtons();
-}
-
-// The row itself. Rendered by updateServerButtons() whenever a `manual` server
-// is the current one, so changing episode re-renders it against that episode's
-// own slot.
-function vidmolyRowHTML() {
-  const id = vidmolyStoredId();
-  const item = currentItem;
-  const what = item && item.type === 'movie' ? 'this movie' : `EP ${currentEp}`;
-  if (id) {
-    return `<div class="vmoly-row">
-      <div class="vmoly-saved">Playing a saved VidMoly link for <b>${what}</b>.</div>
-      <button class="vmoly-btn vmoly-clear" onclick="vidmolyForget()">Use a different link</button>
-    </div>`;
-  }
-  return `<div class="vmoly-row">
-    <label class="vmoly-lbl" for="vidmoly-input">VidMoly link for <b>${what}</b></label>
-    <input id="vidmoly-input" class="vmoly-input" type="url" inputmode="url"
-           autocomplete="off" autocapitalize="off" spellcheck="false"
-           placeholder="https://vidmoly.biz/embed-….html"/>
-    <button class="vmoly-btn" onclick="vidmolySave()">Save &amp; play</button>
-    <div id="vidmoly-note" class="vmoly-note">VidMoly has no search, so each episode needs its own link. Saved on this device.</div>
-  </div>`;
 }
 
 function updateServerButtons() {
@@ -3705,7 +3576,6 @@ function updateServerButtons() {
       ${opts}
     </select>
     <div id="server-status" style="display:none;font-size:11px;color:var(--muted);text-align:center;padding:6px 10px;"></div>
-    ${SERVER_LIST.find(s => s.key === currentServer)?.manual ? vidmolyRowHTML() : ''}
   `;
 }
 
@@ -3740,12 +3610,8 @@ function loadServerUrl() {
   const url = buildUrl(currentServer);
 
   if (!isAnime && !url) {
-    const srv = SERVER_LIST.find(s => s.key === currentServer);
-    // A manual server has no url until a link is pasted. Falling through to the
-    // next server would throw the viewer off the source they just chose, so it
-    // parks the frame and leaves the paste row on screen instead.
-    if (srv && srv.manual) { setPlayerFrame(null); stopWatchTimer(); return; }
-    if (status) { status.style.display = 'block'; status.textContent = `${srv?.label || currentServer} has no direct embed — trying next server…`; }
+    const label = SERVER_LIST.find(s => s.key === currentServer)?.label || currentServer;
+    if (status) { status.style.display = 'block'; status.textContent = `${label} has no direct embed — trying next server…`; }
     autoFallback();
     return;
   }
@@ -3765,9 +3631,7 @@ function loadServerUrl() {
 function autoFallback() {
   const status = document.getElementById('server-status');
   triedServers.add(currentServer);
-  // Manual servers are skipped: the fallback chain is for sources that can
-  // resolve themselves, and landing on a paste box is not a fallback.
-  const next = SERVER_LIST.find(s => !triedServers.has(s.key) && !s.manual);
+  const next = SERVER_LIST.find(s => !triedServers.has(s.key));
   if (!next) {
     if (status) { status.style.display = 'block'; status.textContent = 'No working server found. Try again later or pick one manually.'; }
     return;
