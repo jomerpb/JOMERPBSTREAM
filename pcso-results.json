@@ -1,29 +1,27 @@
 {
-  "updated": "2026-09-01T23:09:08.906334+08:00",
-  "date": "September 1, 2026",
+  "updated": "2026-09-14T17:16:52.906791+08:00",
+  "checked": "2026-09-14T17:16:52.906791+08:00",
+  "date": "September 14, 2026",
   "ez2": [
     {
       "draw": "2PM",
       "nums": [
-        11,
-        4
+        26,
+        26
       ],
       "cutoff": 14
     },
     {
       "draw": "5PM",
       "nums": [
-        5,
-        7
+        17,
+        11
       ],
       "cutoff": 17
     },
     {
       "draw": "9PM",
-      "nums": [
-        16,
-        23
-      ],
+      "nums": [],
       "cutoff": 21
     }
   ],
@@ -31,16 +29,16 @@
     {
       "game": "6/58",
       "nums": [
-        32,
-        25,
-        23,
-        22,
-        1,
-        41
+        57,
+        26,
+        17,
+        14,
+        41,
+        52
       ],
       "done": true,
-      "jackpot": "₱258.5M",
-      "draw_date": "September 01, 2026",
+      "jackpot": "₱292.8M",
+      "draw_date": "September 13, 2026",
       "winners": 0,
       "days": [
         0,
@@ -51,16 +49,16 @@
     {
       "game": "6/55",
       "nums": [
-        45,
-        16,
-        39,
-        50,
-        41,
-        47
+        25,
+        5,
+        37,
+        23,
+        43,
+        51
       ],
       "done": true,
-      "jackpot": "₱167.3M",
-      "draw_date": "August 31, 2026",
+      "jackpot": "₱192.3M",
+      "draw_date": "September 12, 2026",
       "winners": 0,
       "days": [
         1,
@@ -71,16 +69,16 @@
     {
       "game": "6/49",
       "nums": [
-        45,
-        22,
-        41,
-        8,
-        36,
-        2
+        23,
+        26,
+        21,
+        20,
+        48,
+        25
       ],
       "done": true,
-      "jackpot": "₱25.2M",
-      "draw_date": "September 01, 2026",
+      "jackpot": "₱25.1M",
+      "draw_date": "September 13, 2026",
       "winners": 0,
       "days": [
         0,
@@ -91,16 +89,16 @@
     {
       "game": "6/45",
       "nums": [
-        32,
-        6,
-        23,
-        25,
+        12,
         18,
-        21
+        14,
+        34,
+        24,
+        45
       ],
       "done": true,
-      "jackpot": "₱35.0M",
-      "draw_date": "August 31, 2026",
+      "jackpot": "₱51.7M",
+      "draw_date": "September 11, 2026",
       "winners": 0,
       "days": [
         1,
@@ -111,16 +109,16 @@
     {
       "game": "6/42",
       "nums": [
-        17,
-        24,
-        8,
-        33,
-        37,
-        1
+        39,
+        10,
+        26,
+        30,
+        9,
+        29
       ],
       "done": true,
-      "jackpot": "₱21.9M",
-      "draw_date": "September 01, 2026",
+      "jackpot": "₱38.5M",
+      "draw_date": "September 12, 2026",
       "winners": 0,
       "days": [
         2,
