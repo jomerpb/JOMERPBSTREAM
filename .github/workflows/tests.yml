@@ -73,6 +73,9 @@ jobs:
       - name: WebComics scraper — sitemap parsing, and the same shrink guard
         run: python3 .github/scripts/tests/test_scrape_webcomics.py
 
+      - name: KissKH index — anchored episode regex, grouping, shrink guard
+        run: python3 .github/scripts/tests/test_scrape_kisskh.py
+
       - name: IMDb ratings pipeline — vote floor, gap encoding, shrink guard, stamps
         run: python3 .github/scripts/tests/test_build_imdb_ratings.py
 

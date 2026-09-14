@@ -1,0 +1,69 @@
+name: KissKH Index
+
+# FOURTH exception to the repo's manual-only workflow convention, and it earns
+# it the same way pcso-history-append.yml and the MangaFreak feed do: something
+# user-visible goes stale on its own.
+#
+# This index is what the Stream tab's KissKH server resolves against. The site
+# carries currently-airing Korean drama, so a new episode appears on it within
+# hours of broadcast — and until the index is re-scraped that episode simply
+# does not resolve and the player falls through to another server. Dispatch-only
+# would mean "the newest episode never works", which is the one case people
+# actually reach for this source.
+#
+# It is cheap: one request for the sitemap index plus one per shard, 15 in
+# total, a couple of seconds. Daily at 13:00 Asia/Manila, after the previous
+# evening's Korean broadcasts have been posted.
+on:
+  schedule:
+    - cron: '0 5 * * *'          # 13:00 Asia/Manila
+  workflow_dispatch: {}
+
+concurrency:
+  group: kisskh-index
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # No third-party imports: urllib and re are enough for a sitemap.
+
+      - name: Scrape the slug index
+        run: python3 .github/scripts/scrape_kisskh.py
+
+      - name: Commit results
+        run: |
+          git config user.name "KissKH Bot"
+          git config user.email "kisskh-bot@jomerpb.github.io"
+          git add kisskh-index.json
+          if git diff --staged --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "chore: refresh KissKH slug index $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3 4 5; do
+            # Explicit refspec rather than a bare `git push`: checkout@v4 on a
+            # schedule can leave HEAD detached, where a bare push has no upstream
+            # to resolve and fails outright. It shares main with the two PCSO
+            # jobs and the hourly MangaFreak one, so it rebases and retries.
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push $i failed — rebasing onto origin/${GITHUB_REF_NAME} and retrying"
+            git pull --rebase origin "${GITHUB_REF_NAME}" || exit 1
+            sleep $((i * 3))
+          done
+          echo "could not push after 5 attempts" >&2
+          exit 1
