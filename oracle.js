@@ -3529,7 +3529,9 @@ function oracleSeedFromHTML(r){
         return a.map(function(n){ return p2(n); }).join('-');
       }).join(' · ')
     : (r.seedEntry.nums||[]).map(function(n){ return p2(n); }).join('-');
-  return '<span class="opick-jackpot">Cast from '+pcsoHistShortDate(r.seedDate)
+  // .oseed-from rides on the SAME line as the game name and caret ("6/45 ▸ Cast
+  // from Sep 11 · …"); the rollover clause below it keeps its own full-width row.
+  return '<span class="opick-jackpot oseed-from">Cast from '+pcsoHistShortDate(r.seedDate)
     +' · <span class="oseed-src">'+nums+'</span>'
     +(r.gap?' (the scheduled draw before this one is not on file)':'')+'</span>';
 }
