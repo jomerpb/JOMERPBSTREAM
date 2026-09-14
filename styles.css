@@ -1080,6 +1080,7 @@
 #oracle-page .pcso-live{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pcso-pulse 2s infinite;flex-shrink:0;display:inline-block}
 #oracle-page .pcso-live.dot-red{background:var(--red)}
 #oracle-page .pcso-live.dot-orange{background:var(--orange)}
+#oracle-page .pcso-live.dot-teal{background:var(--teal)}
 @keyframes pcso-pulse{0%,100%{opacity:1}50%{opacity:.3}}
 /* Someone who asked the OS not to animate should get a steady dot, not a
    flashing one — the colour still carries the meaning. */
@@ -1745,3 +1746,23 @@
 #trade-page .tc-funds-info .loss{color:var(--red);}
 #trade-page .tc-funds-msg{margin-top:6px;font-size:10.5px;color:var(--red);}
 #trade-page .tc-funds-msg:empty{display:none;}
+
+
+/* ── NEXT DRAW FROM LAST RESULT ────────────────────────────────────────────
+   The seeded panel reuses .oracle-pick-game-row wholesale — same sphere sizing,
+   same --ball-gap/--ball-max cap, same stacked head line — so only three things
+   are new here.
+   .oseed-wait is the refusal state, and it is deliberately as prominent as a
+   row of spheres: "no seed yet" is the panel's real answer on those dates, not
+   an error to tuck away.
+   .oseed-src is the seed draw echoed on the head line, monospaced so the six
+   numbers read as data rather than prose.                                    */
+#oracle-page .oseed-wait{width:100%;margin:2px 0 6px;padding:10px 12px;border-radius:10px;
+  background:rgba(255,255,255,.03);border:1px dashed var(--border);
+  font-size:11px;line-height:1.55;color:var(--muted);text-align:left}
+#oracle-page .oseed-src{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color:var(--muted2);letter-spacing:.02em;white-space:nowrap}
+/* The head line wraps at phone width and the seed clause is the part that
+   should give, not the game name. */
+#oracle-page .oseed-row .opick-head{row-gap:3px}
+@media (max-width:380px){ #oracle-page .oseed-src{white-space:normal} }

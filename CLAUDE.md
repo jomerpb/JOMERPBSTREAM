@@ -31,6 +31,7 @@ run all three, not the same one three times:
    node   .github/scripts/tests/test_oracle_layers.mjs      # layers do what they claim
    node   .github/scripts/tests/test_oracle_pick.mjs        # pick shape, scorer, schedule, palette, jackpot
    node   .github/scripts/tests/test_snapshot_oracle.mjs    # the daily oracle-history.json writer
+   node   .github/scripts/tests/test_oracle_seed.mjs        # 報數起卦 cast, the refusal, pick stability
    python3 .github/scripts/tests/test_sphere_palette.py     # styles.css still matches its generator
    python3 .github/scripts/tests/test_scrape_pcso.py
    python3 .github/scripts/tests/test_append_pcso_history.py
@@ -198,7 +199,94 @@ function declaration for this reason (it was an IIFE); it is idempotent, and a
 re-run that *fails* no longer flips the panel to "fetch failed" when a good
 copy is already loaded.
 
-A third panel, **"Analyze My Own Personal Numbers"** (`<details id="personal-card">`), is collapsed by default and contains everything the personal analysis needs: the game selector (`#gameGrid`), `#ez2wrap`, the six inputs (`#personal-wrap`), the ANALYZE MY NUMBERS button, and the `#loader`/`#results` it renders into. Those elements are no longer page-level — code that reaches for `#gameGrid` or `#results` is reaching inside that card.
+A third date panel, **"Next Draw From Last Result"** (`oracleSeedRender`), is the
+only one anchored on a *draw* rather than a date. The two above it start with a
+calendar date and ask what that date reads; this one takes the previous recorded
+result for each game and casts from **those winning numbers**. It is a separate
+engine on purpose — `convergence()`, `computeOracleAsOf()`, `snapshot_oracle.mjs`
+and `oracle-history.json` are untouched, so the history-free rule below still
+holds for everything that feeds the daily job.
+
+**Only five of the eleven layers can be cast from numbers, and that is a hard
+constraint rather than a shortcut.** Py (a digital root is defined for any
+number), Ls (the Lo Shu *is* the 1–9 grid — which palaces a draw lights up is
+what 九宮 number analysis reads), IC (報數起卦, below), Ta (sum, then reduce into
+the Major Arcana range — the same operation `layerTarot` does to a date sum) and
+An (an 11/22/33/44/55 actually drawn is an angel number). The other six cannot:
+Chaldean maps *letters* to numbers, Astrology/Horary/Part-of-Fortune need a
+moment in time and a place, BaZi's four pillars come from a date and an hour, and
+Energy is derived from those. Feeding six numbers into a BaZi pillar would be
+fabrication, so the panel reads five sources and prints **`/5`** on its ball tags
+and its convergence grid rather than `/11` over a figure six of them never
+contributed to. `dotHTML` and `oraclePickBalls` therefore take an optional icon
+array and source total; both default to the eleven-source cluster, so the two
+existing callers are unchanged.
+
+**The I Ching half is the authentic part, and it is a documented classical
+method, not an adaptation.** Mei Hua Yi Shu's 報數起卦 casts from reported
+numbers: split them into two equal groups, each group's **sum** gives a trigram
+(mod 8, 0→8 Kun), and the total mod 6 gives the moving line. Six lotto numbers
+split 3/3; EZ2's two split 1/1, which is the classic two-number report. Worked
+example, pinned by test 1: 6/58 on 2026-09-11 drew **9, 3, 22, 2, 26, 34** —
+upper (9+3+22) mod 8 = 2 Dui ☱, lower (2+26+34) mod 8 = 6 Kan ☵, moving 96 mod 6
+= 6, giving **hexagram 47 澤水困 Kùn**. Sources: [易學網](https://www.eee-learning.com/article/4136),
+[天機閣](https://tianjige.club/tw/meihua/qigua), [Joseph Yu, *Plum Blossom Divination — A Mathematical Analysis*](http://wew.astro-fengshui.com/images/portfolio/mathematical-analysis-of-plum-blossom.pdf).
+
+**Draw order is load-bearing, which is why `pcso-history.json` stores the numbers
+unsorted.** 報數起卦 reads the two halves in the order they were reported.
+Sorting the draw first changes the hexagram on **817 of 979** recorded draws
+(83.5%) — test 2 measures exactly that, so a future "tidy-up" that sorts the seed
+fails CI instead of silently re-casting every reading.
+
+**The refusal is the feature.** A seeded reading cannot exist before its seed
+does, so a date whose preceding draw is not yet recorded renders
+`⏳ Waiting for the Sep 14 draw` instead of numbers. That collapses the horizon
+from the other panel's two years to exactly **one draw per game**, and EZ2 goes
+blank a day earlier than the rest because it draws daily, so its seed is always
+yesterday. Measured on 2026-09-14: Sep 14 casts all 3 scheduled games, Sep 15
+casts 3 of 4 (EZ2 waiting), Sep 16 casts none. One guard matters — a *missing
+past* draw is not the same as a future one, so only a seed dated today or later
+is `pending`; an older gap falls back to the most recent draw on file and says
+so, or a hole in `pcso-history.json` would freeze the panel forever.
+
+**A seeded pick never moves once it exists**, which is the counterpart of the
+history-free panel's guarantee and had to be proved rather than assumed: the seed
+is a draw that already happened, so later draws landing must leave it alone.
+Test 9 loads a second engine whose history is truncated at 2026-06-30 — the world
+as it looked on the day — and compares **814** past readings: **0 moved**.
+
+**It scores itself whenever the answer is known.** If the target draw is already
+on file the panel prints `Seeded Pick · N of 6 matched` under the spheres. Match
+count only — the winning numbers, the gold highlighting and the prize tiers stay
+in Look Up Result and are deliberately not duplicated. A card that only ever
+shows what it picks reads like a tip sheet; showing how it did is what keeps it a
+statistics exercise.
+
+**And it is not a prediction, measured rather than asserted.** Walk-forward over
+**974 real draws**, each cast from the draw immediately before it: mean **0.72**
+matches per draw against a seeded random control's **0.75** (z = −0.81, i.e.
+indistinguishable). The date engine scored 0.73 on the same corpus and a plain
+mirror transform (pool+1−n) 0.75. Best single result anywhere: 4 of 6, once. The
+note under the panel quotes those figures on the page. Per the statistics rule
+below, never tune any of this for hit rate.
+
+Two house rules, admitted as such in the code the way `convergence()`'s own
+`familyOffset` is. The within-family rotation is
+`((hexNum + drawTotal + digit × pool) mod familySize)` — the cast's own two
+figures, spread by the pool so two games reading the same seed do not land on
+identical positions. And the Lo Shu source votes only for the palaces the draw
+**lit**; the dark ones are displayed but never scored, because reading them as
+"due" is precisely the hot/overdue contradiction the stats engine was removed
+for. Test 5 pins that shut.
+
+`ORACLE_HEX_DB` and `ORACLE_MAJOR_ARCANA` were lifted out of `layerIChing`/
+`layerTarot` to module scope so this panel can name the hexagram and card its
+cast produces without a second copy of 64 + 22 entries drifting from the first.
+Pure move, no behaviour change — confirmed by re-running `snapshot_oracle.mjs`
+with `FORCE_OVERWRITE=1` on a repo copy and diffing: picks for 2026-09-14
+identical across all six games.
+
+A fourth panel, **"Analyze My Own Personal Numbers"** (`<details id="personal-card">`), is collapsed by default and contains everything the personal analysis needs: the game selector (`#gameGrid`), `#ez2wrap`, the six inputs (`#personal-wrap`), the ANALYZE MY NUMBERS button, and the `#loader`/`#results` it renders into. Those elements are no longer page-level — code that reaches for `#gameGrid` or `#results` is reaching inside that card.
 
 **One scorer, two surfaces.** The alignment percentage is `oracleAlignment(nums, digitScores, meaning, poolMax)` — digit convergence ×0.70 blended with meaning capture ×0.30 — and both the Oracle Pick panel and Analyze My Numbers call it. It exists because they drifted: the pick panel blended both halves while the personal view reported the digit half alone, so identical numbers read 54% in one place and 67% in the other. Never re-inline either half; and per the statistics rule above, never tune the two weights for hit rate.
 

@@ -296,6 +296,12 @@ async function loadPcsoHistoryIntoGames(){
       if(typeof oraclePickRender==='function'&&document.getElementById('oracle-pick-result')){
         try{ oraclePickRender(); }catch(e2){ console.error('oraclePickRender:',e2); }
       }
+      // The seeded panel is built ENTIRELY out of PCSO_HISTORY — every number on
+      // it is cast from a recorded draw — so it has to be repainted here or it
+      // keeps serving the hardcoded fallback draws for the whole session.
+      if(typeof oracleSeedRender==='function'&&document.getElementById('oracle-seed-result')){
+        try{ oracleSeedRender(); }catch(e3){ console.error('oracleSeedRender:',e3); }
+      }
     }
   }catch(e){
     PCSO_HISTORY_STATUS={loaded:false,source:'hardcoded fallback',error:e.message};
@@ -1141,6 +1147,74 @@ function chineseLunarDate(y,m,dd){
 
 function ichingHexNumOf(lowerTri,upperTri){ return ICHING_HEX_TABLE[lowerTri-1][upperTri-1]; }
 
+// Hexagram database. Lifted to module scope so the seeded panel
+// ("Next Draw From Last Result") can name the hexagram its 報數起卦 cast
+// produces without a second, drifting copy of these 64 entries.
+var ORACLE_HEX_DB={1:{name:"Qian",english:"The Creative",gambling:"Strong favorable energy · act decisively"},
+    2:{name:"Kun",english:"The Receptive",gambling:"Receptive · follow others' lead"},
+    3:{name:"Zhun",english:"Difficulty at Beginning",gambling:"Initial struggle · persistence wins"},
+    4:{name:"Meng",english:"Youthful Folly",gambling:"Seek guidance · trust intuition"},
+    5:{name:"Xu",english:"Waiting",gambling:"Patience required · timing critical"},
+    6:{name:"Song",english:"Conflict",gambling:"Caution · avoid rash decisions"},
+    7:{name:"Shi",english:"The Army",gambling:"Discipline · collective strength"},
+    8:{name:"Bi",english:"Holding Together",gambling:"Alliance · cooperative fortune"},
+    9:{name:"Xiao Chu",english:"Small Taming",gambling:"Minor gains · accumulation"},
+    10:{name:"Lu",english:"Treading",gambling:"Careful steps · success possible"},
+    11:{name:"Tai",english:"Peace",gambling:"Harmony · excellent fortune"},
+    12:{name:"Pi",english:"Standstill",gambling:"Blockage · wait for better time"},
+    13:{name:"Tong Ren",english:"Fellowship",gambling:"Unity · shared luck"},
+    14:{name:"Da You",english:"Great Possession",gambling:"Abundance · peak fortune"},
+    15:{name:"Qian",english:"Modesty",gambling:"Humble approach brings reward"},
+    16:{name:"Yu",english:"Enthusiasm",gambling:"Joy · favorable for speculation"},
+    17:{name:"Sui",english:"Following",gambling:"Go with flow · adapt to moment"},
+    18:{name:"Gu",english:"Work on Decay",gambling:"Correct errors · renewal ahead"},
+    19:{name:"Lin",english:"Approach",gambling:"Opportunity approaching · be ready"},
+    20:{name:"Guan",english:"Contemplation",gambling:"Observe carefully · gather insight"},
+    21:{name:"Shi He",english:"Biting Through",gambling:"Breakthrough · obstacles cleared"},
+    22:{name:"Bi",english:"Grace",gambling:"Beauty · aesthetics · favorable"},
+    23:{name:"Bo",english:"Splitting Apart",gambling:"Decline · not favorable now"},
+    24:{name:"Fu",english:"Return",gambling:"Renewal · cycle beginning · positive"},
+    25:{name:"Wu Wang",english:"Innocence",gambling:"Pure action · unexpected fortune"},
+    26:{name:"Da Chu",english:"Great Taming",gambling:"Accumulate strength · hold back"},
+    27:{name:"Yi",english:"Nourishment",gambling:"Feed the right energy · discern"},
+    28:{name:"Da Guo",english:"Great Excess",gambling:"Peak · breakthrough or collapse"},
+    29:{name:"Kan",english:"Abysmal Water",gambling:"Double danger · proceed carefully"},
+    30:{name:"Li",english:"The Clinging Fire",gambling:"Clarity · dependence on others"},
+    31:{name:"Xian",english:"Influence",gambling:"Attraction · mutual resonance"},
+    32:{name:"Heng",english:"Duration",gambling:"Perseverance · lasting success"},
+    33:{name:"Dun",english:"Retreat",gambling:"Strategic withdrawal · timing"},
+    34:{name:"Da Zhuang",english:"Great Power",gambling:"Strength · momentum · act now"},
+    35:{name:"Jin",english:"Progress",gambling:"Advancing · success coming"},
+    36:{name:"Ming Yi",english:"Darkening of Light",gambling:"Conceal brilliance · wait"},
+    37:{name:"Jia Ren",english:"Family",gambling:"Proper relationships · harmony"},
+    38:{name:"Kui",english:"Opposition",gambling:"Tension · contrasting forces"},
+    39:{name:"Jian",english:"Obstruction",gambling:"Difficulty · seek help"},
+    40:{name:"Jie",english:"Deliverance",gambling:"Release · obstacles dissolving"},
+    41:{name:"Sun",english:"Decrease",gambling:"Reduce · simplify · less is more"},
+    42:{name:"Yi",english:"Increase",gambling:"Growth · benefit · expand"},
+    43:{name:"Guai",english:"Breakthrough",gambling:"Resolution · decisive action"},
+    44:{name:"Gou",english:"Coming to Meet",gambling:"Temptation · unexpected encounter"},
+    45:{name:"Cui",english:"Gathering",gambling:"Assembly · collective fortune · favorable"},
+    46:{name:"Sheng",english:"Pushing Upward",gambling:"Ascent · gradual success"},
+    47:{name:"Kun",english:"Oppression",gambling:"Exhaustion · endure · change coming"},
+    48:{name:"Jing",english:"The Well",gambling:"Inexhaustible source · seek depth"},
+    49:{name:"Ge",english:"Revolution",gambling:"Change · transformation · major shift"},
+    50:{name:"Ding",english:"The Cauldron",gambling:"Nourishment · cultural achievement"},
+    51:{name:"Zhen",english:"The Arousing Thunder",gambling:"Shock · awakening · action"},
+    52:{name:"Gen",english:"Keeping Still Mountain",gambling:"Stillness · meditation · wait"},
+    53:{name:"Jian",english:"Development",gambling:"Gradual progress · steady gains"},
+    54:{name:"Gui Mei",english:"Marrying Maiden",gambling:"Subordinate position · caution"},
+    55:{name:"Feng",english:"Abundance",gambling:"Peak moment · act now"},
+    56:{name:"Lu",english:"The Wanderer",gambling:"Impermanence · adapt quickly"},
+    57:{name:"Xun",english:"The Gentle Wind",gambling:"Penetrate gradually · influence"},
+    58:{name:"Dui",english:"The Joyous Lake",gambling:"Joy · pleasure · favorable"},
+    59:{name:"Huan",english:"Dispersion",gambling:"Dissolution · scatter obstacles"},
+    60:{name:"Jie",english:"Limitation",gambling:"Boundaries · discipline needed"},
+    61:{name:"Zhong Fu",english:"Inner Truth",gambling:"Sincerity · authentic action"},
+    62:{name:"Xiao Guo",english:"Small Exceeding",gambling:"Small steps · modesty wins"},
+    63:{name:"Ji Ji",english:"After Completion",gambling:"Peak · maintain discipline"},
+    64:{name:"Wei Ji",english:"Before Completion",gambling:"Almost there · final push"}};
+
 function layerIChing(drawHour){
   // Authentic Mei Hua Yi Shu (梅花易数) time-based casting — 年月日时起卦法,
   // Shao Yong's classical method, not a Western-numerology substitute:
@@ -1208,70 +1282,7 @@ function layerIChing(drawHour){
   var hexNum=ichingHexNumOf(lower,upper);
 
   // Hexagram database
-  var hexDB={1:{name:"Qian",english:"The Creative",gambling:"Strong favorable energy · act decisively"},
-    2:{name:"Kun",english:"The Receptive",gambling:"Receptive · follow others' lead"},
-    3:{name:"Zhun",english:"Difficulty at Beginning",gambling:"Initial struggle · persistence wins"},
-    4:{name:"Meng",english:"Youthful Folly",gambling:"Seek guidance · trust intuition"},
-    5:{name:"Xu",english:"Waiting",gambling:"Patience required · timing critical"},
-    6:{name:"Song",english:"Conflict",gambling:"Caution · avoid rash decisions"},
-    7:{name:"Shi",english:"The Army",gambling:"Discipline · collective strength"},
-    8:{name:"Bi",english:"Holding Together",gambling:"Alliance · cooperative fortune"},
-    9:{name:"Xiao Chu",english:"Small Taming",gambling:"Minor gains · accumulation"},
-    10:{name:"Lu",english:"Treading",gambling:"Careful steps · success possible"},
-    11:{name:"Tai",english:"Peace",gambling:"Harmony · excellent fortune"},
-    12:{name:"Pi",english:"Standstill",gambling:"Blockage · wait for better time"},
-    13:{name:"Tong Ren",english:"Fellowship",gambling:"Unity · shared luck"},
-    14:{name:"Da You",english:"Great Possession",gambling:"Abundance · peak fortune"},
-    15:{name:"Qian",english:"Modesty",gambling:"Humble approach brings reward"},
-    16:{name:"Yu",english:"Enthusiasm",gambling:"Joy · favorable for speculation"},
-    17:{name:"Sui",english:"Following",gambling:"Go with flow · adapt to moment"},
-    18:{name:"Gu",english:"Work on Decay",gambling:"Correct errors · renewal ahead"},
-    19:{name:"Lin",english:"Approach",gambling:"Opportunity approaching · be ready"},
-    20:{name:"Guan",english:"Contemplation",gambling:"Observe carefully · gather insight"},
-    21:{name:"Shi He",english:"Biting Through",gambling:"Breakthrough · obstacles cleared"},
-    22:{name:"Bi",english:"Grace",gambling:"Beauty · aesthetics · favorable"},
-    23:{name:"Bo",english:"Splitting Apart",gambling:"Decline · not favorable now"},
-    24:{name:"Fu",english:"Return",gambling:"Renewal · cycle beginning · positive"},
-    25:{name:"Wu Wang",english:"Innocence",gambling:"Pure action · unexpected fortune"},
-    26:{name:"Da Chu",english:"Great Taming",gambling:"Accumulate strength · hold back"},
-    27:{name:"Yi",english:"Nourishment",gambling:"Feed the right energy · discern"},
-    28:{name:"Da Guo",english:"Great Excess",gambling:"Peak · breakthrough or collapse"},
-    29:{name:"Kan",english:"Abysmal Water",gambling:"Double danger · proceed carefully"},
-    30:{name:"Li",english:"The Clinging Fire",gambling:"Clarity · dependence on others"},
-    31:{name:"Xian",english:"Influence",gambling:"Attraction · mutual resonance"},
-    32:{name:"Heng",english:"Duration",gambling:"Perseverance · lasting success"},
-    33:{name:"Dun",english:"Retreat",gambling:"Strategic withdrawal · timing"},
-    34:{name:"Da Zhuang",english:"Great Power",gambling:"Strength · momentum · act now"},
-    35:{name:"Jin",english:"Progress",gambling:"Advancing · success coming"},
-    36:{name:"Ming Yi",english:"Darkening of Light",gambling:"Conceal brilliance · wait"},
-    37:{name:"Jia Ren",english:"Family",gambling:"Proper relationships · harmony"},
-    38:{name:"Kui",english:"Opposition",gambling:"Tension · contrasting forces"},
-    39:{name:"Jian",english:"Obstruction",gambling:"Difficulty · seek help"},
-    40:{name:"Jie",english:"Deliverance",gambling:"Release · obstacles dissolving"},
-    41:{name:"Sun",english:"Decrease",gambling:"Reduce · simplify · less is more"},
-    42:{name:"Yi",english:"Increase",gambling:"Growth · benefit · expand"},
-    43:{name:"Guai",english:"Breakthrough",gambling:"Resolution · decisive action"},
-    44:{name:"Gou",english:"Coming to Meet",gambling:"Temptation · unexpected encounter"},
-    45:{name:"Cui",english:"Gathering",gambling:"Assembly · collective fortune · favorable"},
-    46:{name:"Sheng",english:"Pushing Upward",gambling:"Ascent · gradual success"},
-    47:{name:"Kun",english:"Oppression",gambling:"Exhaustion · endure · change coming"},
-    48:{name:"Jing",english:"The Well",gambling:"Inexhaustible source · seek depth"},
-    49:{name:"Ge",english:"Revolution",gambling:"Change · transformation · major shift"},
-    50:{name:"Ding",english:"The Cauldron",gambling:"Nourishment · cultural achievement"},
-    51:{name:"Zhen",english:"The Arousing Thunder",gambling:"Shock · awakening · action"},
-    52:{name:"Gen",english:"Keeping Still Mountain",gambling:"Stillness · meditation · wait"},
-    53:{name:"Jian",english:"Development",gambling:"Gradual progress · steady gains"},
-    54:{name:"Gui Mei",english:"Marrying Maiden",gambling:"Subordinate position · caution"},
-    55:{name:"Feng",english:"Abundance",gambling:"Peak moment · act now"},
-    56:{name:"Lu",english:"The Wanderer",gambling:"Impermanence · adapt quickly"},
-    57:{name:"Xun",english:"The Gentle Wind",gambling:"Penetrate gradually · influence"},
-    58:{name:"Dui",english:"The Joyous Lake",gambling:"Joy · pleasure · favorable"},
-    59:{name:"Huan",english:"Dispersion",gambling:"Dissolution · scatter obstacles"},
-    60:{name:"Jie",english:"Limitation",gambling:"Boundaries · discipline needed"},
-    61:{name:"Zhong Fu",english:"Inner Truth",gambling:"Sincerity · authentic action"},
-    62:{name:"Xiao Guo",english:"Small Exceeding",gambling:"Small steps · modesty wins"},
-    63:{name:"Ji Ji",english:"After Completion",gambling:"Peak · maintain discipline"},
-    64:{name:"Wei Ji",english:"Before Completion",gambling:"Almost there · final push"}};
+  var hexDB=ORACLE_HEX_DB;
   var hexInfo=hexDB[hexNum]||{name:'Hex '+hexNum,english:'Active energy',gambling:'Moderate fortune'};
 
   // Nuclear hexagram (互卦) — lines 2,3,4 become the new lower trigram,
@@ -1336,16 +1347,10 @@ function layerIChing(drawHour){
 // Date digits reduced into Major Arcana range 0–21, per the standard
 // "Tarot card of the day" numerology method. No personal data.
 // ══════════════════════════
-function layerTarot(drawHour){
-  var dateStr=String(_D)+String(_M)+String(_Y);
-  var rawSum=dateStr.split('').reduce(function(a,b){return a+parseInt(b);},0);
-  var cardNum=rawSum;
-  var wasReduced=false;
-  while(cardNum>21){
-    cardNum=String(cardNum).split('').reduce(function(a,b){return a+parseInt(b);},0);
-    wasReduced=true;
-  }
-  var majorArcana=[
+// Major Arcana. Module scope for the same reason as ORACLE_HEX_DB above:
+// the seeded panel reduces a DRAW total into 0..21 and needs the same card
+// names layerTarot() reduces a DATE total into.
+var ORACLE_MAJOR_ARCANA=[
     {name:'The Fool',gambling:'Fresh, unpredictable energy · take the leap'},
     {name:'The Magician',gambling:'Willpower manifests · confident choices favored'},
     {name:'The High Priestess',gambling:'Trust intuition over pure logic today'},
@@ -1369,6 +1374,17 @@ function layerTarot(drawHour){
     {name:'Judgement',gambling:'Reckoning and renewal · reassess your pattern'},
     {name:'The World',gambling:'Completion · a cycle of picks closes well'},
   ];
+
+function layerTarot(drawHour){
+  var dateStr=String(_D)+String(_M)+String(_Y);
+  var rawSum=dateStr.split('').reduce(function(a,b){return a+parseInt(b);},0);
+  var cardNum=rawSum;
+  var wasReduced=false;
+  while(cardNum>21){
+    cardNum=String(cardNum).split('').reduce(function(a,b){return a+parseInt(b);},0);
+    wasReduced=true;
+  }
+  var majorArcana=ORACLE_MAJOR_ARCANA;
   var card=majorArcana[cardNum]||majorArcana[0];
   var reducedDigit=reduce(cardNum);
   var extraDigits=[];
@@ -1929,10 +1945,14 @@ async function generate(){
 // RENDER
 // ══════════════════════════
 var BTIERS=['b1','b2','b3','b4','b5','b6'];
-function dotHTML(idxs,labels){
-  var icons=['Py','Ch','As','Ba','Fs','IC','PoF','Ta','An','Ho','En','St'];
+// `icons` is optional and defaults to the eleven-source convergence cluster, so
+// every existing caller is unchanged. The seeded panel passes its own five —
+// without that the icon text came from this fixed array by POSITION, so its
+// Py/Ls/IC/Ta/An dots rendered as Py/Ch/As/Ba/Fs.
+function dotHTML(idxs,labels,icons){
+  icons=icons||['Py','Ch','As','Ba','Fs','IC','PoF','Ta','An','Ho','En','St'];
   var cls=['on','on','on','on','on','teal','teal','teal','teal','teal','teal','gold'];
-  return labels.map((l,i)=>`<span class="dot ${idxs.includes(i)?cls[i]:'off'}" title="${l}">${icons[i]}</span>`).join('');
+  return labels.map((l,i)=>`<span class="dot ${idxs.includes(i)?cls[i%cls.length]:'off'}" title="${l}">${icons[i]}</span>`).join('');
 }
 function dCls(c){ return c>=8?'s8':c>=7?'s7':c>=6?'s6':c>=5?'s5':'s4'; }
 
@@ -2935,11 +2955,13 @@ function pcsoHistRender(){
 // hidden "<key>-date" input that still holds the value and its min/max, so every
 // existing reader of those inputs is unchanged. Registered keys:
 //   oracle-pick → Oracle Pick For Any Date   (min 2020-01-01, max today+2y)
+//   oracle-seed → Next Draw From Last Result (min 2020-01-01, max today+14d)
 //   pcso-hist   → Look Up Past Result        (min = earliest draw, max = today)
 // ══════════════════════════
 var ORACLE_CAL_MONTH={}; // key → {y,m} month currently on screen (m is 1-12)
 var ORACLE_CAL_APPLY={   // what to re-render once a day is tapped
   'oracle-pick':function(){ oraclePickRender(); },
+  'oracle-seed':function(){ oracleSeedRender(); },
   'pcso-hist':function(){ pcsoHistDateChanged(); }
 };
 var _oCalMonthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -3176,8 +3198,11 @@ function osphClass(gameKey,i){
 // restarted at position 0 — so its six spheres only ever used two colours,
 // alternating down the row, while a 6-ball row used all six. 2PM starts at 0,
 // 5PM at 2, 9PM at 4, and EZ2 gets six distinct spheres like every other game.
-function oraclePickBalls(nums,meaning,counts,offset,gameKey){
-  var off=offset||0;
+// srcTotal is the denominator on a ball's little tag. It defaults to 11 (the
+// convergence cluster) so the two existing callers are untouched; the seeded
+// panel passes 5, which is how many sources it actually has.
+function oraclePickBalls(nums,meaning,counts,offset,gameKey,srcTotal){
+  var off=offset||0, tot=srcTotal||11;
   return (nums||[]).map(function(n,i){
     var d=digitOf(n);
     var m=meaning&&meaning[n];
@@ -3185,7 +3210,7 @@ function oraclePickBalls(nums,meaning,counts,offset,gameKey){
     var tier=gameKey?osphClass(gameKey,i+off):BTIERS[Math.min(i+off,5)];
     return '<div class="ball '+tier+(m?' ball-meant':'')+'"'
       +(m?' title="'+m.join(' \u00b7 ')+'"':'')+'>'+pad(n)
-      +'<span class="btag">d'+d+(c!==null?'\u00b7'+c+'/11':'')+'</span></div>';
+      +'<span class="btag">d'+d+(c!==null?'\u00b7'+c+'/'+tot:'')+'</span></div>';
   }).join('');
 }
 
@@ -3405,6 +3430,527 @@ function oraclePickRender(){
   dateInp.setAttribute('max',maxD.getFullYear()+'-'+String(maxD.getMonth()+1).padStart(2,'0')+'-'+String(maxD.getDate()).padStart(2,'0'));
   oracleCalSetDate('oracle-pick',dateInp.value||todayStr,false);
   oraclePickRender();
+})();
+
+// ══════════════════════════
+// NEXT DRAW FROM LAST RESULT — the seeded reading
+// ══════════════════════════
+// The THIRD panel, and the only one whose numbers are cast from a DRAW rather
+// than from a date. The two above both start with a calendar date and ask what
+// that date reads; this one starts with the combination that actually came out
+// and asks what it says about the next draw of the same game.
+//
+// WHY THIS IS A SEPARATE ENGINE AND NOT A FLAG ON convergence().
+// The pick in "Oracle Pick For Any Date" is history-free on purpose (see the
+// rule in CLAUDE.md): it depends on the date alone, so a future pick never
+// moves as new draws land, and oracle-snapshot.yml can log tomorrow's pick
+// tonight without the append job having run first. Seeding that engine would
+// break both properties at once. So nothing here touches convergence(),
+// computeOracleAsOf(), snapshot_oracle.mjs or oracle-history.json — this panel
+// is purely additive and the other two render exactly as they did.
+//
+// WHICH LAYERS CAN ACTUALLY BE CAST FROM NUMBERS — five of the eleven. A hard
+// constraint, not a shortcut:
+//   Py  Pythagorean     a digital root is defined for any number          YES
+//   Ls  Lo Shu          the Lo Shu IS the 1..9 grid; which palaces a draw
+//                       lights up is what 九宮 number analysis reads       YES
+//   IC  I Ching         報數起卦 — Mei Hua Yi Shu's casting-by-reported-
+//                       numbers, the classical parallel to the 年月日時
+//                       method layerIChing() already runs                 YES
+//   Ta  Tarot           sum, then reduce into the Major Arcana range,
+//                       exactly what layerTarot() does to a date sum      YES
+//   An  Angel           11/22/33/44/55 actually drawn are angel numbers   YES
+//   Ch  Chaldean        maps LETTERS to numbers; numbers have no letters   no
+//   As  Astrology       needs a moment in time and a place                 no
+//   Ba  BaZi            four pillars come from a date and an hour          no
+//   PoF Part of Fortune Ascendant + Moon − Sun, all chart positions        no
+//   Ho  Horary          a chart cast for the moment a question is asked    no
+//   En  Energy          derived from Ba/As/Fs, so it follows them          no
+// There is no honest way to feed six numbers into a BaZi pillar or a horary
+// chart. Inventing one (numbers as zodiac degrees, say) would be fabrication,
+// and this repo judges a layer on whether it faithfully implements what it
+// claims. So the panel reads FIVE sources and prints "/5" on its face, rather
+// than "/11" over a figure six of them never contributed to.
+//
+// WHAT THIS IS NOT. Measured walk-forward over 974 real draws, each cast from
+// the draw immediately before it: mean 0.72 matches against a random control's
+// 0.75 (z = −0.81). Indistinguishable from chance, like every configuration
+// ever measured in this repo. Statistics and divination, not prediction — and
+// the note under the panel says exactly that.
+
+// Mei Hua 先天八卦數: Qian 1, Dui 2, Li 3, Zhen 4, Xun 5, Kan 6, Gen 7, Kun 8 —
+// the same 1-indexed order layerIChing() uses, so ichingHexNumOf(),
+// ICHING_TRIGRAM_LINES and ichingTriFromLines() are shared rather than copied.
+var OSEED_TRI_NAMES=['','Qian','Dui','Li','Zhen','Xun','Kan','Gen','Kun'];
+var OSEED_TRI_SYM=['','☰','☱','☲','☳','☴','☵','☶','☷'];
+var OSEED_TRI_EL=['','Metal','Metal','Fire','Wood','Wood','Water','Earth','Earth'];
+// He Tu 生成數 — the numbers attached to the Five Elements themselves. This is
+// the table layerIChing()/layerBazi() use for element→digit. Mixing it with Lo
+// Shu palace numbers is the exact bug CLAUDE.md records (it left digits 4 and 9
+// unreachable for two whole layers). One scheme per table.
+var OSEED_EL_NUMS={'Metal':[4,9],'Fire':[2,7],'Wood':[3,8],'Water':[1,6],'Earth':[5]};
+// Lo Shu home palace of each digit — the classical 4-9-2 / 3-5-7 / 8-1-6 square.
+// Here the digits ARE the palace numbers, so no element→digit conversion is in
+// play and the one-scheme rule above is not engaged.
+var OSEED_LOSHU_HOME={1:'N',2:'SW',3:'E',4:'SE',5:'C',6:'NW',7:'W',8:'NE',9:'S'};
+var OSEED_LABELS=['Py','Ls','IC','Ta','An'];
+var OSEED_LABEL_TITLES={Py:'Pythagorean',Ls:'Lo Shu',IC:'I Ching',Ta:'Tarot',An:'Angel'};
+
+// Cast the five number-native layers FROM a set of drawn numbers.
+// Returns null for anything it cannot read (fewer than two numbers).
+function oracleSeedCast(nums){
+  nums=(nums||[]).filter(function(n){ return typeof n==='number'&&isFinite(n)&&n>=1; });
+  if(nums.length<2) return null;
+  var roots=nums.map(function(n){ return reduce(n); });
+  var sum=nums.reduce(function(a,b){ return a+b; },0);
+
+  // ── Py — every drawn number's digital root is a vote, plus the root of the
+  // total. Repeats are not double-counted: convergence here asks WHICH digits a
+  // source names, not how loudly.
+  var py=[];
+  roots.concat([reduce(sum)]).forEach(function(d){ if(py.indexOf(d)<0) py.push(d); });
+
+  // ── Ls — which of the nine palaces the draw lit up, and which it left dark.
+  // The lit palaces are what the layer votes for: they are what the draw
+  // actually did. The dark ones are displayed but never scored — reading them
+  // as "due" is the hot/overdue contradiction the stats engine was removed for.
+  var lit=[]; roots.forEach(function(d){ if(lit.indexOf(d)<0) lit.push(d); });
+  lit.sort(function(a,b){ return a-b; });
+  var dark=[]; for(var d=1;d<=9;d++) if(lit.indexOf(d)<0) dark.push(d);
+
+  // ── IC — 報數起卦. "When the querent reports several numbers they may be
+  // split evenly into two groups; one group's SUM gives the upper trigram and
+  // the other's the lower", with the total mod 6 giving the moving line.
+  // Six lotto numbers split 3/3; EZ2's two split 1/1, the classic two-number
+  // report. DRAW ORDER is the input — which is why pcso-history.json storing
+  // the numbers unsorted is load-bearing here. Sorting them first would quietly
+  // cast a different hexagram.
+  var half=Math.floor(nums.length/2);
+  var upSum=nums.slice(0,half).reduce(function(a,b){ return a+b; },0);
+  var loSum=nums.slice(half).reduce(function(a,b){ return a+b; },0);
+  var upper=(upSum%8)||8, lower=(loSum%8)||8, moving=(sum%6)||6;
+  var hexNum=ichingHexNumOf(lower,upper);
+  // Nuclear and changed hexagrams, by the same line convention layerIChing()
+  // uses: lines6 runs bottom(line 1) to top(line 6).
+  var lines6=ICHING_TRIGRAM_LINES[lower].concat(ICHING_TRIGRAM_LINES[upper]);
+  var nucNum=ichingHexNumOf(ichingTriFromLines(lines6[1],lines6[2],lines6[3]),
+                            ichingTriFromLines(lines6[2],lines6[3],lines6[4]));
+  var chg=lines6.slice(); chg[moving-1]=chg[moving-1]?0:1;
+  var chgNum=ichingHexNumOf(ichingTriFromLines(chg[0],chg[1],chg[2]),
+                            ichingTriFromLines(chg[3],chg[4],chg[5]));
+  var ic=[];
+  (OSEED_EL_NUMS[OSEED_TRI_EL[upper]]||[]).concat(OSEED_EL_NUMS[OSEED_TRI_EL[lower]]||[])
+    .forEach(function(n){ if(ic.indexOf(n)<0) ic.push(n); });
+
+  // ── Ta — the draw's total reduced into 0..21, the same loop layerTarot()
+  // runs on a date's digit sum.
+  var card=sum, cardReduced=false;
+  while(card>21){ card=String(card).split('').reduce(function(a,b){ return a+parseInt(b); },0); cardReduced=true; }
+  var ta=[reduce(card)];
+  if(card>=10){
+    var tens=Math.floor(card/10)||9, ones=(card%10)||9;
+    if(ta.indexOf(tens)<0) ta.push(tens);
+    if(ta.indexOf(ones)<0) ta.push(ones);
+  }
+
+  // ── An — a repeating-digit number in the draw itself. Deliberately empty
+  // when none was drawn: layerAngelNumbers() does not manufacture hits and
+  // neither does this.
+  var an=[];
+  nums.forEach(function(n){ if(n>=11&&n<=99&&n%11===0){ var g=n/11; if(an.indexOf(g)<0) an.push(g); } });
+
+  var info=ORACLE_HEX_DB[hexNum]||{name:'Hex '+hexNum,english:''};
+  var nucInfo=ORACLE_HEX_DB[nucNum]||{name:'Hex '+nucNum};
+  var chgInfo=ORACLE_HEX_DB[chgNum]||{name:'Hex '+chgNum};
+  var cardInfo=ORACLE_MAJOR_ARCANA[card]||ORACLE_MAJOR_ARCANA[0];
+  return {nums:nums,roots:roots,sum:sum,py:py,lit:lit,dark:dark,
+    upper:upper,lower:lower,moving:moving,
+    hexNum:hexNum,hexName:info.name,hexEnglish:info.english,
+    nucNum:nucNum,nucName:nucInfo.name,chgNum:chgNum,chgName:chgInfo.name,
+    ic:ic,card:card,cardReduced:cardReduced,cardName:cardInfo.name,
+    cardReading:cardInfo.gambling,ta:ta,an:an,
+    sources:{Py:py,Ls:lit,IC:ic,Ta:ta,An:an}};
+}
+
+// Full numbers the cast gives a named significance — the seeded twin of
+// oracleMeaningFromLayers(), and the set the picker pays a bonus for below.
+function oracleSeedMeaning(cast,poolMax){
+  var meaning={};
+  function mark(n,label){
+    if(typeof n!=='number'||!isFinite(n)||n<1||n>poolMax) return;
+    if(!meaning[n]) meaning[n]=[];
+    if(meaning[n].indexOf(label)<0) meaning[n].push(label);
+  }
+  if(!cast) return meaning;
+  mark(cast.hexNum,'I Ching hexagram '+cast.hexNum+(cast.hexName?' · '+cast.hexName:''));
+  mark(cast.nucNum,'nuclear hexagram '+cast.nucNum);
+  mark(cast.chgNum,'changed hexagram '+cast.chgNum);
+  mark(cast.card,'Tarot · '+cast.cardName);
+  mark(cast.sum,'draw total ('+cast.sum+')');
+  cast.an.forEach(function(g){ mark(g*11,'angel number '+(g*11)); });
+  return meaning;
+}
+
+// Score the digits, rank the families, rotate within each, cap per family.
+// Same shape convergence() uses, with two deliberate differences: five sources
+// instead of eleven, and a rotation offset taken from the CAST (its hexagram
+// number and the draw total) rather than from the date's flying star.
+function oracleSeedPick(cast,gameKey,need){
+  var game=GAMES[gameKey]||{max:58};
+  var pool=game.max;
+  var collected={},digitScores={};
+  for(var d=1;d<=9;d++){
+    var inL=[];
+    for(var i=0;i<OSEED_LABELS.length;i++)
+      if((cast.sources[OSEED_LABELS[i]]||[]).indexOf(d)>=0) inL.push(i);
+    collected[d]=inL;
+  }
+  var maxMeta=Math.max(1,...Object.values(collected).map(function(a){ return a.length; }));
+  for(var d2=1;d2<=9;d2++)
+    digitScores[d2]={count:collected[d2].length,layers:collected[d2],score:(collected[d2].length/maxMeta)*10};
+  var sorted=Object.entries(digitScores)
+    .map(function(e){ return {digit:parseInt(e[0]),count:e[1].count,layers:e[1].layers,score:e[1].score}; })
+    .sort(function(a,b){ return (b.score-a.score)||(a.digit-b.digit); });
+
+  var digitToNums={};
+  for(var d3=1;d3<=9;d3++){
+    digitToNums[d3]=[];
+    for(var n=1;n<=pool;n++) if(digitOf(n)===d3) digitToNums[d3].push(n);
+  }
+  var meaning=oracleSeedMeaning(cast,pool);
+  // HOUSE RULE, stated plainly — the same admission convergence()'s own
+  // familyOffset carries. The layers name a DIGIT; something must say which
+  // member of that family is meant. Here it is the cast's own two dated
+  // figures: the hexagram number it produced and the draw total it was cast
+  // from, spread across families by the pool so two games reading the same
+  // seed do not land on identical positions. No tradition prescribes this.
+  function familyOffset(digit,size){
+    if(!size) return 0;
+    var o=((cast.hexNum+cast.sum+digit*pool)%size);
+    return o<0?o+size:o;
+  }
+  function bestNums(digit){
+    var fam=(digitToNums[digit]||[]).slice().sort(function(a,b){ return a-b; });
+    var k=fam.length, off=familyOffset(digit,k), rank={};
+    for(var i=0;i<k;i++) rank[fam[(off+i)%k]]=k-i;
+    return fam.slice().sort(function(a,b){
+      var sA=(rank[a]||0)+(meaning[a]?10:0), sB=(rank[b]||0)+(meaning[b]?10:0);
+      return (sB-sA)||(a-b);
+    });
+  }
+  var ranked=[];
+  sorted.forEach(function(f){ bestNums(f.digit).forEach(function(n){ ranked.push(n); }); });
+  var cap=need<=2?1:2, out=[], cnt={};
+  for(var r=0;r<ranked.length;r++){
+    var num=ranked[r], dg=digitOf(num);
+    if(out.indexOf(num)>=0||(cnt[dg]||0)>=cap) continue;
+    cnt[dg]=(cnt[dg]||0)+1; out.push(num);
+    if(out.length===need) break;
+  }
+  for(var s=0;s<ranked.length&&out.length<need;s++)
+    if(out.indexOf(ranked[s])<0) out.push(ranked[s]);
+  out.sort(function(a,b){ return a-b; });
+  return {picks:out,sorted:sorted,digitScores:digitScores,meaning:meaning,pool:pool};
+}
+
+// The scheduled draw immediately BEFORE dateStr for this game — the draw whose
+// result this date's reading has to be cast from. Pure weekday arithmetic on
+// PCSO_GAME_SCHED, in UTC so a DST-less timezone cannot shift a day.
+function oracleSeedPrevDrawDate(gameKey,dateStr){
+  var sched=PCSO_GAME_SCHED[gameKey];
+  if(!sched) return null;
+  var p=String(dateStr||'').split('-');
+  if(p.length!==3) return null;
+  var d=new Date(Date.UTC(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])));
+  if(isNaN(d.getTime())) return null;
+  for(var i=0;i<14;i++){
+    d.setUTCDate(d.getUTCDate()-1);
+    if(sched.indexOf(d.getUTCDay())>=0) return d.toISOString().slice(0,10);
+  }
+  return null;
+}
+
+// The whole reading for one game on one date, or an honest refusal.
+//
+// THE REFUSAL IS THE FEATURE. A seeded reading cannot exist before its seed
+// does, so a date whose preceding draw has not been recorded yet returns
+// {ok:false, waitingFor} and the panel prints that instead of numbers. This is
+// the structural difference from the panel above, which can read any date out
+// to +2 years because it needs nothing but the date.
+//
+// One guard worth keeping: a MISSING past draw (a cancelled or unscraped one)
+// is not the same as a future one. Only a seed dated today or later is
+// "pending"; an older gap falls back to the most recent draw actually on file
+// and flags itself, so a hole in pcso-history.json cannot freeze the panel.
+function oracleSeedCompute(gameKey,dateStr){
+  // Shape guard. Every date on this panel comes from the in-page calendar, so
+  // a malformed one is not reachable through the UI — but the seed lookup
+  // compares dates as STRINGS, and '2026-09-13' < 'not-a-date' is true, so a
+  // garbage value would quietly come back with the newest draw on file and an
+  // answer that means nothing. Refuse instead.
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr||'')))
+    return {ok:false,waitingFor:null,reason:'baddate'};
+  var need=(gameKey==='ez2')?2:6;
+  var want=oracleSeedPrevDrawDate(gameKey,dateStr);
+  var prev=pcsoHistPrevEntry(gameKey,dateStr);
+  var today=oraclePickTodayStr();
+  if(!prev) return {ok:false,waitingFor:want,reason:'none'};
+  if(want&&prev.date<want&&want>=today)
+    return {ok:false,waitingFor:want,reason:'pending'};
+  var gap=!!(want&&prev.date<want);
+
+  if(gameKey==='ez2'){
+    var byHour={},casts={},any=false;
+    ['2PM','5PM','9PM'].forEach(function(t){
+      var sn=(prev.draws&&prev.draws[t])||[];
+      var c=oracleSeedCast(sn);
+      casts[t]=c;
+      byHour[t]=c?oracleSeedPick(c,gameKey,need):null;
+      if(byHour[t]) any=true;
+    });
+    if(!any) return {ok:false,waitingFor:want,reason:'unreadable'};
+    // Each EZ2 draw time is seeded by the SAME draw time the day before — 2PM
+    // from 2PM, not from a merged six. Two numbers split 1/1 for the 報數起卦
+    // cast, which is the classic two-number report.
+    return {ok:true,seedDate:prev.date,seedEntry:prev,gap:gap,ez2:true,
+      byHour:byHour,casts:casts,cast:casts['9PM'],result:byHour['9PM']};
+  }
+
+  var cast=oracleSeedCast(Array.isArray(prev.nums)?prev.nums:[]);
+  if(!cast) return {ok:false,waitingFor:want,reason:'unreadable'};
+  var res=oracleSeedPick(cast,gameKey,need);
+  return {ok:true,seedDate:prev.date,seedEntry:prev,gap:gap,ez2:false,
+    cast:cast,result:res,picks:res.picks};
+}
+
+// The seed line that rides on the game's head line — what this reading was cast
+// from, named explicitly, because the whole panel stands or falls on it.
+function oracleSeedFromHTML(r){
+  if(!r||!r.ok) return '';
+  var nums=r.ez2
+    ? ['2PM','5PM','9PM'].map(function(t){
+        var a=(r.seedEntry.draws&&r.seedEntry.draws[t])||[];
+        return a.map(function(n){ return p2(n); }).join('-');
+      }).join(' · ')
+    : (r.seedEntry.nums||[]).map(function(n){ return p2(n); }).join('-');
+  return '<span class="opick-jackpot">Cast from '+pcsoHistShortDate(r.seedDate)
+    +' · <span class="oseed-src">'+nums+'</span>'
+    +(r.gap?' (the scheduled draw before this one is not on file)':'')+'</span>';
+}
+
+// The cast, shown as the derivation it is. Every line names the arithmetic that
+// produced it, so a reader can check the hexagram by hand.
+function oracleSeedReadingHTML(r,gameKey,dateStr){
+  if(!r||!r.ok||!r.cast) return '';
+  var c=r.cast, res=r.result, html='';
+  var pool=(GAMES[gameKey]&&GAMES[gameKey].max)||58;
+  var bd=oracleAlignment(res.picks,res.digitScores,res.meaning,pool);
+  var ac=bd.pct>=70?'#2ecc71':bd.pct>=45?'#f0c040':'#ff6b6b';
+  var al=bd.pct>=70?'🟢 Strong Alignment':bd.pct>=45?'🟡 Moderate Alignment':'🔴 Weak Alignment';
+  html+='<div class="alt-card" style="margin-bottom:14px;text-align:center;">'
+    +'<div class="alt-label" style="margin-bottom:10px;">Alignment With The Cast · '+pcsoHistShortDate(r.seedDate)+' draw</div>'
+    +'<div style="font-size:36px;font-weight:800;color:'+ac+';margin-bottom:4px;">'+bd.pct+'%</div>'
+    +'<div style="font-size:13px;color:var(--muted2)">'+al+'</div>'
+    +'<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: 🎴 Seeded — five number-native sources, max '
+    +((gameKey==='ez2')?'one number':'two numbers')+' per digit family</div>'
+    +oracleAlignSplitHTML(bd,pool)+'</div>';
+
+  html+='<div class="ord-step">Step 1 — The Draw It Was Cast From</div>'
+    +'<div class="pcso-hist-row">'+pcsoHistWinBalls(c.nums)+'</div>'
+    +'<div class="pcso-hist-sublbl">'+pcsoHistShortDate(r.seedDate)+' · in draw order · total '+c.sum+'</div>';
+
+  html+='<div class="ord-step">Step 2 — Five Sources, Cast From Those Numbers</div>';
+  html+=lcard('🔢','Pythagorean — Digital Roots Of The Draw',c.py,[
+    '<b>Each number reduced:</b> '+c.nums.map(function(n,i){ return p2(n)+'→'+c.roots[i]; }).join(' · '),
+    '<b>Draw total '+c.sum+':</b> → <b>'+reduce(c.sum)+'</b>',
+    '<b>Digits named:</b> <b>'+c.py.join(',')+'</b>'
+  ]);
+  html+=lcard('🏮','Lo Shu — Which Palaces The Draw Lit',c.lit,[
+    '<b>Palaces lit:</b> '+c.lit.map(function(d){ return d+' ('+OSEED_LOSHU_HOME[d]+')'; }).join(' · '),
+    '<b>Palaces dark:</b> '+(c.dark.length?c.dark.map(function(d){ return d+' ('+OSEED_LOSHU_HOME[d]+')'; }).join(' · '):'none — all nine lit'),
+    '<b>Only the lit palaces vote.</b> Reading the dark ones as "due" is the hot/overdue contradiction this engine deliberately does not pay.'
+  ]);
+  html+=lcard('☯','I Ching — 報數起卦 (Cast By Reported Numbers)',c.ic,[
+    '<b>Upper:</b> ('+c.nums.slice(0,Math.floor(c.nums.length/2)).join('+')+') mod 8 = <b>'+c.upper+'</b> '
+      +OSEED_TRI_SYM[c.upper]+' '+OSEED_TRI_NAMES[c.upper]+' · '+OSEED_TRI_EL[c.upper],
+    '<b>Lower:</b> ('+c.nums.slice(Math.floor(c.nums.length/2)).join('+')+') mod 8 = <b>'+c.lower+'</b> '
+      +OSEED_TRI_SYM[c.lower]+' '+OSEED_TRI_NAMES[c.lower]+' · '+OSEED_TRI_EL[c.lower],
+    '<b>Moving line:</b> '+c.sum+' mod 6 = <b>'+c.moving+'</b>',
+    '<b>Hexagram '+c.hexNum+' — '+c.hexName+'</b>'+(c.hexEnglish?' · '+c.hexEnglish:''),
+    '<b>Nuclear '+c.nucNum+'</b> — '+c.nucName+' · <b>Changed '+c.chgNum+'</b> — '+c.chgName,
+    '<b>Trigram elements → He Tu digits:</b> <b>'+c.ic.join(',')+'</b>'
+  ],'',true);
+  html+=lcard('🃏','Tarot — The Draw Total As A Card',c.ta,[
+    '<b>Total '+c.sum+':</b>'+(c.cardReduced?' reduced to <b>'+c.card+'</b> (Major Arcana range 0–21)':' already in range'),
+    '<b>Card '+c.card+' — '+c.cardName+'</b>',
+    '<b>Reading:</b> '+c.cardReading,
+    '<b>Card digit(s):</b> <b>'+c.ta.join(',')+'</b>'
+  ],'',true);
+  html+=lcard('😇','Angel — Repeating-Digit Numbers Drawn',c.an.length?c.an:['—'],[
+    c.an.length
+      ? '<b>Drawn:</b> '+c.an.map(function(g){ return g*11; }).join(', ')+' → digit(s) <b>'+c.an.join(',')+'</b>'
+      : '<b>No 11/22/33/44/55 in this draw</b> — this layer contributes nothing rather than manufacturing a hit.'
+  ],'',true);
+
+  if(res.sorted&&res.sorted.length){
+    html+='<div class="ord-step">Step 3 — Digit Convergence · 5 Sources</div>'
+      +'<div class="dgrid">'+res.sorted.slice(0,6).map(function(sc){
+        return '<div class="dcard '+dCls(sc.count*2)+'">'
+          +'<div class="dnum">'+sc.digit+'</div>'
+          +'<div class="dscore">'+sc.count+'/'+OSEED_LABELS.length+' sources</div>'
+          +'<div class="ddots">'+dotHTML(sc.layers,OSEED_LABELS.map(function(k){ return OSEED_LABEL_TITLES[k]; }),OSEED_LABELS)+'</div></div>';
+      }).join('')+'</div>';
+  }
+  var meantKeys=Object.keys(res.meaning||{}).map(Number).sort(function(a,b){ return a-b; });
+  if(meantKeys.length){
+    html+='<div class="ord-step">Numbers The Cast Gives A Meaning</div><div class="ord-meant">'
+      +meantKeys.map(function(n){
+        return '<div class="ord-meant-row"><span class="pnum pick">'+p2(n)+'</span>'
+          +'<span>'+res.meaning[n].join(' · ')+'</span></div>';
+      }).join('')
+      +'<div class="ord-note">Full-number matches the picker rewards (+10 each) when choosing within a digit family.</div></div>';
+  }
+  return html;
+}
+
+// One block per game drawn that day. Stacked like the Oracle Pick panel: head
+// line (name, caret, what it was cast from), then the spheres, both inside the
+// <summary> so the whole block is the toggle for its reading.
+function oracleSeedGameHTML(gameKey,dateStr){
+  var r=null;
+  try{ r=oracleSeedCompute(gameKey,dateStr); }
+  catch(e){ console.error('oracleSeedCompute '+gameKey+' '+dateStr+':',e); }
+  var name='<span class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]+'</span>';
+
+  // ── the refusal ──
+  // No seed, no reading. Stated as the fact it is, naming the draw it is
+  // waiting for, rather than printing numbers that were not cast from anything.
+  if(!r||!r.ok){
+    var wait;
+    if(r&&r.reason==='pending')
+      wait='Waiting for the '+pcsoHistShortDate(r.waitingFor)+' draw — this reading is cast from it.';
+    else if(r&&r.reason==='unreadable')
+      wait='The '+(r.waitingFor?pcsoHistShortDate(r.waitingFor)+' ':'')+'result on file cannot be read as a full draw.';
+    else
+      wait='No earlier draw on file for this game, so there is nothing to cast from.';
+    return '<div class="oracle-pick-game-row oseed-row"><div class="opick-head">'+name+'</div>'
+      +'<div class="oseed-wait">⏳ '+wait+'</div></div>';
+  }
+
+  var counts={};
+  if(r.result&&r.result.sorted) r.result.sorted.forEach(function(f){ counts[f.digit]=f.count; });
+
+  var ballsHTML,scored;
+  if(r.ez2){
+    ballsHTML='<div class="oracle-pick-cols">'+['2PM','5PM','9PM'].map(function(t,ci){
+      var pk=(r.byHour[t]&&r.byHour[t].picks)||[];
+      var cc={}; if(r.byHour[t]&&r.byHour[t].sorted) r.byHour[t].sorted.forEach(function(f){ cc[f.digit]=f.count; });
+      var mm=(r.byHour[t]&&r.byHour[t].meaning)||{};
+      return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'
+        +'<div class="pcso-hist-row">'+oraclePickBalls(pk,mm,cc,ci*2,gameKey,OSEED_LABELS.length)+'</div></div>';
+    }).join('')+'</div>';
+    scored=(r.byHour['9PM']&&r.byHour['9PM'].picks)||[];
+  } else {
+    ballsHTML='<div class="pcso-hist-row">'
+      +oraclePickBalls(r.picks,r.result.meaning,counts,0,gameKey,OSEED_LABELS.length)+'</div>';
+    scored=r.picks;
+  }
+
+  // ── the score, when the target draw has already happened ──
+  // The panel's own counterweight. A card that only ever shows what it predicts
+  // reads like a tip sheet; showing how it did, every time the answer is known,
+  // is what keeps it a statistics exercise. Match count only — the winning
+  // numbers, the gold highlighting and the prize tiers belong to Look Up Result
+  // and are deliberately not duplicated here.
+  var capHTML='';
+  var actual=pcsoHistEntry(gameKey,dateStr);
+  if(actual){
+    var hits=0,tot=0;
+    if(r.ez2){
+      ['2PM','5PM','9PM'].forEach(function(t){
+        var win=(actual.draws&&actual.draws[t])||[];
+        var pk=(r.byHour[t]&&r.byHour[t].picks)||[];
+        if(!win.length||!pk.length) return;
+        tot+=pk.length;
+        hits+=pk.filter(function(n){ return win.indexOf(n)>=0; }).length;
+      });
+    } else if(Array.isArray(actual.nums)){
+      tot=scored.length;
+      hits=scored.filter(function(n){ return actual.nums.indexOf(n)>=0; }).length;
+    }
+    if(tot) capHTML='<div class="pcso-hist-sublbl">Seeded Pick · <span class="pcso-hist-score'
+      +(hits>=3?' win':'')+'">'+hits+' of '+tot+' matched</span></div>';
+  }
+
+  var head='<div class="opick-head">'+name
+    +'<span class="opick-caret" aria-hidden="true">▸</span>'
+    +oracleSeedFromHTML(r)+'</div>';
+  var body='';
+  try{ body=oracleSeedReadingHTML(r,gameKey,dateStr); }
+  catch(e){ console.error('oracleSeedReadingHTML '+gameKey+':',e); }
+  if(!body)
+    return '<div class="oracle-pick-game-row oseed-row">'+head+ballsHTML+capHTML+'</div>';
+  return '<div class="oracle-pick-game-row oseed-row">'
+    +'<details class="oracle-reading"><summary class="opick-sum">'
+    +head+ballsHTML+'</summary>'
+    +'<div class="ord-body">'+body+'</div></details>'+capHTML+'</div>';
+}
+
+function oracleSeedRender(){
+  var dateInp=document.getElementById('oracle-seed-date');
+  var out=document.getElementById('oracle-seed-result');
+  var noteEl=document.getElementById('oracle-seed-note');
+  if(!dateInp||!out) return;
+  if(noteEl) noteEl.innerHTML='';
+  var dateVal=dateInp.value;
+  if(!dateVal){
+    out.innerHTML='<span class="pcso-hist-none">Pick a date to cast it from the previous draw.</span>';
+    return;
+  }
+  // Same ordering as both panels above: 6-ball ascending, EZ2 last.
+  var scheduled=oracleGamesOnDate(dateVal).sort(function(a,b){
+    if(a==='ez2') return 1;
+    if(b==='ez2') return -1;
+    return parseInt(a)-parseInt(b);
+  });
+  if(!scheduled.length){
+    out.innerHTML='<span class="pcso-hist-none">No PCSO draw is scheduled on '+oraclePickFmtDate(dateVal)+'.</span>';
+    return;
+  }
+  var ready=0;
+  var rows=scheduled.map(function(gk){
+    var h=oracleSeedGameHTML(gk,dateVal);
+    if(h.indexOf('oseed-wait')<0) ready++;
+    return h;
+  }).join('');
+  var waiting=scheduled.length-ready, sub;
+  if(!ready) sub='Nothing can be cast yet \u2014 '+(scheduled.length===1?'this draw is':'all '+scheduled.length+' are')+' waiting on a result';
+  else if(!waiting) sub=(scheduled.length===1?'1 draw':'All '+scheduled.length+' draws')+' cast from the last result';
+  else sub=ready+' of '+scheduled.length+' cast \u00b7 '+waiting+' still waiting on a result';
+  out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
+    +'<div class="oracle-pick-sub">'+sub+'</div>'+rows;
+
+  if(noteEl){
+    var notes=[];
+    if(ready<scheduled.length)
+      notes.push('A reading here is cast from the previous draw of the same game, so it cannot exist until that draw has been recorded. EZ2 goes blank a day before the rest — it draws every day, so its seed is always yesterday.');
+    notes.push('⚠️ For entertainment only. Lottery draws are independent random events — measured walk-forward over 974 real draws this scores 0.72 matches per draw against a random control’s 0.75. It is not a prediction. Play responsibly.');
+    noteEl.innerHTML=notes.map(function(t){ return '<div>'+t+'</div>'; }).join('');
+  }
+}
+
+(function initOracleSeed(){
+  var dateInp=document.getElementById('oracle-seed-date');
+  if(!dateInp){ setTimeout(initOracleSeed,200); return; }
+  var todayStr=oraclePickTodayStr();
+  var p=todayStr.split('-');
+  // Two weeks out is the whole useful range: past that every game is waiting on
+  // a draw that has not happened, and a calendar full of ⏳ teaches nothing.
+  var maxD=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])+14);
+  dateInp.setAttribute('min','2020-01-01');
+  dateInp.setAttribute('max',maxD.getFullYear()+'-'+String(maxD.getMonth()+1).padStart(2,'0')+'-'+String(maxD.getDate()).padStart(2,'0'));
+  oracleCalSetDate('oracle-seed',dateInp.value||todayStr,false);
+  oracleSeedRender();
 })();
 
 // ══════════════════════════

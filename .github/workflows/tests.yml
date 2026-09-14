@@ -54,6 +54,9 @@ jobs:
       - name: Oracle snapshot — the daily oracle-history.json writer
         run: node .github/scripts/tests/test_snapshot_oracle.mjs
 
+      - name: Oracle seeded panel — 報數起卦 cast, the refusal, and pick stability
+        run: node .github/scripts/tests/test_oracle_seed.mjs
+
       - name: Sphere palette — styles.css matches its generator
         run: python3 .github/scripts/tests/test_sphere_palette.py
 
