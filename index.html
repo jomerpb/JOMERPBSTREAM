@@ -37,7 +37,7 @@
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260913e"></script>
+  <script defer src="stream.js?v=20260914f"></script>
   <script defer src="oracle.js?v=20260914c"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -883,7 +883,25 @@
     <div id="detail-player-wrap" style="display:none;">
       <div class="player-sticky-wrap">
         <div class="player-frame">
-          <iframe id="player-iframe" allowfullscreen mozallowfullscreen webkitallowfullscreen allow="autoplay; fullscreen; picture-in-picture" frameborder="0" scrolling="no" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"></iframe>
+          <!-- The allowlists are wildcards (`fullscreen *`), NOT the bare
+               `fullscreen` this shipped with, and the difference is a dead
+               fullscreen button rather than a style choice. A bare feature name
+               in `allow` means the allowlist `'src'` — the origin of the src
+               ATTRIBUTE — and a cross-origin redirect therefore lands on a
+               document the permission does not cover. Videasy does exactly
+               that: player.videasy.net 301s to player.videasy.to, so the frame
+               that actually renders the player had fullscreen, autoplay and PiP
+               all switched off, while the other eight providers (none of which
+               leave their own origin) were unaffected. Measured on a controlled
+               cross-origin redirect in Chromium: `document.fullscreenEnabled`
+               is false in the landed document with `allow="fullscreen"` and
+               true with `allow="fullscreen *"`.
+
+               Note the legacy `allowfullscreen` attribute below is NOT a
+               backstop for this. It maps to `fullscreen *` on its own, but any
+               `allow` attribute overrides it — so adding `allow` is what made
+               fullscreen narrower than it was without it. -->
+          <iframe id="player-iframe" allowfullscreen mozallowfullscreen webkitallowfullscreen allow="autoplay *; fullscreen *; picture-in-picture *" frameborder="0" scrolling="no" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"></iframe>
           <div class="player-placeholder" id="player-placeholder" onclick="playCurrent()">
             <img id="player-placeholder-img" alt=""/>
             <div class="player-placeholder-btn">&#9654;</div>

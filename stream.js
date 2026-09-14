@@ -18,6 +18,10 @@ let currentSeason  = null;
 let allSeasons     = [];
 let currentEp      = 1;
 let totalEps       = 1;
+// Minutes per episode for currentSeason, straight off TMDB's season payload.
+// Ground truth for the truncated-source check in the player; empty when the
+// season has not been fetched (anime, movies, a card built from a list row).
+let seasonEpRuntimes = [];
 let currentLang    = 'sub';
 
 // Pagination state
@@ -1937,6 +1941,8 @@ async function openDetail(item, restore=false) {
   currentItem   = item;
   allSeasons    = [];
   currentSeason = null;
+  seasonEpRuntimes = [];
+  shortSourceHandled = new Set();
   currentLang   = 'sub';
   if (!restore) {
     history.pushState({page:'detail-page', item}, '', `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`);
@@ -2723,6 +2729,7 @@ function onSeasonPick(idx) {
 
 function selectSeason(s) {
   currentSeason = s;
+  seasonEpRuntimes = [];
   // For ongoing anime with no episode count, fetch actual count from AniList
   if (!s.episodes && s.al_id) {
     totalEps = 9999; // allow next button while loading
@@ -2750,6 +2757,11 @@ async function selectTVSeason(s) {
   // Fetch episode count for this season
   const data = await tmdb(`/tv/${s.tmdb_id}/season/${s.season_number}`);
   totalEps = data?.episodes?.length || s.episodes || 10;
+  // The same payload already carries each episode's runtime, and the player
+  // needs it as ground truth for shortSourceCheck() below — TMDB's show-level
+  // episode_run_time is often an empty array (it is for this repo's worked
+  // example), so the per-episode figure is the only reliable one.
+  seasonEpRuntimes = (data?.episodes || []).map(e => Number(e?.runtime) || 0);
   buildEpGrid(totalEps, s.season_number);
 }
 
@@ -3481,7 +3493,18 @@ const SERVER_LIST = [
   { key:'peachify',   label:'Peachify' },
   { key:'cinezo',     label:'Cinezo' },
   { key:'moviesapi',  label:'MoviesAPI' },
-  { key:'vidfast',    label:'VidFast' }
+  { key:'vidfast',    label:'VidFast' },
+  // KissKH is a resolver rather than a provider: it answers to a TITLE, not a
+  // TMDB id, so it needs kisskh-index.json to turn one into the other. Two
+  // flags come with that. `index` says the index must be in memory before a
+  // url can be built. `noAuto` keeps it out of the automatic fallback chain —
+  // it carries Korean drama and nothing else (measured: 43% of scripted
+  // K-dramas by exact title, 5% of C-drama, 2% of J-drama, 0% of general TV),
+  // so landing on it by accident would be a miss for almost every title and
+  // would cost every viewer the index download for nothing. Picked
+  // deliberately it resolves; picked by accident it never is.
+  { key:'kisskh',     label:'KissKH (K-drama)', index:true, noAuto:true,
+    miss:'No KissKH match for this title — trying next server…' }
 ];
 let currentServer = 'vidlink';
 let triedServers = new Set();
@@ -3543,9 +3566,93 @@ function buildUrl(server) {
       return isMovie
         ? `https://vidfast.vc/movie/${tmdbId}`
         : `https://vidfast.vc/tv/${tmdbId}/${seasonNum}/${currentEp}`;
+    // Movies get nothing on purpose: every url this site publishes is
+    // episode-shaped, so there is nothing for a film to resolve to.
+    case 'kisskh':
+      return isMovie ? '' : kisskhUrl(item, seasonNum, currentEp);
     default:
       return '';
   }
+}
+
+// ── KISSKH: RESOLVED FROM AN INDEX, NEVER GUESSED ───────────────────────────
+// kisskh.space/<show>-ep-<n>/ carries a player. The slug looks derivable from
+// the title and is not: over its 25,865 episode urls, 302 use `-episode-`
+// instead of `-ep-`, 53 shows use BOTH, and 1,816 carry no year. A wrong slug
+// answers 404 — and the site sends no CORS headers, so the page cannot read
+// that status and would frame "Page not found" without ever knowing. So the
+// url is looked up in kisskh-index.json (written by .github/scripts/
+// scrape_kisskh.py off the site's own sitemap) and built only on a hit.
+//
+// The index is fetched ONCE, lazily, the first time KissKH is actually chosen
+// — 27KB gzipped, and never downloaded at all by anyone who does not pick it.
+// `?nocache=1` keeps the service worker out of the way for the reason
+// imdb-ratings.json documents: syncShell() evicts anything index.html does not
+// name, so a shell-cached copy would be re-downloaded on every navigation.
+// Left to the HTTP cache it revalidates against its ETag instead.
+const KISSKH_BASE  = 'https://kisskh.space/';
+const KISSKH_INDEX = 'kisskh-index.json?nocache=1';
+let kisskhIndex   = null;   // null until loaded; {} means the fetch failed
+let kisskhLoading = null;   // in-flight promise, so two taps share one request
+let playerRun     = 0;      // guards a slow index load against a later tap
+
+// WordPress' own slug rules, which is what the site's urls were made with:
+// lowercase, accents folded, apostrophes dropped outright (not turned into a
+// separator), everything else collapsed to single dashes.
+function kisskhSlugify(title) {
+  return String(title || '')
+    .toLowerCase()
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/['’]/g, '')
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function ensureKisskhIndex() {
+  if (kisskhIndex) return Promise.resolve(kisskhIndex);
+  if (kisskhLoading) return kisskhLoading;
+  kisskhLoading = fetch(KISSKH_INDEX)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { kisskhIndex = (d && d.shows) || {}; return kisskhIndex; })
+    .catch(() => { kisskhIndex = {}; return kisskhIndex; })   // a failed load is a miss, not a crash
+    .finally(() => { kisskhLoading = null; });
+  return kisskhLoading;
+}
+
+// Index entry: [slug, kind, year, [[epFrom,epTo],…]] with kind 0 = `-ep-`,
+// 1 = `-episode-`. A show can hold several entries — "The Way Home" splits
+// episodes 8,9,12,13,15,16 across one slug and 10,11,14 across another, with
+// different tokens AND different years — so every entry is searched for the
+// episode rather than only the first.
+function kisskhUrl(item, seasonNum, ep) {
+  if (!kisskhIndex || !item || item.type !== 'tv') return '';
+  const title = kisskhSlugify(item.title);
+  if (!title || !ep) return '';
+  // Seasons 2+ are their own slug on this site (squid-game-season-2,
+  // sweet-home-season-3), but a few shows keep everything under one, so the
+  // bare title is tried second rather than instead.
+  const keys = seasonNum > 1 ? [`${title}-season-${seasonNum}`, title] : [title];
+  const year = Number(String(item.released || '').slice(0, 4)) || 0;
+  for (const key of keys) {
+    const entries = kisskhIndex[key];
+    if (!Array.isArray(entries)) continue;
+    // Shape-check BEFORE sorting, not inside the loop. The comparator reads
+    // e[2] on both sides, so one malformed row takes the whole lookup down
+    // with a TypeError rather than being skipped — which is exactly what the
+    // garbage-entry test caught. A truncated or half-written index has to
+    // degrade into a miss, never into a dead player.
+    const valid = entries.filter(e => Array.isArray(e) && typeof e[0] === 'string' && Array.isArray(e[3]));
+    if (!valid.length) continue;
+    // Same title, different years: prefer the one that matches TMDB's. sort()
+    // is stable, so entries stay in the scraper's fullest-first order otherwise.
+    const ordered = year ? valid.slice().sort((a, b) => (b[2] === year) - (a[2] === year)) : valid;
+    for (const e of ordered) {
+      if (e[3].some(r => Array.isArray(r) && ep >= r[0] && ep <= r[1]))
+        return `${KISSKH_BASE}${e[0]}-${e[1] ? 'episode' : 'ep'}-${ep}/`;
+    }
+  }
+  return '';
 }
 
 function updateServerButtons() {
@@ -3592,19 +3699,33 @@ function setPlayerFrame(url) {
 // detectable. That's the best available signal without per-provider integration.
 function loadServerUrl() {
   clearTimeout(serverLoadTimer);
+  const run = ++playerRun;
   const item = currentItem;
   const isAnime = item?.type === 'anime';
   const status = document.getElementById('server-status');
+  const srv = SERVER_LIST.find(s => s.key === currentServer);
+
+  // An index-backed server cannot build a url until its index is in memory.
+  // Fetch it once, then re-enter — unless a later tap has already moved on,
+  // which `run` catches the same way searchRunId guards the search grid.
+  if (srv && srv.index && !kisskhIndex) {
+    if (status) { status.style.display = 'block'; status.textContent = `Looking up ${srv.label}…`; }
+    ensureKisskhIndex().then(() => { if (run === playerRun) loadServerUrl(); });
+    return;
+  }
+
   const url = buildUrl(currentServer);
 
   if (!isAnime && !url) {
-    const label = SERVER_LIST.find(s => s.key === currentServer)?.label || currentServer;
-    if (status) { status.style.display = 'block'; status.textContent = `${label} has no direct embed — trying next server…`; }
+    if (status) { status.style.display = 'block'; status.textContent = srv?.miss || `${srv?.label || currentServer} has no direct embed — trying next server…`; }
     autoFallback();
     return;
   }
 
-  if (status) status.style.display = 'none';
+  // Clear the text, not just the visibility: "Looking up KissKH…" would
+  // otherwise sit in the node and flash on the next status the panel shows.
+  setServerStatus('');
+  playerFrameLoadedAt = Date.now();
   const iframe = setPlayerFrame(url);
   if (!iframe) return;
   iframe.onerror = function() { autoFallback(); };
@@ -3618,7 +3739,10 @@ function loadServerUrl() {
 function autoFallback() {
   const status = document.getElementById('server-status');
   triedServers.add(currentServer);
-  const next = SERVER_LIST.find(s => !triedServers.has(s.key));
+  // `noAuto` servers are skipped: KissKH answers for Korean drama alone, so
+  // drifting onto it is a miss for almost every title — and it would pull its
+  // index down for a viewer who never asked for it.
+  const next = SERVER_LIST.find(s => !triedServers.has(s.key) && !s.noAuto);
   if (!next) {
     if (status) { status.style.display = 'block'; status.textContent = 'No working server found. Try again later or pick one manually.'; }
     return;
@@ -3628,6 +3752,135 @@ function autoFallback() {
   updateServerButtons();
   loadServerUrl();
 }
+
+// ── TRUNCATED SOURCE GUARD ──────────────────────────────────────────────────
+// Vidlink sometimes hands its player a source whose reported duration is far
+// short of the episode: a 66-minute episode came up as a 41-minute seek bar,
+// and the only way back to the real one was to load a different episode and
+// return, i.e. to make the player load again. This automates exactly that,
+// once, before anything has actually been watched.
+//
+// The signal is the provider's own: vidlink.pro posts to its parent window
+// every 2s with {type:'MEDIA_DATA', data:{<tmdbId>:{show_progress:{'s1e3':
+// {progress:{watched,duration}}}}}} and on each play/pause/seek/timeupdate
+// with {type:'PLAYER_EVENT', data:{event,currentTime,duration,...}}. Both
+// carry the <video> element's own duration, which is the number the seek bar
+// is drawn from — so the page can see the truncation without being able to
+// read into the cross-origin frame.
+//
+// Ground truth is TMDB's runtime for THAT episode, not the show-level
+// episode_run_time (which is an empty array for plenty of shows, this repo's
+// worked example included). No runtime on file means no check at all — the
+// guard never fires on a guess.
+//
+// What it deliberately does NOT do: chase the number. One reload per
+// server+episode, only while the position is still near zero, and if the
+// reload comes back just as short it says so and leaves the choice of server
+// to the viewer. A source that is legitimately a few minutes off (rounding,
+// credits) is not a defect, hence the ratio rather than an exact compare.
+const SHORT_SOURCE_RATIO   = 0.85;   // below 85% of the known runtime is a truncated source
+const SHORT_SOURCE_GRACE_MS = 90000; // stop reloading 90s after the frame loaded
+const SHORT_SOURCE_MAX_POS  = 30;    // ...and only while under 30s has been played
+let playerFrameLoadedAt = 0;
+let shortSourceHandled  = new Set();
+
+function shortSourceKey() {
+  const item = currentItem;
+  const id = item ? (item.tmdb_id || item.id) : '?';
+  const sn = currentSeason ? (currentSeason.season_number || 1) : 1;
+  return `${id}|${currentServer}|${sn}|${currentEp}`;
+}
+
+// How long the thing being played is supposed to run, in seconds, or 0 when
+// nothing reliable is known. Anime returns 0 on purpose: it plays through
+// MegaPlay rather than any of these providers, and AniList's `duration` is a
+// per-series average rather than this episode's length.
+function expectedEpisodeSecs() {
+  const item = currentItem;
+  if (!item) return 0;
+  if (item.type === 'anime') return 0;
+  if (item.type === 'movie') return (Number(item.runtime) || 0) * 60;
+  const mins = seasonEpRuntimes[currentEp - 1] || Number(item.runtime) || 0;
+  return mins * 60;
+}
+
+function setServerStatus(text) {
+  const el = document.getElementById('server-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.display = text ? 'block' : 'none';
+}
+
+// Pulls this episode's {watched,duration} out of a MEDIA_DATA payload. A row
+// for a different episode is not an answer about this one, so it returns null
+// rather than whatever happens to be first.
+function mediaDataProgress(data) {
+  if (!data || typeof data !== 'object') return null;
+  const item = currentItem;
+  if (!item) return null;
+  const id = item.tmdb_id || item.id;
+  const entry = data[id] || data[String(id)];
+  if (!entry) return null;
+  if (item.type === 'movie') return entry.progress || null;
+  const sn = currentSeason ? (currentSeason.season_number || 1) : 1;
+  const row = entry.show_progress && entry.show_progress[`s${sn}e${currentEp}`];
+  return (row && row.progress) || null;
+}
+
+function onPlayerMessage(e) {
+  const frame = document.getElementById('player-iframe');
+  // Only the live player frame is listened to. setPlayerFrame() replaces the
+  // element, so a frame being torn down cannot report against its successor,
+  // and nothing else on the page can spoof a duration.
+  if (!frame || !e || !e.source || e.source !== frame.contentWindow) return;
+  const msg = e.data;
+  if (!msg || typeof msg !== 'object') return;
+
+  let dur = null, pos = null;
+  if (msg.type === 'PLAYER_EVENT' && msg.data) {
+    dur = Number(msg.data.duration);
+    pos = Number(msg.data.currentTime);
+  } else if (msg.type === 'MEDIA_DATA') {
+    const p = mediaDataProgress(msg.data);
+    if (!p) return;
+    dur = Number(p.duration);
+    pos = Number(p.watched);
+  } else {
+    return;
+  }
+  if (!Number.isFinite(dur) || dur <= 0) return;
+  shortSourceCheck(dur, Number.isFinite(pos) && pos > 0 ? pos : 0);
+}
+
+function shortSourceCheck(dur, pos) {
+  const want = expectedEpisodeSecs();
+  if (!want) return;                       // no runtime on file: never act on a guess
+  const key = shortSourceKey();
+
+  if (dur >= want * SHORT_SOURCE_RATIO) {  // the source is fine — clear a stale warning
+    if (shortSourceHandled.has(key)) setServerStatus('');
+    return;
+  }
+
+  const label = `This source runs ${formatWatchTime(Math.round(dur))} of ${formatWatchTime(want)}`;
+  const tooLate = pos > SHORT_SOURCE_MAX_POS ||
+                  (playerFrameLoadedAt && Date.now() - playerFrameLoadedAt > SHORT_SOURCE_GRACE_MS);
+
+  if (shortSourceHandled.has(key) || tooLate) {
+    // Already given its second chance, or the viewer is far enough in that
+    // restarting would cost more than the wrong seek bar does.
+    shortSourceHandled.add(key);
+    setServerStatus(`${label}. Reloading did not help — try another server.`);
+    return;
+  }
+
+  shortSourceHandled.add(key);
+  loadServerUrl();                         // same episode, fresh player — the manual fix, automated
+  startWatchTimer();                       // the old frame's elapsed time is not this one's
+  setServerStatus(`${label} — reloading the player…`);
+}
+
+window.addEventListener('message', onPlayerMessage);
 
 // ── WATCH TIMER ──
 let watchTimer = null;
@@ -3694,10 +3947,16 @@ function resumeFromTracked() {
   }
   if (url) {
     clearTimeout(serverLoadTimer);
+    playerFrameLoadedAt = Date.now();
     setPlayerFrame(url);
   } else {
     loadServerUrl(); // provider has no confirmed resume param; reload from start
   }
+  // Resuming is a deliberate position, so the truncated-source guard must not
+  // reload out from under it and send the viewer back to 0:00. Spending this
+  // episode's one reload here is the point: a short seek bar is a smaller loss
+  // than the place they just asked to return to.
+  shortSourceHandled.add(shortSourceKey());
   startWatchTimer(); // restart timer from 0 on new server
 }
 

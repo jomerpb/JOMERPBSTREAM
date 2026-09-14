@@ -725,6 +725,61 @@ Filtering it properly needs the provider↔IMDb intersection precomputed in the
 pipeline — roughly 33,500 titles and 1,700 discover pages for PH — which is a
 bigger job than this one and has not been done.
 
+## The KissKH server is a resolver, and the slug cannot be guessed
+
+Every other entry in `SERVER_LIST` answers to a TMDB id — `buildUrl()` turns
+`(tmdbId, season, episode)` into a URL. KissKH answers to a **title**, so it
+carries two flags: `index` (no URL can be built until `kisskh-index.json` is in
+memory) and `noAuto` (it is never reached by the automatic fallback chain).
+
+**Why an index rather than a formula.** `kisskh.space/<show>-ep-<n>/` looks
+derivable and is not. Over all 25,865 episode URLs: 302 use `-episode-` instead
+of `-ep-`, **53 shows use BOTH**, and 1,816 carry no year. A wrong slug answers
+**404** — and the site sends no CORS headers, so the page cannot read that
+status and would frame "Page not found" without ever knowing. The index is what
+makes a miss knowable *before* a frame is pointed anywhere.
+
+*The Way Home* is the case that shapes the lookup: its episodes are split
+across **two** slugs with different tokens *and* different years — 8,9,12,13,
+15,16 on `the-way-home` (`-episode-`) and 10,11,14 on `the-way-home-2024`
+(`-ep-`). So every entry for a show is searched for the episode, not just the
+first. Seasons 2+ are their own slug (`squid-game-season-2`,
+`sweet-home-season-3`), with the bare title tried second because a few shows
+keep everything under one.
+
+**What it is worth, measured before it was built.** Exact-title match against
+TMDB's own surfaces, scripted titles only — Reality/Talk/News/Documentary are
+excluded because a drama site does not carry Inkigayo or SNL Korea, and leaving
+them in reads 28% instead of 43%:
+
+| surface | matched |
+|---|---|
+| K-drama, scripted | **34/80 (43%)** — of those, 23 complete, 11 partial |
+| C-drama | 3/60 (5%) |
+| J-drama | 1/60 (2%) |
+| All popular TV | 0/60 (0%) |
+
+That is why `noAuto` exists: drifting onto a Korean-drama-only source would be
+a miss for almost every title *and* would cost every viewer the index download
+for nothing. Picked deliberately it resolves; picked by accident it never is. A
+miss falls through to the ordinary chain with its own message rather than
+dead-ending.
+
+**Known limits, stated rather than papered over.** Movies get nothing — every
+URL the site publishes is episode-shaped. Episode numbering can disagree with
+TMDB's: dramika.com, which frames this same site, carries a per-episode
+correction for exactly that (measured over 100 episodes, 95 matched a plain
+`-episode-N`→`-ep-N` transform and **5 pointed at a different episode number**,
+with 0 dead links). Reading that correction would mean scraping 8,597 dramika
+HTML pages — its REST API is CORS-open but `acf`/`meta` are empty and the
+theme injects the player server-side — against 15 for the sitemap, so it is not
+done and the numbering can be off on those shows.
+
+Do not "improve" the hit rate by loosening the matcher into fuzzy title
+matching. That is the direction `scrape_webcomics.py` documents at length
+(*Hunter x Hunter* → `dark-hunter`), and here a wrong match is a whole wrong
+show rather than a wrong cover.
+
 ## Cast is a list with faces, and a full-cast page
 
 The Cast block is a row per performer — circular headshot, name, character —
@@ -817,7 +872,16 @@ Because it now commits hourly it shares `main` with the two PCSO jobs, so its
 commit step **rebases and retries** (5 attempts) and pushes an explicit
 `HEAD:${GITHUB_REF_NAME}` refspec. A bare `git push` loses that race.
 
-`tests.yml` is a fourth exception to the manual-only convention, in a different
+`kisskh-index.yml` is the fourth scheduled exception, and earns it the same
+way: `kisskh-index.json` is what the Stream tab's **KissKH** server resolves
+against, the site carries currently-airing Korean drama, and until the index is
+re-scraped a newly aired episode does not resolve at all — which is the one
+case anybody reaches for that source. It is 15 requests and a couple of
+seconds, daily at 13:00 Asia/Manila. It commits to `main` alongside the two
+PCSO jobs and the hourly MangaFreak one, so it rebases and retries its push the
+same way.
+
+`tests.yml` is a fifth exception to the manual-only convention, in a different
 direction: it has **no cron**, but it runs on every push and pull request. The
 convention removed *scheduled* runs; a test suite that only runs when someone
 remembers is the reason a broken engine could reach the two scheduled jobs
@@ -1097,6 +1161,15 @@ inside the app rather than a dead end.
   to ask for. The genre segment is stored even though `/en/comic/<slug>/<id>`
   301s to the right one — inside an iframe that redirect is a second round trip
   on every open.
+
+**KissKH** (`kisskh.space`):
+- `kisskh-index.yml` → `.github/scripts/scrape_kisskh.py` → `kisskh-index.json`
+  (1,660 shows / 25,865 episode URLs, 122KB raw / **27.8KB gzipped**). Exists
+  for the same reason the MangaFreak, WebComics and PCSO pipelines do — the
+  site sends no `Access-Control-Allow-Origin` — and like WebComics it publishes
+  a WordPress sitemap, so the scrape is **15 requests** rather than a walk. The
+  shard list is read from `wp-sitemap.xml` rather than hardcoded. Same shrink
+  guard, plus a 400-show floor.
 
 **IMDb** (`datasets.imdbws.com`):
 - `imdb-ratings.yml` → `.github/scripts/build_imdb_ratings.py` → `imdb-ratings.json`
