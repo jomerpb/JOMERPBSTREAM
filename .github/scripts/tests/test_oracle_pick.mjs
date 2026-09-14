@@ -221,7 +221,10 @@ console.log('\n4. oracleAlignment — the shared scorer');
     }
     return null;
   };
-  for (const surface of ['renderPersonalResults', 'oraclePickGameHTML']) {
+  // oraclePickGameHTML was the second surface until the date panel it belonged
+  // to was retired; oracleSeedReadingHTML is the seeded card that replaced it
+  // and is now the other caller of the shared scorer.
+  for (const surface of ['renderPersonalResults', 'oracleSeedReadingHTML']) {
     const body = bodyOf(surface);
     check(`${surface} gets its percentage from oracleAlignment`,
           !!body && body.includes('oracleAlignment('), body ? 'does not call it' : 'function not found');
@@ -248,8 +251,10 @@ console.log('\n5. Game schedule');
         JSON.stringify(sb.oracleGamesOnDate('')) === '[]'
         && JSON.stringify(sb.oracleGamesOnDate('nope')) === '[]');
 
-  // The Oracle Pick panel's documented order: 6-ball ascending, EZ2 last. The
-  // sort lives in oraclePickRender, so it is reproduced here rather than read.
+  // The documented order every Oracle panel renders in: 6-ball ascending, EZ2
+  // last. The sort lives in oracleSeedRender and pcsoHistRender (it lived in
+  // oraclePickRender too until that panel was retired), so it is reproduced
+  // here rather than read out of one of them.
   const order = (ds) => sb.oracleGamesOnDate(ds).sort((a, b) =>
     a === 'ez2' ? 1 : b === 'ez2' ? -1 : parseInt(a) - parseInt(b));
   const badOrder = sweepDates().filter((ds) => {

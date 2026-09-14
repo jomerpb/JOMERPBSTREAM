@@ -291,11 +291,6 @@ async function loadPcsoHistoryIntoGames(){
       if(typeof pcsoHistRender==='function'&&document.getElementById('pcso-hist-result')){
         pcsoHistRender();
       }
-      // The "Oracle Pick For Any Date" panel renders once at init off the
-      // fallback GAMES data — redo it now that the real history is in.
-      if(typeof oraclePickRender==='function'&&document.getElementById('oracle-pick-result')){
-        try{ oraclePickRender(); }catch(e2){ console.error('oraclePickRender:',e2); }
-      }
       // The seeded panel is built ENTIRELY out of PCSO_HISTORY — every number on
       // it is cast from a recorded draw — so it has to be repainted here or it
       // keeps serving the hardcoded fallback draws for the whole session.
@@ -336,9 +331,6 @@ var ORACLE_HISTORY_READY=(async function loadOracleHistory(){
   }
   if(ORACLE_HISTORY&&typeof pcsoHistRender==='function'&&document.getElementById('pcso-hist-result')){
     try{pcsoHistRender();}catch(e){}
-  }
-  if(ORACLE_HISTORY&&typeof oraclePickRender==='function'&&document.getElementById('oracle-pick-result')){
-    try{oraclePickRender();}catch(e){}
   }
 })();
 
@@ -2954,13 +2946,12 @@ function pcsoHistRender(){
 // Generic over a key: each picker owns "<key>-field/-trigger/-label/-cal" plus a
 // hidden "<key>-date" input that still holds the value and its min/max, so every
 // existing reader of those inputs is unchanged. Registered keys:
-//   oracle-pick → Oracle Pick For Any Date   (min 2020-01-01, max today+2y)
-//   oracle-seed → Next Draw From Last Result (min 2020-01-01, max today+14d)
+//   oracle-seed → Oracle Pick Seeded From The Last Result (min 2020-01-01,
+//                 max today+14d)
 //   pcso-hist   → Look Up Past Result        (min = earliest draw, max = today)
 // ══════════════════════════
 var ORACLE_CAL_MONTH={}; // key → {y,m} month currently on screen (m is 1-12)
 var ORACLE_CAL_APPLY={   // what to re-render once a day is tapped
-  'oracle-pick':function(){ oraclePickRender(); },
   'oracle-seed':function(){ oracleSeedRender(); },
   'pcso-hist':function(){ pcsoHistDateChanged(); }
 };
@@ -3076,8 +3067,6 @@ function oracleCalRender(key){
   });
 })();
 
-// Thin wrapper kept for the Oracle Pick panel's own call sites.
-function oraclePickSetDate(dateStr,doRender){ oracleCalSetDate('oracle-pick',dateStr,doRender); }
 
 (function initPcsoHist(){
   var dateInp=document.getElementById('pcso-hist-date');
@@ -3144,6 +3133,15 @@ function oraclePickDayDiff(fromStr,toStr){
 
 // ══════════════════════════
 // THE DAY'S READING
+//
+// NO LONGER RENDERED ON THE PAGE, and kept deliberately. Its caller was
+// oraclePickGameHTML, which went with the retired date panel — but the engine it
+// displays did NOT go: computeOracleAsOf() still runs nightly in
+// oracle-snapshot.yml and still fills Look Up Result's 📌 recorded picks. This
+// is the function that turns that engine's layers into the `meaning` map
+// oracleAlignment() scores against, and test 6 in test_oracle_pick.mjs uses it
+// to prove two same-day games no longer print one identical percentage. Delete
+// it and that guard has nothing to call.
 // The seven date-derived layers each compute a real, dated result — the Mei Hua
 // Yi Shu hexagram cast for that date and hour, the BaZi four pillars, the Tarot
 // card, the Flying Star, the horary chart. The pick panel used to discard all of
@@ -3216,238 +3214,36 @@ function oraclePickBalls(nums,meaning,counts,offset,gameKey,srcTotal){
 
 // Elemental energy bars, rendered at final width (renderResults animates them
 // from 0 via animateBars(); this panel has no such hook, so paint them filled).
-function oraclePickEnergyHTML(energy){
-  if(!energy) return '';
-  var order=['Fire','Water','Wood','Metal','Earth'];
-  var cls={'Fire':'ef','Water':'ew','Wood':'ewod','Metal':'emet','Earth':'eear'};
-  var emo={'Fire':'\uD83D\uDD25','Water':'\uD83D\uDCA7','Wood':'\uD83C\uDF3F','Metal':'\u2699\uFE0F','Earth':'\uD83D\uDFE4'};
-  return order.map(function(e){
-    var pct=(energy[e]&&energy[e].pct)||0;
-    return '<div class="erow"><span class="elabel">'+emo[e]+' '+e+'</span>'
-      +'<div class="ebar-wrap"><div class="ebar '+cls[e]+'" style="width:'+pct+'%"></div></div>'
-      +'<span class="epct" style="color:'+(pct>=28?'var(--gold)':'var(--muted2)')+'">'+pct+'%</span></div>';
-  }).join('');
-}
-
 // One block per game. Each line is self-contained: its own alignment score —
 // which genuinely differs per game, since it is the sum of the picked digits'
 // scores — its spheres, and its own collapsible reading. The reading repeats
 // the date-level cards under every game on purpose, so a line can be read on
 // its own without scrolling back to a shared block.
-function oraclePickGameHTML(gameKey,dateStr,meaning,reading){
-  var look=null;
-  try{ look=oracleHistLookup(gameKey,dateStr); }
-  catch(e){ console.error('oraclePickGameHTML '+gameKey+' '+dateStr+':',e); }
-  var det=null;
-  try{ det=computeOracleAsOf(gameKey,dateStr,{withDetail:true}); }
-  catch(e){ console.error('detail '+gameKey+':',e); }
-  var slice=(gameKey==='ez2')?(det&&det['9PM']):det;
-
-  var counts={};
-  if(slice&&slice.sorted) slice.sorted.forEach(function(f){ counts[f.digit]=f.count; });
-
-  var name='<span class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
-    +(look?oracleSrcTag(look.source,false):'')+'</span>';
-  if(!look||!look.picks){
-    return '<div class="oracle-pick-game-row"><div class="oracle-pick-gname-block">'+name+'</div>'
-      +'<span class="pcso-hist-none">Could not compute a pick for this draw.</span></div>';
-  }
-
-  // ── alignment, per game ──
-  // Same arithmetic renderResults uses: the summed digit score of the picks
-  // over their maximum. EZ2 is scored on its 9PM set, the one the detail run
-  // returns.
-  var scored=(gameKey==='ez2')?(look.picks['9PM']||[]):look.picks;
-  var ds=(slice&&slice.digitScores)||{};
-  // ── alignment: digit convergence + the per-game meaning capture ──
-  // See oracleAlignment(); Analyze My Numbers uses the identical function.
-  var pool=(GAMES[gameKey]&&GAMES[gameKey].max)||58;
-  var breakdown=oracleAlignment(scored,ds,meaning,pool);
-  var pct=breakdown.pct;
-
-  var ballsHTML;
-  if(gameKey==='ez2'){
-    ballsHTML='<div class="oracle-pick-cols">'+['2PM','5PM','9PM'].map(function(t,ci){
-      return '<div class="oracle-pick-col"><span class="oracle-pick-slot">'+t+'</span>'
-        +'<div class="pcso-hist-row">'+oraclePickBalls(look.picks[t]||[],meaning,counts,ci*2,gameKey)+'</div></div>';
-    }).join('')+'</div>';
-  } else {
-    ballsHTML='<div class="pcso-hist-row">'+oraclePickBalls(look.picks,meaning,counts,0,gameKey)+'</div>';
-  }
-
-  // The whole block IS the toggle, read top to bottom: one head line carrying
-  // the game name, its source tag, the caret and the jackpot clause, then that
-  // game's spheres underneath. Clicking anywhere on it opens the reading, which
-  // sits BEFORE the picks it explains.
-  //
-  // The name used to sit inline to the LEFT of the spheres. Moving it onto its
-  // own line is what gives the jackpot clause somewhere to go \u2014 it has nowhere
-  // beside a row of six spheres \u2014 and it hands the spheres the width the lead
-  // was holding. No EZ2 spacer any more: the empty .oracle-pick-slot label
-  // existed only to drop the inline name onto the centre line of EZ2's taller
-  // column block, and above the spheres there is nothing to centre against.
-  var head='<div class="opick-head">'+name
-    +'<span class="opick-caret" aria-hidden="true">\u25b8</span>'
-    +oraclePickJackpotHTML(gameKey,dateStr)+'</div>';
-
-  var body=oracleReadingHTML(reading,slice,scored,pct,gameKey,dateStr,breakdown);
-  if(!body) return '<div class="oracle-pick-game-row"><div class="oracle-pick-gname-block">'+name+'</div>'+ballsHTML+'</div>';
-  return '<div class="oracle-pick-game-row">'
-    +'<details class="oracle-reading"><summary class="opick-sum">'
-    +head+ballsHTML+'</summary>'
-    +'<div class="ord-body">'+body+'</div></details></div>';
-}
-
-
 // The reading for one game line. Built from the SAME helpers Run Expert uses —
 // the alignment notes, the energy bars, the dcard convergence grid and lcard()
 // with the horary / BaZi / I Ching panels — so the two views are one design.
-function oracleReadingHTML(rd,slice,scored,pct,gameKey,dateStr,bd){
-  if(!rd||!rd.layers) return '';
-  var L=rd.layers, html='';
-  var when=oraclePickFmtDate(dateStr);
-
-  // ── Overall Alignment — the identical .alt-card Run Expert renders ──
-  var ac=pct>=70?'#2ecc71':pct>=45?'#f0c040':'#ff6b6b';
-  var al=pct>=70?'\uD83D\uDFE2 Strong Alignment':pct>=45?'\uD83D\uDFE1 Moderate Alignment':'\uD83D\uDD34 Weak Alignment';
-  var modeHTML='<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: \u26a1\uD83C\uDF10 Hybrid \u2014 strongest digit energies, max '
-    +((gameKey==='ez2')?'one number':'two numbers')+' per digit family</div>';
-  var splitHTML=oracleAlignSplitHTML(bd,(GAMES[gameKey]&&GAMES[gameKey].max));
-  var cnt={};
-  (scored||[]).forEach(function(n){ var d=digitOf(n); cnt[d]=(cnt[d]||0)+1; });
-  var coll=Object.keys(cnt).filter(function(d){ return cnt[d]>1; });
-  var collisionHTML=coll.length
-    ? '<div style="font-size:11px;color:var(--muted);margin-top:8px;">ℹ '+coll.map(function(d){ return cnt[d]+' picks ride digit '+d; }).join(', ')+' — concentrated on the strongest digit score by design</div>'
-    : '<div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ Picks draw on distinct digit scores</div>';
-  var draws=(slice&&slice.statsDraws)||[];
-  var backtestHTML='';
-  if(draws.length){
-    var pd=[]; (scored||[]).forEach(function(n){ var d=digitOf(n); if(pd.indexOf(d)<0) pd.push(d); });
-    var hit=draws.filter(function(dr){ return dr.some(function(n){ return pd.indexOf(digitOf(n))>=0; }); }).length;
-    backtestHTML='<div style="font-size:11px;color:var(--muted2);margin-top:4px;">📊 Historical check: '
-      +Math.round(hit/draws.length*100)+'% of last '+draws.length
-      +' draws had at least one number matching these digits (real data, not the formula)</div>';
-  }
-  var sourceHTML='<div style="font-size:10px;color:'+(PCSO_HISTORY_STATUS.loaded?'var(--muted)':'#ff6b6b')
-    +';margin-top:4px;">'+(PCSO_HISTORY_STATUS.loaded?'✓':'⚠')+' Data source: '+PCSO_HISTORY_STATUS.source+'</div>';
-
-  html+='<div class="alt-card" style="margin-bottom:14px;text-align:center;">'
-    +'<div class="alt-label" style="margin-bottom:10px;">Overall Alignment \u00b7 '+when+'</div>'
-    +'<div style="font-size:36px;font-weight:800;color:'+ac+';margin-bottom:4px;">'+pct+'%</div>'
-    +'<div style="font-size:13px;color:var(--muted2)">'+al+'</div>'
-    +modeHTML+splitHTML+collisionHTML+backtestHTML+sourceHTML+'</div>';
-
-  if(slice&&slice.energy){
-    html+='<div class="slabel">Current Energy Flow \u00b7 '+when+' \u00b7 '+((gameKey==='ez2')?'9PM':'9PM')+'</div>'
-      +'<div class="eflow"><div class="eflow-title">\u26a1 Elemental Energy Balance \u2014 All 11 Layers</div>'
-      +oraclePickEnergyHTML(slice.energy)+'</div>';
-  }
-
-  if(slice&&slice.sorted&&slice.sorted.length){
-    html+='<div class="ord-step">Step 1 \u2014 Digit Convergence \u00b7 11 Sources</div>'
-      +'<div class="dgrid">'+slice.sorted.slice(0,6).map(function(sc){
-        return '<div class="dcard '+dCls(sc.count)+'">'
-          +'<div class="dnum">'+sc.digit+'</div>'
-          +'<div class="dscore">'+sc.count+'/'+slice.LABELS.length+' layers</div>'
-          +'<div class="ddots">'+dotHTML(sc.layers,slice.LABELS)+'</div></div>';
-      }).join('')+'</div>';
-  }
-
-  var meantKeys=Object.keys(rd.meaning||{}).map(Number).sort(function(a,b){return a-b;});
-  if(meantKeys.length){
-    html+='<div class="ord-step">Numbers Carrying A Meaning Today</div><div class="ord-meant">'
-      +meantKeys.map(function(n){
-        return '<div class="ord-meant-row"><span class="pnum pick">'+p2(n)+'</span>'
-          +'<span>'+rd.meaning[n].join(' \u00b7 ')+'</span></div>';
-      }).join('')
-      +'<div class="ord-note">Full-number matches the engine rewards (+10 each) when choosing within a digit family.</div></div>';
-  }
-
-  html+='<div class="ord-step">Full 11-Layer Breakdown</div>';
-  try{
-    if(L.num)    html+=lcard('\uD83D\uDD22','Numerology \u2014 Pythagorean + Chaldean',L.num.nums,L.num.steps);
-    if(L.astro)  html+=lcard('\uD83E\uDE90','Astrology \u2014 Dignities + Aspects + Horary',L.astro.nums.slice(0,7),L.astro.steps,oracleHoraryHTML(L),true);
-    if(L.bazi)   html+=lcard('\u262F\uFE0F','BaZi \u2014 Exact Pillars + Clashes + Hidden Stems',L.bazi.nums,L.bazi.steps,oracleBaziHTML(L),true);
-    if(L.fs)     html+=lcard('\uD83C\uDFEE','Feng Shui \u2014 Flying Star + Lo Shu + Fixed Stars',L.fs.nums,L.fs.steps,'',false);
-    if(L.iching) html+=lcard('\u262F','I Ching \u2014 Hexagram + Nuclear + Changing Line',L.iching.nums,L.iching.steps,oracleIChingHTML(L),true);
-    if(L.tarot)  html+=lcard('\uD83C\uDCCF','Tarot \u2014 Major Arcana Card of the Day',L.tarot.nums,L.tarot.steps,'',true);
-    if(L.angel)  html+=lcard('\uD83D\uDE07','Angel Numbers \u2014 Repeating-Digit Resonance',L.angel.nums.length?L.angel.nums:['\u2014'],L.angel.steps,'',true);
-  }catch(e){ console.error('reading cards:',e); }
-
-  return html;
-}
-
-function oraclePickRender(){
-  var dateInp=document.getElementById('oracle-pick-date');
-  var out=document.getElementById('oracle-pick-result');
-  var noteEl=document.getElementById('oracle-pick-note');
-  if(!dateInp||!out) return;
-  if(noteEl) noteEl.innerHTML='';
-  var dateVal=dateInp.value;
-  if(!dateVal){
-    out.innerHTML='<span class="pcso-hist-none">Pick a date to read its Oracle numbers.</span>';
-    return;
-  }
-  // 6-ball games first in ascending order, EZ2 last — it is three rows tall and
-  // reads better as the tail of the card.
-  var scheduled=oracleGamesOnDate(dateVal).sort(function(a,b){
-    if(a==='ez2') return 1;
-    if(b==='ez2') return -1;
-    return parseInt(a)-parseInt(b);
-  });
-  if(!scheduled.length){
-    out.innerHTML='<span class="pcso-hist-none">No PCSO draw is scheduled on '+oraclePickFmtDate(dateVal)+'.</span>';
-    return;
-  }
-  var reading=null;
-  try{ reading=oracleDateReading(dateVal,'9PM'); }catch(e){ console.error('oracleDateReading:',e); }
-  var meaning=(reading&&reading.meaning)||{};
-  out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
-    +'<div class="oracle-pick-sub">'+scheduled.length+' draw'+(scheduled.length===1?'':'s')+' this day</div>'
-    +scheduled.map(function(gk){ return oraclePickGameHTML(gk,dateVal,meaning,reading); }).join('');
-
-  if(noteEl){
-    var todayStr=oraclePickTodayStr();
-    var notes=[];
-    if(dateVal>todayStr){
-      var ahead=oraclePickDayDiff(todayStr,dateVal);
-      notes.push('Read '+ahead+' day'+(ahead===1?'':'s')+' ahead. Every layer is computed for '+oraclePickFmtDate(dateVal)+' exactly and nothing here uses past draws, so this pick is already final \u2014 it will read the same on the day itself.');
-    }
-    notes.push('⚠️ For entertainment only. Lottery draws are independent random events — no layer here can know the next one. Play responsibly.');
-    noteEl.innerHTML=notes.map(function(t){return '<div>'+t+'</div>';}).join('');
-  }
-}
-
-(function initOraclePick(){
-  var dateInp=document.getElementById('oracle-pick-date');
-  if(!dateInp){ setTimeout(initOraclePick,200); return; }
-  var todayStr=oraclePickTodayStr();
-  var p=todayStr.split('-');
-  var maxD=new Date(parseInt(p[0])+2,parseInt(p[1])-1,parseInt(p[2])); // 2 years out — far enough for any planning, keeps the month grid navigable
-  // setAttribute, not the .min/.max properties: the input is type=hidden now and
-  // the calendar reads these back with getAttribute.
-  dateInp.setAttribute('min','2020-01-01');
-  dateInp.setAttribute('max',maxD.getFullYear()+'-'+String(maxD.getMonth()+1).padStart(2,'0')+'-'+String(maxD.getDate()).padStart(2,'0'));
-  oracleCalSetDate('oracle-pick',dateInp.value||todayStr,false);
-  oraclePickRender();
-})();
-
 // ══════════════════════════
-// NEXT DRAW FROM LAST RESULT — the seeded reading
+// ORACLE PICK SEEDED FROM THE LAST RESULT
 // ══════════════════════════
-// The THIRD panel, and the only one whose numbers are cast from a DRAW rather
-// than from a date. The two above both start with a calendar date and ask what
-// that date reads; this one starts with the combination that actually came out
-// and asks what it says about the next draw of the same game.
+// The Oracle tab's LEAD panel, and the only one whose numbers are cast from a
+// DRAW rather than from a date. It replaced "Oracle Pick For Any Date", which
+// read the date alone: you picked a day and it told you what that day read, for
+// any date out to +2 years. This one starts from the combination that actually
+// came out and asks what it says about the next draw of the same game.
+//
+// WHAT THE REPLACEMENT COST, stated plainly because it is not recoverable: the
+// retired panel could browse two years ahead. This one cannot see past the next
+// draw of each game, because a seeded reading has no seed until that draw is
+// recorded. That is the trade the repo owner chose, knowing the horizon loss.
 //
 // WHY THIS IS A SEPARATE ENGINE AND NOT A FLAG ON convergence().
-// The pick in "Oracle Pick For Any Date" is history-free on purpose (see the
-// rule in CLAUDE.md): it depends on the date alone, so a future pick never
-// moves as new draws land, and oracle-snapshot.yml can log tomorrow's pick
-// tonight without the append job having run first. Seeding that engine would
-// break both properties at once. So nothing here touches convergence(),
-// computeOracleAsOf(), snapshot_oracle.mjs or oracle-history.json — this panel
-// is purely additive and the other two render exactly as they did.
+// The history-free engine is still LIVE and untouched — only its browsing panel
+// went. computeOracleAsOf() depends on the date alone, so a future pick never
+// moves as new draws land and oracle-snapshot.yml can log tomorrow's pick
+// tonight without the append job having run first; Look Up Result below shows
+// those 📌 recorded picks. Seeding that engine would break both properties at
+// once, so nothing here touches convergence(), computeOracleAsOf(),
+// snapshot_oracle.mjs or oracle-history.json.
 //
 // WHICH LAYERS CAN ACTUALLY BE CAST FROM NUMBERS — five of the eleven. A hard
 // constraint, not a shortcut:
@@ -3882,9 +3678,16 @@ function oracleSeedGameHTML(gameKey,dateStr){
       +(hits>=3?' win':'')+'">'+hits+' of '+tot+' matched</span></div>';
   }
 
+  // The rollover clause moved here from the retired "Oracle Pick For Any Date"
+  // panel. It belongs on this card at least as well: oraclePickJackpotHTML only
+  // speaks for a 6-ball draw dated today..+ORACLE_PICK_JACKPOT_DAYS with no
+  // result on file, and the next draw of each game is exactly what this card
+  // reads. Both clauses are .opick-jackpot and the CSS gives each its own
+  // full-width line, so the seed line and the money line never split one row.
   var head='<div class="opick-head">'+name
     +'<span class="opick-caret" aria-hidden="true">▸</span>'
-    +oracleSeedFromHTML(r)+'</div>';
+    +oracleSeedFromHTML(r)
+    +oraclePickJackpotHTML(gameKey,dateStr)+'</div>';
   var body='';
   try{ body=oracleSeedReadingHTML(r,gameKey,dateStr); }
   catch(e){ console.error('oracleSeedReadingHTML '+gameKey+':',e); }

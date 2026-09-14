@@ -1764,5 +1764,9 @@
   color:var(--muted2);letter-spacing:.02em;white-space:nowrap}
 /* The head line wraps at phone width and the seed clause is the part that
    should give, not the game name. */
+/* Two .opick-jackpot clauses now ride this head — what the reading was cast
+   from, and the rollover the retired date panel used to carry. Each takes its
+   own full-width line so they never split one row and truncate each other. */
 #oracle-page .oseed-row .opick-head{row-gap:3px}
+#oracle-page .oseed-row .opick-jackpot{flex:1 1 100%}
 @media (max-width:380px){ #oracle-page .oseed-src{white-space:normal} }
