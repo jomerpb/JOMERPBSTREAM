@@ -1764,9 +1764,15 @@
   color:var(--muted2);letter-spacing:.02em;white-space:nowrap}
 /* The head line wraps at phone width and the seed clause is the part that
    should give, not the game name. */
-/* Two .opick-jackpot clauses now ride this head — what the reading was cast
-   from, and the rollover the retired date panel used to carry. Each takes its
-   own full-width line so they never split one row and truncate each other. */
+/* Two .opick-jackpot clauses ride this head — what the reading was cast from,
+   and the rollover the retired date panel used to carry. They are NOT laid out
+   the same way: the seed clause reads as part of the title ("6/45 ▸ Cast from
+   Sep 11 · …") so it stays on the name's own line, while the money line takes a
+   full-width row of its own beneath. Giving both their own row pushed the seed
+   clause off the title line, which is what this splits apart. `min-width:0`
+   lets the seed clause shrink and wrap rather than force the head wider than
+   the card. */
 #oracle-page .oseed-row .opick-head{row-gap:3px}
 #oracle-page .oseed-row .opick-jackpot{flex:1 1 100%}
+#oracle-page .oseed-row .oseed-from{flex:0 1 auto;min-width:0}
 @media (max-width:380px){ #oracle-page .oseed-src{white-space:normal} }
