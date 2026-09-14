@@ -18,6 +18,10 @@ let currentSeason  = null;
 let allSeasons     = [];
 let currentEp      = 1;
 let totalEps       = 1;
+// Minutes per episode for currentSeason, straight off TMDB's season payload.
+// Ground truth for the truncated-source check in the player; empty when the
+// season has not been fetched (anime, movies, a card built from a list row).
+let seasonEpRuntimes = [];
 let currentLang    = 'sub';
 
 // Pagination state
@@ -1937,6 +1941,8 @@ async function openDetail(item, restore=false) {
   currentItem   = item;
   allSeasons    = [];
   currentSeason = null;
+  seasonEpRuntimes = [];
+  shortSourceHandled = new Set();
   currentLang   = 'sub';
   if (!restore) {
     history.pushState({page:'detail-page', item}, '', `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`);
@@ -2723,6 +2729,7 @@ function onSeasonPick(idx) {
 
 function selectSeason(s) {
   currentSeason = s;
+  seasonEpRuntimes = [];
   // For ongoing anime with no episode count, fetch actual count from AniList
   if (!s.episodes && s.al_id) {
     totalEps = 9999; // allow next button while loading
@@ -2750,6 +2757,11 @@ async function selectTVSeason(s) {
   // Fetch episode count for this season
   const data = await tmdb(`/tv/${s.tmdb_id}/season/${s.season_number}`);
   totalEps = data?.episodes?.length || s.episodes || 10;
+  // The same payload already carries each episode's runtime, and the player
+  // needs it as ground truth for shortSourceCheck() below — TMDB's show-level
+  // episode_run_time is often an empty array (it is for this repo's worked
+  // example), so the per-episode figure is the only reliable one.
+  seasonEpRuntimes = (data?.episodes || []).map(e => Number(e?.runtime) || 0);
   buildEpGrid(totalEps, s.season_number);
 }
 
@@ -3605,6 +3617,7 @@ function loadServerUrl() {
   }
 
   if (status) status.style.display = 'none';
+  playerFrameLoadedAt = Date.now();
   const iframe = setPlayerFrame(url);
   if (!iframe) return;
   iframe.onerror = function() { autoFallback(); };
@@ -3628,6 +3641,135 @@ function autoFallback() {
   updateServerButtons();
   loadServerUrl();
 }
+
+// ── TRUNCATED SOURCE GUARD ──────────────────────────────────────────────────
+// Vidlink sometimes hands its player a source whose reported duration is far
+// short of the episode: a 66-minute episode came up as a 41-minute seek bar,
+// and the only way back to the real one was to load a different episode and
+// return, i.e. to make the player load again. This automates exactly that,
+// once, before anything has actually been watched.
+//
+// The signal is the provider's own: vidlink.pro posts to its parent window
+// every 2s with {type:'MEDIA_DATA', data:{<tmdbId>:{show_progress:{'s1e3':
+// {progress:{watched,duration}}}}}} and on each play/pause/seek/timeupdate
+// with {type:'PLAYER_EVENT', data:{event,currentTime,duration,...}}. Both
+// carry the <video> element's own duration, which is the number the seek bar
+// is drawn from — so the page can see the truncation without being able to
+// read into the cross-origin frame.
+//
+// Ground truth is TMDB's runtime for THAT episode, not the show-level
+// episode_run_time (which is an empty array for plenty of shows, this repo's
+// worked example included). No runtime on file means no check at all — the
+// guard never fires on a guess.
+//
+// What it deliberately does NOT do: chase the number. One reload per
+// server+episode, only while the position is still near zero, and if the
+// reload comes back just as short it says so and leaves the choice of server
+// to the viewer. A source that is legitimately a few minutes off (rounding,
+// credits) is not a defect, hence the ratio rather than an exact compare.
+const SHORT_SOURCE_RATIO   = 0.85;   // below 85% of the known runtime is a truncated source
+const SHORT_SOURCE_GRACE_MS = 90000; // stop reloading 90s after the frame loaded
+const SHORT_SOURCE_MAX_POS  = 30;    // ...and only while under 30s has been played
+let playerFrameLoadedAt = 0;
+let shortSourceHandled  = new Set();
+
+function shortSourceKey() {
+  const item = currentItem;
+  const id = item ? (item.tmdb_id || item.id) : '?';
+  const sn = currentSeason ? (currentSeason.season_number || 1) : 1;
+  return `${id}|${currentServer}|${sn}|${currentEp}`;
+}
+
+// How long the thing being played is supposed to run, in seconds, or 0 when
+// nothing reliable is known. Anime returns 0 on purpose: it plays through
+// MegaPlay rather than any of these providers, and AniList's `duration` is a
+// per-series average rather than this episode's length.
+function expectedEpisodeSecs() {
+  const item = currentItem;
+  if (!item) return 0;
+  if (item.type === 'anime') return 0;
+  if (item.type === 'movie') return (Number(item.runtime) || 0) * 60;
+  const mins = seasonEpRuntimes[currentEp - 1] || Number(item.runtime) || 0;
+  return mins * 60;
+}
+
+function setServerStatus(text) {
+  const el = document.getElementById('server-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.display = text ? 'block' : 'none';
+}
+
+// Pulls this episode's {watched,duration} out of a MEDIA_DATA payload. A row
+// for a different episode is not an answer about this one, so it returns null
+// rather than whatever happens to be first.
+function mediaDataProgress(data) {
+  if (!data || typeof data !== 'object') return null;
+  const item = currentItem;
+  if (!item) return null;
+  const id = item.tmdb_id || item.id;
+  const entry = data[id] || data[String(id)];
+  if (!entry) return null;
+  if (item.type === 'movie') return entry.progress || null;
+  const sn = currentSeason ? (currentSeason.season_number || 1) : 1;
+  const row = entry.show_progress && entry.show_progress[`s${sn}e${currentEp}`];
+  return (row && row.progress) || null;
+}
+
+function onPlayerMessage(e) {
+  const frame = document.getElementById('player-iframe');
+  // Only the live player frame is listened to. setPlayerFrame() replaces the
+  // element, so a frame being torn down cannot report against its successor,
+  // and nothing else on the page can spoof a duration.
+  if (!frame || !e || !e.source || e.source !== frame.contentWindow) return;
+  const msg = e.data;
+  if (!msg || typeof msg !== 'object') return;
+
+  let dur = null, pos = null;
+  if (msg.type === 'PLAYER_EVENT' && msg.data) {
+    dur = Number(msg.data.duration);
+    pos = Number(msg.data.currentTime);
+  } else if (msg.type === 'MEDIA_DATA') {
+    const p = mediaDataProgress(msg.data);
+    if (!p) return;
+    dur = Number(p.duration);
+    pos = Number(p.watched);
+  } else {
+    return;
+  }
+  if (!Number.isFinite(dur) || dur <= 0) return;
+  shortSourceCheck(dur, Number.isFinite(pos) && pos > 0 ? pos : 0);
+}
+
+function shortSourceCheck(dur, pos) {
+  const want = expectedEpisodeSecs();
+  if (!want) return;                       // no runtime on file: never act on a guess
+  const key = shortSourceKey();
+
+  if (dur >= want * SHORT_SOURCE_RATIO) {  // the source is fine — clear a stale warning
+    if (shortSourceHandled.has(key)) setServerStatus('');
+    return;
+  }
+
+  const label = `This source runs ${formatWatchTime(Math.round(dur))} of ${formatWatchTime(want)}`;
+  const tooLate = pos > SHORT_SOURCE_MAX_POS ||
+                  (playerFrameLoadedAt && Date.now() - playerFrameLoadedAt > SHORT_SOURCE_GRACE_MS);
+
+  if (shortSourceHandled.has(key) || tooLate) {
+    // Already given its second chance, or the viewer is far enough in that
+    // restarting would cost more than the wrong seek bar does.
+    shortSourceHandled.add(key);
+    setServerStatus(`${label}. Reloading did not help — try another server.`);
+    return;
+  }
+
+  shortSourceHandled.add(key);
+  loadServerUrl();                         // same episode, fresh player — the manual fix, automated
+  startWatchTimer();                       // the old frame's elapsed time is not this one's
+  setServerStatus(`${label} — reloading the player…`);
+}
+
+window.addEventListener('message', onPlayerMessage);
 
 // ── WATCH TIMER ──
 let watchTimer = null;
@@ -3694,10 +3836,16 @@ function resumeFromTracked() {
   }
   if (url) {
     clearTimeout(serverLoadTimer);
+    playerFrameLoadedAt = Date.now();
     setPlayerFrame(url);
   } else {
     loadServerUrl(); // provider has no confirmed resume param; reload from start
   }
+  // Resuming is a deliberate position, so the truncated-source guard must not
+  // reload out from under it and send the viewer back to 0:00. Spending this
+  // episode's one reload here is the point: a short seek bar is a smaller loss
+  // than the place they just asked to return to.
+  shortSourceHandled.add(shortSourceKey());
   startWatchTimer(); // restart timer from 0 on new server
 }
 
