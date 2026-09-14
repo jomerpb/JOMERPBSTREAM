@@ -33,12 +33,12 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260913d"/>
+  <link rel="stylesheet" href="styles.css?v=20260914a"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
   <script defer src="stream.js?v=20260913e"></script>
-  <script defer src="oracle.js?v=20260901a"></script>
+  <script defer src="oracle.js?v=20260914a"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
 <body>
@@ -1082,6 +1082,32 @@
     </div>
   </div>
   <div class="pcso-hist-result" id="pcso-hist-result"></div>
+</div>
+
+<!-- NEXT DRAW FROM LAST RESULT — the seeded panel.
+     Third, between the two date-anchored panels and the personal card. Unlike
+     both panels around it this one is anchored on a DRAW: it takes the previous
+     recorded result for each game and casts the five number-native layers from
+     those winning numbers. A date whose preceding draw has not been recorded
+     yet shows what it is waiting for instead of numbers — see
+     oracleSeedCompute() in oracle.js. Same in-page calendar as the other two. -->
+<div class="pcso-history">
+  <div class="pcso-history-eyebrow"><span class="pcso-live dot-teal" aria-hidden="true"></span>Next Draw From Last Result</div>
+  <div class="pcso-hist-controls">
+    <div class="opick-field" id="oracle-seed-field">
+      <input type="hidden" id="oracle-seed-date">
+      <button type="button" class="opick-trigger" id="oracle-seed-trigger"
+              onclick="oracleCalToggle('oracle-seed',event)" aria-haspopup="dialog" aria-expanded="false">
+        <span id="oracle-seed-label">Select a date</span>
+        <span class="opick-chev" aria-hidden="true">&#9662;</span>
+      </button>
+      <div class="opick-cal" id="oracle-seed-cal" role="dialog" aria-label="Choose a date"></div>
+    </div>
+  </div>
+  <div class="pcso-hist-result" id="oracle-seed-result">
+    <span class="pcso-hist-none">Pick a date to cast it from the previous draw.</span>
+  </div>
+  <div class="oracle-pick-note" id="oracle-seed-note"></div>
 </div>
 
 <!-- ANALYZE MY OWN PERSONAL NUMBERS
