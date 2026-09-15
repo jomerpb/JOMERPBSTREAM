@@ -352,7 +352,12 @@ console.log('\n13. Look Up reads the seeded engine, and only seeded log entries'
   check('and not the history-free pick',
         JSON.stringify(shown) !== JSON.stringify(freeEngine),
         `matches computeOracleAsOf ${JSON.stringify(freeEngine)}`);
-  check('the row names the draw it was cast from', /Cast from/.test(html));
+  // The seed clause belongs to the seeded card ONLY. Look Up briefly carried it
+  // too; the repo owner asked for it removed, so this pins it out rather than in.
+  check('the Look Up row does NOT carry the seed clause', !/Cast from/.test(html)
+        && !/oseed-from/.test(html), 'seed clause is back in Look Up');
+  check('but the seeded card still does',
+        /Cast from/.test(sb.oracleSeedGameHTML('658', target)));
 }
 
 // ── 14. the init path renders without throwing ───────────────────────────
