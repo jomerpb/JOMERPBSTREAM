@@ -775,6 +775,163 @@ console.log('\n16. the TV country chips ARE the filter panel\'s Country picker')
   check(mismatched.length === 0, 'data-region matches the region each chip passes to loadTVSub', mismatched.join(','));
 }
 
+console.log('\n17. the Tags filter only sends keywords that ARE the term');
+{
+  // TMDB's /search/keyword is fuzzy and the shipped code took its top 6 hits
+  // verbatim, so "boys love" pulled in `god's love` and "gay romance" pulled in
+  // `sad romance` — all OR'd into with_keywords, all widening the grid.
+  const realFetch = ctx.fetch;
+  // The exact page-1 payloads TMDB returns for the four Coming of Age terms,
+  // recorded live. Keeping them fixed is the point: this asserts the GATE, not
+  // TMDB's ranking on the day the suite runs.
+  const LIVE = {
+    'boys love':   [[365317,"boy's love"],[289844,"boys' love (bl)"],[369329,'boys home'],
+                    [376783,'boys lo'],[344720,"god's love"],[357079,'rich boy loves poor girl']],
+    'girls love':  [[383699,"girls' love"],[280003,"girls' love (gl)"],
+                    [371256,'ukraine, girls, sex, love, witch, cossack, devil'],
+                    [296384,'girls home'],[239560,'school girl love'],[357079,'rich boy loves poor girl']],
+    'lgbt':        [[158718,'lgbt'],[380747,'lgbt+'],[195624,'black lgbt'],[224000,'lgbt parenting'],
+                    [243575,'indigenous lgbt'],[173669,'lgbt activist']],
+    'gay romance': [[240305,'gay romance'],[352267,'sad romance'],[324113,'bad romance'],[375932,'war romance']],
+    'time loop':   [[9663,'time loop'],[300668,'time loops'],[301553,'timeloop'],
+                    [287501,'time loss'],[268805,'time leap'],[276092,'time lord']],
+    'isekai':      [[290667,'isekai'],[315058,'reverse isekai'],[330855,'sekai']],
+    'zombie':      [[12377,'zombie'],[210024,'zombie sex'],[263472,'zombie cat'],[1721,'zombie apocalypse'],
+                    [289309,'zombie animals'],[192011,'rob zombie']],
+    'countryside': [[10235,'countryside'],[221964,'spanish countryside'],[159999,'french countryside']],
+  };
+  ctx.fetch = async (url) => {
+    const q = decodeURIComponent(String(url).match(/[?&]query=([^&]*)/)?.[1] || '').replace(/\+/g, ' ');
+    const rows = LIVE[q] || [];
+    return { ok: true, json: async () => ({ results: rows.map(([id, name]) => ({ id, name })) }) };
+  };
+
+  const got = await S(`resolveKeywordIds("boys love,girls love,lgbt,gay romance")`);
+  const names = got.names;
+  // Everything the repo owner asked this chip to pull stays in.
+  for (const want of ["boy's love", "boys' love (bl)", "girls' love", "girls' love (gl)",
+                      'lgbt', 'lgbt+', 'black lgbt', 'gay romance']) {
+    check(names.includes(want), `keeps "${want}"`, names.join(' | '));
+  }
+  // Everything that merely looks like it does not.
+  for (const junk of ['boys home', 'boys lo', "god's love", 'rich boy loves poor girl',
+                      'ukraine, girls, sex, love, witch, cossack, devil', 'girls home',
+                      'school girl love', 'sad romance', 'bad romance', 'war romance']) {
+    check(!names.includes(junk), `drops "${junk}"`);
+  }
+  check(got.ids.split('|').length === names.length, 'the id list and the printed names stay in step');
+  check(!got.ids.split('|').includes('344720'), "god's love's id never reaches with_keywords");
+
+  // Spelling variants are the reason the gate is substring-on-squashed rather
+  // than whole-token: a token rule drops these three and keeps the chip at one id.
+  const tl = await S(`resolveKeywordIds("time loop")`);
+  check(tl.names.length === 3 && tl.names.every(n => /time ?loops?/.test(n)),
+        'time loop keeps its spelling variants and drops time lord/leap/loss', tl.names.join(' | '));
+  // A near-miss typo and a substring-of-a-different-word are both refused.
+  const isk = await S(`resolveKeywordIds("isekai")`);
+  check(!isk.names.includes('sekai'), 'isekai does not match sekai', isk.names.join(' | '));
+  // Qualified forms survive — this is what a prefix-only rule would lose.
+  const cs = await S(`resolveKeywordIds("countryside")`);
+  check(cs.names.includes('spanish countryside'), 'qualified forms are kept', cs.names.join(' | '));
+  // No terms at all is still an empty query, not a fetch.
+  const none = await S(`resolveKeywordIds("")`);
+  check(none.ids === '' && none.names.length === 0, 'an empty tag list resolves to nothing');
+
+  ctx.fetch = realFetch;
+}
+
+console.log('\n18. infinite scroll RE-ARMS its sentinel instead of re-observing it');
+{
+  // IntersectionObserver only fires on a CHANGE, and observe() on an element it
+  // already watches is a no-op — so a sentinel that never leaves the root margin
+  // kills paging silently. Measured before the fix: a tag-filtered grid stopped
+  // at 68 cards with hasMore still true and made zero further requests.
+  const calls = [];
+  const realGet = ctx.document.getElementById;
+  ctx.document.getElementById = id => (/-sentinel$/.test(id) ? { id } : realGet(id));
+  const obs = S('infiniteObserver');
+  const realObserve = obs.observe, realUnobserve = obs.unobserve;
+  obs.observe = function (t) { calls.push('observe:' + t.id); };
+  obs.unobserve = function (t) { calls.push('unobserve:' + t.id); };
+
+  vm.runInContext('attachInfiniteScroll()', ctx);
+  const tv = calls.filter(c => c.endsWith('tv-sentinel'));
+  check(tv.length === 2 && tv[0].startsWith('unobserve') && tv[1].startsWith('observe'),
+        'each sentinel is unobserved and re-observed, in that order', tv.join(' , '));
+  check(calls.filter(c => c.startsWith('observe:')).length === 4,
+        'all four grids are re-armed', String(calls.length));
+
+  // Called twice in a row it must re-arm again, not fall through — that is the
+  // whole point, since applyTVFilter calls it after every completed page.
+  calls.length = 0;
+  vm.runInContext('attachInfiniteScroll()', ctx);
+  check(calls.filter(c => c.startsWith('unobserve:')).length === 4,
+        'a second call re-arms rather than no-opping');
+
+  obs.observe = realObserve; obs.unobserve = realUnobserve;
+  ctx.document.getElementById = realGet;
+}
+
+console.log('\n19. the COA chip resolves in parallel, is memoised, and is wired to both panels');
+{
+  const realFetch = ctx.fetch;
+  let calls = 0, inFlight = 0, maxInFlight = 0;
+  ctx.fetch = async (url) => {
+    calls++; inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise(r => setTimeout(r, 15));     // a round trip worth waiting on
+    inFlight--;
+    const q = decodeURIComponent(String(url).match(/[?&]query=([^&]*)/)?.[1] || '').replace(/\+/g, ' ');
+    // a DISTINCT id per term — deriving it from the length collided
+    // ('boys love' and 'gay theme' are both 9) and the real dedupe then
+    // correctly dropped one, which looked like an ordering bug.
+    let h = 0; for (const c of q) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return { ok: true, json: async () => ({ results: [{ id: h, name: q }] }) };
+  };
+  vm.runInContext('KEYWORD_CACHE.clear()', ctx);
+
+  const terms = 'boys love,girls love,lgbt,gay romance,coming of age,gay theme,queer,lesbian,homosexuality,lesbian relationship,transgender';
+  const t0 = Date.now();
+  const got = await S(`resolveKeywordIds(${JSON.stringify(terms)})`);
+  const elapsed = Date.now() - t0;
+
+  check(calls === 11, 'every term is looked up', String(calls));
+  check(maxInFlight === 11, 'all 11 go out TOGETHER, not one after another', 'max in flight: ' + maxInFlight);
+  check(elapsed < 150, 'so the wall clock is one round trip, not eleven', elapsed + 'ms');
+  // Order comes from the term list, not from whichever answer landed first —
+  // that is what keeps the "Matched TMDB tags" line readable.
+  check(got.names[0] === 'boys love' && got.names[10] === 'transgender',
+        'names stay in the order the chip lists them', got.names.join(' | '));
+
+  // Memoised: a second resolve costs nothing. applyTVFilter re-runs this on
+  // EVERY filter change, so without the cache ticking a rating pays for 11
+  // lookups again.
+  const before = calls;
+  await S(`resolveKeywordIds(${JSON.stringify(terms)})`);
+  check(calls === before, 'a second resolve makes zero requests', `${calls - before} extra`);
+
+  // A failure must NOT be cached, or one flaky moment pins the chip empty.
+  vm.runInContext('KEYWORD_CACHE.clear()', ctx);
+  ctx.fetch = async () => { throw new Error('offline'); };
+  const dead = await S(`resolveKeywordIds("queer")`);
+  check(dead.ids === '' && dead.names.length === 0, 'a failed lookup degrades to empty, never throws');
+  check(vm.runInContext('KEYWORD_CACHE.has("queer")', ctx) === false,
+        'and is NOT cached, so the next attempt retries');
+
+  ctx.fetch = realFetch;
+
+  // Both panels carry the chip, with identical terms — they drifted once before.
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const coa = [...html.matchAll(/data-val="([^"]*)" onchange="onTagCheck\('(tf|mf)-tag'\)">COA</g)];
+  check(coa.length === 2, 'the COA chip is on both the TV and the Movie panel', String(coa.length));
+  check(coa.length === 2 && coa[0][1] === coa[1][1], 'both send the same terms');
+  const sent = coa.length ? coa[0][1].split(',') : [];
+  for (const want of ['coming of age', 'boys love', 'girls love', 'lgbt', 'gay romance'])
+    check(sent.includes(want), `COA sends "${want}"`);
+  // Terms measured to return nothing, or to match people's names, stay out.
+  for (const dud of ['yaoi', 'yuri', 'bl'])
+    check(!sent.includes(dud), `COA does not send "${dud}"`);
+}
+
 console.log('\n' + '='.repeat(60));
 console.log(`${fails.length} failure(s)` + (fails.length ? ': ' + fails.join(', ') : ''));
 process.exit(fails.length ? 1 : 0);
