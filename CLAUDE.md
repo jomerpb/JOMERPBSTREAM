@@ -371,8 +371,8 @@ titles by text, the exact technique that sent *Attack on Titan* to a prequel
 spin-off in the MangaFreak resolver. `imdbScoreFor` returns null for both types
 and `markImdbTarget` never tags their cards, so they cost no requests either.
 
-**~7% of the catalogue has no IMDb entry** at the pipeline's vote floor and
-falls back to TMDB's number rather than showing a blank. The two therefore
+**~12% of the catalogue has no IMDb entry at all** and falls back to TMDB's
+number rather than showing a blank. The two therefore
 coexist on one grid, so the badge is **tinted IMDb amber (`#f5c518`) when it came
 from IMDb** and left white when it did not, the `title` attribute names the
 source, and the detail page's facts table spells it out in full
@@ -382,10 +382,10 @@ source, and the detail page's facts table spells it out in full
 
 The obvious shape, `{"32199328":66,…}`, costs **5.50 MB raw / 1.64 MB gzipped**.
 Sorting the tconsts and storing the **gaps** between them in one array
-alongside a parallel array of ratings costs **2.42 MB raw / 0.74 MB gzipped**
-for the same 430,439 titles, because a sorted gap list is mostly single digits
-and gzip eats it. That is within 7% of a hand-rolled binary format (0.69 MB)
-while staying plain JSON. Do not "simplify" it back into an object keyed by
+alongside a parallel array of ratings costs **4.45 MB raw / 1.35 MB gzipped**
+for the same 807,198 titles, because a sorted gap list is mostly single digits
+and gzip eats it. That is within 7% of a hand-rolled binary format while
+staying plain JSON. Do not "simplify" it back into an object keyed by
 tconst — it more than doubles what every phone downloads.
 
 The decoder is one running sum, and it is load-bearing: seeded wrong or off by
@@ -393,18 +393,67 @@ one anywhere, **every card gets its neighbour's rating** — plausible-looking d
 that never throws. Test 1 in `test_imdb_ratings.mjs` pins the seed at zero and
 test 3 in `test_build_imdb_ratings.py` asserts `decode(encode(x)) == x`.
 
-**The 100-vote floor is a feature, not a size hack.** It drops titles nobody has
-rated enough for the rating to mean anything — the same defect this whole change
-fixes. Measured coverage of the app's own catalogue: 95.5% at no floor (6.20 MB
-gzipped), **93.1% at 100 votes (0.74 MB)**, 82.2% at 500, 78.5% at 1000. 100 is
-the knee.
+### The vote floor is 5, and the TYPE FILTER is what pays for it
+
+This file used to keep every IMDb title with **100+** votes, and the floor was
+justified here as "the measured knee" of a coverage/size curve. It was — but
+the curve had been measured with *every* IMDb title type in the file, and that
+is what made coverage expensive. The reported symptom: *A Love Other Than
+Yours* shows **8.2** on imdb.com and the card showed nothing, because IMDb has
+it at 47 votes. So did a whole block of the K-Drama tab.
+
+Two things had to be true at once, and only the second one was:
+
+| | titles | gzip | K-Drama page 1 badged |
+|---|---|---|---|
+| all types, ≥100 votes (before) | 430,618 | 0.74 MB | 9/20 |
+| all types, ≥5 votes | 1,709,783 | 2.61 MB | 18/20 |
+| **`RATING_TYPES`, ≥5 votes (now)** | **807,198** | **1.35 MB** | **18/20** |
+
+**The page never looks up an episode.** A tconst only ever reaches this file
+through `/tv/{id}/external_ids` or `/movie/{id}/external_ids`, which answer
+with the series or the film — so `tvEpisode` (882,358 rated rows) and
+`videoGame` (20,227) are unreachable, 53% of the dump, and excluding them buys
+the low floor outright. That was measured, not assumed: 30 random tconsts of
+each against TMDB's `/find` returned **0 movie cards and 0 TV cards**.
+
+**`short`, `video` and `tvShort` are KEPT, and that reversed the first
+attempt.** From the browse grids they look exactly as unreachable as episodes —
+0 of 417 sampled catalogue titles is one. But Search and the actor filmography
+grid reach the whole catalogue: of 40 random `short`/`video`/`tvShort`
+tconsts, TMDB returns **a real movie card for 34**. Dropping them to save
+0.37 MB would have quietly blanked those two surfaces, which no browse-grid
+sample can see. Test 11 in `test_build_imdb_ratings.py` pins them in.
+
+**Regression was checked directly rather than argued.** Of the 314 titles that
+carried a badge under the old config across a 417-title sample, **0** lose it.
+The only `movie` row the new file drops relative to the old one is
+`tt10489208`, which IMDb itself removed from its ratings dump between two
+consecutive days.
+
+What this gives up: a thin rating *can* now lead a rating-sorted grid — 5 of
+the 51 titles gained on that sample are rated 8.5+ off fewer than 25 votes.
+That is a much smaller defect than the one `TMDB_VOTE_FLOOR` exists for (TMDB
+served *Resident Evil* **10.0 off a single vote**), because IMDb publishes
+nothing under 5 votes and weights what it does publish. On the grid this change
+was reported against, the worst new entrant is 8.6 off 38 votes sitting fourth.
+**Raise `MIN_VOTES` to 25 if that is ever judged too loose**: it costs 15 of the
+51 gained titles and takes the file back to 0.81 MB.
+
+**`BROWSE_MIN_VOTES` keeps the 100-vote floor** for `imdb-browse.json`, and the
+two are deliberately separate constants. That index sorts by a vote-weighted
+score where thin titles buy nothing, and it is only fetched when a filter is
+used. Folding them into one setting quadruples it for no gain — test 11 asserts
+they differ.
 
 **The workflow runs weekly, not daily, and that is a size decision.** The file is
-single-line JSON, so any change writes a fresh ~0.74 MB blob into git history —
-there is no line-level delta to be had. Daily is ~270 MB of history a year;
-weekly is ~38 MB. An IMDb rating on a title with 100+ votes barely moves in seven
-days, and the only real cost of the gap is that a brand-new release shows TMDB's
-number for up to a week. Dispatch it by hand after a big release week.
+single-line JSON, so any change writes a fresh ~1.35 MB blob into git history —
+there is no line-level delta to be had. Weekly is ~70 MB of history a year;
+daily would be ~490 MB. An IMDb rating barely moves in seven days, and the only
+real cost of the gap is that a brand-new release shows TMDB's number for up to a
+week. Dispatch it by hand after a big release week. Note this job now fetches
+`title.basics.tsv.gz` (227 MB) for **both** outputs rather than only the browse
+index, since the ratings file needs each tconst's type; the run is ~25s.
 
 It is fetched with `?nocache=1` so the **service worker does not intercept it**.
 That is not a "don't cache" instruction to the browser: `syncShell()` deletes
@@ -447,6 +496,30 @@ sat on TMDB's number while the card it was opened from already showed IMDb's.
 The detail page additionally re-runs `renderDetailFacts` when its lookup lands,
 because the facts table names the source and would otherwise read
 "8.0/10 on TMDB" under a star that had already flipped to 8.4.
+
+**The badge element is always painted, and hidden when it has no number.** This
+is the second half of that same trap and it shipped broken for longer:
+`resolveImdbCards` can only *update* a `.js-score` it finds, and the builders
+used to emit **none at all** when `scoreOf()` returned null. So a title with a
+weak TMDB score but a real IMDb one could never fill itself in. The three browse
+grids hid it, because `paintRatedGrid` rebuilds every card from scratch and the
+rebuild re-runs `scoreOf` with `imdbScore` now set — but **the home rows, Search
+and the actor filmography grid never repaint**, so there the card stayed blank
+forever. Measured in Chromium before the fix, on *2 Days and 1 Night* (TMDB 6.7
+off 30 votes, so `scoreOf` refuses it; IMDb 8.2 off 310): `imdbScoreFor()`
+returned `"8.2"` and both `buildSmCard` and `buildGridCard` still rendered
+nothing. Note what missed it — **every headless assertion passed**, because the
+grid tests only ever exercise the repainting path; it took building a card and
+running the hydration pass against it in a real browser.
+
+So both builders now always emit the badge, `hidden` when empty, the detail
+page keeps its star pill for tv/movie with `keep:true` instead of filtering it
+out, and one helper (`imdbShowBadge`) fills the text, names the source, tints it
+amber **and un-hides it** — that last part being the half that was missing.
+`[hidden]{display:none!important}` is pinned in `styles.css` so a future rule
+cannot un-hide an empty badge. Test 15 in `test_imdb_ratings.mjs` asserts the
+element is emitted-but-hidden with no score, and that `imdbShowBadge` clears
+`hidden`.
 
 ### Every browse grid is ordered by the rating on the card
 
@@ -1179,7 +1252,8 @@ inside the app rather than a dead end.
 
 **IMDb** (`datasets.imdbws.com`):
 - `imdb-ratings.yml` → `.github/scripts/build_imdb_ratings.py` → `imdb-ratings.json`
-  (430k titles at 100+ votes, the rating every card shows) **and**
+  (807k titles at 5+ votes, restricted to the title types a card can show —
+  the rating every card displays) **and**
   `imdb-browse.json` (189k titles with type/year/genre/vote weight, behind the
   Genre/Year/Rating filters). IMDb's own daily dumps, reshaped. Exists
   for the same reason the MangaFreak and PCSO pipelines do — the browser cannot

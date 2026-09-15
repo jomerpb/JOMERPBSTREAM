@@ -27,16 +27,78 @@ human can eyeball, so there is no decoder to get wrong beyond a running sum.
 Do not "simplify" this back into an object keyed by tconst — it more than
 doubles what every phone downloads for zero readability gained.
 
-THE VOTE FLOOR IS A FEATURE, NOT A SIZE HACK
---------------------------------------------
-MIN_VOTES drops titles nobody has rated enough for the rating to mean anything.
-That is the same defect this whole change is fixing: measured on a 247-title
-sample of the app's own catalogue, TMDB served "Peloton — 9.0" off a single
-vote, against IMDb's 4.3 from 12. A 100-vote floor keeps 430,439 titles and
-still covers 93.1% of that sample; dropping the floor to 0 would add 1.28M
-mostly-unrated titles to buy 2.4 points of coverage and take the file to 6.20 MB
-gzipped. Raising it to 1000 saves 0.30 MB and costs 15 points of coverage.
-100 is the measured knee.
+THE VOTE FLOOR IS LOW; THE TYPE FILTER IS WHAT PAYS FOR IT
+----------------------------------------------------------
+This file used to keep every IMDb title with 100+ votes. That floor was chosen
+as the knee of a coverage/size curve — but the curve was measured with EVERY
+title type in the file, and that is what made it expensive. Measured against
+IMDb's own dumps:
+
+    5-99 votes : 1,279,165 titles, of which 694,679 are tvEpisode
+    100+ votes :   430,618 titles, of which 187,679 are tvEpisode
+
+The page never looks up an episode. It resolves a tconst from TMDB's
+/tv/{id}/external_ids or /movie/{id}/external_ids, which answer with the
+SERIES or the FILM. So 43.6% of the old file could never be read by anything,
+and half of what a lower floor would have added was more of the same.
+
+Excluding the types a card can NEVER show turns the floor from a size decision
+back into a correctness one:
+
+    config                       titles   gzip     browse grids covered
+    all types,   >=100 votes    430,618   0.74 MB   314/417  (75.3%)
+    all types,   >=5   votes  1,709,783   2.61 MB   366/417  (87.8%)
+    RATING_TYPES,>=5   votes    807,198   1.35 MB   365/417  (87.5%)   <- in use
+
+Coverage is measured over 417 titles pulled from this app's own surfaces (5
+country tabs, popular/top-rated/airing TV, popular/top-rated/upcoming/
+now-playing movies). So +12.2 points for +0.61 MB, where dropping the floor
+with no type filter costs +1.87 MB to gain ONE more title than this does.
+
+WHICH TYPES ARE EXCLUDED, AND HOW THAT WAS SETTLED
+--------------------------------------------------
+Only two: tvEpisode (882,358 rated rows) and videoGame (20,227). Both were
+checked against TMDB's /find rather than reasoned about — 30 random tconsts of
+each, asking whether TMDB returns a card for them at all:
+
+    tvEpisode  0/30 movie_results, 0/30 tv_results (2/30 tv_episode_results)
+    videoGame  0/30 anything
+
+This app never builds a card from tv_episode_results, so neither type is
+reachable. Between them they are 902,585 rows — 53% of the dump.
+
+short, video and tvShort ARE kept, and that reversed an earlier decision here.
+They look as unreachable as episodes from the browse grids, where 0 of 417
+titles is one — but Search and the actor filmography grid reach the whole
+catalogue. Tested the same way: of 40 random short/video/tvShort tconsts, TMDB
+returns a real movie card for **34**. Dropping them would have quietly blanked
+badges on those two surfaces, which no browse-grid sample can see. They cost
+0.37 MB and they stay.
+
+Regression checked directly rather than assumed: of every tconst in the old
+100-vote file, the ones this config drops are 187,610 tvEpisode, 18,861 short*,
+8,366 video*, 5,460 videoGame and 486 tvShort* (*now kept — figures are from
+the narrow set that was rejected), and exactly ONE movie, tt10489208, which
+IMDb itself removed from its ratings dump between two consecutive days. Under
+the config actually shipped, **no title of a kept type loses its badge**.
+
+WHY THE OLD FLOOR EXISTED, AND WHAT REPLACES IT
+-----------------------------------------------
+The 100-vote floor was not only about bytes: it dropped ratings too thin to
+mean anything, the same defect that makes TMDB_VOTE_FLOOR refuse a TMDB mean
+off nine votes. That concern is real and is now handled differently: IMDb
+publishes NOTHING under 5 votes, and unlike TMDB's raw mean an IMDb rating is
+already weighted. Measured on the grid this change was asked about, the worst
+new entrant is 8.6 off 38 votes sitting fourth; nothing absurd leads. The one
+number to watch is that 5 of the 51 titles gained on that sample are rated 8.5+
+off fewer than 25 votes, so a thin rating CAN lead a grid — it just no longer
+leads it with a 10.0 off a single vote, which is what TMDB_VOTE_FLOOR was
+added for. Raise MIN_VOTES to 25 if that is ever judged too loose: it costs 15
+of the 51 gained titles and takes the file from 1.35 MB back to 0.81 MB.
+
+The browse index keeps its own, separate floor (BROWSE_MIN_VOTES, still 100).
+It backs the Genre/Year/Rating filters and sorts by a vote-weighted score, so
+thin titles buy it nothing and it is fetched only when a filter is used.
 """
 
 import gzip
@@ -63,13 +125,38 @@ BROWSE_TYPES = {'movie': 0, 'tvSeries': 1, 'tvMiniSeries': 2}
 # Shrink guard for the browse index; it sits around 189k titles.
 BROWSE_FLOOR = 100_000
 
-# See the module docstring — the knee of the coverage/size curve, not a guess.
-MIN_VOTES = 100
+# The browse index keeps the 100-vote floor it was built with. It is a separate
+# file behind the Genre/Year/Rating filters, it ranks by a vote-weighted score
+# rather than raw rating, and it is only fetched when a filter is used — none
+# of which is true of the ratings file, so the two floors are not one setting.
+BROWSE_MIN_VOTES = 100
+
+# Which IMDb title types can ever appear on a card. This excludes exactly two —
+# tvEpisode and videoGame — and both were measured against TMDB's /find rather
+# than assumed: 0 of 30 each come back as a movie or TV card. Between them they
+# are 53% of the rated dump, and excluding them is what pays for the low floor.
+# Do NOT also drop short/video/tvShort to save another 0.37 MB; that was tried,
+# and 34 of 40 of them ARE reachable through Search and actor filmographies.
+RATING_TYPES = {
+    'movie', 'tvSeries', 'tvMiniSeries', 'tvMovie', 'tvSpecial',
+    # Kept because Search and the actor filmography grid reach past the browse
+    # grids: 34 of 40 random short/video/tvShort tconsts come back from TMDB's
+    # /find as real movie cards. See the module docstring.
+    'short', 'video', 'tvShort',
+}
+
+# IMDb publishes no rating at all below 5 votes, so this is "everything IMDb
+# will tell us" rather than a threshold with anything below it. See the module
+# docstring for why the old 100 stopped being the right number once the type
+# filter landed.
+MIN_VOTES = 5
 
 # Shrink guard, same contract as scrape_mangafreak.write(): a truncated
 # download must never replace a good file. IMDb's set only grows, so anything
 # under this floor (or well under what is already committed) is a bad fetch.
-FLOOR = 250_000
+# Raised with the type filter: the file now sits near 560k, so the old 250,000
+# would have waved through a download that lost half its rows.
+FLOOR = 400_000
 
 UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36')
@@ -81,13 +168,18 @@ def fetch(url):
         return r.read()
 
 
-def parse(raw_gz, min_votes=MIN_VOTES):
+def parse(raw_gz, keep=None, min_votes=MIN_VOTES):
     """Return (sorted [(tconst_int, rating_x10)], skipped_count).
 
     Ratings are stored times ten so the payload carries integers only —
     `7.4` round-trips as `74` and the page divides by ten to print it. Storing
     the float would cost three more bytes per title and reintroduce the
     0.1-precision noise that JSON floats bring with them.
+
+    `keep`, when given, is the set of tconst STRINGS whose title type a card can
+    show (see cardable_tconsts). Passing None keeps every type, which is what
+    the floor-only tests exercise — but main() always passes the set, because
+    without it 43.6% of the rows are episodes nothing can ever look up.
     """
     rows = []
     skipped = 0
@@ -101,6 +193,8 @@ def parse(raw_gz, min_votes=MIN_VOTES):
                 skipped += 1
                 continue
             tconst, rating, votes = parts
+            if keep is not None and tconst not in keep:
+                continue
             try:
                 v = int(votes)
                 if v < min_votes:
@@ -137,7 +231,52 @@ def decode(gaps, ratings):
     return out
 
 
-def parse_basics(raw_gz, ratings, min_votes=MIN_VOTES):
+def read_ratings(raw_gz):
+    """{tconst_str: (rating_float, votes)} for every rated title.
+
+    Both outputs need the ratings keyed by the raw tconst string — the browse
+    index to join against title.basics, and the ratings file to know which
+    tconsts are worth checking a type for — so it is read once and shared.
+    """
+    out = {}
+    with gzip.open(io.BytesIO(raw_gz), 'rt', encoding='utf-8') as f:
+        header = next(f, '')
+        if not header.startswith('tconst'):
+            raise ValueError(f'unexpected dataset header: {header!r}')
+        for line in f:
+            p = line.rstrip('\n').split('\t')
+            if len(p) != 3:
+                continue
+            try:
+                out[p[0]] = (float(p[1]), int(p[2]))
+            except ValueError:
+                continue
+    return out
+
+
+def cardable_tconsts(raw_gz, ratings):
+    """The rated tconsts whose IMDb title type a card can actually show.
+
+    Only the first two columns are parsed — title.basics is ~12M rows and
+    splitting all nine of them here costs real seconds for eight fields nobody
+    in this function reads. Restricted to tconsts that carry a rating at all,
+    so the set stays near 1.7M entries rather than the full catalogue.
+    """
+    keep = set()
+    with gzip.open(io.BytesIO(raw_gz), 'rt', encoding='utf-8') as f:
+        header = next(f, '')
+        if not header.startswith('tconst'):
+            raise ValueError(f'unexpected basics header: {header!r}')
+        for line in f:
+            p = line.split('\t', 2)
+            if len(p) < 2:
+                continue
+            if p[1] in RATING_TYPES and p[0] in ratings:
+                keep.add(p[0])
+    return keep
+
+
+def parse_basics(raw_gz, ratings, min_votes=BROWSE_MIN_VOTES):
     """Join title.basics against the ratings we already parsed.
 
     Returns (rows, genre_vocabulary) where each row is
@@ -240,7 +379,7 @@ def write_browse(path, rows, vocab, *, floor=BROWSE_FLOOR):
         'checked': now,
         'updated': now if changed else (old.get('updated') or now),
         'source': BASICS,
-        'minVotes': MIN_VOTES,
+        'minVotes': BROWSE_MIN_VOTES,
         'count': new_n,
         **payload_core,
     }
@@ -299,29 +438,26 @@ def write(path, rows, *, floor=FLOOR):
 
 
 def main():
+    # BOTH outputs need title.basics now, so it is fetched before either is
+    # written. The ratings file needs it to know a tconst's TYPE — without that
+    # the low vote floor would drag in 694,679 tvEpisode rows nothing can look
+    # up (see the module docstring) — and the browse index needs it for genres.
     print(f'fetching {DATASET} ...')
     raw = fetch(DATASET)
     print(f'  {len(raw)/1e6:.2f} MB gzipped')
-    rows, skipped = parse(raw)
-    print(f'  {len(rows)} titles at >={MIN_VOTES} votes ({skipped} malformed rows skipped)')
-    ok = write(OUT, rows)
-
-    # The browse index needs the ratings keyed by the raw tconst string to join
-    # against title.basics, which is why parse() is not reused wholesale here.
     print(f'fetching {BASICS} ...')
     raw_b = fetch(BASICS)
     print(f'  {len(raw_b)/1e6:.2f} MB gzipped')
-    ratings = {}
-    with gzip.open(io.BytesIO(raw), 'rt', encoding='utf-8') as f:
-        next(f)
-        for line in f:
-            p = line.rstrip('\n').split('\t')
-            if len(p) != 3:
-                continue
-            try:
-                ratings[p[0]] = (float(p[1]), int(p[2]))
-            except ValueError:
-                continue
+
+    ratings = read_ratings(raw)
+    print(f'  {len(ratings)} rated titles in the dump')
+    keep = cardable_tconsts(raw_b, ratings)
+    print(f'  {len(keep)} of them are a type a card can show')
+
+    rows, skipped = parse(raw, keep)
+    print(f'  {len(rows)} titles at >={MIN_VOTES} votes ({skipped} malformed rows skipped)')
+    ok = write(OUT, rows)
+
     brows, vocab = parse_basics(raw_b, ratings)
     print(f'  {len(brows)} browsable titles, {len(vocab)} genres')
     ok_b = write_browse(OUT_BROWSE, brows, vocab)

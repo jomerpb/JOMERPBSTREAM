@@ -589,6 +589,68 @@ console.log('\n14. browse grids are sorted by the DISPLAYED rating, descending')
   ctx.document.createElement = realCreate;
 }
 
+console.log('\n15. a card that paints with NO rating can still be filled in later');
+// The bug this pins: resolveImdbCards() can only UPDATE a .js-score element it
+// finds, and the builders used to emit none at all when scoreOf() returned
+// null. So a title with a weak TMDB score but a real IMDb one was blank
+// forever on every surface that does not repaint — the home rows, Search and
+// the actor filmography grid. Measured in Chromium before the fix: for
+// 2 Days and 1 Night (TMDB 6.7 off 30 votes, IMDb 8.2 off 310) imdbScoreFor()
+// returned "8.2" and the card stayed empty.
+{
+  const realCreate = ctx.document.createElement;
+  // innerHTML is a plain string on the stub, which is all this needs: the
+  // assertion is about what the builder EMITS, not how it renders.
+  ctx.document.createElement = () => {
+    const el = { style: {}, dataset: {}, cssText: '',
+      classList: { add: () => {}, remove: () => {}, contains: () => false },
+      innerHTML: '', textContent: '', title: '', hidden: false,
+      setAttribute: () => {}, getAttribute: () => null, appendChild: () => {},
+      addEventListener: () => {}, querySelector: () => null, querySelectorAll: () => [] };
+    Object.defineProperty(el, 'style', { value: { cssText: '' }, writable: true });
+    return el;
+  };
+
+  const blank = { type: 'tv', id: 1, tmdb_id: 1, title: 'Blank', score: '6.7', votes: 30 };
+  const rated = { type: 'tv', id: 2, tmdb_id: 2, title: 'Rated', score: '8.0', votes: 900 };
+
+  for (const [name, fn] of [['buildGridCard', 'buildGridCard'], ['buildSmCard', 'buildSmCard']]) {
+    vm.runInContext(`__blank = ${JSON.stringify(blank)}; __rated = ${JSON.stringify(rated)};`, ctx);
+    const outBlank = vm.runInContext(`${fn}(__blank).innerHTML`, ctx);
+    const outRated = vm.runInContext(`${fn}(__rated).innerHTML`, ctx);
+    check(/js-score/.test(outBlank),
+          `${name} still emits a .js-score element when there is no number`, outBlank.slice(0, 120));
+    check(/js-score[^>]*\shidden/.test(outBlank),
+          `${name} hides that empty badge rather than showing an empty chip`);
+    check(!/⭐/.test(outBlank), `${name} prints no star while the badge is empty`);
+    check(/js-score/.test(outRated) && !/js-score[^>]*\shidden/.test(outRated),
+          `${name} leaves a real rating visible`);
+    check(/⭐8\.0/.test(outRated), `${name} prints the number it has`, outRated.slice(0, 160));
+  }
+
+  // imdbShowBadge is the half that was missing: it un-hides.
+  const el = { textContent: '', title: '', hidden: true, dataset: {},
+               classList: { _s: new Set(), add(c) { this._s.add(c); }, contains(c) { return this._s.has(c); } } };
+  ctx.__badge = el;
+  vm.runInContext('imdbShowBadge(__badge, "8.2")', ctx);
+  check(el.textContent === '⭐8.2', 'imdbShowBadge writes the star and the number', el.textContent);
+  check(el.hidden === false, 'imdbShowBadge UN-HIDES the badge (the missing half)');
+  check(el.classList.contains('is-imdb'), 'and tints it IMDb amber');
+  check(el.title === 'IMDb 8.2', 'and names the source in the tooltip', el.title);
+
+  // data-sp keeps the detail pill's spacing ("⭐ 8.2") distinct from a card's.
+  const pill = { textContent: '', title: '', hidden: true, dataset: { sp: ' ' },
+                 classList: { _s: new Set(), add(c) { this._s.add(c); }, contains: () => false } };
+  ctx.__badge = pill;
+  vm.runInContext('imdbShowBadge(__badge, "8.2")', ctx);
+  check(pill.textContent === '⭐ 8.2', 'data-sp is honoured for the detail pill', pill.textContent);
+
+  check(vm.runInContext('imdbShowBadge(null, "8.2")', ctx) === false,
+        'a missing element returns false instead of throwing');
+
+  ctx.document.createElement = realCreate;
+}
+
 console.log('\n' + '='.repeat(60));
 console.log(`${fails.length} failure(s)` + (fails.length ? ': ' + fails.join(', ') : ''));
 process.exit(fails.length ? 1 : 0);
