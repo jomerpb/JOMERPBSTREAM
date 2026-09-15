@@ -37,7 +37,7 @@
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
-  <script defer src="stream.js?v=20260915c"></script>
+  <script defer src="stream.js?v=20260915d"></script>
   <script defer src="oracle.js?v=20260915b"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
@@ -365,12 +365,12 @@
   <div style="padding:0;">
     <div class="content-tabs" id="tv-tabs">
       <div class="ctab" onclick="togglePageFilter('tv-filter')">⚙ Filter</div>
-      <div class="ctab active" onclick="loadTVSub('popular','',this)">All Popular</div>
-      <div class="ctab" onclick="loadTVSub('popular','KR',this)">🇰🇷 K-Drama</div>
-      <div class="ctab" onclick="loadTVSub('popular','JP',this)">🇯🇵 J-Drama</div>
-      <div class="ctab" onclick="loadTVSub('popular','CN',this)">🇨🇳 C-Drama</div>
-      <div class="ctab" onclick="loadTVSub('popular','TH',this)">🇹🇭 Thai</div>
-      <div class="ctab" onclick="loadTVSub('popular','PH',this)">🇵🇭 Filipino</div>
+      <div class="ctab active" id="tv-tab-all" onclick="loadTVSub('popular','',this)">All Popular</div>
+      <div class="ctab" data-region="KR" onclick="loadTVSub('popular','KR',this)">🇰🇷 K-Drama</div>
+      <div class="ctab" data-region="JP" onclick="loadTVSub('popular','JP',this)">🇯🇵 J-Drama</div>
+      <div class="ctab" data-region="CN" onclick="loadTVSub('popular','CN',this)">🇨🇳 C-Drama</div>
+      <div class="ctab" data-region="TH" onclick="loadTVSub('popular','TH',this)">🇹🇭 Thai</div>
+      <div class="ctab" data-region="PH" onclick="loadTVSub('popular','PH',this)">🇵🇭 Filipino</div>
       <div class="ctab" onclick="loadTVSub('top_rated','',this)">Top Rated</div>
     </div>
     <!-- TV Filter Panel -->
