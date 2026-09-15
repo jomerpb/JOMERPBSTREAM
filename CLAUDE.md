@@ -802,6 +802,92 @@ Filtering it properly needs the provider↔IMDb intersection precomputed in the
 pipeline — roughly 33,500 titles and 1,700 discover pages for PH — which is a
 bigger job than this one and has not been done.
 
+### The country chips ARE the filter panel's Country picker
+
+The TV tab has two country controls — the 🇰🇷/🇯🇵/🇨🇳/🇹🇭/🇵🇭 chips in `#tv-tabs`
+and the Country picker in the filter panel — and until now they read two
+separate places while every query only ever consulted the second.
+`applyTVFilter` read `#tf-country` and nothing else, so a lit chip contributed
+**no country at all**: ticking "8+" with K-Drama lit dropped the country, took
+the no-country IMDb browse path and answered with the global 8+ list. Measured
+in Chromium, the grid under a lit 🇰🇷 chip came back Breaking Bad 9.5 /
+Band of Brothers 9.4 / Planet Earth 9.4 — card-for-card the same grid a lit 🇯🇵
+chip produced, which is how the repo owner reported it (two screenshots,
+different chip, identical results).
+
+It leaked the other way too, and that half is easy to miss: tapping a chip ran
+`fetchTV(region)` directly and **silently discarded a Min Rating the panel was
+still displaying** — J-Drama with 8+ visibly ticked returned a 7.6.
+
+So there is one source of truth now. A chip tap writes its region into
+`#tf-country` (`setTVCountryPicker`) and every query reads the country back out
+of there; `syncTVCountryChip` lights the chip that matches the country actually
+being sent. The panel and the grid cannot disagree about what was asked for.
+Three details are load-bearing:
+
+- **Country is deliberately NOT counted as a "refining" filter**
+  (`tvRefiningFilterActive` lists genre/year/rating/status/tag/provider and not
+  country). A bare chip tap with nothing else ticked must still take the plain
+  `/discover` path it always took — verified byte-identical:
+  `with_origin_country=KR&sort_by=popularity.desc&vote_count.gte=0`, and
+  All Popular still sends `with_status=0`, Top Rated still hits `/tv/top_rated`.
+- **`setTVCountryPicker` refreshes the picker with `refreshTagPicker`, not
+  `onTagCheck`.** That split exists for exactly this: `onTagCheck` schedules an
+  auto-apply, and the caller is already about to run the query itself. The two
+  are otherwise the same function.
+- **The chip only yields to the picker when it is a country chip.**
+  `syncTVCountryChip` hands the highlight back to `#tv-tab-all` when the country
+  is cleared or is a combination no chip can express (Korea + Japan → All
+  Popular, query `with_origin_country=KR%7CJP`), but leaves Top Rated alone —
+  otherwise tapping Top Rated would lose its own highlight the instant the
+  filter ran.
+
+**Nothing ticked anywhere is not a query.** `imdbBrowseQuery` with no criteria
+matches the whole 189k index and sorts it by weighted rating, so Clear used to
+leave a top-rated grid sitting under an All Popular chip. `applyTVFilter` now
+falls back to the chip's own list instead. (`applyMovieFilter` still has this;
+Movies has no country chips so it was out of the reported path.)
+
+Measured after the change, in Chromium against live TMDB:
+
+| | cards | wrong country | below the rating |
+|---|---|---|---|
+| K-Drama + 8+ | 21 | 0 | 0 |
+| tap J-Drama with 8+ still set | 18 | 0 | 0 |
+| K-Drama + 8+ + Completed | 21 | 0 | 0 |
+| K-Drama + 8+ + Netflix | 19 | 0 | 0 |
+| K-Drama + 8+, scrolled to page 2 | 32 | 0 | 0 |
+| Thailand ticked in the panel | 23 | 0 | — |
+
+**What this does NOT fix, stated up front.** Country forces the TMDB
+`/discover` path — IMDb publishes no country field, as the browse-index section
+above explains — so a country now inherits every limit that path has, where
+before it inherited none of them by accident:
+
+- **A narrow combination returns a thin grid.** K-Drama + 9+ is **5 cards**.
+  That is `FILTER_MAX_PAGES` (4 pages, 80 titles) crossed with a client-side
+  rating cut, not a bug.
+- **A held-back genre plus a country can return an empty one.** K-Drama + 8+ +
+  Horror is **0 cards**, and that is not because none exist: sampling 348
+  Korean series and resolving 252 of them into `imdb-browse.json`, **11 are
+  IMDb-labelled Horror and 3 of those are 8.0+** (Death's Game 8.4,
+  Kingdom 8.3, The Guest 8.0). TMDB has no Horror id for television at all, so
+  the genre is applied after paging and its yield is whatever those 80
+  popularity-sorted rows happen to contain. Fixing it properly is the same
+  precomputed-intersection job the Netflix + Horror note above defers, and
+  raising `FILTER_MAX_PAGES` is not a cheap way out: `filterByImdbGenres` costs
+  one `/external_ids` per title, so 10 pages is 200 requests per filter change.
+- **Only the TV tab.** The Movies chips (Popular / Top Rated / Now Playing /
+  Upcoming) and the Anime genre chips (Action / Romance / Isekai / Fantasy)
+  have the same shape of split — a chip tap drops the panel's filter — but they
+  are list selectors rather than country selectors, so the same bridge does not
+  apply to them and they were left alone.
+
+Test 16 in `test_imdb_ratings.mjs` pins all of it, including a read of
+`index.html` asserting every chip's `data-region` has a matching checkbox in
+`#tf-country` and matches the region that chip passes to `loadTVSub` — a chip
+added without either would write a region nothing ever reads back.
+
 ## The KissKH server is a resolver, and the slug cannot be guessed
 
 Every other entry in `SERVER_LIST` answers to a TMDB id — `buildUrl()` turns

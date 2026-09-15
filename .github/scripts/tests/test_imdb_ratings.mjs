@@ -651,6 +651,130 @@ console.log('\n15. a card that paints with NO rating can still be filled in late
   ctx.document.createElement = realCreate;
 }
 
+console.log('\n16. the TV country chips ARE the filter panel\'s Country picker');
+{
+  // The bug this pins: applyTVFilter read #tf-country and nothing else, so a lit
+  // K-Drama chip contributed no country at all and "8+" answered with the global
+  // IMDb list. The chip and the picker are one control now — these assertions are
+  // what stops them drifting back apart.
+  const realGet = ctx.document.getElementById;
+  const realQS  = ctx.document.querySelector;
+  const realQSA = ctx.document.querySelectorAll;
+
+  const mkClassList = o => ({
+    add:      c => { if (c === 'active') o.active = true;  else o.cls.add(c); },
+    remove:   c => { if (c === 'active') o.active = false; else o.cls.delete(c); },
+    contains: c => (c === 'active' ? o.active : o.cls.has(c)),
+    toggle:   (c, on) => { if (on) o.cls.add(c); else o.cls.delete(c); },
+  });
+  const chip = (label, region, id) => {
+    const o = { textContent: label, id: id || '', dataset: region ? { region } : {},
+                active: false, cls: new Set(), style: {} };
+    o.classList = mkClassList(o);
+    return o;
+  };
+  const TABS = [chip('Filter'), chip('All Popular', null, 'tv-tab-all'),
+                chip('K-Drama', 'KR'), chip('J-Drama', 'JP'), chip('C-Drama', 'CN'),
+                chip('Thai', 'TH'), chip('Filipino', 'PH'), chip('Top Rated')];
+  const lit = () => (TABS.find(t => t.active) || {}).textContent || '(none)';
+  const light = label => { TABS.forEach(t => { t.active = false; }); TABS.find(t => t.textContent === label).active = true; };
+  const tabsEl = {
+    querySelector: sel => {
+      if (sel === '.ctab.active') return TABS.find(t => t.active) || null;
+      const m = /\.ctab\[data-region="(\w+)"\]/.exec(sel);
+      return m ? (TABS.find(t => t.dataset.region === m[1]) || null) : null;
+    },
+    querySelectorAll: sel => (sel === '.ctab' ? TABS : []),
+  };
+
+  const mkBox = val => { const b = { dataset: { val }, checked: false }; b.closest = () => ({ textContent: val }); return b; };
+  const boxes = {
+    'tf-country':  ['KR','JP','CN','TH','PH','US','GB','IN'].map(mkBox),
+    'tf-genre':    ['18','27'].map(mkBox),
+    'tf-year':     ['2020s'].map(mkBox),
+    'tf-rating':   ['9','8','7','6'].map(mkBox),
+    'tf-status':   ['ended'].map(mkBox),
+    'tf-tag':      ['isekai'].map(mkBox),
+    'tf-provider': ['8'].map(mkBox),
+  };
+  const pickerEl = id => ({
+    dataset: { noun: 'Country' },
+    querySelectorAll: sel => (sel.includes(':checked') ? boxes[id].filter(b => b.checked) : boxes[id]),
+    querySelector: sel => (sel === '.tag-picker-trigger'
+      ? { classList: { add: noop, remove: noop, toggle: noop, contains: () => false } } : null),
+  });
+
+  ctx.document.getElementById = id => {
+    if (id === 'tv-tabs') return tabsEl;
+    if (id === 'tv-tab-all') return TABS.find(t => t.id === 'tv-tab-all');
+    if (boxes[id]) return pickerEl(id);
+    return fakeEl();
+  };
+  ctx.document.querySelector = sel => {
+    const m = /^#tv-tabs (.+)$/.exec(sel);
+    return m ? tabsEl.querySelector(m[1]) : null;
+  };
+  ctx.document.querySelectorAll = sel => {
+    const m = /^#(tf-\w+) input\[type=checkbox\](:checked)?$/.exec(sel);
+    if (m && boxes[m[1]]) return m[2] ? boxes[m[1]].filter(b => b.checked) : boxes[m[1]];
+    return [];
+  };
+
+  // a chip tap writes its region into the picker, and nothing else
+  S('setTVCountryPicker("KR")');
+  check(JSON.stringify(S('getTagVals("tf-country")')) === '["KR"]',
+        'tapping K-Drama leaves exactly KR checked in #tf-country', JSON.stringify(S('getTagVals("tf-country")')));
+  S('setTVCountryPicker("JP")');
+  check(JSON.stringify(S('getTagVals("tf-country")')) === '["JP"]',
+        'switching chips replaces the country rather than adding to it');
+  S('setTVCountryPicker("")');
+  check(S('getTagVals("tf-country")').length === 0, 'All Popular clears the country');
+
+  // Country is deliberately NOT a "refining" filter — a bare chip tap has to
+  // keep taking the cheap /discover path it always took.
+  S('setTVCountryPicker("KR")');
+  check(S('tvRefiningFilterActive()') === false, 'a country on its own is not a refining filter');
+  boxes['tf-rating'][1].checked = true;
+  check(S('tvRefiningFilterActive()') === true, 'Min Rating is');
+  boxes['tf-rating'][1].checked = false;
+  boxes['tf-provider'][0].checked = true;
+  check(S('tvRefiningFilterActive()') === true, 'so is Streaming');
+  boxes['tf-provider'][0].checked = false;
+
+  // and the lit chip follows the country back
+  light('All Popular'); S('syncTVCountryChip(["JP"])');
+  check(lit() === 'J-Drama', 'picking Japan in the panel lights the J-Drama chip', lit());
+  light('K-Drama'); S('syncTVCountryChip([])');
+  check(lit() === 'All Popular', 'clearing the country hands a lit country chip back to All Popular', lit());
+  light('K-Drama'); S('syncTVCountryChip(["KR","JP"])');
+  check(lit() === 'All Popular', 'two countries — which no chip can express — also fall back', lit());
+  light('Top Rated'); S('syncTVCountryChip([])');
+  check(lit() === 'Top Rated', 'but Top Rated keeps its own highlight', lit());
+  light('Top Rated'); S('syncTVCountryChip(["TH"])');
+  check(lit() === 'Thai', 'and still yields to an explicit country', lit());
+
+  ctx.document.getElementById = realGet;
+  ctx.document.querySelector = realQS;
+  ctx.document.querySelectorAll = realQSA;
+
+  // The mapping has to be TOTAL: a chip whose country has no checkbox would
+  // write a region nothing ever reads back.
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const tabRow = /<div class="content-tabs" id="tv-tabs">[\s\S]*?<\/div>\s*<!--/.exec(html)[0];
+  const chipRegions = [...tabRow.matchAll(/data-region="(\w+)"/g)].map(m => m[1]);
+  const countryBlock = /id="tf-country"[\s\S]*?tag-picker-footer/.exec(html)[0];
+  const pickerVals = new Set([...countryBlock.matchAll(/data-val="(\w+)"/g)].map(m => m[1]));
+  check(chipRegions.length >= 5, `every country chip carries a data-region (${chipRegions.length} found)`);
+  check(chipRegions.every(r => pickerVals.has(r)),
+        'every chip country has a checkbox in #tf-country',
+        chipRegions.filter(r => !pickerVals.has(r)).join(','));
+  check(/id="tv-tab-all"/.test(tabRow), 'the All Popular chip carries the id syncTVCountryChip falls back to');
+  // Each country chip must hand loadTVSub the same region it advertises.
+  const mismatched = [...tabRow.matchAll(/data-region="(\w+)" onclick="loadTVSub\('popular','(\w*)'/g)]
+    .filter(m => m[1] !== m[2]).map(m => `${m[1]}!=${m[2]}`);
+  check(mismatched.length === 0, 'data-region matches the region each chip passes to loadTVSub', mismatched.join(','));
+}
+
 console.log('\n' + '='.repeat(60));
 console.log(`${fails.length} failure(s)` + (fails.length ? ': ' + fails.join(', ') : ''));
 process.exit(fails.length ? 1 : 0);

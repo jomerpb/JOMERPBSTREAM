@@ -1754,10 +1754,72 @@ async function loadMoreManga() {
 // ═══════════════════════════════════════════
 // TV PAGE
 // ═══════════════════════════════════════════
+// ── The country chips ARE the filter panel's Country picker ──
+// #tv-tabs' K/J/C/Thai/Filipino chips and #tf-country used to be two separate
+// controls reading two separate places, and every query only ever consulted the
+// second: applyTVFilter read #tf-country and nothing else. So ticking "8+" with
+// the K-Drama chip lit threw the country away and answered with the global IMDb
+// 8+ list — measured in Chromium, the grid under a lit K-Drama chip came back
+// Breaking Bad / Band of Brothers / Planet Earth, character-for-character the
+// same grid a lit J-Drama chip produced. The leak ran the other way too: tapping
+// a chip re-ran the plain country list and silently dropped a Min Rating the
+// panel was still displaying (J-Drama + 8+ returned a 7.6).
+//
+// There is one source of truth now. A chip tap writes its region into
+// #tf-country and every query reads the country back out of there, so the panel
+// and the grid cannot disagree about what was asked for. Every chip country has
+// a checkbox in that picker, which is what makes the mapping total.
+const TV_ALL_CHIP = 'tv-tab-all';
+
+function tvCountryChip(region) {
+  return region ? document.querySelector(`#tv-tabs .ctab[data-region="${region}"]`) : null;
+}
+
+// Set the Country picker to exactly `region` (or clear it when falsy). Uses
+// refreshTagPicker rather than onTagCheck on purpose — the caller runs the
+// query itself, and onTagCheck would schedule a second one on top of it.
+function setTVCountryPicker(region) {
+  const el = document.getElementById('tf-country');
+  if (!el) return;
+  el.querySelectorAll('input[type=checkbox]').forEach(c => { c.checked = !!region && c.dataset.val === region; });
+  refreshTagPicker('tf-country');
+}
+
+// Everything in the panel EXCEPT Country. Country is excluded because it is now
+// the chip itself: a chip tap with nothing else set must still take the plain,
+// cheaper /discover path it has always taken, byte for byte.
+function tvRefiningFilterActive() {
+  return ['genre','year','rating','status','tag','provider']
+    .some(g => document.querySelectorAll(`#tf-${g} input[type=checkbox]:checked`).length > 0);
+}
+
+// Keep the lit chip honest about the country actually being queried. A single
+// country that owns a chip lights that chip; anything else — none, or a
+// combination no chip can express — hands the highlight back to All Popular,
+// but only when a country chip is the one currently lit, so tapping Top Rated
+// does not immediately lose its own highlight to this.
+function syncTVCountryChip(countries) {
+  const tabs = document.getElementById('tv-tabs');
+  if (!tabs) return;
+  const target = countries.length === 1 ? tvCountryChip(countries[0]) : null;
+  const active = tabs.querySelector('.ctab.active');
+  if (!target && !(active && active.dataset.region)) return;
+  const chip = target || document.getElementById(TV_ALL_CHIP);
+  if (!chip || chip === active) return;
+  tabs.querySelectorAll('.ctab').forEach(t => t.classList.remove('active'));
+  chip.classList.add('active');
+}
+
 async function loadTVSub(sub, region, tabEl) {
+  if (tabEl) { document.querySelectorAll('#tv-tabs .ctab').forEach(t=>t.classList.remove('active')); tabEl.classList.add('active'); }
+  // The chip IS the country, so record it before choosing which query to run.
+  setTVCountryPicker(region);
+  // A panel filter is a standing refinement, not something a chip tap throws
+  // away. With one set, every chip goes through applyTVFilter — which now reads
+  // the country the line above just wrote.
+  if (tvRefiningFilterActive()) { await applyTVFilter(1); return; }
   tvPageState = {sub, region, page:1, hasMore:false};
   const run = nextGridRun('tv-grid');
-  if (tabEl) { document.querySelectorAll('#tv-tabs .ctab').forEach(t=>t.classList.remove('active')); tabEl.classList.add('active'); }
   document.getElementById('tv-grid').innerHTML = `<div class="sk" style="height:100px;grid-column:1/-1;border-radius:8px;"></div>`;
   document.getElementById('tv-more').style.display = 'none';
   const items = await fetchTV(sub, region, 1);
@@ -1819,7 +1881,7 @@ async function loadMoreTV() {
 function setTVFilter(region) {
   navTo('tv');
   setTimeout(() => {
-    const tab = document.querySelector('#tv-tabs .ctab:nth-child(2)');
+    const tab = tvCountryChip(region) || document.getElementById(TV_ALL_CHIP);
     loadTVSub('popular', region, tab);
   }, 100);
 }
@@ -4161,7 +4223,11 @@ function clearTagPicker(groupId) {
 
 const FILTER_NOUN_PLURAL = {Genre:'Genres', Country:'Countries', Year:'Years', Rating:'Ratings', Status:'Statuses', Tag:'Tags'};
 
-function onTagCheck(groupId) {
+// Repaint a picker's trigger label and its selected-chip row from whatever is
+// currently checked. Split out of onTagCheck so code that sets a picker's boxes
+// itself — the TV country chips below — can refresh the UI WITHOUT scheduling a
+// second query on top of the one it is already about to run.
+function refreshTagPicker(groupId) {
   const el = document.getElementById(groupId);
   if (!el) return;
   const checkedCount = el.querySelectorAll('input[type=checkbox]:checked').length;
@@ -4177,6 +4243,12 @@ function onTagCheck(groupId) {
   }
   if (trigger) trigger.classList.toggle('has-selection', checkedCount > 0);
   updateFilterSelectedDisplay(groupId);
+}
+
+function onTagCheck(groupId) {
+  const el = document.getElementById(groupId);
+  if (!el) return;
+  refreshTagPicker(groupId);
   scheduleAutoApply(groupId);
 }
 
@@ -4467,6 +4539,19 @@ async function applyTVFilter(page=1) {
     tvFilterStatuses = statuses;
 
     const providers = getTagVals('tf-provider');
+
+    // The chip row and this panel are one control (see the note above
+    // loadTVSub), so make the lit chip agree with the country about to be sent.
+    syncTVCountryChip(countries);
+    // Nothing ticked anywhere is not a query — imdbBrowseQuery with no criteria
+    // matches the whole 189k index and hands back a top-rated grid, which is
+    // what Clear used to leave behind under an All Popular chip. Fall back to
+    // the chip's own list instead.
+    if (!countries.length && !tvRefiningFilterActive()) {
+      const chip = document.getElementById(TV_ALL_CHIP);
+      await loadTVSub('popular', '', chip);
+      return;
+    }
 
     // Genre / Year / Min Rating / Status can be answered from IMDb's own data,
     // and that is a materially different list — IMDb and TMDB agree on only 18
