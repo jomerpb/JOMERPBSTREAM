@@ -989,12 +989,55 @@ ranking shifts. If that trade is ever judged wrong the answer is **more search
 terms on the chip** (`bl`, `yaoi`, `yuri`, `queer`), not a looser gate — the same
 direction `webcomicsPathFor` and the MangaFreak matcher both document.
 
-**The "Coming of Age" chip sends `boys love, girls love, lgbt, gay romance`,
-and that is deliberate.** The label does not describe the terms, which looks
-like a bug and was raised as one; the repo owner was asked and chose to keep
-both the label and the terms — the chip is their umbrella for BL/GL/LGBT
-content. Don't "fix" the label or swap the terms for `coming of age` without
-asking them again.
+**The chip is called "COA" and sends eleven terms**, on both the TV and the
+Movie panel: `boys love, girls love, lgbt, gay romance, coming of age, gay
+theme, queer, lesbian, homosexuality, lesbian relationship, transgender`. It is
+the repo owner's single umbrella for coming-of-age **and** BL/GL/LGBT content —
+they were asked, shown the measurements below, and chose one wide chip over
+splitting it. Don't split it or rename it without asking them again.
+
+Every term in it was measured against the live API before being added; the ones
+left out were left out on evidence, not taste:
+
+| term | TV | movies | verdict |
+|---|---|---|---|
+| lgbt | 984 | 7,202 | in — the biggest single term |
+| gay theme | 311 | 4,914 | in |
+| coming of age | 518 | 4,104 | in |
+| boys love | 1,510 | 784 | in — the biggest for TV |
+| queer / lesbian / homosexuality / lesbian relationship / transgender | 40-227 | 479-1,110 | in |
+| girls love, gay romance | 416 / 401 | 196 / 236 | in |
+| `bl` | 10 | 0 | **out** — resolves to `taiwan bl`, `chinese bl` etc., which almost nothing carries |
+| `yaoi` | 0 | 0 | **out** — TMDB has the keyword, nothing is tagged with it |
+| `yuri` | 54 | 27 | **out** — matches people: `yuri cabral`, `yuri tha jury`, `munakata yurix event`. The de-spaced gate cannot catch these, since `yuricabral` really does contain `yuri` |
+| `gay`, `bisexual`, `same-sex relationship`, `gay couple` | 3-164 | 15-288 | **out** — negligible yield, and the first two pull adult-adjacent sub-keywords |
+
+Widening took the pool from **2,494 → 3,096 TV and 7,861 → 14,699 movies**.
+
+**What widening costs, measured and accepted.** `coming of age` is a different
+concept from BL/LGBT, and merging them dilutes the top of the grid: the widened
+TV pool leads with Stranger Things, Young Sheldon, Hunter x Hunter and Gravity
+Falls where the BL/GL terms alone lead with The Spirealm, Pls Love, You Maniac
+and Quiet Please! — i.e. entirely CN/JP/TH/KR BL. A three-chip split (BL/GL
+1,880 TV · LGBTQ+ 2,654 TV · Coming of Age 518 TV) was measured and offered and
+the owner declined it. Adult content does not leak: `/discover` defaults
+`include_adult=false` and the app never sets it — 0 flagged rows on page 1 of
+either kind.
+
+**The eleven lookups go out in parallel and are memoised** (`KEYWORD_CACHE`,
+`keywordsForTerm`). They all land *before* the grid query can start, and
+`applyTVFilter` re-resolves them on every filter change, so ticking a rating
+used to pay for the whole set again. Measured: 11 sequential calls cost 678 ms
+against 4's 570 ms on a warm connection, and that gap multiplies by round-trip
+time on a phone. In the browser lane the first apply makes **11** keyword
+requests and ticking 8+ afterwards makes **0**.
+
+One trap that test 19 caught rather than a review: **`tmdb()` swallows its own
+errors and returns `null` instead of throwing**, so the obvious `try/catch`
+around the lookup never fires and a network failure was being cached as an
+empty result — pinning the chip to "no tags" for the rest of the session, the
+exact failure `imdbIdMap` documents. `null` IS the failure signal here and has
+to be told apart from a successful search that matched nothing, which is cached.
 
 ## The KissKH server is a resolver, and the slug cannot be guessed
 

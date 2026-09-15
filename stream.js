@@ -4384,21 +4384,41 @@ function resetPageFilter(page) {
 const kwNorm = s => (s||'').toLowerCase().replace(/['\u2019]/g,'').replace(/[^a-z0-9+]/g,'');
 const KEYWORDS_PER_TERM = 6;
 
+// One term was four sequential round trips; the COA chip alone is eleven, and
+// every one of them lands BEFORE the grid query can start. So they go out
+// together and each answer is memoised — a TMDB keyword id never changes, and
+// the same chip is re-resolved on every single filter change (ticking a rating
+// re-runs the whole of applyTVFilter). Order is preserved by mapping back over
+// `terms` rather than by arrival, so the "Matched TMDB tags" line reads in the
+// order the chip lists them.
+const KEYWORD_CACHE = new Map();
+
+async function keywordsForTerm(term) {
+  if (KEYWORD_CACHE.has(term)) return KEYWORD_CACHE.get(term);
+  const d = await tmdb('/search/keyword', {query: term});
+  // A FAILED lookup must not be cached — one flaky moment would otherwise pin
+  // this chip to "no tags" for the whole session, the same rule imdbIdMap
+  // follows. tmdb() swallows its own errors and hands back null rather than
+  // throwing, so a try/catch here would never fire: null IS the failure signal,
+  // and it has to be told apart from a successful search that matched nothing.
+  if (!d || !Array.isArray(d.results)) return [];
+  const want = kwNorm(term);
+  const matches = d.results
+    .filter(m => kwNorm(m?.name).includes(want))
+    .slice(0, KEYWORDS_PER_TERM);
+  KEYWORD_CACHE.set(term, matches);   // an empty-but-real answer is cached
+  return matches;
+}
+
 async function resolveKeywordIds(text) {
   const terms = (text||'').split(',').map(t=>t.trim()).filter(Boolean);
   if (!terms.length) return {ids:'', names:[]};
+  const per = await Promise.all(terms.map(keywordsForTerm));
   const idSet = new Set();
   const names = [];
-  for (const term of terms) {
-    try {
-      const d = await tmdb('/search/keyword', {query: term});
-      const want = kwNorm(term);
-      const matches = (d?.results||[])
-        .filter(m => kwNorm(m.name).includes(want))
-        .slice(0, KEYWORDS_PER_TERM);
-      matches.forEach(m => { if (!idSet.has(m.id)) { idSet.add(m.id); names.push(m.name); } });
-    } catch {}
-  }
+  per.forEach(matches => matches.forEach(m => {
+    if (!idSet.has(m.id)) { idSet.add(m.id); names.push(m.name); }
+  }));
   return {ids: [...idSet].join('|'), names};
 }
 

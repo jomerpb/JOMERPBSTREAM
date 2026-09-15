@@ -872,6 +872,66 @@ console.log('\n18. infinite scroll RE-ARMS its sentinel instead of re-observing 
   ctx.document.getElementById = realGet;
 }
 
+console.log('\n19. the COA chip resolves in parallel, is memoised, and is wired to both panels');
+{
+  const realFetch = ctx.fetch;
+  let calls = 0, inFlight = 0, maxInFlight = 0;
+  ctx.fetch = async (url) => {
+    calls++; inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise(r => setTimeout(r, 15));     // a round trip worth waiting on
+    inFlight--;
+    const q = decodeURIComponent(String(url).match(/[?&]query=([^&]*)/)?.[1] || '').replace(/\+/g, ' ');
+    // a DISTINCT id per term — deriving it from the length collided
+    // ('boys love' and 'gay theme' are both 9) and the real dedupe then
+    // correctly dropped one, which looked like an ordering bug.
+    let h = 0; for (const c of q) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return { ok: true, json: async () => ({ results: [{ id: h, name: q }] }) };
+  };
+  vm.runInContext('KEYWORD_CACHE.clear()', ctx);
+
+  const terms = 'boys love,girls love,lgbt,gay romance,coming of age,gay theme,queer,lesbian,homosexuality,lesbian relationship,transgender';
+  const t0 = Date.now();
+  const got = await S(`resolveKeywordIds(${JSON.stringify(terms)})`);
+  const elapsed = Date.now() - t0;
+
+  check(calls === 11, 'every term is looked up', String(calls));
+  check(maxInFlight === 11, 'all 11 go out TOGETHER, not one after another', 'max in flight: ' + maxInFlight);
+  check(elapsed < 150, 'so the wall clock is one round trip, not eleven', elapsed + 'ms');
+  // Order comes from the term list, not from whichever answer landed first —
+  // that is what keeps the "Matched TMDB tags" line readable.
+  check(got.names[0] === 'boys love' && got.names[10] === 'transgender',
+        'names stay in the order the chip lists them', got.names.join(' | '));
+
+  // Memoised: a second resolve costs nothing. applyTVFilter re-runs this on
+  // EVERY filter change, so without the cache ticking a rating pays for 11
+  // lookups again.
+  const before = calls;
+  await S(`resolveKeywordIds(${JSON.stringify(terms)})`);
+  check(calls === before, 'a second resolve makes zero requests', `${calls - before} extra`);
+
+  // A failure must NOT be cached, or one flaky moment pins the chip empty.
+  vm.runInContext('KEYWORD_CACHE.clear()', ctx);
+  ctx.fetch = async () => { throw new Error('offline'); };
+  const dead = await S(`resolveKeywordIds("queer")`);
+  check(dead.ids === '' && dead.names.length === 0, 'a failed lookup degrades to empty, never throws');
+  check(vm.runInContext('KEYWORD_CACHE.has("queer")', ctx) === false,
+        'and is NOT cached, so the next attempt retries');
+
+  ctx.fetch = realFetch;
+
+  // Both panels carry the chip, with identical terms — they drifted once before.
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const coa = [...html.matchAll(/data-val="([^"]*)" onchange="onTagCheck\('(tf|mf)-tag'\)">COA</g)];
+  check(coa.length === 2, 'the COA chip is on both the TV and the Movie panel', String(coa.length));
+  check(coa.length === 2 && coa[0][1] === coa[1][1], 'both send the same terms');
+  const sent = coa.length ? coa[0][1].split(',') : [];
+  for (const want of ['coming of age', 'boys love', 'girls love', 'lgbt', 'gay romance'])
+    check(sent.includes(want), `COA sends "${want}"`);
+  // Terms measured to return nothing, or to match people's names, stay out.
+  for (const dud of ['yaoi', 'yuri', 'bl'])
+    check(!sent.includes(dud), `COA does not send "${dud}"`);
+}
+
 console.log('\n' + '='.repeat(60));
 console.log(`${fails.length} failure(s)` + (fails.length ? ': ' + fails.join(', ') : ''));
 process.exit(fails.length ? 1 : 0);
