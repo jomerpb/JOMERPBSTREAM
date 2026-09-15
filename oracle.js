@@ -2874,13 +2874,14 @@ function pcsoHistGameHTML(gameKey,dateStr){
   var look=null;
   try{ look=oracleHistLookup(gameKey,dateStr); }
   catch(e){ console.error('oracleHistLookup '+gameKey+' '+dateStr+':',e); }
-  // The seed clause rides here too, so this panel says what it was cast FROM
-  // in the same words the card at the top of the page does. Without it the two
-  // surfaces print the same six numbers with no visible reason they agree.
+  // NO SEED CLAUSE HERE, deliberately. It was added when this panel switched to
+  // the seeded engine, on the reasoning that the two surfaces should show why
+  // they agree — the repo owner asked for it back out. The seeded card at the
+  // top of the page is where "Cast from Sep 12 · 39-10-26-30-09-29" belongs;
+  // this panel is about the DRAW, and its head reads name, source tag, then the
+  // confirmed jackpot inline. Don't re-add it without asking them again.
   var head='<div class="opick-head"><span class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
-    +(look?oracleSrcTag(look.source,false):'')+'</span>'
-    +(look&&look.seed?oracleSeedFromHTML(look.seed):'')
-    +pcsoHistJackpotHTML(entry)+'</div>';
+    +(look?oracleSrcTag(look.source,false):'')+'</span>'+pcsoHistJackpotHTML(entry)+'</div>';
 
   // The caption under the picks, naming the row above it and scoring it. One
   // line rather than a label above and a count below, which put two pieces of
@@ -2915,7 +2916,7 @@ function pcsoHistGameHTML(gameKey,dateStr){
     }).join('');
     // EZ2 is scored across all three draws at once — the caption sits under the
     // whole block, so a per-column count would have nowhere to go.
-    return '<div class="oracle-pick-game-row lookup-row oseed-row">'+head
+    return '<div class="oracle-pick-game-row lookup-row">'+head
       +'<div class="oracle-pick-cols">'+cols+'</div>'
       +(anyPick?pickCap(anyWin?hitsE:null,totalE):'')+'</div>';
   }
@@ -2929,7 +2930,7 @@ function pcsoHistGameHTML(gameKey,dateStr){
     body6+='<div class="pcso-hist-row">'+pcsoHistPickBalls(look.picks,win6)+'</div>'
       +pickCap(win6.length?hits:null,look.picks.length);
   }
-  return '<div class="oracle-pick-game-row lookup-row oseed-row">'+head+body6+'</div>';
+  return '<div class="oracle-pick-game-row lookup-row">'+head+body6+'</div>';
 }
 
 function pcsoHistRender(){
