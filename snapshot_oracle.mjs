@@ -1,10 +1,11 @@
 // scripts/snapshot_oracle.mjs
 //
-// Logs today's Oracle pick for every game to oracle-history.json, using the
-// SAME oracle.js engine the site runs (loaded via vm, not reimplemented),
-// called through computeOracleAsOf() so the logged value can never contain
-// same-day draw data — even if this workflow runs late, or a scrape lands
-// first. Run by .github/workflows/oracle-snapshot.yml at 00:05 Asia/Manila.
+// Logs today's Oracle pick to oracle-history.json, using the SAME oracle.js
+// engine the site runs (loaded via vm, not reimplemented), called through
+// oracleSeedCompute() so the logged value is exactly what the page's lead card
+// shows. A seeded pick is cast from a draw that ALREADY HAPPENED, so it can
+// never contain same-day draw data either — even if this workflow runs late,
+// or a scrape lands first. Run by .github/workflows/oracle-snapshot.yml at 00:05 Asia/Manila.
 //
 // Idempotent: if today's entry already exists, does nothing unless
 // FORCE_OVERWRITE=1 is set in the environment (manual re-run / correction).
@@ -25,7 +26,6 @@ const ORACLE_JS = path.join(ROOT, 'oracle.js');
 const PCSO_HISTORY = path.join(ROOT, 'pcso-history.json');
 const ORACLE_HISTORY = path.join(ROOT, 'oracle-history.json');
 
-const GAMES_6BALL = ['642', '645', '649', '655', '658'];
 
 function stubEl() {
   return {
@@ -108,25 +108,72 @@ async function main() {
     throw new Error(`Engine failed to load pcso-history.json: ${sandbox.PCSO_HISTORY_STATUS.error}`);
   }
 
+  // Logs the SEEDED pick — the one the page actually shows. It used to log
+  // computeOracleAsOf(), the history-free engine, and that stayed true only
+  // while a panel displayed it. Once the seeded card replaced that panel the
+  // log and the page were two different engines wearing one label: measured
+  // 2026-09-15, 6/42 read 08-17-21-29-38-39 on the card and 01-10-16-24-25-33
+  // in the log, 0 of 6 in common.
+  //
+  // Entries are tagged engine:'seeded' so the page can tell them apart from the
+  // older ones, which stay in the file untouched (see the immutability rule in
+  // CLAUDE.md) and are simply no longer displayed.
+  //
+  // ONLY GAMES DRAWN TODAY, and only those whose seed is on file. The previous
+  // version logged all six every day regardless of the schedule; a seeded pick
+  // for a game that does not draw today is not a thing this page ever shows.
+  // A game whose seed has not been appended yet is OMITTED rather than logged
+  // from an older draw — a wrong-seed pick recorded as fact is worse than a
+  // gap, and the gap is visible.
+  //
+  // This makes the two scheduled jobs ORDER-DEPENDENT: pcso-history-append.yml
+  // at 23:00 Manila must land before oracle-snapshot.yml at 00:05, or the seed
+  // for the day is missing and that game logs nothing. The crons already run in
+  // that order; this is why they must stay that way.
   const picks = {};
-  for (const gk of GAMES_6BALL) {
-    const result = sandbox.computeOracleAsOf(gk, todayStr);
-    if (!Array.isArray(result) || result.length !== 6) {
-      throw new Error(`computeOracleAsOf('${gk}', '${todayStr}') returned an unexpected shape: ${JSON.stringify(result)}`);
+  const seeds = {};
+  const scheduled = sandbox.oracleGamesOnDate(todayStr);
+  for (const gk of scheduled) {
+    let r = null;
+    try {
+      r = sandbox.oracleSeedCompute(gk, todayStr);
+    } catch (e) {
+      console.warn(`  ${gk}: oracleSeedCompute threw — ${e.message}`);
+      continue;
     }
-    picks[gk] = result;
+    if (!r || !r.ok) {
+      console.warn(`  ${gk}: no seed yet (${(r && r.reason) || 'unknown'}${r && r.waitingFor ? ', waiting for ' + r.waitingFor : ''}) — not logged`);
+      continue;
+    }
+    if (gk === 'ez2') {
+      const byHour = {};
+      for (const slot of ['2PM', '5PM', '9PM']) {
+        const p = r.byHour[slot] && r.byHour[slot].picks;
+        if (!Array.isArray(p) || p.length !== 2) {
+          throw new Error(`ez2 ${slot} on ${todayStr} returned an unexpected shape: ${JSON.stringify(p)}`);
+        }
+        byHour[slot] = p;
+      }
+      picks.ez2 = byHour;
+    } else {
+      if (!Array.isArray(r.picks) || r.picks.length !== 6) {
+        throw new Error(`oracleSeedCompute('${gk}', '${todayStr}') returned an unexpected shape: ${JSON.stringify(r.picks)}`);
+      }
+      picks[gk] = r.picks;
+    }
+    seeds[gk] = r.seedDate;
   }
-  const ez2Result = sandbox.computeOracleAsOf('ez2', todayStr);
-  if (!ez2Result || !ez2Result['2PM'] || !ez2Result['5PM'] || !ez2Result['9PM']) {
-    throw new Error(`computeOracleAsOf('ez2', '${todayStr}') returned an unexpected shape: ${JSON.stringify(ez2Result)}`);
+  if (!Object.keys(picks).length) {
+    throw new Error(`No game could be cast for ${todayStr} — every scheduled game is missing its seed. Has pcso-history-append.yml run?`);
   }
-  picks.ez2 = ez2Result;
 
   const entry = {
     date: todayStr,
     generatedAt: new Date().toISOString(),
     engineSha,
+    engine: 'seeded',
     picks,
+    seeds,
   };
 
   if (existingIdx !== -1) {
@@ -139,9 +186,15 @@ async function main() {
 
   fs.writeFileSync(ORACLE_HISTORY, JSON.stringify(log, null, 2) + '\n');
 
-  console.log(`Wrote oracle-history.json — ${todayStr}:`);
-  for (const gk of GAMES_6BALL) console.log(`  ${gk}: ${picks[gk].map((n) => String(n).padStart(2, '0')).join('-')}`);
-  console.log(`  ez2 2PM: ${picks.ez2['2PM'].map((n) => String(n).padStart(2, '0')).join('-')}  5PM: ${picks.ez2['5PM'].map((n) => String(n).padStart(2, '0')).join('-')}  9PM: ${picks.ez2['9PM'].map((n) => String(n).padStart(2, '0')).join('-')}`);
+  const pad = (a) => a.map((n) => String(n).padStart(2, '0')).join('-');
+  console.log(`Wrote oracle-history.json — ${todayStr} (seeded):`);
+  for (const gk of Object.keys(picks)) {
+    if (gk === 'ez2') {
+      console.log(`  ez2  seed ${seeds.ez2}  2PM: ${pad(picks.ez2['2PM'])}  5PM: ${pad(picks.ez2['5PM'])}  9PM: ${pad(picks.ez2['9PM'])}`);
+    } else {
+      console.log(`  ${gk}  seed ${seeds[gk]}  ${pad(picks[gk])}`);
+    }
+  }
 }
 
 main().catch((e) => {
