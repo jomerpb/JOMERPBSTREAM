@@ -66,18 +66,36 @@ check('the pre-existing older entry is byte-identical',
       JSON.stringify(log.entries[1]) === JSON.stringify(OLD_ENTRY));
 check('entry carries date, generatedAt, engineSha and picks',
       log.entries[0].date && log.entries[0].generatedAt && log.entries[0].engineSha && log.entries[0].picks);
+// The tag is what lets the page tell a seeded entry from the history-free ones
+// written before the switch. Without it Look Up would display a retired
+// engine's numbers under the same label the seeded card uses.
+check("entry is tagged engine:'seeded'", log.entries[0].engine === 'seeded', String(log.entries[0].engine));
+check('entry records the seed date it cast from', !!log.entries[0].seeds
+      && Object.keys(log.entries[0].seeds).length === Object.keys(log.entries[0].picks).length,
+      JSON.stringify(log.entries[0].seeds));
 
 // ── 2. the logged shape ──────────────────────────────────────────────────
 console.log('\n2. Logged pick shape');
 {
   const picks = log.entries[0].picks;
-  check('all five 6-ball games are logged as 6 numbers',
-        SIX_BALL.every((g) => Array.isArray(picks[g]) && picks[g].length === 6
-          && new Set(picks[g]).size === 6),
-        JSON.stringify(picks && Object.keys(picks)));
-  check('EZ2 is logged with its three draw hours of 2 numbers',
-        picks.ez2 && EZ2_SLOTS.every((s) => Array.isArray(picks.ez2[s]) && picks.ez2[s].length === 2));
-  check('no game is missing', SIX_BALL.concat('ez2').every((g) => picks[g] !== undefined));
+  const { loadEngineFromRepo: le } = await import('./lib/load_oracle.mjs');
+  const sbShape = await le();
+  const onToday = sbShape.oracleGamesOnDate(log.entries[0].date);
+  // Only games DRAWN that day are logged, and only those whose seed is on file.
+  // The old contract was "all six, every day" — a seeded pick for a game that
+  // does not draw today is not something the page ever shows.
+  check('every logged 6-ball game is 6 distinct numbers',
+        Object.keys(picks).filter((g) => g !== 'ez2')
+          .every((g) => Array.isArray(picks[g]) && picks[g].length === 6 && new Set(picks[g]).size === 6),
+        JSON.stringify(Object.keys(picks)));
+  if (picks.ez2) {
+    check('EZ2 is logged with its three draw hours of 2 numbers',
+          EZ2_SLOTS.every((s) => Array.isArray(picks.ez2[s]) && picks.ez2[s].length === 2));
+  }
+  check('nothing is logged for a game that does not draw that day',
+        Object.keys(picks).every((g) => onToday.includes(g)),
+        `${JSON.stringify(Object.keys(picks))} vs scheduled ${JSON.stringify(onToday)}`);
+  check('at least one game was logged', Object.keys(picks).length > 0);
 }
 
 // ── 3. idempotent per day ────────────────────────────────────────────────
@@ -119,14 +137,25 @@ console.log('\n5. Logged picks match a direct engine recompute');
   const { loadEngineFromRepo } = await import('./lib/load_oracle.mjs');
   const sb = await loadEngineFromRepo();
   const logged = readLog().entries[0];
+  // The whole point of the script: the log and the page cannot disagree. This
+  // is what caught the regression that prompted the switch — the log held
+  // computeOracleAsOf's numbers while the page printed oracleSeedCompute's.
   const wrong = [];
-  for (const g of SIX_BALL) {
-    const direct = JSON.stringify(sb.computeOracleAsOf(g, logged.date));
+  for (const g of Object.keys(logged.picks)) {
+    const r = sb.oracleSeedCompute(g, logged.date);
+    const direct = JSON.stringify(g === 'ez2'
+      ? { '2PM': r.byHour['2PM'].picks, '5PM': r.byHour['5PM'].picks, '9PM': r.byHour['9PM'].picks }
+      : r.picks);
     if (direct !== JSON.stringify(logged.picks[g])) wrong.push(`${g}: ${direct} vs ${JSON.stringify(logged.picks[g])}`);
+    if (r.seedDate !== logged.seeds[g]) wrong.push(`${g} seed: ${r.seedDate} vs ${logged.seeds[g]}`);
   }
-  const ez2Direct = JSON.stringify(sb.computeOracleAsOf('ez2', logged.date));
-  if (ez2Direct !== JSON.stringify(logged.picks.ez2)) wrong.push(`ez2: ${ez2Direct} vs ${JSON.stringify(logged.picks.ez2)}`);
-  check('every logged game matches computeOracleAsOf for that date', wrong.length === 0, wrong[0] || '');
+  check('every logged game matches oracleSeedCompute for that date', wrong.length === 0, wrong[0] || '');
+  // And it must NOT be the retired engine's answer.
+  const sixLogged = Object.keys(logged.picks).filter((g) => g !== 'ez2');
+  check('logged picks are the seeded engine, not the history-free one',
+        sixLogged.length === 0 || sixLogged.some((g) =>
+          JSON.stringify(sb.computeOracleAsOf(g, logged.date)) !== JSON.stringify(logged.picks[g])),
+        'every game agreed with computeOracleAsOf — is the snapshot still logging the old engine?');
 }
 
 // ── 6. it starts a log from nothing ──────────────────────────────────────

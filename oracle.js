@@ -315,9 +315,9 @@ var PCSO_HISTORY_READY=loadPcsoHistoryIntoGames();
 // .github/workflows/oracle-snapshot.yml (00:05 Manila) running
 // scripts/snapshot_oracle.mjs — which calls this same file's
 // computeOracleAsOf(), so the logged value equals what Run Expert
-// shows all day under the engine freeze. The Look Up panel prefers
-// this recorded value; dates before the log existed fall back to a
-// live recompute (labeled ↻).
+// The Look Up panel prefers this recorded value, but only for entries the
+// snapshot job tagged engine:'seeded' — see oracleHistLookup. Anything older
+// records the retired history-free engine and is not displayed.
 // ══════════════════════════
 var ORACLE_HISTORY=null; // {updated, entries:[{date, engineSha, picks:{ez2:{'2PM':[a,b],...}, '642':[..6..], ...}}]} newest-first
 var ORACLE_HISTORY_READY=(async function loadOracleHistory(){
@@ -335,22 +335,43 @@ var ORACLE_HISTORY_READY=(async function loadOracleHistory(){
 })();
 
 // Pure source-selection helper (unit-testable, no DOM):
-// returns {picks, source:'recorded'|'recomputed'} or null.
+// returns {picks, source:'recorded'|'recomputed', seed} or null.
 // 'recorded'   → taken verbatim from oracle-history.json (immutable audit log)
-// 'recomputed' → computeOracleAsOf() fallback for dates the log doesn't cover
+// 'recomputed' → a live seeded cast for dates the log doesn't cover
+//
+// IT READS THE SEEDED ENGINE, and only entries the snapshot job tagged
+// engine:'seeded'. That gate is the whole point of this function now. Look Up
+// showed whatever oracle-history.json held, and after the date panel was
+// retired that was a DIFFERENT engine's numbers from the ones the page prints
+// at the top — measured on 2026-09-15, 6/42 showed 08-17-21-29-38-39 on the
+// seeded card and 01-10-16-24-25-33 under "Oracle's Pick" here, 0 of 6 in
+// common. Two engines, one label, on one screen.
+//
+// Entries written before the switch stay in the file and stay immutable — they
+// are simply not displayed, because they record a pick this page no longer
+// makes. They are skipped by the tag, never by their date, so a hand-repaired
+// old entry cannot creep back in.
+//
+// The fallback is exact rather than approximate: a seeded pick is deterministic
+// from pcso-history.json (test 9 recomputes 814 past readings against a
+// truncated history and gets 0 changes), so 'recomputed' is the same answer the
+// log would have held. The tag is about proof-of-timing, not correctness.
 function oracleHistLookup(gameKey,dateStr){
+  var r=null;
+  try{ r=oracleSeedCompute(gameKey,dateStr); }
+  catch(e){ console.error('oracleSeedCompute '+gameKey+' '+dateStr+':',e); }
+  if(!r||!r.ok) return null;
+  var live=r.ez2
+    ? {'2PM':(r.byHour['2PM']||{}).picks||[],'5PM':(r.byHour['5PM']||{}).picks||[],'9PM':(r.byHour['9PM']||{}).picks||[]}
+    : r.picks;
   if(ORACLE_HISTORY&&Array.isArray(ORACLE_HISTORY.entries)){
     for(var i=0;i<ORACLE_HISTORY.entries.length;i++){
       var en=ORACLE_HISTORY.entries[i];
-      if(en&&en.date===dateStr&&en.picks&&en.picks[gameKey]){
-        return {picks:en.picks[gameKey],source:'recorded'};
-      }
+      if(en&&en.date===dateStr&&en.engine==='seeded'&&en.picks&&en.picks[gameKey])
+        return {picks:en.picks[gameKey],source:'recorded',seed:r};
     }
   }
-  var rc=null;
-  try{ rc=computeOracleAsOf(gameKey,dateStr); }catch(e){ console.error('computeOracleAsOf '+gameKey+':',e); }
-  if(!rc) return null;
-  return {picks:rc,source:'recomputed'};
+  return {picks:live,source:'recomputed',seed:r};
 }
 function oracleSrcTag(source,withWord){
   if(!source) return '';
@@ -2853,8 +2874,13 @@ function pcsoHistGameHTML(gameKey,dateStr){
   var look=null;
   try{ look=oracleHistLookup(gameKey,dateStr); }
   catch(e){ console.error('oracleHistLookup '+gameKey+' '+dateStr+':',e); }
+  // The seed clause rides here too, so this panel says what it was cast FROM
+  // in the same words the card at the top of the page does. Without it the two
+  // surfaces print the same six numbers with no visible reason they agree.
   var head='<div class="opick-head"><span class="oracle-pick-gname">'+PCSO_GAME_LABELS[gameKey]
-    +(look?oracleSrcTag(look.source,false):'')+'</span>'+pcsoHistJackpotHTML(entry)+'</div>';
+    +(look?oracleSrcTag(look.source,false):'')+'</span>'
+    +(look&&look.seed?oracleSeedFromHTML(look.seed):'')
+    +pcsoHistJackpotHTML(entry)+'</div>';
 
   // The caption under the picks, naming the row above it and scoring it. One
   // line rather than a label above and a count below, which put two pieces of
@@ -2889,7 +2915,7 @@ function pcsoHistGameHTML(gameKey,dateStr){
     }).join('');
     // EZ2 is scored across all three draws at once — the caption sits under the
     // whole block, so a per-column count would have nowhere to go.
-    return '<div class="oracle-pick-game-row lookup-row">'+head
+    return '<div class="oracle-pick-game-row lookup-row oseed-row">'+head
       +'<div class="oracle-pick-cols">'+cols+'</div>'
       +(anyPick?pickCap(anyWin?hitsE:null,totalE):'')+'</div>';
   }
@@ -2903,7 +2929,7 @@ function pcsoHistGameHTML(gameKey,dateStr){
     body6+='<div class="pcso-hist-row">'+pcsoHistPickBalls(look.picks,win6)+'</div>'
       +pickCap(win6.length?hits:null,look.picks.length);
   }
-  return '<div class="oracle-pick-game-row lookup-row">'+head+body6+'</div>';
+  return '<div class="oracle-pick-game-row lookup-row oseed-row">'+head+body6+'</div>';
 }
 
 function pcsoHistRender(){
@@ -3068,25 +3094,6 @@ function oracleCalRender(key){
 })();
 
 
-(function initPcsoHist(){
-  var dateInp=document.getElementById('pcso-hist-date');
-  if(!dateInp){ setTimeout(initPcsoHist,200); return; }
-  var phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
-  function fmt(d){
-    var mm=String(d.getMonth()+1).padStart(2,'0');
-    var dd=String(d.getDate()).padStart(2,'0');
-    return d.getFullYear()+'-'+mm+'-'+dd;
-  }
-  var maxD=new Date(phNow);
-  var minD=new Date(phNow); minD.setMonth(minD.getMonth()-3);
-  var defaultD=new Date(phNow); defaultD.setDate(defaultD.getDate()-1);
-  // setAttribute, not the .min/.max properties: the input is type=hidden now
-  // and the shared calendar reads these back with getAttribute.
-  dateInp.setAttribute('max',fmt(maxD));
-  dateInp.setAttribute('min',fmt(minD));
-  oracleCalSetDate('pcso-hist',fmt(defaultD),false);
-  pcsoHistRender();
-})();
 
 // ══════════════════════════
 // ORACLE PICK FOR ANY DATE
@@ -3756,6 +3763,42 @@ function oracleSeedRender(){
   dateInp.setAttribute('max',maxD.getFullYear()+'-'+String(maxD.getMonth()+1).padStart(2,'0')+'-'+String(maxD.getDate()).padStart(2,'0'));
   oracleCalSetDate('oracle-seed',dateInp.value||todayStr,false);
   oracleSeedRender();
+})();
+
+// ══════════════════════════
+// LOOK UP RESULT — first render.
+//
+// THIS MUST STAY BELOW THE SEEDED ENGINE. It used to sit just under
+// pcsoHistRender(), which was correct while that panel read
+// computeOracleAsOf(). It now reads oracleSeedCompute(), and that engine's
+// tables (OSEED_TRI_EL, OSEED_EL_NUMS, OSEED_LOSHU_HOME, OSEED_LABELS) are
+// `var`s: hoisted, so the file parses, but still undefined until execution
+// reaches their declarations. Rendering before that point threw
+// `Cannot read properties of undefined (reading '4')` out of oracleSeedCast
+// on every game — the index in that message is the trigram number, which is
+// what identified it. Caught only in the browser: the vm harnesses stub the
+// date input with an empty value, so pcsoHistRender() returned early and the
+// init path never ran there. test 14 in test_oracle_seed.mjs now gives the
+// stub a real value so the ordering is exercised headlessly too.
+// ══════════════════════════
+(function initPcsoHist(){
+  var dateInp=document.getElementById('pcso-hist-date');
+  if(!dateInp){ setTimeout(initPcsoHist,200); return; }
+  var phNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
+  function fmt(d){
+    var mm=String(d.getMonth()+1).padStart(2,'0');
+    var dd=String(d.getDate()).padStart(2,'0');
+    return d.getFullYear()+'-'+mm+'-'+dd;
+  }
+  var maxD=new Date(phNow);
+  var minD=new Date(phNow); minD.setMonth(minD.getMonth()-3);
+  var defaultD=new Date(phNow); defaultD.setDate(defaultD.getDate()-1);
+  // setAttribute, not the .min/.max properties: the input is type=hidden now
+  // and the shared calendar reads these back with getAttribute.
+  dateInp.setAttribute('max',fmt(maxD));
+  dateInp.setAttribute('min',fmt(minD));
+  oracleCalSetDate('pcso-hist',fmt(defaultD),false);
+  pcsoHistRender();
 })();
 
 // ══════════════════════════

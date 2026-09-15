@@ -307,6 +307,104 @@ console.log('\n12. No number is unreachable under the seeded picker');
   }
 }
 
+// ── 13. Look Up reads the SEEDED engine, and only seeded log entries ─────
+// The regression this pins: after the date panel was retired, Look Up still
+// rendered oracle-history.json verbatim — the history-free engine's numbers —
+// under the same "Oracle's Pick" label the seeded card uses. Measured on
+// 2026-09-15 the two shared 0 of 6 numbers for 6/42.
+console.log('\n13. Look Up reads the seeded engine, and only seeded log entries');
+{
+  const rows = (RAW['6/58'] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const target = rows[rows.length - 1].date;
+  const seeded = sb.oracleSeedCompute('658', target).picks;
+
+  // (a) with no log at all, the lookup returns a live seeded cast
+  sb.ORACLE_HISTORY = null;
+  let look = sb.oracleHistLookup('658', target);
+  check('with no log it returns a live seeded cast',
+        !!look && look.source === 'recomputed' && JSON.stringify(look.picks) === JSON.stringify(seeded),
+        JSON.stringify(look && look.picks));
+  check('and it carries the seed it cast from', !!(look && look.seed && look.seed.seedDate));
+
+  // (b) an UNTAGGED entry (the retired engine's) must be ignored, not shown
+  const stale = [9, 9, 9, 9, 9, 9].map((_, i) => i + 1); // obviously not the seeded answer
+  sb.ORACLE_HISTORY = { entries: [{ date: target, picks: { '658': stale } }] };
+  look = sb.oracleHistLookup('658', target);
+  check('an untagged (pre-switch) log entry is NOT displayed',
+        !!look && look.source === 'recomputed' && JSON.stringify(look.picks) !== JSON.stringify(stale),
+        JSON.stringify(look && look.picks));
+
+  // (c) an entry tagged engine:'seeded' IS preferred, and tagged recorded
+  sb.ORACLE_HISTORY = { entries: [{ date: target, engine: 'seeded', picks: { '658': seeded } }] };
+  look = sb.oracleHistLookup('658', target);
+  check("an entry tagged engine:'seeded' is used and marked recorded",
+        !!look && look.source === 'recorded' && JSON.stringify(look.picks) === JSON.stringify(seeded));
+  sb.ORACLE_HISTORY = null;
+
+  // (d) the rendered panel shows the seeded numbers, not the retired engine's
+  const html = sb.pcsoHistGameHTML('658', target);
+  const freeEngine = sb.computeOracleAsOf('658', target);
+  const shown = (html.match(/<span class="pnum pick[^"]*">(\d+)<\/span>/g) || [])
+    .map((m) => parseInt(m.replace(/\D/g, ''), 10));
+  check('the rendered Look Up row prints the seeded pick',
+        JSON.stringify(shown) === JSON.stringify(seeded),
+        `${JSON.stringify(shown)} vs seeded ${JSON.stringify(seeded)}`);
+  check('and not the history-free pick',
+        JSON.stringify(shown) !== JSON.stringify(freeEngine),
+        `matches computeOracleAsOf ${JSON.stringify(freeEngine)}`);
+  check('the row names the draw it was cast from', /Cast from/.test(html));
+}
+
+// ── 14. the init path renders without throwing ───────────────────────────
+// Ordering guard. initPcsoHist() renders Look Up during script evaluation, and
+// Look Up now reaches into the seeded engine, whose tables are `var`s — hoisted
+// but undefined until execution reaches them. With the init hook above those
+// declarations the first render threw out of oracleSeedCast on every game, and
+// NOTHING headless saw it: the shared stub gives the date input an empty value,
+// so pcsoHistRender() returned early. This loads oracle.js with a stub that
+// answers like the real page and fails on any console.error.
+console.log('\n14. First render at init does not throw');
+{
+  const vm = await import('node:vm');
+  const src = fs.readFileSync(new URL('../../../oracle.js', import.meta.url), 'utf8');
+  const histText = fs.readFileSync(PCSO_HISTORY, 'utf8');
+  const seen = [];
+  const el = (value) => ({
+    style: {}, classList: { add(){}, remove(){}, toggle(){}, contains: () => false },
+    innerHTML: '', value, textContent: '', min: '', max: '', dataset: {},
+    setAttribute(){}, getAttribute: () => null, appendChild(){}, addEventListener(){},
+    removeEventListener(){}, scrollIntoView(){}, querySelector: () => el(''),
+    querySelectorAll: () => [], options: [], selectedIndex: 0, checked: false, disabled: false,
+  });
+  // A date the panel really defaults to: yesterday, in the middle of live history.
+  const yday = (() => { const d = new Date(Date.now() - 86400000); return ymd(d); })();
+  const sandbox = {
+    console: { log(){}, warn(){}, error: (...a) => seen.push(a.map(String).join(' ')) },
+    AbortController, Intl, Date, Math, JSON, Object, Array, Promise, parseInt, parseFloat,
+    String, Number, isNaN, isFinite, Boolean, RegExp, Error, setTimeout, clearTimeout,
+    setInterval, clearInterval,
+    document: {
+      getElementById: (id) => el(/-date$/.test(id) ? yday : ''),
+      querySelector: () => el(''), querySelectorAll: () => [],
+      addEventListener(){}, createElement: () => el(''),
+    },
+    window: { addEventListener(){} },
+    localStorage: { getItem: () => null, setItem(){}, removeItem(){} },
+    sessionStorage: { getItem: () => null, setItem(){}, removeItem(){} },
+    navigator: { userAgent: 'init-order-test' },
+    fetch: async (u) => String(u).includes('oracle-history.json')
+      ? { ok: false, status: 404, json: async () => ({}) }
+      : { ok: true, status: 200, json: async () => JSON.parse(histText) },
+  };
+  sandbox.globalThis = sandbox; sandbox.self = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox, { filename: 'oracle.js' });
+  const thrown = seen.filter((m) => /TypeError|is not defined|Cannot read/.test(m));
+  check('no error logged while the page initialises', thrown.length === 0, thrown[0] || '');
+  check('the seeded tables are initialised before any render',
+        Array.isArray(sandbox.OSEED_TRI_EL) && !!sandbox.OSEED_EL_NUMS);
+}
+
 console.log('\n==============================================================');
 if (failures.length) {
   console.error(`${failures.length} failure(s):`);
