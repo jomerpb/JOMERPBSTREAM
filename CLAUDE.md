@@ -888,6 +888,114 @@ Test 16 in `test_imdb_ratings.mjs` pins all of it, including a read of
 `#tf-country` and matches the region that chip passes to `loadTVSub` — a chip
 added without either would write a region nothing ever reads back.
 
+### Infinite scroll has to RE-ARM its sentinel, not re-observe it
+
+**`IntersectionObserver` only calls back on a CHANGE of intersection, and
+`observe()` on an element it is already watching is a no-op per spec.** So a
+sentinel that drifts inside the root margin and never leaves it kills paging
+outright: no further callback ever arrives, `attachInfiniteScroll()` cannot
+restart it however many times it is called, and the grid simply stops with
+`hasMore` still true and nothing on screen explaining why.
+
+Reported as "it is only showing 70+ results". Measured in Chromium — All
+Popular + the Coming of Age tag + 8+:
+
+| | before | after |
+|---|---|---|
+| cards before it stopped | **68** | **239** |
+| TMDB page reached (of 77) | 10 | **77, `hasMore:false`** |
+| `/discover` calls | 14, then **zero** across three more scrolls | 81 |
+| scrolls to exhaust | never | 11 |
+
+The decisive measurement was calling `loadMoreTV()` by hand at the stall: it
+immediately added 11 cards and advanced to page 12. So the loader, the
+`hasMore` bookkeeping and the fetch chain were all fine, and the observer was
+the dead part. The sentinel's rect at the stall says why — `top: 730` in a
+915px viewport, i.e. permanently on screen, with `scrollY + innerHeight`
+exactly equal to `scrollHeight`.
+
+**A tag filter is what exposes it, but the bug belongs to all four grids.** Each
+round keeps only ~11 cards (the rest fail the IMDb rating cut), which is less
+than a viewport, so the document does not grow enough to push the sentinel out
+of view and generate the transition the observer needs. A grid appending 20 full
+cards usually grows past the viewport, the sentinel leaves, and it recovers —
+which is why this reads as intermittent rather than broken.
+
+`unobserve()` then `observe()` queues a fresh initial observation, so a sentinel
+still on screen fires once more. **It is self-limiting rather than a loop**: the
+moment an append pushes the sentinel past the 200px margin the callback reports
+not-intersecting and stops, and `loadMoreTV`'s own `hasMore = false` guard blocks
+a second entry while a load is in flight. Test 18 asserts the unobserve/observe
+pair for all four sentinels and that a second call re-arms rather than falling
+through.
+
+### Tags come from TMDB because IMDb publishes no keyword data at all
+
+Asked directly ("why is this TMDB"), and worth recording with the evidence
+rather than as an assertion. `datasets.imdbws.com` publishes **seven** files —
+`title.basics`, `title.akas`, `title.crew`, `title.episode`, `title.principals`,
+`title.ratings`, `name.basics` — and **none of them carries keywords**.
+`title.basics` is nine columns ending at `genres`. Verified live 2026-09-15.
+IMDb's *website* has keyword pages, but they are not in the non-commercial
+datasets, so reaching them would mean scraping or the paid API. Tags are
+therefore TMDB's, permanently, unlike Status — which moved to IMDb only because
+IMDb does publish `startYear`/`endYear`.
+
+**TMDB's `/search/keyword` is a FUZZY match and the shipped code took its top 6
+hits verbatim.** Most of them are not the term. Measured live:
+
+| term | what TMDB returns in its top 6 |
+|---|---|
+| `boys love` | boy's love, boys' love (bl), **boys home, boys lo, god's love, rich boy loves poor girl** |
+| `girls love` | girls' love, girls' love (gl), **ukraine, girls, sex, love, witch, cossack, devil**, **girls home, school girl love** |
+| `gay romance` | gay romance, **sad romance, bad romance, war romance** |
+
+Every id is OR'd into `with_keywords`, and the panel printed all of them back as
+"Matched TMDB tags: boy's love, boys' love (bl), boys home, boys lo, god's
+love…", which is how it was reported. Across the nine tag chips, **16 of 58 ids
+(28%)** were unrelated.
+
+The gate is **de-spaced substring containment** (`kwNorm`): squash apostrophes
+and every non-alphanumeric away, then keep a keyword whose squashed name
+*contains* the squashed term. `boyslove` is inside `boyslovebl` but not inside
+`godslove`, `boyshome` or `boyslo`; `gayromance` is not inside `sadromance`.
+
+Two weaker rules were measured and rejected:
+
+- **Whole-token containment** (every word of the term present as a token) keeps
+  the Ukraine string — it literally contains `girls` and `love` — and throws away
+  `time loops`, `timeloop` and `lgbt+`, taking the Time Loop chip from 3 ids to 1.
+- **Prefix matching** drops the qualified forms that are the point of a keyword
+  search: `black lgbt`, `gay vampire`, `spanish countryside`.
+
+Filtering happens **before** the cap, not after: the 6 was always meant to be a
+cap on relevant keywords, and applying it first left some terms with a single
+usable id out of six.
+
+**What the gate costs, stated rather than glossed.** It is a name-based rule, so
+it cannot see that a title is on-topic when TMDB has keyworded it oddly. The 10
+dropped keywords carry 8 TV titles between them; 5 survive on a kept keyword, so
+the real loss is **3 titles**, and only one of those is genuinely off-topic:
+
+| title | kept by | verdict |
+|---|---|---|
+| I Feel You Linger in the Air, House of Stars, True Love or Just Confusion, Stay Still, Shock Me Girls | boys' love (bl) / girls' love (gl) / gay romance / lgbt | unaffected |
+| Theo Teaching Children God's Word (US) | — | correctly dropped |
+| Walking in the Bright Sky (VN), Back in Time (CN) | — | **real loss** — both are BL, reachable only through a junk keyword |
+
+Two BL titles out of a 1,533-title pool is the price of a panel that no longer
+prints nonsense and a query that cannot pull in unrelated titles as TMDB's fuzzy
+ranking shifts. If that trade is ever judged wrong the answer is **more search
+terms on the chip** (`bl`, `yaoi`, `yuri`, `queer`), not a looser gate — the same
+direction `webcomicsPathFor` and the MangaFreak matcher both document.
+
+**The "Coming of Age" chip sends `boys love, girls love, lgbt, gay romance`,
+and that is deliberate.** The label does not describe the terms, which looks
+like a bug and was raised as one; the repo owner was asked and chose to keep
+both the label and the terms — the chip is their umbrella for BL/GL/LGBT
+content. Don't "fix" the label or swap the terms for `coming of age` without
+asking them again.
+
 ## The KissKH server is a resolver, and the slug cannot be guessed
 
 Every other entry in `SERVER_LIST` answers to a TMDB id — `buildUrl()` turns

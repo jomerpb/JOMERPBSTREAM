@@ -4360,6 +4360,30 @@ function resetPageFilter(page) {
 // Turns free-text like "boys love, time loop" into TMDB keyword IDs joined with OR (|)
 // Grabs multiple matching keyword variants per term (not just the top hit) since TMDB
 // tags the same theme inconsistently (e.g. "boys love" vs "boys' love" vs "yaoi").
+// TMDB's /search/keyword is a FUZZY match, and the shipped code took its top 6
+// hits verbatim. Most of them are not the term: "boys love" answers with
+// `boys home`, `boys lo`, `god's love` and `rich boy loves poor girl`;
+// "gay romance" answers with `sad romance`, `bad romance`, `war romance`;
+// "girls love" answers with `ukraine, girls, sex, love, witch, cossack, devil`.
+// Every id is OR'd into with_keywords, so each one widens the grid with titles
+// nobody asked for — measured across the nine tag chips, 16 of 58 ids (28%)
+// were unrelated, and the panel printed them all back as "Matched TMDB tags".
+//
+// The gate is de-spaced substring containment: squash apostrophes and every
+// non-alphanumeric away, then keep a keyword whose squashed name CONTAINS the
+// squashed term. `boyslove` is in `boyslovebl` but not in `godslove`,
+// `boyshome` or `boyslo`; `gayromance` is not in `sadromance`. It keeps the
+// spelling variants that matter (`boy's love`, `boys' love (bl)`, `girls' love
+// (gl)`, `time loops`, `timeloop`, `lgbt+`) and the qualified forms
+// (`black lgbt`, `gay vampire`, `spanish countryside`), which a stricter
+// whole-token rule throws away.
+//
+// Filtering happens BEFORE the cap, not after: the 6 was always meant to be a
+// cap on relevant keywords, and applying it first left some terms with a single
+// usable id out of six.
+const kwNorm = s => (s||'').toLowerCase().replace(/['\u2019]/g,'').replace(/[^a-z0-9+]/g,'');
+const KEYWORDS_PER_TERM = 6;
+
 async function resolveKeywordIds(text) {
   const terms = (text||'').split(',').map(t=>t.trim()).filter(Boolean);
   if (!terms.length) return {ids:'', names:[]};
@@ -4368,7 +4392,10 @@ async function resolveKeywordIds(text) {
   for (const term of terms) {
     try {
       const d = await tmdb('/search/keyword', {query: term});
-      const matches = (d?.results||[]).slice(0,6);
+      const want = kwNorm(term);
+      const matches = (d?.results||[])
+        .filter(m => kwNorm(m.name).includes(want))
+        .slice(0, KEYWORDS_PER_TERM);
       matches.forEach(m => { if (!idSet.has(m.id)) { idSet.add(m.id); names.push(m.name); } });
     } catch {}
   }
@@ -4762,10 +4789,31 @@ const infiniteObserver = new IntersectionObserver((entries) => {
   });
 }, { rootMargin: '200px' });
 
+// RE-ARM, don't just observe. IntersectionObserver only calls back on a CHANGE
+// of intersection, and observe() on an element it is already watching is a
+// no-op per spec — so once the sentinel is sitting inside the root margin and
+// never leaves it, no further callback arrives and paging is simply dead. The
+// grid stops with `hasMore` still true and nothing on screen says why.
+//
+// Measured: All Popular + the Coming of Age tag + 8+ stalled at exactly 68
+// cards, tvPageState.page 10 of TMDB's 77, with zero further /discover calls
+// across three more scrolls to the bottom — while calling loadMoreTV() by hand
+// immediately added 11 more. So the loader was fine and the observer was dead.
+// A tag filter shows it first because each round keeps only ~11 cards (the rest
+// fail the IMDb cut), which is less than a viewport, so the sentinel never gets
+// pushed off screen.
+//
+// unobserve() then observe() queues a fresh initial observation, so a sentinel
+// that is still on screen fires once more. It is self-limiting rather than a
+// loop: the moment an append pushes the sentinel past the 200px margin the
+// callback reports not-intersecting and stops, and loadMoreTV's own
+// `hasMore = false` guard blocks a second entry while a load is in flight.
 function attachInfiniteScroll() {
   ['anime','manga','tv','movies'].forEach(page => {
     const sentinel = document.getElementById(`${page}-sentinel`);
-    if (sentinel) infiniteObserver.observe(sentinel);
+    if (!sentinel) return;
+    infiniteObserver.unobserve(sentinel);
+    infiniteObserver.observe(sentinel);
   });
 }
 
