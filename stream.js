@@ -283,6 +283,19 @@ async function hydrateImdbScores(root) {
   return resolveImdbCards(eager);
 }
 
+// Put an IMDb score into a badge that may never have had one. Every surface
+// now paints its badge up front and hides it when empty (see buildSmCard), so
+// this is always an update — but it un-hides, which is the half that was
+// missing and the reason a blank card could never fill itself in.
+function imdbShowBadge(el, score) {
+  if (!el) return false;
+  el.textContent = '⭐' + (el.dataset.sp || '') + score;
+  el.title = 'IMDb ' + score;
+  el.classList.add('is-imdb');
+  el.hidden = false;
+  return true;
+}
+
 async function resolveImdbCards(cards) {
   if (!cards.length) return;
   await loadImdbRatings();
@@ -298,12 +311,10 @@ async function resolveImdbCards(cards) {
         const tconst = await resolveImdbId(type, id);
         const s = imdbLookup(tconst);
         if (!s) continue;
-        const badge = el.querySelector('.js-score');
-        if (badge) {
-          badge.textContent = '⭐' + (badge.dataset.sp || '') + s;
-          badge.title = 'IMDb ' + s;
-          badge.classList.add('is-imdb');
-        }
+        // matches() as well as querySelector(): the detail page's info block
+        // carries the key on the scope element itself, the same trap
+        // hydrateImdbScores() documents.
+        imdbShowBadge(el.matches('.js-score') ? el : el.querySelector('.js-score'), s);
       } catch {}
     }
   };
@@ -1092,7 +1103,16 @@ function buildSmCard(item) {
   c.href = `#detail-${item.type}-${item.al_id||item.tmdb_id||item.id}`;
   c.style.cssText = 'text-decoration:none;color:inherit;';
   const sc = scoreOf(item);
-  const badge = sc.value ? `<div class="card-sm-badge js-score${sc.src==='IMDb'?' is-imdb':''}" title="${sc.src} ${sc.value}">⭐${sc.value}</div>` : '';
+  // The badge element is ALWAYS emitted, and hidden when there is no number
+  // yet. It used to be omitted entirely, and resolveImdbCards() can only
+  // UPDATE a .js-score it finds — so a card that painted blank stayed blank
+  // even once IMDb's answer arrived. The browse grids hid the bug because
+  // paintRatedGrid() rebuilds every card from scratch; the home rows, Search
+  // and the actor filmography grid never repaint, so there it was permanent.
+  // Measured before the fix: imdbScoreFor() returned "8.2" for 2 Days and 1
+  // Night (TMDB 6.7 off 30 votes, so scoreOf refuses it) and the card stayed
+  // empty. See imdbShowBadge().
+  const badge = `<div class="card-sm-badge js-score${sc.src==='IMDb'?' is-imdb':''}"${sc.value?` title="${sc.src} ${sc.value}"`:''}${sc.value?'':' hidden'}>${sc.value?`⭐${sc.value}`:''}</div>`;
   const typeBadge = `<div class="card-sm-type ${item.type}">${typeLabelShort(item)}</div>`;
   c.innerHTML = `
     <div class="card-sm-img">
@@ -1131,7 +1151,7 @@ function buildGridCard(item) {
   c.innerHTML = `
     <div class="grid-card-img">
       <img src="${item.img||''}" alt="${item.title}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;"/>
-      ${gsc.value?`<div class="grid-card-score js-score${gsc.src==='IMDb'?' is-imdb':''}" title="${gsc.src} ${gsc.value}">⭐${gsc.value}</div>`:''}
+      <div class="grid-card-score js-score${gsc.src==='IMDb'?' is-imdb':''}"${gsc.value?` title="${gsc.src} ${gsc.value}"`:''}${gsc.value?'':' hidden'}>${gsc.value?`⭐${gsc.value}`:''}</div>
       <div class="grid-card-type ${typeColor}">${typeLabel}</div>
       <div class="grid-card-overlay">
         <div class="grid-card-title">${item.title}</div>
@@ -2458,7 +2478,12 @@ function renderDetailHero(item, type, extraTags=[]) {
   const pills = [
     {label: typeLabel, cls: typeClass},
     {label: item.year||'', cls:''},
-    {label: dsc.value?`⭐ ${dsc.value}`:'', cls:'accent', js:'score', sp:' '},
+    // keep:true so the pill survives the filter below even with no number in
+    // it — for a TV title or a film the IMDb lookup may still land, and a pill
+    // that was never rendered cannot be filled in. Anime and manga never get
+    // an IMDb lookup, so theirs is dropped as before.
+    {label: dsc.value?`⭐ ${dsc.value}`:'', cls:'accent', js:'score', sp:' ',
+     keep: type==='tv' || type==='movie'},
     {label: item.episodes?`${item.episodes} eps`:'', cls:''},
     // Manga-only counts. Anime/TV/movie items never carry these keys, so no
     // branch is needed — they simply filter out as empty below.
@@ -2469,11 +2494,11 @@ function renderDetailHero(item, type, extraTags=[]) {
     // the episode-count badge in this same row, instead of appearing lower
     // down next to the "EPISODES" section heading.
     ...(extraTags||[]).map(t => ({label: t, cls: 'accent'})),
-  ].filter(p=>p.label);
+  ].filter(p=>p.label || p.keep);
 
   document.getElementById('detail-info').innerHTML = `
     <div class="detail-title">${item.title}</div>
-    <div class="detail-pills">${pills.map(p=>`<span class="dpill ${p.cls}${p.js?' js-'+p.js:''}"${p.sp?` data-sp="${p.sp}"`:''}>${p.label}</span>`).join('')}</div>`;
+    <div class="detail-pills">${pills.map(p=>`<span class="dpill ${p.cls}${p.js?' js-'+p.js:''}"${p.sp?` data-sp="${p.sp}"`:''}${p.label?'':' hidden'}>${p.label}</span>`).join('')}</div>`;
 
   // The star fills in from IMDb a moment after the page paints, same as a card
   // — but the facts table below carries the same number AND names its source,
@@ -2484,8 +2509,7 @@ function renderDetailHero(item, type, extraTags=[]) {
   markImdbTarget(info, item);
   imdbScoreFor(item).then(s => {
     if (!s || currentItem !== item) return;
-    const pill = info.querySelector('.js-score');
-    if (pill) pill.textContent = `⭐ ${s}`;
+    imdbShowBadge(info.querySelector('.js-score'), s);
     renderDetailFacts(item);
   }).catch(() => {});
 

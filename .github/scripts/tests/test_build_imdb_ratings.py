@@ -44,7 +44,9 @@ SAMPLE = '\n'.join([
 ]) + '\n'
 
 print('1. parse() honours the vote floor and skips junk')
-rows, skipped = bir.parse(gz(SAMPLE))
+# min_votes is passed explicitly: the SHIPPED default is 5 now (see test 11),
+# and this test is about the floor mechanism, not about which number it holds.
+rows, skipped = bir.parse(gz(SAMPLE), min_votes=100)
 got = dict(rows)
 check(len(rows) == 4, 'kept exactly the 4 rows at/over 100 votes', len(rows))
 check(skipped == 3, 'counted the 3 malformed rows', skipped)
@@ -213,6 +215,69 @@ if os.path.exists(pb):
           f"enough TV titles to browse ({ty.get(1,0)+ty.get(2,0)})")
 else:
     check(False, 'imdb-browse.json is committed')
+
+print('\n11. the low floor is paid for by the title-type filter')
+# The floor dropped 100 -> 5 so a card can show what IMDb actually publishes:
+# A Love Other Than Yours (tt43736405) is rated 8.2 off 47 votes and used to
+# render with no badge at all. What keeps that affordable is excluding the
+# types a card can never reach — tvEpisode and videoGame are 53% of the dump.
+check(bir.MIN_VOTES == 5, f'ratings floor is 5, not {bir.MIN_VOTES}')
+check(bir.BROWSE_MIN_VOTES == 100,
+      f'the browse index keeps its own 100 floor, got {bir.BROWSE_MIN_VOTES}')
+check(bir.MIN_VOTES != bir.BROWSE_MIN_VOTES,
+      'the two floors are separate settings, not one constant reused')
+
+rows_lo, _ = bir.parse(gz(SAMPLE))
+check(dict(rows_lo).get(2) == 54,
+      'at the shipped default the 99-vote row is KEPT', dict(rows_lo).get(2))
+
+TYPES = '\n'.join([
+    'tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\tendYear\truntimeMinutes\tgenres',
+    'tt0000001\tmovie\tA\tA\t0\t1999\t\\N\t90\tHorror',
+    'tt0000002\ttvEpisode\tB\tB\t0\t2010\t\\N\t45\tDrama',
+    'tt0000003\tshort\tC\tC\t0\t2001\t\\N\t9\tComedy',
+    'tt32199328\ttvSeries\tNewtopia\tNewtopia\t0\t2025\t\\N\t50\tDrama',
+    'tt0000007\tvideoGame\tG\tG\t0\t2019\t\\N\t50\tAction',
+]) + '\n'
+RATED = {'tt0000001': (5.7, 2231), 'tt0000002': (5.4, 99), 'tt0000003': (6.5, 100),
+         'tt32199328': (6.6, 11462), 'tt0000007': (10.0, 1000000)}
+keep = bir.cardable_tconsts(gz(TYPES), RATED)
+check(keep == {'tt0000001', 'tt0000003', 'tt32199328'},
+      'cardable_tconsts keeps movie/short/tvSeries and drops tvEpisode + videoGame',
+      sorted(keep))
+check('tt0000002' not in keep, 'tvEpisode excluded — 0 of 30 come back from TMDB /find as a card')
+check('tt0000007' not in keep, 'videoGame excluded — 0 of 30 come back from /find at all')
+# short/video/tvShort are NOT episodes: 34 of 40 sampled tconsts DO resolve to a
+# real TMDB movie card, reachable through Search and actor filmographies. This
+# assertion is what stops a future "save 0.37 MB" edit from blanking those.
+check('short' in bir.RATING_TYPES and 'video' in bir.RATING_TYPES
+      and 'tvShort' in bir.RATING_TYPES,
+      'short/video/tvShort stay in RATING_TYPES (Search + filmography reach them)')
+check('tvEpisode' not in bir.RATING_TYPES and 'videoGame' not in bir.RATING_TYPES,
+      'and the two unreachable types stay out')
+
+kept_ids = [t for t, _ in bir.parse(gz(SAMPLE), keep={'tt0000001', 'tt0000003'})[0]]
+check(kept_ids == [1, 3], 'parse(keep=...) emits only the cardable tconsts', kept_ids)
+check([t for t, _ in bir.parse(gz(SAMPLE), keep=set())[0]] == [],
+      'an empty keep set yields nothing rather than everything')
+
+print('\n12. the committed ratings file reflects both decisions')
+if os.path.exists(p2 := os.path.join(ROOT, 'imdb-ratings.json')):
+    d = json.load(open(p2))
+    m = bir.decode(d['d'], d['r'])
+    check(d['minVotes'] == 5, f"committed file records minVotes={d['minVotes']}")
+    check(d['count'] > 700_000, f"holds {d['count']:,} titles (was 430,495 at the old floor)")
+    # The title this change was reported for: 8.2 off 47 votes, under the old floor.
+    check(m.get(43736405) == 82,
+          'A Love Other Than Yours (tt43736405) now carries 8.2', m.get(43736405))
+    # A few more of the reported blanks, so a floor regression is loud.
+    for tc, want, name in ((6283624, 76, 'Radio Star'), (10160132, 86, 'Amazing Saturday'),
+                           (4938990, 80, 'Law of the Jungle'), (2375022, 84, 'Show! Music Core')):
+        check(m.get(tc) == want, f'{name} (tt{tc}) reads {want/10}', m.get(tc))
+    check(json.load(open(os.path.join(ROOT, 'imdb-browse.json')))['minVotes'] == 100,
+          'the browse index did NOT inherit the low floor')
+else:
+    check(False, 'imdb-ratings.json is committed')
 
 print('\n' + '=' * 60)
 print(f'{len(fails)} failure(s)' + ('' if not fails else ': ' + ', '.join(fails)))
