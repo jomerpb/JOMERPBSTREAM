@@ -115,9 +115,11 @@ async function main() {
   // 2026-09-15, 6/42 read 08-17-21-29-38-39 on the card and 01-10-16-24-25-33
   // in the log, 0 of 6 in common.
   //
-  // Entries are tagged engine:'seeded' so the page can tell them apart from the
-  // older ones, which stay in the file untouched (see the immutability rule in
-  // CLAUDE.md) and are simply no longer displayed.
+  // Entries are tagged with oracle.js's ORACLE_SEED_ENGINE ('seeded-11' since
+  // 2026-09-24, when the six moment-cast methods joined; plain 'seeded' before
+  // that) so the page can tell them apart from the older ones, which stay in
+  // the file untouched (see the immutability rule in CLAUDE.md) and are simply
+  // no longer displayed.
   //
   // ONLY GAMES DRAWN TODAY, and only those whose seed is on file. The previous
   // version logged all six every day regardless of the schedule; a seeded pick
@@ -171,7 +173,9 @@ async function main() {
     date: todayStr,
     generatedAt: new Date().toISOString(),
     engineSha,
-    engine: 'seeded',
+    // The engine's own version tag, read from oracle.js rather than repeated
+    // here, so the page's Look Up gate and this log cannot drift apart.
+    engine: sandbox.ORACLE_SEED_ENGINE,
     picks,
     seeds,
   };
@@ -187,7 +191,7 @@ async function main() {
   fs.writeFileSync(ORACLE_HISTORY, JSON.stringify(log, null, 2) + '\n');
 
   const pad = (a) => a.map((n) => String(n).padStart(2, '0')).join('-');
-  console.log(`Wrote oracle-history.json — ${todayStr} (seeded):`);
+  console.log(`Wrote oracle-history.json — ${todayStr} (${entry.engine}):`);
   for (const gk of Object.keys(picks)) {
     if (gk === 'ez2') {
       console.log(`  ez2  seed ${seeds.ez2}  2PM: ${pad(picks.ez2['2PM'])}  5PM: ${pad(picks.ez2['5PM'])}  9PM: ${pad(picks.ez2['9PM'])}`);

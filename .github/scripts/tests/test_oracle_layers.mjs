@@ -518,6 +518,41 @@ console.log('\n12. computeOracleAsOf restores globals on the error path');
         `${before.Y}-${before.M}-${before.D} became ${sb._Y}-${sb._M}-${sb._D}`);
 }
 
+// ── 13. the Ascendant is on the EAST horizon ────────────────────────────
+// astroAscendant() used to stop one step short of Wikipedia's formula ("then
+// add or subtract 180°") and returned the DESCENDANT on every date: at Manila
+// sunset it matched the Sun to 0.2°, at sunrise it sat 180° away. The rising
+// Sun is on the Ascendant by definition, so this is checked against that
+// identity rather than against a table — no source to disagree with.
+console.log('\n13. Ascendant = Sun at sunrise, Descendant = Sun at sunset');
+{
+  function chartAt(y, m, d, h) {
+    const dd = sb.astroDayNumber(y, m, d, h), sp = sb.astroSunPos(dd), ecl = sb.astroObliquity(dd);
+    const lst = sb.astroSiderealDeg(sb.astroNorm360(sp.M + sp.w), h - 8, sb.ASTRO_LON);
+    const rd = sb.astroSunRaDec(sp.lonsun, sp.r, ecl);
+    return { sun: sp.lonsun, asc: sb.astroAscendant(lst, sb.ASTRO_LAT, ecl),
+             alt: sb.astroAltitude(rd.RA, rd.Dec, lst, sb.ASTRO_LAT) };
+  }
+  const sep = (a, b) => Math.abs((((a - b) % 360) + 540) % 360 - 180);
+  let worstRise = 0, worstSet = 0, days = 0;
+  for (const [y, m, d] of [[1985, 2, 21], [2024, 3, 20], [2026, 6, 21], [2026, 9, 24], [2026, 12, 21], [2030, 8, 1]]) {
+    let rise = null, set = null;
+    for (let h = 0; h < 24; h += 1 / 60) {
+      const a = chartAt(y, m, d, h).alt, b = chartAt(y, m, d, h + 1 / 60).alt;
+      if (a < 0 && b >= 0) rise = h;
+      if (a > 0 && b <= 0) set = h;
+    }
+    if (rise === null || set === null) continue;
+    days++;
+    const r = chartAt(y, m, d, rise), st = chartAt(y, m, d, set);
+    worstRise = Math.max(worstRise, sep(r.asc, r.sun));
+    worstSet = Math.max(worstSet, sep(st.asc, (st.sun + 180) % 360));
+  }
+  check(`found sunrise and sunset on all 6 dates (${days})`, days === 6);
+  check(`at sunrise the Ascendant is the Sun (worst ${worstRise.toFixed(2)}°)`, worstRise < 1);
+  check(`at sunset the Ascendant is opposite the Sun (worst ${worstSet.toFixed(2)}°)`, worstSet < 1);
+}
+
 console.log('\n' + '='.repeat(62));
 console.log(failures.length
   ? `${failures.length} failure(s): ${failures.join(', ')}`

@@ -316,9 +316,18 @@ var PCSO_HISTORY_READY=loadPcsoHistoryIntoGames();
 // scripts/snapshot_oracle.mjs — which calls this same file's
 // computeOracleAsOf(), so the logged value equals what Run Expert
 // The Look Up panel prefers this recorded value, but only for entries the
-// snapshot job tagged engine:'seeded' — see oracleHistLookup. Anything older
-// records the retired history-free engine and is not displayed.
+// snapshot job tagged with the current ORACLE_SEED_ENGINE — see
+// oracleHistLookup. Anything else records a retired engine (the history-free
+// one, or the five-source seeded one tagged plain 'seeded') and is not displayed.
 // ══════════════════════════
+// The tag the snapshot job writes on every entry, and the ONLY tag Look Up
+// will display. It names the engine version, not just the family: the five-
+// source seeded engine logged 'seeded' until 2026-09-24, and its picks are
+// not what this page computes any more (the six moment-cast methods and the
+// Ascendant fix both moved them), so showing them under "Oracle's Pick" would
+// be the two-engines-one-label bug again. Bump this whenever the seeded picks
+// change for dates already logged.
+var ORACLE_SEED_ENGINE='seeded-11';
 var ORACLE_HISTORY=null; // {updated, entries:[{date, engineSha, picks:{ez2:{'2PM':[a,b],...}, '642':[..6..], ...}}]} newest-first
 var ORACLE_HISTORY_READY=(async function loadOracleHistory(){
   try{
@@ -339,8 +348,8 @@ var ORACLE_HISTORY_READY=(async function loadOracleHistory(){
 // 'recorded'   → taken verbatim from oracle-history.json (immutable audit log)
 // 'recomputed' → a live seeded cast for dates the log doesn't cover
 //
-// IT READS THE SEEDED ENGINE, and only entries the snapshot job tagged
-// engine:'seeded'. That gate is the whole point of this function now. Look Up
+// IT READS THE SEEDED ENGINE, and only entries the snapshot job tagged with
+// the current ORACLE_SEED_ENGINE ('seeded-11'). That gate is the whole point of this function now. Look Up
 // showed whatever oracle-history.json held, and after the date panel was
 // retired that was a DIFFERENT engine's numbers from the ones the page prints
 // at the top — measured on 2026-09-15, 6/42 showed 08-17-21-29-38-39 on the
@@ -367,7 +376,7 @@ function oracleHistLookup(gameKey,dateStr){
   if(ORACLE_HISTORY&&Array.isArray(ORACLE_HISTORY.entries)){
     for(var i=0;i<ORACLE_HISTORY.entries.length;i++){
       var en=ORACLE_HISTORY.entries[i];
-      if(en&&en.date===dateStr&&en.engine==='seeded'&&en.picks&&en.picks[gameKey])
+      if(en&&en.date===dateStr&&en.engine===ORACLE_SEED_ENGINE&&en.picks&&en.picks[gameKey])
         return {picks:en.picks[gameKey],source:'recorded',seed:r};
     }
   }
@@ -519,11 +528,20 @@ function astroSiderealDeg(sunMeanLon,utHours,geoLonEast){
   var GMST=astroNorm360(GMST0+utHours*15);
   return astroNorm360(GMST+geoLonEast);
 }
+// Ecliptic longitude of the Ascendant (the ecliptic point rising on the EAST
+// horizon). Wikipedia "Ascendant": λ = atan2(−cos θ, sin θ cos ε + tan φ sin ε),
+// THEN "if (Ascendant < 180) Ascendant += 180 else Ascendant −= 180". That last
+// step used to be missing, so this returned the DESCENDANT on every date —
+// measured with the engine's own Sun: at Manila sunset the old value matched
+// the Sun to 0.2°, at sunrise it sat 180.0° away, which is backwards (the
+// rising Sun IS on the Ascendant). Horary's ASC/5th house and the Part of
+// Fortune both read this, so both were cast from the opposite point. Test 13
+// in test_oracle_layers.mjs pins the sunrise/sunset identity.
 function astroAscendant(ramcDeg,latDeg,eclDeg){
   var R=ramcDeg*Math.PI/180, L=latDeg*Math.PI/180, E=eclDeg*Math.PI/180;
   var y=-Math.cos(R);
   var x=Math.sin(R)*Math.cos(E)+Math.tan(L)*Math.sin(E);
-  return astroNorm360(Math.atan2(y,x)*180/Math.PI);
+  return astroNorm360(Math.atan2(y,x)*180/Math.PI+180);
 }
 function astroAltitude(RA,Dec,lstDeg,latDeg){
   var HA=astroNorm360(lstDeg-RA); if(HA>180)HA-=360;
@@ -606,7 +624,11 @@ function layerNumerology(drawHour){
   // Universal Day = reduce all digits of full date
   var dateStr=String(_D)+String(_M)+String(_Y);
   var ud=reduce(dateStr.split('').reduce(function(a,b){return a+parseInt(b);},0));
-  var h=drawHour==='2PM'?2:drawHour==='5PM'?5:9;
+  // drawHour is one of the draw slots ('2PM'/'5PM'/'9PM') or, for a birth
+  // chart, a clock time in decimal PH hours (06:10 → 6.1667), read on the
+  // same 12-hour face the slot strings use (21:00 → 9).
+  var h=typeof drawHour==='number'?((Math.floor(drawHour)+11)%12)+1
+       :drawHour==='2PM'?2:drawHour==='5PM'?5:9;
   var combined=reduce(ud+h);
   var dayRed=reduce(_D);
   // Month+Year
@@ -647,7 +669,7 @@ function layerNumerology(drawHour){
 
   var allNums=[...new Set([...pyNums,...chNums])];
   return {
-    pyNums,chNums,allNums,nums:allNums,ud,h,combined,saturn,monthYear,dayRed,
+    pyNums,chNums,allNums,nums:allNums,ud,h,combined,saturn,monthYear,dayRed,chDay,chMonth,
     steps:[
       `<b>Pythagorean — Universal Day:</b> ${dateStr.split('').join('+')}=${dateStr.split('').reduce((a,b)=>a+parseInt(b),0)} → <b>${ud}</b>`,
       `<b>Day of month ${_D}:</b> ${String(_D).split('').join('+')} → <b>${dayRed}</b>`,
@@ -665,7 +687,9 @@ function layerNumerology(drawHour){
 
 function layerAstrology(drawHour){
   // Real ephemeris positions (see ASTRO ENGINE above for source/accuracy).
-  var h=drawHour==='2PM'?14:drawHour==='5PM'?17:21;
+  // A slot string, or a decimal PH clock time for a birth chart (see
+  // layerNumerology). astroDayNumber() already takes fractional hours.
+  var h=typeof drawHour==='number'?drawHour:drawHour==='2PM'?14:drawHour==='5PM'?17:21;
   var d=astroDayNumber(_Y,_M,_D,h);
   var sp=astroSunPos(d);
   var sunLon=sp.lonsun;
@@ -830,7 +854,10 @@ function layerBazi(drawHour){
 
   // Hour pillar — fixed branches by hour
   var hBranchMap={'2PM':7,'5PM':9,'9PM':11}; // Wei=7,You=9,Hai=11
-  var hBranch=hBranchMap[drawHour]||11;
+  // A decimal clock time (birth chart) takes the classical two-hour branch:
+  // Zi 23-01, Chou 01-03 … Mao 05-07 … Hai 21-23, i.e. floor((h+1)/2) mod 12,
+  // which lands the three slot hours on the same Wei/You/Hai as the map.
+  var hBranch=typeof drawHour==='number'?Math.floor((drawHour+1)/2)%12:(hBranchMap[drawHour]||11);
   // Hour stem — "Five Rats" (五鼠遁) rule: Zi-hour stem = (dayStem mod 5)*2,
   // then +1 stem per subsequent 2-hour branch. The previous formula divided
   // the branch index by 2 instead of using it directly, which is wrong for
@@ -3254,7 +3281,11 @@ function oraclePickBalls(nums,meaning,counts,offset,gameKey,srcTotal){
 // snapshot_oracle.mjs or oracle-history.json.
 //
 // WHICH LAYERS CAN ACTUALLY BE CAST FROM NUMBERS — five of the eleven. A hard
-// constraint, not a shortcut:
+// constraint, not a shortcut. The six marked "no" are NOT dropped: since
+// 2026-09-24 they are cast from a MOMENT instead — the target draw's own
+// date and hour, intersected with the querent's birth chart — see
+// oracleSeedDateSources() below. All eleven vote; five from the numbers, six
+// from the moment:
 //   Py  Pythagorean     a digital root is defined for any number          YES
 //   Ls  Lo Shu          the Lo Shu IS the 1..9 grid; which palaces a draw
 //                       lights up is what 九宮 number analysis reads       YES
@@ -3273,14 +3304,15 @@ function oraclePickBalls(nums,meaning,counts,offset,gameKey,srcTotal){
 // There is no honest way to feed six numbers into a BaZi pillar or a horary
 // chart. Inventing one (numbers as zodiac degrees, say) would be fabrication,
 // and this repo judges a layer on whether it faithfully implements what it
-// claims. So the panel reads FIVE sources and prints "/5" on its face, rather
-// than "/11" over a figure six of them never contributed to.
+// claims. That is why those six read a date and an hour — the input they were
+// built for — rather than the seed draw's numbers. The panel prints "/11".
 //
-// WHAT THIS IS NOT. Measured walk-forward over 974 real draws, each cast from
-// the draw immediately before it: mean 0.72 matches against a random control's
-// 0.75 (z = −0.81). Indistinguishable from chance, like every configuration
-// ever measured in this repo. Statistics and divination, not prediction — and
-// the note under the panel says exactly that.
+// WHAT THIS IS NOT. Measured walk-forward over 998 real draws, each cast from
+// the draw immediately before it: mean 0.74 matches against a seeded random
+// control's 0.72 (z = 0.52). Indistinguishable from chance, like every
+// configuration ever measured in this repo (the five-source version scored
+// 0.72 vs 0.75). Statistics and divination, not prediction — and the note
+// under the panel says exactly that.
 
 // Mei Hua 先天八卦數: Qian 1, Dui 2, Li 3, Zhen 4, Xun 5, Kan 6, Gen 7, Kun 8 —
 // the same 1-indexed order layerIChing() uses, so ichingHexNumOf(),
@@ -3297,8 +3329,102 @@ var OSEED_EL_NUMS={'Metal':[4,9],'Fire':[2,7],'Wood':[3,8],'Water':[1,6],'Earth'
 // Here the digits ARE the palace numbers, so no element→digit conversion is in
 // play and the one-scheme rule above is not engaged.
 var OSEED_LOSHU_HOME={1:'N',2:'SW',3:'E',4:'SE',5:'C',6:'NW',7:'W',8:'NE',9:'S'};
-var OSEED_LABELS=['Py','Ls','IC','Ta','An'];
-var OSEED_LABEL_TITLES={Py:'Pythagorean',Ls:'Lo Shu',IC:'I Ching',Ta:'Tarot',An:'Angel'};
+// ALL ELEVEN sources, in the same slot order convergence() uses so the dots
+// read the same on both panels — Lo Shu sits in Feng Shui's slot, since the
+// Lo Shu IS the Feng Shui grid. Five are cast from the seed draw's NUMBERS
+// (oracleSeedCast); the other six from a MOMENT (oracleSeedDateSources).
+var OSEED_LABELS=['Py','Ch','As','Ba','Ls','IC','PoF','Ta','An','Ho','En'];
+var OSEED_NUM_LABELS=['Py','Ls','IC','Ta','An'];
+var OSEED_DATE_LABELS=['Ch','As','Ba','PoF','Ho','En'];
+var OSEED_LABEL_TITLES={Py:'Pythagorean',Ch:'Chaldean',As:'Astrology',Ba:'BaZi',Ls:'Lo Shu',
+  IC:'I Ching',PoF:'Part of Fortune',Ta:'Tarot',An:'Angel',Ho:'Horary',En:'Energy'};
+
+// ── THE SIX THAT NEED A MOMENT ──
+// Chaldean, Astrology, BaZi, Part of Fortune, Horary and Energy cannot be cast
+// from six numbers (see the table above) — but they do not need to be. Every
+// draw happens at a known moment, and the reading has a querent with a known
+// birth moment. Each of the six is therefore cast TWICE with the ordinary
+// layer functions, unchanged:
+//   * for the TARGET DRAW's moment — its date, at its own draw hour (9PM for
+//     the 6-ball games, each EZ2 slot at 2PM/5PM/9PM), Manila;
+//   * for the querent's BIRTH moment (ORACLE_BIRTH, Manila).
+// A method votes for a digit only where BOTH casts name it.
+//
+// HOUSE RULE, disclosed like familyOffset below: no tradition prescribes this
+// intersection. It was chosen over the alternatives by measurement, walk-
+// forward over 998 real draws (never by hit rate — all four sit at chance,
+// 0.71-0.74 matches per draw against a random control's 0.72):
+//   rule                          distinct picks   digit imbalance χ²
+//   draw moment only (no birth)        965              1417
+//   draw AND birth   (this)            955              1184
+//   draw OR birth                      926              2083
+//   birth as six more sources          924              2379
+// OR and "six more sources" hand the birth digits a PERMANENT vote on every
+// draw — the constant-source defect CLAUDE.md records — because a birth chart
+// never changes. AND cannot: a digit still needs the draw's own moment to name
+// it, so the birth chart can only narrow what the moment says, never add to it.
+//
+// WHAT IT COSTS, stated rather than hidden: digit 6 appears in none of the six
+// birth casts, so these six methods can never vote for it, and the digit-6
+// family (6, 15, 24, 33, 42, 51) drops to 0.9% of picks. It can still reach
+// the pick through the five number-cast sources. And about a third of the
+// six slots (2017 of 5988 over that corpus) come out EMPTY on a given draw,
+// because the moment and the chart share nothing for that method — the
+// method ran and found no agreement, which is reported rather than filled.
+// That is what personalising to one chart means; it is not a bug to tune away.
+//
+// Chaldean on the birth side reads only the birth WEEKDAY and MONTH names. The
+// game words (PCSO/LOTTO/PHILIPPINES) are what the draw is about, not the
+// person, and letting them through the intersection would re-create the
+// permanent 3 and 7 vote the Chaldean layer already carries on every draw.
+var ORACLE_BIRTH={y:1985,m:2,d:21,hour:6+10/60}; // 06:10, Manila (UTC+8)
+
+// The six moment-cast digit lists for one PH-local date and hour ('2PM'/'5PM'/
+// '9PM' or a decimal clock time). Borrows the date globals the layers read and
+// restores them in a finally, the same discipline as computeOracleAsOf().
+function oracleMomentSources(y,m,d,hour,isBirth){
+  var saved={_D:_D,_M:_M,_Y:_Y,_DOW:_DOW};
+  _D=d; _M=m; _Y=y; _DOW=new Date(y,m-1,d).getDay();
+  try{
+    var num,astro,bazi,fs,energy;
+    try{num=layerNumerology(hour);}catch(e){num={chNums:[]};}
+    try{astro=layerAstrology(hour);}catch(e){astro={nums:[],pofNums:[],horaryNums:[]};}
+    try{bazi=layerBazi(hour);}catch(e){bazi={nums:[]};}
+    try{fs=layerFengshui();}catch(e){fs={nums:[]};}
+    try{energy=calcEnergy(bazi,astro,fs);}catch(e){energy=null;}
+    var ch=isBirth?[num.chDay,num.chMonth]:(num.chNums||[]);
+    function uniq(a){ var o=[]; (a||[]).forEach(function(x){ var r=reduce(x); if(typeof x==='number'&&o.indexOf(r)<0) o.push(r); }); return o.sort(function(p,q){ return p-q; }); }
+    return {Ch:uniq(ch),As:uniq(astro.nums),Ba:uniq(bazi.nums),PoF:uniq(astro.pofNums),
+      Ho:uniq(astro.horaryNums),En:uniq(energyDigits(energy))};
+  } finally {
+    _D=saved._D; _M=saved._M; _Y=saved._Y; _DOW=saved._DOW;
+  }
+}
+// The birth side never changes, so it is cast once per page.
+var _oracleBirthSrc=null;
+function oracleBirthSources(){
+  if(!_oracleBirthSrc)
+    _oracleBirthSrc=oracleMomentSources(ORACLE_BIRTH.y,ORACLE_BIRTH.m,ORACLE_BIRTH.d,ORACLE_BIRTH.hour,true);
+  return _oracleBirthSrc;
+}
+// Every digit any of the moment-cast methods voted for, for the card's pills.
+function oseedAllVotes(sources){
+  var out=[];
+  OSEED_DATE_LABELS.forEach(function(k){ ((sources&&sources[k])||[]).forEach(function(d){ if(out.indexOf(d)<0) out.push(d); }); });
+  out.sort(function(a,b){ return a-b; });
+  return out.length?out:['—'];
+}
+// The six date-method votes for a target draw: its own moment ∩ the birth chart.
+function oracleSeedDateSources(dateStr,drawHour){
+  var p=String(dateStr||'').split('-').map(function(x){ return parseInt(x,10); });
+  var draw=oracleMomentSources(p[0],p[1],p[2],drawHour||'9PM',false);
+  var birth=oracleBirthSources();
+  var sources={};
+  OSEED_DATE_LABELS.forEach(function(k){
+    sources[k]=draw[k].filter(function(x){ return birth[k].indexOf(x)>=0; });
+  });
+  return {sources:sources,draw:draw,hour:drawHour||'9PM'};
+}
 
 // Cast the five number-native layers FROM a set of drawn numbers.
 // Returns null for anything it cannot read (fewer than two numbers).
@@ -3396,17 +3522,23 @@ function oracleSeedMeaning(cast,poolMax){
 }
 
 // Score the digits, rank the families, rotate within each, cap per family.
-// Same shape convergence() uses, with two deliberate differences: five sources
-// instead of eleven, and a rotation offset taken from the CAST (its hexagram
-// number and the draw total) rather than from the date's flying star.
-function oracleSeedPick(cast,gameKey,need){
+// Same shape convergence() uses, with two deliberate differences: five of the
+// eleven sources are cast from the seed draw's numbers rather than the date,
+// and the rotation offset is taken from the CAST (its hexagram number and the
+// draw total) rather than from the date's flying star.
+function oracleSeedPick(cast,gameKey,need,dateSources){
   var game=GAMES[gameKey]||{max:58};
   var pool=game.max;
+  // Five sources come from the cast, six from the moment (when given — a bare
+  // cast still picks, with those six slots simply empty).
+  var src={};
+  OSEED_NUM_LABELS.forEach(function(k){ src[k]=cast.sources[k]||[]; });
+  OSEED_DATE_LABELS.forEach(function(k){ src[k]=(dateSources&&dateSources[k])||[]; });
   var collected={},digitScores={};
   for(var d=1;d<=9;d++){
     var inL=[];
     for(var i=0;i<OSEED_LABELS.length;i++)
-      if((cast.sources[OSEED_LABELS[i]]||[]).indexOf(d)>=0) inL.push(i);
+      if((src[OSEED_LABELS[i]]||[]).indexOf(d)>=0) inL.push(i);
     collected[d]=inL;
   }
   var maxMeta=Math.max(1,...Object.values(collected).map(function(a){ return a.length; }));
@@ -3505,11 +3637,13 @@ function oracleSeedCompute(gameKey,dateStr){
 
   if(gameKey==='ez2'){
     var byHour={},casts={},any=false;
+    var moments={};
     ['2PM','5PM','9PM'].forEach(function(t){
       var sn=(prev.draws&&prev.draws[t])||[];
       var c=oracleSeedCast(sn);
       casts[t]=c;
-      byHour[t]=c?oracleSeedPick(c,gameKey,need):null;
+      moments[t]=oracleSeedDateSources(dateStr,t);
+      byHour[t]=c?oracleSeedPick(c,gameKey,need,moments[t].sources):null;
       if(byHour[t]) any=true;
     });
     if(!any) return {ok:false,waitingFor:want,reason:'unreadable'};
@@ -3517,14 +3651,16 @@ function oracleSeedCompute(gameKey,dateStr){
     // from 2PM, not from a merged six. Two numbers split 1/1 for the 報數起卦
     // cast, which is the classic two-number report.
     return {ok:true,seedDate:prev.date,seedEntry:prev,gap:gap,ez2:true,
-      byHour:byHour,casts:casts,cast:casts['9PM'],result:byHour['9PM']};
+      byHour:byHour,casts:casts,cast:casts['9PM'],result:byHour['9PM'],
+      moments:moments,moment:moments['9PM']};
   }
 
   var cast=oracleSeedCast(Array.isArray(prev.nums)?prev.nums:[]);
   if(!cast) return {ok:false,waitingFor:want,reason:'unreadable'};
-  var res=oracleSeedPick(cast,gameKey,need);
+  var moment=oracleSeedDateSources(dateStr,'9PM');
+  var res=oracleSeedPick(cast,gameKey,need,moment.sources);
   return {ok:true,seedDate:prev.date,seedEntry:prev,gap:gap,ez2:false,
-    cast:cast,result:res,picks:res.picks};
+    cast:cast,moment:moment,result:res,picks:res.picks};
 }
 
 // The seed line that rides on the game's head line — what this reading was cast
@@ -3557,7 +3693,7 @@ function oracleSeedReadingHTML(r,gameKey,dateStr){
     +'<div class="alt-label" style="margin-bottom:10px;">Alignment With The Cast · '+pcsoHistShortDate(r.seedDate)+' draw</div>'
     +'<div style="font-size:36px;font-weight:800;color:'+ac+';margin-bottom:4px;">'+bd.pct+'%</div>'
     +'<div style="font-size:13px;color:var(--muted2)">'+al+'</div>'
-    +'<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: 🎴 Seeded — five number-native sources, max '
+    +'<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: 🎴 Seeded — eleven sources, five cast from the draw, six from the draw’s moment, max '
     +((gameKey==='ez2')?'one number':'two numbers')+' per digit family</div>'
     +oracleAlignSplitHTML(bd,pool)+'</div>';
 
@@ -3565,7 +3701,7 @@ function oracleSeedReadingHTML(r,gameKey,dateStr){
     +'<div class="pcso-hist-row">'+pcsoHistWinBalls(c.nums)+'</div>'
     +'<div class="pcso-hist-sublbl">'+pcsoHistShortDate(r.seedDate)+' · in draw order · total '+c.sum+'</div>';
 
-  html+='<div class="ord-step">Step 2 — Five Sources, Cast From Those Numbers</div>';
+  html+='<div class="ord-step">Step 2 — Five Sources Cast From Those Numbers, Six From The Moment</div>';
   html+=lcard('🔢','Pythagorean — Digital Roots Of The Draw',c.py,[
     '<b>Each number reduced:</b> '+c.nums.map(function(n,i){ return p2(n)+'→'+c.roots[i]; }).join(' · '),
     '<b>Draw total '+c.sum+':</b> → <b>'+reduce(c.sum)+'</b>',
@@ -3598,10 +3734,26 @@ function oracleSeedReadingHTML(r,gameKey,dateStr){
       : '<b>No 11/22/33/44/55 in this draw</b> — this layer contributes nothing rather than manufacturing a hit.'
   ],'',true);
 
+  // The six moment-cast methods. Each line shows what the draw's own moment
+  // named and which of those digits the personal chart agreed with — the only
+  // ones that vote. The chart itself (date, time) is deliberately not printed.
+  var mo=r.moment;
+  if(mo&&mo.draw){
+    var slotTxt=(typeof mo.hour==='string')?mo.hour:'9PM';
+    html+=lcard('🌌','Draw Moment · '+pcsoHistShortDate(dateStr)+' '+slotTxt+' Manila — Agreed With The Personal Chart',
+      oseedAllVotes(mo.sources),
+      OSEED_DATE_LABELS.map(function(k){
+        var kept=mo.sources[k]||[], named=mo.draw[k]||[];
+        return '<b>'+OSEED_LABEL_TITLES[k]+':</b> moment names '+(named.length?named.join(','):'—')
+          +' → agreed <b>'+(kept.length?kept.join(','):'none')+'</b>';
+      }).concat(['<b>A method votes only where the draw’s moment and the personal chart agree.</b> No agreement means that method contributes nothing to this draw, rather than a manufactured hit.']),
+      '',true);
+  }
+
   if(res.sorted&&res.sorted.length){
-    html+='<div class="ord-step">Step 3 — Digit Convergence · 5 Sources</div>'
+    html+='<div class="ord-step">Step 3 — Digit Convergence · '+OSEED_LABELS.length+' Sources</div>'
       +'<div class="dgrid">'+res.sorted.slice(0,6).map(function(sc){
-        return '<div class="dcard '+dCls(sc.count*2)+'">'
+        return '<div class="dcard '+dCls(sc.count)+'">'
           +'<div class="dnum">'+sc.digit+'</div>'
           +'<div class="dscore">'+sc.count+'/'+OSEED_LABELS.length+' sources</div>'
           +'<div class="ddots">'+dotHTML(sc.layers,OSEED_LABELS.map(function(k){ return OSEED_LABEL_TITLES[k]; }),OSEED_LABELS)+'</div></div>';
@@ -3747,7 +3899,7 @@ function oracleSeedRender(){
     var notes=[];
     if(ready<scheduled.length)
       notes.push('A reading here is cast from the previous draw of the same game, so it cannot exist until that draw has been recorded. EZ2 goes blank a day before the rest — it draws every day, so its seed is always yesterday.');
-    notes.push('⚠️ For entertainment only. Lottery draws are independent random events — measured walk-forward over 974 real draws this scores 0.72 matches per draw against a random control’s 0.75. It is not a prediction. Play responsibly.');
+    notes.push('⚠️ For entertainment only. Lottery draws are independent random events — measured walk-forward over 998 real draws this scores 0.74 matches per draw against a random control’s 0.72. It is not a prediction. Play responsibly.');
     noteEl.innerHTML=notes.map(function(t){ return '<div>'+t+'</div>'; }).join('');
   }
 }
