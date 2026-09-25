@@ -143,7 +143,7 @@ The Oracle tab has **two** date pickers, deliberately distinct, and the split is
 - **"Look Up Past Result"** is anchored on a *draw*: capped at today, renders nothing unless `PCSO_HISTORY` has that date, one game at a time, and it's the only place that shows actual winning numbers, gold match highlighting and match counts, and the only place that prints a *confirmed* jackpot. Each game is stacked like the pick panel: head line (`.opick-head` — name, source tag, then the confirmed jackpot inline), winning numbers, Oracle's pick, then one caption underneath carrying the label, the score **and**, once the pick actually paid, what PCSO owes for it (`Oracle's Pick · 3 of 6 matched · Balik Taya ₱30`). That last clause comes from `PCSO_PRIZE_TIERS` / `pcsoHistPrizeHTML`, and the whole scoring half turns glowing green (`.pcso-hist-score.win`, `.pcso-hist-prize`) instead of gold at 3+. The name used to be a left column beside the numbers, which is why the row needed a fixed-width lead, a min-height tuned to one chip and an empty slot spacer for EZ2 — all three are gone, and the chips take the full card width.
 
   The tier figures are PCSO's own published matrix, one per game, read off each game's page on `pcso.gov.ph` — **not** a single table shared across games: the 3-match fixed prize alone runs ₱20 / ₱30 / ₱50 / ₱60 / ₱100 from 6/42 up to 6/58. Two of the tiers are **pools, not per-ticket amounts**: PCSO pays the 5-match and 4-match categories as a fixed sum "to be shared equally per standard bet", so a draw with 698 four-match winners pays each of them a few hundred pesos. `pcso-history.json` carries a winner count for the *jackpot* only, so the per-ticket figure for those two is unknowable here — hence "You won a share of ₱1.3M" rather than a number the data cannot support. Don't "fix" that wording into a flat payout. The 6-match line uses the draw's **confirmed** jackpot from the entry, falling back to the game's published minimum only when the entry has no figure. EZ2 is excluded on purpose — this panel scores it across all three of the day's draws at once, so no single draw exists for a tier to attach to, and its prize is fixed rather than tiered.
-- **"Oracle Pick Seeded From The Last Result"** (`oracleSeedRender`) is anchored on a *draw* and leads the page. No game selector — it lists **every** game scheduled that weekday (`oracleGamesOnDate`, 6-ball ascending then EZ2 last), each cast from that game's own previous recorded result. Each game block is **stacked**, not inline: one head line (`.opick-head` — name, caret, the seed clause and the jackpot clause, each `.opick-jackpot` taking its own full-width row), then the spheres — both inside the `<summary>`, so the whole block is still the toggle that opens the reading. Stacking is what makes room for those clauses and hands the spheres the width an inline lead would hold; there is no EZ2 `.oracle-pick-slot` spacer, since above the spheres there is no centre line to align to. Full mechanics — which five layers are cast from numbers and how the other six are cast from the draw's moment and the owner's birth chart, the 報數起卦 method, the refusal, stability — are in their own section below.
+- **"Oracle Pick Seeded From The Last Result"** (`oracleSeedRender`) is anchored on a *draw* and leads the page. No game selector — it lists **every** game scheduled that weekday (`oracleGamesOnDate`, 6-ball ascending then EZ2 last), each cast from that game's own **last three** recorded results (head clause: `Cast from the last 3 draws`). Each game block is **stacked**, not inline: one head line (`.opick-head` — name, caret, the seed clause and the jackpot clause, each `.opick-jackpot` taking its own full-width row), then the spheres — both inside the `<summary>`, so the whole block is still the toggle that opens the reading. Stacking is what makes room for those clauses and hands the spheres the width an inline lead would hold; there is no EZ2 `.oracle-pick-slot` spacer, since above the spheres there is no centre line to align to. Full mechanics — which five layers are cast from numbers and how the other six are cast from the draw's moment and the owner's birth chart, the 報數起卦 method, the refusal, stability — are in their own section below.
 
   The jackpot line (`oraclePickJackpotHTML`) moved onto the seeded panel when the date panel was retired — it fits at least as well, since it only ever speaks for a 6-ball draw dated today..+7 with no result on file, and the next draw of each game is exactly what that panel reads. It carries the amount over from the previous play: that jackpot if the draw had no winner, otherwise the game's reset amount, which `pcsoHistResetJackpot` reads out of the history (the jackpot of the first draw after the most recent won one) rather than hardcoding it — PCSO has raised these over time (6/58 went 49.5M → 75M), so the historical minimum is the wrong number. Shown **only** for a 6-ball draw dated today..+`ORACLE_PICK_JACKPOT_DAYS` (7) that has no result on file yet: never on a past date, never further out (every draw in between moves the figure), never for a draw already on file, and never for EZ2 — its prize is fixed, not a rollover. The wording states the fact it is derived from ("No winner on Aug 14, so ₱15.0M rolls over.") rather than asserting a jackpot for a draw that hasn't happened; the confirmed figure shows up in Look Up Result once `pcso-history.json` has the draw. Both surfaces put the amount itself in `.opick-amt` (the confirmed jackpot's green bold) inside a muted `.opick-jackpot` clause — one helper, so estimate and confirmed cannot drift apart.
 
@@ -212,7 +212,34 @@ horizon loss — do not "restore" the date panel without asking them again. It i
 separate engine from `convergence()`/`computeOracleAsOf()`; the history-free
 rule below still holds for those, and the daily job now logs *this* engine.
 
-**All eleven layers vote: five cast from the seed draw's numbers, six from a
+**The seed is the last THREE draws, by a 2-of-3 majority.** Since 2026-09-25,
+at the owner's request, a reading is cast from the game's last three recorded
+draws (`pcsoHistPrevEntries`, newest first; EZ2 per slot from the same slot on
+the three days before). Each draw is cast by `oracleSeedCast` exactly as before,
+and `oracleSeedCastMany` lets a number-cast method vote for a digit only when
+**at least two of the three** casts name it. Measured over 988 walk-forward
+draws, never by hit rate:
+
+| seed rule | distinct picks | χ² | a source naming 7+ of 9 digits |
+|---|---|---|---|
+| last draw only (before) | 946 | 1180 | Py 6% |
+| **2 of 3 draws (in use)** | **980** | **1261** | Py 20%, Ls 6% |
+| all 18 numbers as one report | 928 | 1990 | Py 98%, Ls 96% |
+| any of the 3 (union) | 924 | 2190 | Py 99%, Ls 96%, IC 52% |
+
+Pooling is the obvious build and it is wrong: eighteen numbers light nearly every
+Lo Shu palace and digital root, so Pythagorean and Lo Shu turn into sources that
+vote for everything. Test 16 pins the majority and fails if either source names
+7+ digits on 30% or more of readings (union measures 99% / 96%). House rules,
+disclosed in the code: the family rotation reads the **sum** of the three
+hexagram numbers and the three draw totals, and full-number meanings come from
+all three casts, labelled with their draw. The refusal still turns on the newest
+seed alone (`prev`), and fewer than three draws on file refuses with
+`reason:'few'`. `seeds` in `oracle-history.json` still records the newest seed
+date — the other two follow from it deterministically. Walk-forward: **0.73**
+matches per draw against a random control's **0.73** (z = −0.06).
+
+**All eleven layers vote: five cast from the seed draws' numbers, six from a
 moment.** Only five can be cast from numbers, and that is a hard constraint
 rather than a shortcut: Py (a digital root is defined for any number), Ls (the
 Lo Shu *is* the 1–9 grid — which palaces a draw lights up is what 九宮 number
@@ -235,7 +262,7 @@ and a method votes for a digit **only where both casts name it**
 same on both panels.
 
 The AND rule is a house rule, chosen by measurement over 998 walk-forward
-draws, never by hit rate (all sit at chance):
+draws while the seed was still one draw, never by hit rate (all sit at chance):
 
 | rule | distinct picks | digit imbalance χ² |
 |---|---|---|
@@ -261,7 +288,7 @@ OR back in turns it red. Two details are load-bearing:
 
 What it costs, stated rather than hidden: **digit 6 is in none of the six birth
 casts**, so those six can never vote for it and the 6-family (6, 15, 24, 33, 42,
-51) drops to **0.9%** of picks. It can still arrive through the five number-cast
+51) drops to **0.9%** of picks (0.5% with the three-draw seed). It can still arrive through the five number-cast
 sources, and every number in every pool stays reachable (test 12). And about a
 third of the six slots come out empty on a given draw (2017 of 5988), because the
 moment and the chart share nothing for that method — reported as "none", never
@@ -313,10 +340,10 @@ shows what it picks reads like a tip sheet; showing how it did is what keeps it 
 statistics exercise.
 
 **And it is not a prediction, measured rather than asserted.** Walk-forward over
-**998 real draws**, each cast from the draw immediately before it: mean **0.74**
-matches per draw against a seeded random control's **0.72** (z = 0.52, i.e.
-indistinguishable). The five-source version scored 0.72 against 0.75 on 974
-draws; the date engine 0.73 and a plain mirror transform (pool+1−n) 0.75. Best
+**988 real draws**, each cast from the three draws immediately before it: mean
+**0.73** matches per draw against a seeded random control's **0.73** (z = −0.06,
+i.e. indistinguishable). The one-draw eleven-source version scored 0.74 against
+0.72 on 998 draws, the five-source version 0.72 against 0.75 on 974; the date engine 0.73 and a plain mirror transform (pool+1−n) 0.75. Best
 single result anywhere: 4 of 6, once. The note under the panel quotes the
 current figures on the page. Per the statistics rule below, never tune any of
 this for hit rate.

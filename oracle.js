@@ -2763,6 +2763,12 @@ function pcsoHistPrevEntry(gameKey,dateStr){
   return best;
 }
 
+// The last `n` draws on file strictly before dateStr, newest first.
+function pcsoHistPrevEntries(gameKey,dateStr,n){
+  return (PCSO_HISTORY[gameKey]||[]).filter(function(e){ return e.date&&e.date<dateStr; })
+    .sort(function(a,b){ return a.date<b.date?1:a.date>b.date?-1:0; }).slice(0,n);
+}
+
 // What a game's jackpot restarts at after somebody wins it. Read from the data
 // rather than hardcoded: the jackpot of the first draw following each won draw
 // is the reset amount, and the most recent one is the level in force now. PCSO
@@ -3307,11 +3313,11 @@ function oraclePickBalls(nums,meaning,counts,offset,gameKey,srcTotal){
 // claims. That is why those six read a date and an hour — the input they were
 // built for — rather than the seed draw's numbers. The panel prints "/11".
 //
-// WHAT THIS IS NOT. Measured walk-forward over 998 real draws, each cast from
-// the draw immediately before it: mean 0.74 matches against a seeded random
-// control's 0.72 (z = 0.52). Indistinguishable from chance, like every
-// configuration ever measured in this repo (the five-source version scored
-// 0.72 vs 0.75). Statistics and divination, not prediction — and the note
+// WHAT THIS IS NOT. Measured walk-forward over 988 real draws, each cast from
+// the three draws immediately before it: mean 0.73 matches against a seeded
+// random control's 0.73 (z = −0.06). Indistinguishable from chance, like every
+// configuration ever measured in this repo (one-draw eleven-source: 0.74 vs
+// 0.72; the five-source version: 0.72 vs 0.75). Statistics and divination, not prediction — and the note
 // under the panel says exactly that.
 
 // Mei Hua 先天八卦數: Qian 1, Dui 2, Li 3, Zhen 4, Xun 5, Kan 6, Gen 7, Kun 8 —
@@ -3352,7 +3358,8 @@ var OSEED_LABEL_TITLES={Py:'Pythagorean',Ch:'Chaldean',As:'Astrology',Ba:'BaZi',
 //
 // HOUSE RULE, disclosed like familyOffset below: no tradition prescribes this
 // intersection. It was chosen over the alternatives by measurement, walk-
-// forward over 998 real draws (never by hit rate — all four sit at chance,
+// forward over 998 real draws, measured when a reading was still cast from the
+// last ONE draw (never by hit rate — all four sit at chance,
 // 0.71-0.74 matches per draw against a random control's 0.72):
 //   rule                          distinct picks   digit imbalance χ²
 //   draw moment only (no birth)        965              1417
@@ -3366,7 +3373,8 @@ var OSEED_LABEL_TITLES={Py:'Pythagorean',Ch:'Chaldean',As:'Astrology',Ba:'BaZi',
 //
 // WHAT IT COSTS, stated rather than hidden: digit 6 appears in none of the six
 // birth casts, so these six methods can never vote for it, and the digit-6
-// family (6, 15, 24, 33, 42, 51) drops to 0.9% of picks. It can still reach
+// family (6, 15, 24, 33, 42, 51) drops to 0.9% of picks (0.5% once readings
+// were cast from the last three draws). It can still reach
 // the pick through the five number-cast sources. And about a third of the
 // six slots (2017 of 5988 over that corpus) come out EMPTY on a given draw,
 // because the moment and the chart share nothing for that method — the
@@ -3502,6 +3510,47 @@ function oracleSeedCast(nums){
     sources:{Py:py,Ls:lit,IC:ic,Ta:ta,An:an}};
 }
 
+// ── THE LAST THREE DRAWS ──
+// Since 2026-09-25 a reading is cast from the last THREE recorded draws of the
+// game, not the last one (the owner's request). Each draw is cast exactly as
+// before by oracleSeedCast(); the five number-cast methods then vote for a
+// digit only when AT LEAST TWO of the three casts name it.
+//
+// Why a 2-of-3 majority and not the obvious alternatives — measured walk-
+// forward over 988 draws (never by hit rate; every option sits at chance,
+// 0.72-0.74 matches against a random control's 0.72):
+//   rule                               distinct   χ²    a source naming 7+ digits
+//   last draw only (before)              946     1180   Py 6%
+//   2 of 3 draws (this)                  980     1261   Py 20%, Ls 6%
+//   all 18 numbers as one report         928     1990   Py 98%, Ls 96%
+//   any of the 3 draws (union)           924     2190   Py 99%, Ls 96%, IC 52%
+// Eighteen numbers light almost every Lo Shu palace and every digital root, so
+// pooling (or a union) turns Pythagorean and Lo Shu into sources that vote for
+// nearly everything — present, but saying nothing. The majority keeps every
+// method discriminating and asks the natural question of three draws: which
+// digits RECUR.
+//
+// House rules, disclosed: the within-family rotation reads the SUM of the three
+// hexagram numbers and the SUM of the three draw totals (the single-draw rule,
+// widened), and the full-number meanings are those of all three casts, each
+// labelled with the draw it came from.
+var OSEED_SEED_DRAWS=3, OSEED_MAJORITY=2;
+function oracleSeedCastMany(numsList,dates){
+  var parts=(numsList||[]).map(function(n){ return oracleSeedCast(n); });
+  if(parts.length<OSEED_SEED_DRAWS||parts.some(function(c){ return !c; })) return null;
+  parts.forEach(function(c,i){ c.date=(dates&&dates[i])||null; });
+  var sources={};
+  OSEED_NUM_LABELS.forEach(function(k){
+    var cnt={};
+    parts.forEach(function(c){ (c.sources[k]||[]).forEach(function(d){ cnt[d]=(cnt[d]||0)+1; }); });
+    sources[k]=Object.keys(cnt).map(Number).filter(function(d){ return cnt[d]>=OSEED_MAJORITY; })
+      .sort(function(a,b){ return a-b; });
+  });
+  return {parts:parts,sources:sources,
+    hexNum:parts.reduce(function(a,c){ return a+c.hexNum; },0),
+    sum:parts.reduce(function(a,c){ return a+c.sum; },0)};
+}
+
 // Full numbers the cast gives a named significance — the seeded twin of
 // oracleMeaningFromLayers(), and the set the picker pays a bonus for below.
 function oracleSeedMeaning(cast,poolMax){
@@ -3553,7 +3602,18 @@ function oracleSeedPick(cast,gameKey,need,dateSources){
     digitToNums[d3]=[];
     for(var n=1;n<=pool;n++) if(digitOf(n)===d3) digitToNums[d3].push(n);
   }
-  var meaning=oracleSeedMeaning(cast,pool);
+  var meaning;
+  if(cast.parts){
+    // Three casts: every one's meanings count, each labelled with its draw.
+    meaning={};
+    cast.parts.forEach(function(c){
+      var m=oracleSeedMeaning(c,pool), tag=c.date?pcsoHistShortDate(c.date)+' · ':'';
+      Object.keys(m).forEach(function(n){
+        if(!meaning[n]) meaning[n]=[];
+        m[n].forEach(function(l){ var t=tag+l; if(meaning[n].indexOf(t)<0) meaning[n].push(t); });
+      });
+    });
+  } else meaning=oracleSeedMeaning(cast,pool);
   // HOUSE RULE, stated plainly — the same admission convergence()'s own
   // familyOffset carries. The layers name a DIGIT; something must say which
   // member of that family is meant. Here it is the cast's own two dated
@@ -3635,31 +3695,36 @@ function oracleSeedCompute(gameKey,dateStr){
     return {ok:false,waitingFor:want,reason:'pending'};
   var gap=!!(want&&prev.date<want);
 
+  // The last three draws, newest first. The newest one is `prev` above, so the
+  // refusal and the gap flag still turn on the single draw that must land.
+  var seeds=pcsoHistPrevEntries(gameKey,dateStr,OSEED_SEED_DRAWS);
+  if(seeds.length<OSEED_SEED_DRAWS) return {ok:false,waitingFor:want,reason:'few'};
+  var seedDates=seeds.map(function(e){ return e.date; });
+
   if(gameKey==='ez2'){
     var byHour={},casts={},any=false;
     var moments={};
     ['2PM','5PM','9PM'].forEach(function(t){
-      var sn=(prev.draws&&prev.draws[t])||[];
-      var c=oracleSeedCast(sn);
+      var c=oracleSeedCastMany(seeds.map(function(e){ return (e.draws&&e.draws[t])||[]; }),seedDates);
       casts[t]=c;
       moments[t]=oracleSeedDateSources(dateStr,t);
       byHour[t]=c?oracleSeedPick(c,gameKey,need,moments[t].sources):null;
       if(byHour[t]) any=true;
     });
     if(!any) return {ok:false,waitingFor:want,reason:'unreadable'};
-    // Each EZ2 draw time is seeded by the SAME draw time the day before — 2PM
-    // from 2PM, not from a merged six. Two numbers split 1/1 for the 報數起卦
-    // cast, which is the classic two-number report.
-    return {ok:true,seedDate:prev.date,seedEntry:prev,gap:gap,ez2:true,
+    // Each EZ2 draw time is seeded by the SAME draw time on the three days
+    // before — 2PM from 2PM, not from a merged six. Two numbers split 1/1 for
+    // each 報數起卦 cast, which is the classic two-number report.
+    return {ok:true,seedDate:prev.date,seedEntry:prev,seedDates:seedDates,seedEntries:seeds,gap:gap,ez2:true,
       byHour:byHour,casts:casts,cast:casts['9PM'],result:byHour['9PM'],
       moments:moments,moment:moments['9PM']};
   }
 
-  var cast=oracleSeedCast(Array.isArray(prev.nums)?prev.nums:[]);
+  var cast=oracleSeedCastMany(seeds.map(function(e){ return Array.isArray(e.nums)?e.nums:[]; }),seedDates);
   if(!cast) return {ok:false,waitingFor:want,reason:'unreadable'};
   var moment=oracleSeedDateSources(dateStr,'9PM');
   var res=oracleSeedPick(cast,gameKey,need,moment.sources);
-  return {ok:true,seedDate:prev.date,seedEntry:prev,gap:gap,ez2:false,
+  return {ok:true,seedDate:prev.date,seedEntry:prev,seedDates:seedDates,seedEntries:seeds,gap:gap,ez2:false,
     cast:cast,moment:moment,result:res,picks:res.picks};
 }
 
@@ -3667,16 +3732,12 @@ function oracleSeedCompute(gameKey,dateStr){
 // from, named explicitly, because the whole panel stands or falls on it.
 function oracleSeedFromHTML(r){
   if(!r||!r.ok) return '';
-  var nums=r.ez2
-    ? ['2PM','5PM','9PM'].map(function(t){
-        var a=(r.seedEntry.draws&&r.seedEntry.draws[t])||[];
-        return a.map(function(n){ return p2(n); }).join('-');
-      }).join(' · ')
-    : (r.seedEntry.nums||[]).map(function(n){ return p2(n); }).join('-');
   // .oseed-from rides on the SAME line as the game name and caret ("6/45 ▸ Cast
-  // from Sep 11 · …"); the rollover clause below it keeps its own full-width row.
-  return '<span class="opick-jackpot oseed-from">Cast from '+pcsoHistShortDate(r.seedDate)
-    +' · <span class="oseed-src">'+nums+'</span>'
+  // from the last 3 draws"); the rollover clause below keeps its own row. The
+  // three dates and numbers are in the reading's Step 1, and in the tooltip.
+  var dates=(r.seedDates||[r.seedDate]).map(function(d){ return pcsoHistShortDate(d); }).join(', ');
+  return '<span class="opick-jackpot oseed-from" title="'+dates+'">Cast from the last '
+    +(r.seedDates||[r.seedDate]).length+' draws'
     +(r.gap?' (the scheduled draw before this one is not on file)':'')+'</span>';
 }
 
@@ -3690,49 +3751,50 @@ function oracleSeedReadingHTML(r,gameKey,dateStr){
   var ac=bd.pct>=70?'#2ecc71':bd.pct>=45?'#f0c040':'#ff6b6b';
   var al=bd.pct>=70?'🟢 Strong Alignment':bd.pct>=45?'🟡 Moderate Alignment':'🔴 Weak Alignment';
   html+='<div class="alt-card" style="margin-bottom:14px;text-align:center;">'
-    +'<div class="alt-label" style="margin-bottom:10px;">Alignment With The Cast · '+pcsoHistShortDate(r.seedDate)+' draw</div>'
+    +'<div class="alt-label" style="margin-bottom:10px;">Alignment With The Cast · last '+((r.seedDates||[1]).length)+' draws</div>'
     +'<div style="font-size:36px;font-weight:800;color:'+ac+';margin-bottom:4px;">'+bd.pct+'%</div>'
     +'<div style="font-size:13px;color:var(--muted2)">'+al+'</div>'
     +'<div style="font-size:11px;color:var(--muted2);margin-top:6px;">Mode: 🎴 Seeded — eleven sources, five cast from the draw, six from the draw’s moment, max '
     +((gameKey==='ez2')?'one number':'two numbers')+' per digit family</div>'
     +oracleAlignSplitHTML(bd,pool)+'</div>';
 
-  html+='<div class="ord-step">Step 1 — The Draw It Was Cast From</div>'
-    +'<div class="pcso-hist-row">'+pcsoHistWinBalls(c.nums)+'</div>'
-    +'<div class="pcso-hist-sublbl">'+pcsoHistShortDate(r.seedDate)+' · in draw order · total '+c.sum+'</div>';
+  // Step 1 — the three draws, newest first, each in draw order.
+  var parts=c.parts||[c];
+  html+='<div class="ord-step">Step 1 — The Last '+parts.length+' Draws It Was Cast From</div>';
+  parts.forEach(function(pc){
+    html+='<div class="pcso-hist-row">'+pcsoHistWinBalls(pc.nums)+'</div>'
+      +'<div class="pcso-hist-sublbl">'+(pc.date?pcsoHistShortDate(pc.date)+' · ':'')+'in draw order · total '+pc.sum+'</div>';
+  });
+  function dl(pc){ return '<b>'+(pc.date?pcsoHistShortDate(pc.date):'Draw')+':</b> '; }
+  function list(a){ return a&&a.length?a.join(','):'—'; }
+  var majNote='<b>A digit votes when at least '+OSEED_MAJORITY+' of the '+parts.length+' draws name it:</b> ';
 
   html+='<div class="ord-step">Step 2 — Five Sources Cast From Those Numbers, Six From The Moment</div>';
-  html+=lcard('🔢','Pythagorean — Digital Roots Of The Draw',c.py,[
-    '<b>Each number reduced:</b> '+c.nums.map(function(n,i){ return p2(n)+'→'+c.roots[i]; }).join(' · '),
-    '<b>Draw total '+c.sum+':</b> → <b>'+reduce(c.sum)+'</b>',
-    '<b>Digits named:</b> <b>'+c.py.join(',')+'</b>'
-  ]);
-  html+=lcard('🏮','Lo Shu — Which Palaces The Draw Lit',c.lit,[
-    '<b>Palaces lit:</b> '+c.lit.map(function(d){ return d+' ('+OSEED_LOSHU_HOME[d]+')'; }).join(' · '),
-    '<b>Palaces dark:</b> '+(c.dark.length?c.dark.map(function(d){ return d+' ('+OSEED_LOSHU_HOME[d]+')'; }).join(' · '):'none — all nine lit'),
-    '<b>Only the lit palaces vote.</b> Reading the dark ones as "due" is the hot/overdue contradiction this engine deliberately does not pay.'
-  ]);
-  html+=lcard('☯','I Ching — 報數起卦 (Cast By Reported Numbers)',c.ic,[
-    '<b>Upper:</b> ('+c.nums.slice(0,Math.floor(c.nums.length/2)).join('+')+') mod 8 = <b>'+c.upper+'</b> '
-      +OSEED_TRI_SYM[c.upper]+' '+OSEED_TRI_NAMES[c.upper]+' · '+OSEED_TRI_EL[c.upper],
-    '<b>Lower:</b> ('+c.nums.slice(Math.floor(c.nums.length/2)).join('+')+') mod 8 = <b>'+c.lower+'</b> '
-      +OSEED_TRI_SYM[c.lower]+' '+OSEED_TRI_NAMES[c.lower]+' · '+OSEED_TRI_EL[c.lower],
-    '<b>Moving line:</b> '+c.sum+' mod 6 = <b>'+c.moving+'</b>',
-    '<b>Hexagram '+c.hexNum+' — '+c.hexName+'</b>'+(c.hexEnglish?' · '+c.hexEnglish:''),
-    '<b>Nuclear '+c.nucNum+'</b> — '+c.nucName+' · <b>Changed '+c.chgNum+'</b> — '+c.chgName,
-    '<b>Trigram elements → He Tu digits:</b> <b>'+c.ic.join(',')+'</b>'
-  ],'',true);
-  html+=lcard('🃏','Tarot — The Draw Total As A Card',c.ta,[
-    '<b>Total '+c.sum+':</b>'+(c.cardReduced?' reduced to <b>'+c.card+'</b> (Major Arcana range 0–21)':' already in range'),
-    '<b>Card '+c.card+' — '+c.cardName+'</b>',
-    '<b>Reading:</b> '+c.cardReading,
-    '<b>Card digit(s):</b> <b>'+c.ta.join(',')+'</b>'
-  ],'',true);
-  html+=lcard('😇','Angel — Repeating-Digit Numbers Drawn',c.an.length?c.an:['—'],[
-    c.an.length
-      ? '<b>Drawn:</b> '+c.an.map(function(g){ return g*11; }).join(', ')+' → digit(s) <b>'+c.an.join(',')+'</b>'
-      : '<b>No 11/22/33/44/55 in this draw</b> — this layer contributes nothing rather than manufacturing a hit.'
-  ],'',true);
+  html+=lcard('🔢','Pythagorean — Digital Roots Of Each Draw',list(c.sources.Py).split(','),
+    parts.map(function(pc){
+      return dl(pc)+pc.nums.map(function(n,i){ return p2(n)+'→'+pc.roots[i]; }).join(' · ')
+        +' · total '+pc.sum+'→'+reduce(pc.sum)+' → <b>'+list(pc.py)+'</b>';
+    }).concat([majNote+'<b>'+list(c.sources.Py)+'</b>']));
+  html+=lcard('🏮','Lo Shu — Which Palaces Each Draw Lit',list(c.sources.Ls).split(','),
+    parts.map(function(pc){
+      return dl(pc)+'lit '+pc.lit.map(function(d){ return d+' ('+OSEED_LOSHU_HOME[d]+')'; }).join(' · ');
+    }).concat([majNote+'<b>'+list(c.sources.Ls)+'</b>',
+      '<b>Only lit palaces vote.</b> Reading the dark ones as "due" is the hot/overdue contradiction this engine deliberately does not pay.']));
+  html+=lcard('☯','I Ching — 報數起卦 (Cast By Reported Numbers)',list(c.sources.IC).split(','),
+    parts.map(function(pc){
+      var h=Math.floor(pc.nums.length/2);
+      return dl(pc)+'('+pc.nums.slice(0,h).join('+')+') mod 8 = '+pc.upper+' '+OSEED_TRI_SYM[pc.upper]+' '+OSEED_TRI_NAMES[pc.upper]
+        +' over ('+pc.nums.slice(h).join('+')+') mod 8 = '+pc.lower+' '+OSEED_TRI_SYM[pc.lower]+' '+OSEED_TRI_NAMES[pc.lower]
+        +' · moving '+pc.moving+' → <b>Hexagram '+pc.hexNum+' — '+pc.hexName+'</b> · He Tu digits '+list(pc.ic);
+    }).concat([majNote+'<b>'+list(c.sources.IC)+'</b>']),'',true);
+  html+=lcard('🃏','Tarot — Each Draw Total As A Card',list(c.sources.Ta).split(','),
+    parts.map(function(pc){
+      return dl(pc)+'total '+pc.sum+(pc.cardReduced?' → '+pc.card:'')+' · <b>'+pc.cardName+'</b> → '+list(pc.ta);
+    }).concat([majNote+'<b>'+list(c.sources.Ta)+'</b>']),'',true);
+  html+=lcard('😇','Angel — Repeating-Digit Numbers Drawn',list(c.sources.An).split(','),
+    parts.map(function(pc){
+      return dl(pc)+(pc.an.length?pc.an.map(function(g){ return g*11; }).join(', ')+' → '+pc.an.join(','):'none drawn');
+    }).concat([majNote+(c.sources.An.length?'<b>'+list(c.sources.An)+'</b>':'<b>none</b> — this layer contributes nothing rather than manufacturing a hit.')]),'',true);
 
   // The six moment-cast methods. Each line shows what the draw's own moment
   // named and which of those digits the personal chart agreed with — the only
@@ -3790,7 +3852,9 @@ function oracleSeedGameHTML(gameKey,dateStr){
     else if(r&&r.reason==='unreadable')
       wait='The '+(r.waitingFor?pcsoHistShortDate(r.waitingFor)+' ':'')+'result on file cannot be read as a full draw.';
     else
-      wait='No earlier draw on file for this game, so there is nothing to cast from.';
+      wait=(r&&r.reason==='few')
+        ? 'Fewer than '+OSEED_SEED_DRAWS+' earlier draws on file for this game, so there is nothing to cast from.'
+        : 'No earlier draw on file for this game, so there is nothing to cast from.';
     return '<div class="oracle-pick-game-row oseed-row"><div class="opick-head">'+name+'</div>'
       +'<div class="oseed-wait">⏳ '+wait+'</div></div>';
   }
@@ -3890,7 +3954,7 @@ function oracleSeedRender(){
   }).join('');
   var waiting=scheduled.length-ready, sub;
   if(!ready) sub='Nothing can be cast yet \u2014 '+(scheduled.length===1?'this draw is':'all '+scheduled.length+' are')+' waiting on a result';
-  else if(!waiting) sub=(scheduled.length===1?'1 draw':'All '+scheduled.length+' draws')+' cast from the last result';
+  else if(!waiting) sub=(scheduled.length===1?'1 game':'All '+scheduled.length+' games')+' cast from their last '+OSEED_SEED_DRAWS+' draws';
   else sub=ready+' of '+scheduled.length+' cast \u00b7 '+waiting+' still waiting on a result';
   out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
     +'<div class="oracle-pick-sub">'+sub+'</div>'+rows;
@@ -3898,8 +3962,8 @@ function oracleSeedRender(){
   if(noteEl){
     var notes=[];
     if(ready<scheduled.length)
-      notes.push('A reading here is cast from the previous draw of the same game, so it cannot exist until that draw has been recorded. EZ2 goes blank a day before the rest — it draws every day, so its seed is always yesterday.');
-    notes.push('⚠️ For entertainment only. Lottery draws are independent random events — measured walk-forward over 998 real draws this scores 0.74 matches per draw against a random control’s 0.72. It is not a prediction. Play responsibly.');
+      notes.push('A reading here is cast from the last three draws of the same game, so it cannot exist until the newest of them has been recorded. EZ2 goes blank a day before the rest — it draws every day, so its newest seed is always yesterday.');
+    notes.push('⚠️ For entertainment only. Lottery draws are independent random events — measured walk-forward over 988 real draws this scores 0.73 matches per draw against a random control’s 0.73. It is not a prediction. Play responsibly.');
     noteEl.innerHTML=notes.map(function(t){ return '<div>'+t+'</div>'; }).join('');
   }
 }

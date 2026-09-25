@@ -277,19 +277,22 @@ console.log('\n10. computeOracleAsOf is unaffected by the seeded engine');
 }
 
 // ── 11. EZ2 is seeded per draw time, not from a merged six ───────────────
-console.log('\n11. EZ2 seeds each draw time from the same time the day before');
+console.log('\n11. EZ2 seeds each draw time from the same time on the three days before');
 {
   const rows = (RAW.ez2 || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
   const target = rows[rows.length - 1].date;
   const r = sb.oracleSeedCompute('ez2', target);
   check('EZ2 produces a seeded reading', r && r.ok && r.ez2);
   if (r && r.ok) {
-    const seed = r.seedEntry;
     let bad = 0;
     for (const slot of EZ2_SLOTS) {
-      const want = (seed.draws && seed.draws[slot]) || [];
+      // each of the three casts reads that SAME slot on its own day
       const c = r.casts[slot];
-      if (!c || JSON.stringify(c.nums) !== JSON.stringify(want)) bad++;
+      if (!c || !c.parts || c.parts.length !== 3) { bad++; continue; }
+      r.seedEntries.forEach((e, i) => {
+        const want = (e.draws && e.draws[slot]) || [];
+        if (JSON.stringify(c.parts[i].nums) !== JSON.stringify(want)) bad++;
+      });
       const p = r.byHour[slot] && r.byHour[slot].picks;
       if (!Array.isArray(p) || p.length !== 2 || new Set(p).size !== 2
           || p.some((x) => x < 1 || x > 31)) bad++;
@@ -520,6 +523,56 @@ console.log('\n15. All eleven sources vote; the six date methods read draw momen
   check('no "/5" left on the card', !/\d\/5[< ]/.test(card));
   const leak = ['1985', 'Feb 21', 'February 21', '06:10', '6:10', 'Aquarius 2', 'Xin辛Mao卯'].filter((t) => card.includes(t));
   check(`the birth date and time are never printed (${leak.join(', ') || 'none found'})`, leak.length === 0);
+}
+
+// ── 16. cast from the LAST THREE draws, by a 2-of-3 majority ──────────────
+// The owner asked for the reading to come from the last three draws of the
+// game rather than the last one. Each draw is cast as before; a number-cast
+// method votes for a digit only when at least two of the three name it. The
+// obvious alternative — all 18 numbers as one report — was measured and
+// rejected: it lights nearly every palace and digital root, so Pythagorean and
+// Lo Shu named 7+ of the 9 digits on 96-98% of draws, i.e. voted for
+// everything. The last check here is the guard against drifting back to that.
+console.log('\n16. Cast from the last three draws, 2-of-3 majority');
+{
+  check('three draws, majority of two', sb.OSEED_SEED_DRAWS === 3 && sb.OSEED_MAJORITY === 2);
+  let wrongSeeds = 0, wrongMaj = 0, n = 0;
+  const wide = { Py: 0, Ls: 0 };
+  for (const d of allSixBallDraws()) {
+    const r = sb.oracleSeedCompute(d.gk, d.date);
+    if (!r || !r.ok) continue;
+    n++;
+    // the three seeds are exactly the three latest draws on file before the date
+    const want = (RAW[FILE_KEY[d.gk]] || []).filter((e) => e.date < d.date)
+      .map((e) => e.date).sort().reverse().slice(0, 3);
+    if (JSON.stringify(r.seedDates) !== JSON.stringify(want) || r.seedDate !== want[0]) wrongSeeds++;
+    // every number-cast vote is named by at least two of the three casts
+    for (const k of sb.OSEED_NUM_LABELS) {
+      const cnt = {};
+      r.cast.parts.forEach((c) => c.sources[k].forEach((x) => { cnt[x] = (cnt[x] || 0) + 1; }));
+      const maj = Object.keys(cnt).map(Number).filter((x) => cnt[x] >= 2).sort((a, b) => a - b);
+      if (JSON.stringify(maj) !== JSON.stringify(r.cast.sources[k])) wrongMaj++;
+    }
+    if (r.cast.sources.Py.length >= 7) wide.Py++;
+    if (r.cast.sources.Ls.length >= 7) wide.Ls++;
+  }
+  check(`checked ${n} readings`, n > 900);
+  check(`seeds are the three latest draws before each date, newest first (${wrongSeeds} wrong)`, wrongSeeds === 0);
+  check(`every number-cast vote is a 2-of-3 majority (${wrongMaj} wrong)`, wrongMaj === 0);
+  check(`Pythagorean and Lo Shu stay discriminating — naming 7+ digits on ${(100 * wide.Py / n).toFixed(0)}% / ${(100 * wide.Ls / n).toFixed(0)}% of readings (pooling gave 98% / 96%)`,
+        wide.Py / n < 0.3 && wide.Ls / n < 0.3);
+
+  // Fewer than three draws on file is a refusal, not a one-draw reading.
+  const rows = (RAW['6/58'] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const early = sb.oracleSeedCompute('658', rows[2].date); // only two draws before it
+  check(`with only two earlier draws it refuses (${early && early.reason})`, early && !early.ok && early.reason === 'few');
+
+  // What the card says.
+  const target = rows[rows.length - 1].date;
+  const html = sb.oracleSeedGameHTML('658', target);
+  check('the head reads "Cast from the last 3 draws"', />Cast from the last 3 draws</.test(html), html.match(/oseed-from[^<]*/)?.[0]);
+  const reading = sb.oracleSeedReadingHTML(sb.oracleSeedCompute('658', target), '658', target);
+  check('the reading lists all three draws', (reading.match(/in draw order/g) || []).length === 3);
 }
 
 console.log('\n==============================================================');
