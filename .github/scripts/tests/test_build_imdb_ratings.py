@@ -267,13 +267,26 @@ if os.path.exists(p2 := os.path.join(ROOT, 'imdb-ratings.json')):
     m = bir.decode(d['d'], d['r'])
     check(d['minVotes'] == 5, f"committed file records minVotes={d['minVotes']}")
     check(d['count'] > 700_000, f"holds {d['count']:,} titles (was 430,495 at the old floor)")
-    # The title this change was reported for: 8.2 off 47 votes, under the old floor.
-    check(m.get(43736405) == 82,
-          'A Love Other Than Yours (tt43736405) now carries 8.2', m.get(43736405))
-    # A few more of the reported blanks, so a floor regression is loud.
+    # The title this change was reported for: 47 votes, under the old 100 floor.
+    # What the floor promises is that it is IN the file with a real rating — not
+    # which rating. This used to assert exactly 8.2 and went red on the 2026-09-21
+    # weekly refresh, when IMDb moved it to 7.6 while the four titles below did
+    # not budge (so the decoder was fine; a thin-vote title's score simply moved).
+    # A weekly job cannot be pinned to one week's value of a 47-vote average.
+    got = m.get(43736405)
+    check(isinstance(got, int) and 10 <= got <= 100,
+          'A Love Other Than Yours (tt43736405) carries a rating (was blank at the old floor)', got)
+    # A few more of the reported blanks, so a floor regression is loud. These are
+    # well-voted titles, so their ratings are stable — kept within 0.5 of the value
+    # recorded when the floor changed. That still catches a decoder that hands
+    # every title its neighbour's rating (a random value lands inside a 1-point
+    # window for all four together essentially never) without failing CI every
+    # time IMDb nudges a score by a tenth.
     for tc, want, name in ((6283624, 76, 'Radio Star'), (10160132, 86, 'Amazing Saturday'),
                            (4938990, 80, 'Law of the Jungle'), (2375022, 84, 'Show! Music Core')):
-        check(m.get(tc) == want, f'{name} (tt{tc}) reads {want/10}', m.get(tc))
+        got = m.get(tc)
+        check(isinstance(got, int) and abs(got - want) <= 5,
+              f'{name} (tt{tc}) reads about {want/10} (within 0.5)', got)
     check(json.load(open(os.path.join(ROOT, 'imdb-browse.json')))['minVotes'] == 100,
           'the browse index did NOT inherit the low floor')
 else:

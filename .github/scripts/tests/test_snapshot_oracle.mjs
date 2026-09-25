@@ -69,7 +69,9 @@ check('entry carries date, generatedAt, engineSha and picks',
 // The tag is what lets the page tell a seeded entry from the history-free ones
 // written before the switch. Without it Look Up would display a retired
 // engine's numbers under the same label the seeded card uses.
-check("entry is tagged engine:'seeded'", log.entries[0].engine === 'seeded', String(log.entries[0].engine));
+// 'seeded-11' since the six moment-cast methods joined; the five-source engine
+// wrote plain 'seeded', and those entries must not be mistaken for this one.
+check("entry is tagged engine:'seeded-11'", log.entries[0].engine === 'seeded-11', String(log.entries[0].engine));
 check('entry records the seed date it cast from', !!log.entries[0].seeds
       && Object.keys(log.entries[0].seeds).length === Object.keys(log.entries[0].picks).length,
       JSON.stringify(log.entries[0].seeds));

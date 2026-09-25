@@ -245,37 +245,54 @@ console.log('\n9. Later draws landing never move an existing pick');
 // every night, so a seeded pick leaking into it would corrupt the log.
 console.log('\n10. computeOracleAsOf is unaffected by the seeded engine');
 {
-  // Pinned values, taken from the committed oracle-history.json entry for
-  // 2026-09-14 — i.e. what the daily job actually wrote with the old engine.
+  // Pinned values for 2026-09-14. They were first taken from the committed
+  // oracle-history.json entry the daily job wrote; the Ascendant fix
+  // (astroAscendant used to return the Descendant — test 13 in
+  // test_oracle_layers.mjs) moved Horary and Part of Fortune and so re-pinned
+  // them on 2026-09-24. Proven to be that fix alone: with only the +180° undone
+  // and every seeded-engine change still in place, the OLD pins pass exactly.
   const PINNED = {
-    '642': [6, 24, 28, 29, 37, 38],
-    '645': [1, 2, 6, 11, 24, 28],
-    '649': [2, 6, 24, 28, 37, 47],
-    '655': [2, 6, 24, 28, 37, 47],
-    '658': [2, 6, 24, 28, 37, 56],
+    '642': [9, 18, 28, 29, 37, 38],
+    '645': [1, 2, 9, 11, 18, 28],
+    '649': [2, 18, 27, 28, 37, 47],
+    '655': [2, 28, 37, 45, 47, 54],
+    '658': [2, 28, 37, 45, 54, 56],
   };
   for (const [gk, want] of Object.entries(PINNED)) {
     const got = sb.computeOracleAsOf(gk, '2026-09-14');
     check(`${gk} on 2026-09-14 is still ${want.join('-')} (got ${JSON.stringify(got)})`, JSON.stringify(got) === JSON.stringify(want));
   }
   const ez = sb.computeOracleAsOf('ez2', '2026-09-14');
-  check(`ez2 on 2026-09-14 is unchanged (got ${JSON.stringify(ez)})`, JSON.stringify(ez) === JSON.stringify({ '2PM': [11, 28], '5PM': [11, 28], '9PM': [28, 29] }));
+  check(`ez2 on 2026-09-14 is unchanged (got ${JSON.stringify(ez)})`, JSON.stringify(ez) === JSON.stringify({ '2PM': [11, 28], '5PM': [7, 11], '9PM': [28, 29] }));
+  // The seeded engine now borrows the date globals to cast the draw's moment
+  // and the birth chart. Running it in between must leave the date engine's
+  // answer — and the globals the page renders from — exactly as they were.
+  const g0 = [sb._D, sb._M, sb._Y, sb._DOW].join();
+  const before = JSON.stringify(sb.computeOracleAsOf('658', '2026-09-14'));
+  sb.oracleSeedCompute('658', '2026-09-16');
+  sb.oracleSeedDateSources('2031-01-01', '2PM');
+  const after = JSON.stringify(sb.computeOracleAsOf('658', '2026-09-14'));
+  check('a seeded cast in between does not move computeOracleAsOf', before === after, `${before} vs ${after}`);
+  check('and it leaves the page date globals as it found them', [sb._D, sb._M, sb._Y, sb._DOW].join() === g0);
 }
 
 // ── 11. EZ2 is seeded per draw time, not from a merged six ───────────────
-console.log('\n11. EZ2 seeds each draw time from the same time the day before');
+console.log('\n11. EZ2 seeds each draw time from the same time on the three days before');
 {
   const rows = (RAW.ez2 || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
   const target = rows[rows.length - 1].date;
   const r = sb.oracleSeedCompute('ez2', target);
   check('EZ2 produces a seeded reading', r && r.ok && r.ez2);
   if (r && r.ok) {
-    const seed = r.seedEntry;
     let bad = 0;
     for (const slot of EZ2_SLOTS) {
-      const want = (seed.draws && seed.draws[slot]) || [];
+      // each of the three casts reads that SAME slot on its own day
       const c = r.casts[slot];
-      if (!c || JSON.stringify(c.nums) !== JSON.stringify(want)) bad++;
+      if (!c || !c.parts || c.parts.length !== 3) { bad++; continue; }
+      r.seedEntries.forEach((e, i) => {
+        const want = (e.draws && e.draws[slot]) || [];
+        if (JSON.stringify(c.parts[i].nums) !== JSON.stringify(want)) bad++;
+      });
       const p = r.byHour[slot] && r.byHour[slot].picks;
       if (!Array.isArray(p) || p.length !== 2 || new Set(p).size !== 2
           || p.some((x) => x < 1 || x > 31)) bad++;
@@ -304,6 +321,23 @@ console.log('\n12. No number is unreachable under the seeded picker');
     const missing = [];
     for (let n = 1; n <= POOL[gk]; n++) if (!seen[gk].has(n)) missing.push(n);
     check(`${gk}: all ${POOL[gk]} numbers reachable${missing.length ? ' — missing ' + missing.join(',') : ''}`, missing.length === 0);
+  }
+  // And with all eleven sources live — the six moment-cast ones narrow toward
+  // the birth chart's digits, which starves the digit-6 family (it is in none
+  // of the six birth casts). Starved is disclosed; unreachable would be a bug.
+  const seen11 = {};
+  for (const gk of SIX_BALL) seen11[gk] = new Set();
+  for (const d of allSixBallDraws()) {
+    const ds = sb.oracleSeedDateSources(d.date, '9PM').sources;
+    for (const gk of SIX_BALL) {
+      const c = sb.oracleSeedCast(d.nums.map((n) => ((n - 1) % POOL[gk]) + 1));
+      for (const x of sb.oracleSeedPick(c, gk, 6, ds).picks) seen11[gk].add(x);
+    }
+  }
+  for (const gk of SIX_BALL) {
+    const missing = [];
+    for (let n = 1; n <= POOL[gk]; n++) if (!seen11[gk].has(n)) missing.push(n);
+    check(`${gk}: all ${POOL[gk]} numbers reachable with all 11 sources${missing.length ? ' — missing ' + missing.join(',') : ''}`, missing.length === 0);
   }
 }
 
@@ -334,11 +368,20 @@ console.log('\n13. Look Up reads the seeded engine, and only seeded log entries'
         !!look && look.source === 'recomputed' && JSON.stringify(look.picks) !== JSON.stringify(stale),
         JSON.stringify(look && look.picks));
 
-  // (c) an entry tagged engine:'seeded' IS preferred, and tagged recorded
-  sb.ORACLE_HISTORY = { entries: [{ date: target, engine: 'seeded', picks: { '658': seeded } }] };
+  // (c) an entry tagged with the CURRENT engine is preferred, and tagged recorded
+  check("the current engine tag is 'seeded-11'", sb.ORACLE_SEED_ENGINE === 'seeded-11', String(sb.ORACLE_SEED_ENGINE));
+  sb.ORACLE_HISTORY = { entries: [{ date: target, engine: sb.ORACLE_SEED_ENGINE, picks: { '658': seeded } }] };
   look = sb.oracleHistLookup('658', target);
-  check("an entry tagged engine:'seeded' is used and marked recorded",
+  check('an entry tagged with the current engine is used and marked recorded',
         !!look && look.source === 'recorded' && JSON.stringify(look.picks) === JSON.stringify(seeded));
+  // (c2) the FIVE-source engine's entries (plain 'seeded') are skipped too:
+  // their picks are not what the page computes any more, and showing them under
+  // "Oracle's Pick" would be the two-engines-one-label bug again.
+  sb.ORACLE_HISTORY = { entries: [{ date: target, engine: 'seeded', picks: { '658': stale } }] };
+  look = sb.oracleHistLookup('658', target);
+  check("a five-source 'seeded' entry is NOT displayed",
+        !!look && look.source === 'recomputed' && JSON.stringify(look.picks) === JSON.stringify(seeded),
+        JSON.stringify(look && look.picks));
   sb.ORACLE_HISTORY = null;
 
   // (d) the rendered panel shows the seeded numbers, not the retired engine's
@@ -408,6 +451,128 @@ console.log('\n14. First render at init does not throw');
   check('no error logged while the page initialises', thrown.length === 0, thrown[0] || '');
   check('the seeded tables are initialised before any render',
         Array.isArray(sandbox.OSEED_TRI_EL) && !!sandbox.OSEED_EL_NUMS);
+}
+
+// ── 15. ALL ELEVEN methods vote: five from the numbers, six from the moment ─
+// The six date methods (Chaldean, Astrology, BaZi, Part of Fortune, Horary,
+// Energy) cannot read six numbers, so they are cast for the target draw's own
+// moment AND for the birth chart, and vote only where the two agree. Pins:
+// the eleven slots, the birth chart itself, the AND rule, that the rule never
+// hands out a permanent vote, and that the birth details never reach the page.
+console.log('\n15. All eleven sources vote; the six date methods read draw moment AND birth chart');
+{
+  const ALL = ['Py', 'Ch', 'As', 'Ba', 'Ls', 'IC', 'PoF', 'Ta', 'An', 'Ho', 'En'];
+  check('eleven slots, in convergence() order', JSON.stringify(sb.OSEED_LABELS) === JSON.stringify(ALL),
+        JSON.stringify(sb.OSEED_LABELS));
+  check('five number-cast + six moment-cast = the eleven',
+        JSON.stringify([...sb.OSEED_NUM_LABELS, ...sb.OSEED_DATE_LABELS].sort()) === JSON.stringify(ALL.slice().sort()));
+
+  // The birth chart, checked independently: 1985-02-21 06:10 Manila is 乙丑 year,
+  // 戊寅 month (after Lichun, Feb 4), 辛卯 day (a plain 60-day count from the
+  // 2000-01-07 甲子 anchor agrees), 辛卯 hour (Mao 05-07, Five Rats from 辛).
+  // Sunrise that day was ~06:21, so the Ascendant must sit just before the Sun
+  // (Pisces 2°) — late Aquarius — not Leo, which the pre-fix code gave.
+  const B = sb.ORACLE_BIRTH;
+  sb._D = B.d; sb._M = B.m; sb._Y = B.y; sb._DOW = new Date(B.y, B.m - 1, B.d).getDay();
+  const bz = sb.layerBazi(B.hour), as = sb.layerAstrology(B.hour);
+  const pillars = [bz.year, bz.month, bz.day, bz.hour].map((p) => p.stem + p.branch).join(' ');
+  check(`birth pillars are 乙丑 戊寅 辛卯 辛卯 (got ${pillars})`, pillars === 'Yi乙Chou丑 Wu戊Yin寅 Xin辛Mao卯 Xin辛Mao卯');
+  check(`birth Ascendant is Aquarius (got ${as.horaryASC})`, /^Aquarius/.test(as.horaryASC));
+  const today = sb.oraclePickTodayStr().split('-').map(Number);
+  sb._D = today[2]; sb._M = today[1]; sb._Y = today[0]; sb._DOW = new Date(today[0], today[1] - 1, today[2]).getDay();
+  const birth = sb.oracleBirthSources();
+  check('birth Chaldean reads the birth weekday and month only (THURSDAY 8, FEBRUARY 9), not the game words',
+        JSON.stringify(birth.Ch) === '[8,9]', JSON.stringify(birth.Ch));
+
+  // The AND rule, and no permanent vote, over every recorded draw date.
+  const dates = [...new Set(allSixBallDraws().map((d) => d.date))];
+  let notSubset = 0, votedAtAll = 0;
+  const always = {};
+  for (const d of dates) {
+    const m = sb.oracleSeedDateSources(d, '9PM');
+    for (const k of sb.OSEED_DATE_LABELS) {
+      const kept = m.sources[k];
+      if (kept.some((x) => !m.draw[k].includes(x) || !birth[k].includes(x))) notSubset++;
+      if (kept.length) votedAtAll++;
+      const set = new Set(kept);
+      always[k] = always[k] ? new Set([...always[k]].filter((x) => set.has(x))) : set;
+    }
+  }
+  check(`every moment-cast vote is named by BOTH the draw moment and the birth chart (${notSubset} violations over ${dates.length} dates)`,
+        notSubset === 0 && dates.length > 300);
+  const perma = sb.OSEED_DATE_LABELS.filter((k) => always[k].size).map((k) => k + ':' + [...always[k]]);
+  check(`no method votes the same digit on every date — no permanent vote (${perma.join(' ') || 'none'})`, perma.length === 0);
+  check(`the six methods do vote (${votedAtAll} of ${dates.length * 6} method-dates)`, votedAtAll > dates.length * 6 * 0.5);
+
+  // The pick really uses them: the full eleven changes most picks vs five.
+  let changed = 0, n = 0;
+  for (const d of allSixBallDraws().slice(-200)) {
+    const r = sb.oracleSeedCompute(d.gk, d.date);
+    if (!r || !r.ok) continue;
+    n++;
+    if (sb.oracleSeedPick(r.cast, d.gk, 6).picks.join() !== r.picks.join()) changed++;
+  }
+  check(`the moment-cast sources reach the pick (${changed}/${n} differ from a five-source pick)`, n > 100 && changed > n * 0.3);
+
+  // What the page prints: "/11", and nothing that identifies the birth chart.
+  const rows = (RAW['6/58'] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const target = rows[rows.length - 1].date;
+  const r = sb.oracleSeedCompute('658', target);
+  const card = sb.oracleSeedGameHTML('658', target) + sb.oracleSeedReadingHTML(r, '658', target);
+  check('ball tags and the grid print /11', /·\d+\/11</.test(card) && /\d+\/11 sources/.test(card));
+  check('no "/5" left on the card', !/\d\/5[< ]/.test(card));
+  const leak = ['1985', 'Feb 21', 'February 21', '06:10', '6:10', 'Aquarius 2', 'Xin辛Mao卯'].filter((t) => card.includes(t));
+  check(`the birth date and time are never printed (${leak.join(', ') || 'none found'})`, leak.length === 0);
+}
+
+// ── 16. cast from the LAST THREE draws, by a 2-of-3 majority ──────────────
+// The owner asked for the reading to come from the last three draws of the
+// game rather than the last one. Each draw is cast as before; a number-cast
+// method votes for a digit only when at least two of the three name it. The
+// obvious alternative — all 18 numbers as one report — was measured and
+// rejected: it lights nearly every palace and digital root, so Pythagorean and
+// Lo Shu named 7+ of the 9 digits on 96-98% of draws, i.e. voted for
+// everything. The last check here is the guard against drifting back to that.
+console.log('\n16. Cast from the last three draws, 2-of-3 majority');
+{
+  check('three draws, majority of two', sb.OSEED_SEED_DRAWS === 3 && sb.OSEED_MAJORITY === 2);
+  let wrongSeeds = 0, wrongMaj = 0, n = 0;
+  const wide = { Py: 0, Ls: 0 };
+  for (const d of allSixBallDraws()) {
+    const r = sb.oracleSeedCompute(d.gk, d.date);
+    if (!r || !r.ok) continue;
+    n++;
+    // the three seeds are exactly the three latest draws on file before the date
+    const want = (RAW[FILE_KEY[d.gk]] || []).filter((e) => e.date < d.date)
+      .map((e) => e.date).sort().reverse().slice(0, 3);
+    if (JSON.stringify(r.seedDates) !== JSON.stringify(want) || r.seedDate !== want[0]) wrongSeeds++;
+    // every number-cast vote is named by at least two of the three casts
+    for (const k of sb.OSEED_NUM_LABELS) {
+      const cnt = {};
+      r.cast.parts.forEach((c) => c.sources[k].forEach((x) => { cnt[x] = (cnt[x] || 0) + 1; }));
+      const maj = Object.keys(cnt).map(Number).filter((x) => cnt[x] >= 2).sort((a, b) => a - b);
+      if (JSON.stringify(maj) !== JSON.stringify(r.cast.sources[k])) wrongMaj++;
+    }
+    if (r.cast.sources.Py.length >= 7) wide.Py++;
+    if (r.cast.sources.Ls.length >= 7) wide.Ls++;
+  }
+  check(`checked ${n} readings`, n > 900);
+  check(`seeds are the three latest draws before each date, newest first (${wrongSeeds} wrong)`, wrongSeeds === 0);
+  check(`every number-cast vote is a 2-of-3 majority (${wrongMaj} wrong)`, wrongMaj === 0);
+  check(`Pythagorean and Lo Shu stay discriminating — naming 7+ digits on ${(100 * wide.Py / n).toFixed(0)}% / ${(100 * wide.Ls / n).toFixed(0)}% of readings (pooling gave 98% / 96%)`,
+        wide.Py / n < 0.3 && wide.Ls / n < 0.3);
+
+  // Fewer than three draws on file is a refusal, not a one-draw reading.
+  const rows = (RAW['6/58'] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const early = sb.oracleSeedCompute('658', rows[2].date); // only two draws before it
+  check(`with only two earlier draws it refuses (${early && early.reason})`, early && !early.ok && early.reason === 'few');
+
+  // What the card says.
+  const target = rows[rows.length - 1].date;
+  const html = sb.oracleSeedGameHTML('658', target);
+  check('the head reads "Cast from the last 3 draws"', />Cast from the last 3 draws</.test(html), html.match(/oseed-from[^<]*/)?.[0]);
+  const reading = sb.oracleSeedReadingHTML(sb.oracleSeedCompute('658', target), '658', target);
+  check('the reading lists all three draws', (reading.match(/in draw order/g) || []).length === 3);
 }
 
 console.log('\n==============================================================');

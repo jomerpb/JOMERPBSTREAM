@@ -38,7 +38,7 @@
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
   <script defer src="stream.js?v=20260915f"></script>
-  <script defer src="oracle.js?v=20260915b"></script>
+  <script defer src="oracle.js?v=20260925b"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
 <body>
@@ -1057,12 +1057,13 @@
      leads the page.
      This REPLACED "Oracle Pick For Any Date", which read the date alone and
      could therefore browse two years ahead. This one is anchored on a DRAW: it
-     takes the previous recorded result for each game and casts the five
-     number-native layers from those winning numbers, so a date whose preceding
-     draw is not yet recorded shows what it is WAITING FOR instead of numbers —
-     see oracleSeedCompute() in oracle.js. The history-free engine itself is
-     untouched and still live: oracle-snapshot.yml logs it nightly and Look Up
-     Result below shows those 📌 recorded picks. Only the browsing panel went. -->
+     takes the last three recorded results for each game and casts the five
+     number-native layers from those winning numbers, plus the six date layers
+     from the draw's own moment AND the owner's birth chart (all eleven vote),
+     so a date whose preceding draw is not yet recorded shows what it is
+     WAITING FOR instead of numbers — see oracleSeedCompute() in oracle.js.
+     oracle-snapshot.yml logs this engine nightly and Look Up Result below shows
+     those 📌 recorded picks. -->
 <div class="pcso-history">
   <div class="pcso-history-eyebrow"><span class="pcso-live dot-teal" aria-hidden="true"></span>Oracle Pick Seeded From The Last Result</div>
   <div class="pcso-hist-controls">
