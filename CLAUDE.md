@@ -741,10 +741,22 @@ default browse path never downloads it.
 
 ### Status is a real filter now, and it used to filter nothing
 
-**TMDB's `/discover/tv` has no status parameter.** Not a limited one — none. The
-Stream tab was only ever force-*labelling* results "Completed" from
-`tvFilterStatuses` while the query itself ignored status entirely, so ticking
-the box changed the caption on the cards and not which cards came back.
+**Correction (2026-09-26): this section used to open "TMDB's `/discover/tv` has
+no status parameter. Not a limited one — none." That was wrong.** It has
+`with_status` — "possible values are: [0, 1, 2, 3, 4, 5], can be a comma (AND)
+or pipe (OR) separated query"
+([TMDB docs](https://developer.themoviedb.org/reference/discover-tv)) — and the
+All Popular chip had been sending `with_status=0` the whole time. Because the
+belief stood, the TMDB path (Country / Tags / Streaming) kept sending nothing and
+stamping the ticked status on every card, which is how it was reported: K-Drama +
+2026 + Completed showed *The Ordinary Jackpot* — episode 6 of 10, next episode a
+week out — labelled "Completed". The TMDB-path fix is in its own subsection
+below; the IMDb-path reasoning that follows still holds on its own terms.
+
+The original bug: the Stream tab was only ever force-*labelling* results
+"Completed" from `tvFilterStatuses` while the query itself ignored status
+entirely, so ticking the box changed the caption on the cards and not which
+cards came back.
 
 It cost more than it looked. Status was in the gate that decides IMDb index vs
 TMDB `/discover`, so ticking it pushed the whole query onto TMDB's much smaller
@@ -789,6 +801,56 @@ meaning still open) rather than as an absolute year: runs are short, so the
 column is mostly single digits and gzip flattens it. The whole addition cost
 **0.03 MB gzipped** — `imdb-browse.json` went 0.96 → 0.99 MB — for 30,459
 titles carrying an end year.
+
+#### Status on the TMDB path: `with_status`, and a label only the query earned
+
+When Country, Tags or Streaming routes the query to `/discover/tv`, Status is
+now sent as `with_status` (`TMDB_TV_STATUS`, `tmdbTvStatusParam`):
+
+| ticked | sent | kept afterwards (`tvStatusKeep`) |
+|---|---|---|
+| Ongoing | `0\|2` Returning Series, In Production | aired only |
+| Completed | `3` Ended | aired only |
+| Upcoming | `1\|2` Planned, In Production | not yet aired only |
+| Canceled | `4` Canceled | aired only |
+
+**"In Production" is split on whether the show has aired**, because TMDB keeps a
+show there before its premiere (15 of 20 on the KR 2026 list) and, for a few,
+after it. `fromTMDB` labels the detail page by the same rule — unaired "In
+Production" now reads Upcoming, where it used to read Ongoing — so card and
+detail page agree. A card is labelled from the filter **only when exactly one
+status is ticked**, because only then did the query itself guarantee it.
+
+Measured before and after, in Chromium on K-Drama + 2026 + Completed, every card
+checked against its own `/tv/{id}` detail status:
+
+| | cards | labelled Completed but not Ended |
+|---|---|---|
+| before | 20 | **4** — The Ordinary Jackpot, Four Hands Two Sonatas, A Love Other Than Yours, Tomb Raider King |
+| after | 20 | **0** |
+
+Upcoming 17/17 correct. Across 702 sampled `/discover` rows (KR, JP, global;
+codes 0, 3, 4, 1|2) the discover index and the detail page agreed 702/702.
+Test 20 in `test_imdb_ratings.mjs` drives `applyTVFilter` against a fake TMDB
+that honours `with_status`, and goes red (11 failures) on the old code.
+
+What this does NOT fix, stated up front:
+
+- **TMDB's discover index can trail a status change.** Ongoing showed 13 of 14
+  correct: *A Genius Baby's Life Turnaround* is "Ended" on its detail page but
+  still indexed under Returning Series. Fixing that needs a detail call per card.
+- **TMDB's data is the truth here.** A show TMDB has not marked Ended stays out
+  of Completed, and a show it marked Ended early is in.
+- **Upcoming + Completed/Canceled ticked together** keeps an aired "In
+  Production" show, since it cannot be told from an Ended one without a detail
+  call. With two ticked no label is forced, so it is not mislabelled.
+- **The IMDb path (no Country/Tags/Streaming) is unchanged.** Its Completed is
+  sound — 0 of 40 cards per query had a next episode scheduled, across three
+  queries — but its **Ongoing is not**: 18 of the first 40 cards are "Ended" on
+  TMDB (*Yan Can Cook*, *Survival*), because an IMDb row with no end year is not
+  a running show. Routing Status to `with_status` there too would fix it and
+  cost the IMDb catalogue and genre labelling for any query with Status ticked;
+  that is the owner's call and has not been made.
 
 ### The Streaming filter, and the TV genre hole it exposed
 

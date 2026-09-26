@@ -932,6 +932,113 @@ console.log('\n19. the COA chip resolves in parallel, is memoised, and is wired 
     check(!sent.includes(dud), `COA does not send "${dud}"`);
 }
 
+console.log('\n20. the TV Status filter reaches TMDB, and a card wears only the status it earned');
+{
+  // The bug this pins, reported on "Korea, 2026, Completed": the TMDB path sent
+  // no status at all and then stamped "Completed" on every card, so The Ordinary
+  // Jackpot — episode 6 of 10, next episode a week out — led the grid labelled
+  // finished. TMDB's /discover/tv DOES take `with_status`; this fake TMDB honours
+  // it exactly the way the live one was measured to, so a query that forgets to
+  // send it gets every row back, as the real one did.
+  const day = 864e5, iso = t => new Date(t).toISOString().slice(0, 10);
+  const past = iso(Date.now() - 30 * day), future = iso(Date.now() + 30 * day);
+  // [id, name, first_air_date, TMDB status code] — 0 Returning, 1 Planned,
+  // 2 In Production, 3 Ended, 4 Canceled.
+  const ROWS = [
+    [294636, 'The Ordinary Jackpot', past, 0],
+    [900001, 'Finished Drama A', past, 3],
+    [900002, 'Finished Drama B', past, 3],
+    [900003, 'Cancelled Drama', past, 4],
+    [900004, 'Premieres Next Month', future, 2],   // In Production, not yet aired
+    [900005, 'Aired Once, Still In Production', past, 2],
+    [900006, 'Announced, No Date', '', 1],
+    [900007, 'Odd Row: Ended Before It Aired', future, 3],
+  ];
+  const urls = [];
+  const realFetch = ctx.fetch;
+  ctx.fetch = async u => {
+    urls.push(String(u));
+    const ws = new URL(String(u)).searchParams.get('with_status');
+    const codes = ws ? new Set(ws.split('|').map(Number)) : null;
+    const results = ROWS.filter(r => !codes || codes.has(r[3]))
+      .map(([id, name, first_air_date]) => ({ id, name, first_air_date, origin_country: ['KR'],
+                                             vote_average: 7.9, vote_count: 500, genre_ids: [18] }));
+    return { ok: true, json: async () => ({ page: 1, total_pages: 1, results }) };
+  };
+
+  const realGet = ctx.document.getElementById, realQSA = ctx.document.querySelectorAll;
+  const mkBox = (val, checked) => ({ dataset: { val }, checked });
+  const boxes = { 'tf-country': [mkBox('KR', true)], 'tf-year': [mkBox('2026', false)], 'tf-status': [] };
+  const checked = id => (boxes[id] || []).filter(b => b.checked);
+  ctx.document.getElementById = id => (boxes[id]
+    ? { dataset: {}, querySelectorAll: sel => (sel.includes(':checked') ? checked(id) : boxes[id]) }
+    : fakeEl());
+  ctx.document.querySelectorAll = sel => {
+    const m = /^#(tf-\w+) input\[type=checkbox\](:checked)?$/.exec(sel);
+    return m ? (m[2] ? checked(m[1]) : (boxes[m[1]] || [])) : [];
+  };
+  vm.runInContext('__realRender = renderRatedGrid; renderRatedGrid = async (id, items) => { __painted = items; };', ctx);
+
+  const run = async statuses => {
+    boxes['tf-status'] = statuses.map(v => mkBox(v, true));
+    urls.length = 0;
+    await S('applyTVFilter(1)');
+    const painted = S('__painted');
+    return { url: urls.find(u => u.includes('/discover/tv')) || '', painted,
+             names: painted.map(i => i.title), labels: [...new Set(painted.map(i => i.status))] };
+  };
+
+  const done = await run(['ended']);
+  check(/with_status=3(&|$)/.test(done.url), 'Completed sends with_status=3', done.url.replace(/api_key=\w+&?/, ''));
+  check(/with_origin_country=KR/.test(done.url), 'alongside the country, so Country + Status reach TMDB together');
+  check(!done.names.includes('The Ordinary Jackpot'),
+        'The Ordinary Jackpot (still airing) is NOT returned under Completed', done.names.join(' | '));
+  check(done.names.length === 2 && done.names.every(n => n.startsWith('Finished')),
+        'only the Ended rows come back', done.names.join(' | '));
+  check(done.labels.length === 1 && done.labels[0] === 'Completed', 'and each is labelled Completed', done.labels.join(','));
+  check(!done.names.includes('Odd Row: Ended Before It Aired'),
+        'a row that has not aired is never labelled Completed, whatever TMDB filed it under');
+
+  const ongoing = await run(['returning']);
+  check(/with_status=0%7C2(&|$)/.test(ongoing.url), 'Ongoing sends Returning Series OR In Production', ongoing.url.replace(/api_key=\w+&?/, ''));
+  check(ongoing.names.includes('The Ordinary Jackpot'), 'The Ordinary Jackpot is under Ongoing, where it belongs');
+  check(ongoing.names.includes('Aired Once, Still In Production') && !ongoing.names.includes('Premieres Next Month'),
+        'In Production splits on whether it has aired — aired half here', ongoing.names.join(' | '));
+  check(ongoing.labels.length === 1 && ongoing.labels[0] === 'Ongoing', 'each labelled Ongoing', ongoing.labels.join(','));
+
+  const soon = await run(['planned']);
+  check(/with_status=1%7C2(&|$)/.test(soon.url), 'Upcoming sends Planned OR In Production', soon.url.replace(/api_key=\w+&?/, ''));
+  check(soon.names.includes('Premieres Next Month') && soon.names.includes('Announced, No Date')
+        && !soon.names.includes('Aired Once, Still In Production'),
+        '…and the unaired half lands here', soon.names.join(' | '));
+  check(soon.labels.length === 1 && soon.labels[0] === 'Upcoming', 'each labelled Upcoming', soon.labels.join(','));
+
+  const canc = await run(['canceled']);
+  check(/with_status=4(&|$)/.test(canc.url) && canc.names.join() === 'Cancelled Drama',
+        'Canceled is its own TMDB status (4), not folded into Completed', canc.names.join(' | '));
+
+  // Two boxes is OR, and there is no single truthful label to stamp.
+  const two = await run(['ended', 'returning']);
+  check(/with_status=0%7C2%7C3(&|$)/.test(two.url), 'two statuses are OR-joined', two.url.replace(/api_key=\w+&?/, ''));
+  const oj = two.painted.find(i => i.title === 'The Ordinary Jackpot');
+  check(oj && oj.status !== 'Completed', 'with two ticked, nothing is force-labelled Completed', oj && oj.status);
+
+  const none = await run([]);
+  check(!/with_status=/.test(none.url), 'no status ticked sends no with_status');
+
+  // The detail page reads the same rule, so the card and the page agree.
+  const lbl = (st, d) => S(`fromTMDB(${JSON.stringify({ id: 1, name: 'x', status: st, first_air_date: d })}, 'tv').status`);
+  check(lbl('In Production', future) === 'Upcoming', 'detail: an unaired In Production show reads Upcoming');
+  check(lbl('In Production', past) === 'Ongoing', 'detail: an aired one reads Ongoing');
+  check(lbl('Returning Series', past) === 'Ongoing' && lbl('Ended', past) === 'Completed',
+        'detail: Returning Series / Ended unchanged');
+
+  vm.runInContext('renderRatedGrid = __realRender;', ctx);
+  ctx.document.getElementById = realGet;
+  ctx.document.querySelectorAll = realQSA;
+  ctx.fetch = realFetch;
+}
+
 console.log('\n' + '='.repeat(60));
 console.log(`${fails.length} failure(s)` + (fails.length ? ': ' + fails.join(', ') : ''));
 process.exit(fails.length ? 1 : 0);
