@@ -2991,9 +2991,8 @@ function pcsoHistRender(){
     var reasonTxt=(typeof PCSO_HISTORY_STATUS!=='undefined'&&PCSO_HISTORY_STATUS.error)?PCSO_HISTORY_STATUS.error:'network error';
     warn='<div class="pcso-hist-none" style="color:var(--accent);margin-top:8px">\u26a0\ufe0f Historical data failed to load ('+reasonTxt+'). Showing limited offline data only \u2014 reload the page to retry.</div>';
   }
-  out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
-    +'<div class="oracle-pick-sub">'+scheduled.length+' draw'+(scheduled.length===1?'':'s')+' this day</div>'
-    +warn
+  // No date/count header: the date picker right above already says which day.
+  out.innerHTML=warn
     +scheduled.map(function(gk){ return pcsoHistGameHTML(gk,dateVal); }).join('');
 }
 
@@ -3952,20 +3951,14 @@ function oracleSeedRender(){
     if(h.indexOf('oseed-wait')<0) ready++;
     return h;
   }).join('');
-  var waiting=scheduled.length-ready, sub;
-  if(!ready) sub='Nothing can be cast yet \u2014 '+(scheduled.length===1?'this draw is':'all '+scheduled.length+' are')+' waiting on a result';
-  else if(!waiting) sub=(scheduled.length===1?'1 game':'All '+scheduled.length+' games')+' cast from their last '+OSEED_SEED_DRAWS+' draws';
-  else sub=ready+' of '+scheduled.length+' cast \u00b7 '+waiting+' still waiting on a result';
-  out.innerHTML='<div class="oracle-pick-head">'+oraclePickFmtDate(dateVal)+'</div>'
-    +'<div class="oracle-pick-sub">'+sub+'</div>'+rows;
+  // No date/summary header: the picker above names the day, and each game
+  // row carries its own "Cast from…" or ⏳ waiting line.
+  out.innerHTML=rows;
 
-  if(noteEl){
-    var notes=[];
-    if(ready<scheduled.length)
-      notes.push('A reading here is cast from the last three draws of the same game, so it cannot exist until the newest of them has been recorded. EZ2 goes blank a day before the rest — it draws every day, so its newest seed is always yesterday.');
-    notes.push('⚠️ For entertainment only. Lottery draws are independent random events — measured walk-forward over 988 real draws this scores 0.73 matches per draw against a random control’s 0.73. It is not a prediction. Play responsibly.');
-    noteEl.innerHTML=notes.map(function(t){ return '<div>'+t+'</div>'; }).join('');
-  }
+  // The disclaimer is static markup at the bottom of the page (#oracle-disclaimer);
+  // only the waiting explanation stays with this card.
+  if(noteEl&&ready<scheduled.length)
+    noteEl.innerHTML='<div>A reading here is cast from the last three draws of the same game, so it cannot exist until the newest of them has been recorded. EZ2 goes blank a day before the rest — it draws every day, so its newest seed is always yesterday.</div>';
 }
 
 (function initOracleSeed(){

@@ -1154,6 +1154,14 @@
    number width, because the numbers are centred and the name has to fit in the
    margin beside them. */
 #oracle-page .pcso-hist-result{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90px;text-align:center}
+/* Picker + results share one card: the picker takes the slot the date header
+   used to fill, and the first game row's own top border is the divider under
+   it. The inner result drops its own card chrome so it is not a box in a box. */
+#oracle-page .pcso-hist-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 8px 18px}
+#oracle-page .pcso-hist-card .pcso-hist-controls{margin-bottom:0}
+#oracle-page .pcso-hist-card .pcso-hist-result{background:none;border:0;border-radius:0;padding:0;min-height:60px}
+#oracle-page .pcso-hist-card .pcso-hist-result>.pcso-hist-none{margin-top:18px}
+#oracle-page .oracle-disclaimer{margin:18px 0 8px}
 #oracle-page .pcso-hist-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 #oracle-page .pcso-hist-none{font-size:11px;color:var(--muted);font-style:italic}
 /* The caption UNDER a game's picks, naming the row above it and scoring it on
