@@ -1168,6 +1168,18 @@ Filtering happens **before** the cap, not after: the 6 was always meant to be a
 cap on relevant keywords, and applying it first left some terms with a single
 usable id out of six.
 
+**Terms of three letters or fewer match a WHOLE WORD instead** (`KW_SHORT_TERM`,
+`kwTokens`) — that is `bl` and `gl`. Containment is fine for `boys love` and
+useless for two letters: TMDB's first page for `gl` is mostly glasses, gloves,
+glue, global and glory hole, and the substring gate kept `glasses` as gl's sixth
+keyword; `bl`'s page carries blackout, blues, black magic and blow job, and was
+spared only because TMDB happened to rank its real hits first. A whole-word hit
+cannot drift, so it also **skips the 6-keyword cap**: `bl` has nine real
+keywords and the cap cut `filipino bl` and `pinoy bl series` (12 series).
+Every whole-word hit is on page 1 (pages 2-3 measured: none). No other tag chip
+has a term that short, so nothing else moved. Test 17 pins both, against TMDB's
+recorded page.
+
 **What the gate costs, stated rather than glossed.** It is a name-based rule, so
 it cannot see that a title is on-topic when TMDB has keyworded it oddly. The 10
 dropped keywords carry 8 TV titles between them; 5 survive on a kept keyword, so
@@ -1185,15 +1197,35 @@ ranking shifts. If that trade is ever judged wrong the answer is **more search
 terms on the chip** (`bl`, `yaoi`, `yuri`, `queer`), not a looser gate — the same
 direction `webcomicsPathFor` and the MangaFreak matcher both document.
 
-**The chip is called "COA" and sends eleven terms**, on both the TV and the
-Movie panel: `boys love, girls love, lgbt, gay romance, coming of age, gay
-theme, queer, lesbian, homosexuality, lesbian relationship, transgender`. It is
-the repo owner's single umbrella for coming-of-age **and** BL/GL/LGBT content —
-they were asked, shown the measurements below, and chose one wide chip over
-splitting it. Don't split it or rename it without asking them again.
+**The chip is called "COA" and sends six terms**, on both the TV and the Movie
+panel: `boys love, bl, girls love, gl, lgbt, gay romance`. The repo owner
+narrowed it to exactly these on 2026-09-26, after the eleven-term version below
+filled the grid with Hunter x Hunter, Stranger Things and Young Sheldon. Traced
+per show against TMDB's own keyword lists, those came in through **`coming of
+age` alone** (Euphoria also via `transgender`, Orange Is the New Black via
+`lesbian relationship`). Test 19 pins the six as a whole set. Don't widen it
+again, or rename it, without asking them.
 
-Every term in it was measured against the live API before being added; the ones
-left out were left out on evidence, not taste:
+| COA sends | keyword ids | TV page 1 + 2: coming-of-age shows from the report |
+|---|---|---|
+| the eleven terms (before) | 41 | 7 of 7 |
+| **the six (now)** | **23** | **0** |
+| the six minus `lgbt` (measured, not shipped) | 15 | 0 — and page 1 is BL/GL only |
+
+**What `lgbt` still brings, stated because it looks like the same bug.** TMDB
+tags plenty of mainstream Western titles `lgbt`, and the owner asked for that
+term, so they stay: RuPaul's Drag Race, Hannibal, Sex Education, The Owl House,
+American Horror Story, Only Murders in the Building on TV; Green Book, The
+Imitation Game, Bohemian Rhapsody in Movies. Dropping `lgbt` is the only thing
+that removes them, and it is the owner's call.
+
+The eleven-term version it replaced, kept for the record: `boys love, girls
+love, lgbt, gay romance, coming of age, gay theme, queer, lesbian,
+homosexuality, lesbian relationship, transgender` — chosen earlier as one wide
+umbrella for coming-of-age **and** BL/GL/LGBT content over a three-chip split.
+
+Every term in that list was measured against the live API before being added;
+the ones left out were left out on evidence, not taste:
 
 | term | TV | movies | verdict |
 |---|---|---|---|
@@ -1203,7 +1235,7 @@ left out were left out on evidence, not taste:
 | boys love | 1,510 | 784 | in — the biggest for TV |
 | queer / lesbian / homosexuality / lesbian relationship / transgender | 40-227 | 479-1,110 | in |
 | girls love, gay romance | 416 / 401 | 196 / 236 | in |
-| `bl` | 10 | 0 | **out** — resolves to `taiwan bl`, `chinese bl` etc., which almost nothing carries |
+| `bl` | 10 | 0 | **out** at the time — resolves to `taiwan bl`, `chinese bl` etc., which almost nothing carries. **In since 2026-09-26** at the owner's request, with the whole-word rule; `pinoy bl series` (12 series) is the one that carries weight |
 | `yaoi` | 0 | 0 | **out** — TMDB has the keyword, nothing is tagged with it |
 | `yuri` | 54 | 27 | **out** — matches people: `yuri cabral`, `yuri tha jury`, `munakata yurix event`. The de-spaced gate cannot catch these, since `yuricabral` really does contain `yuri` |
 | `gay`, `bisexual`, `same-sex relationship`, `gay couple` | 3-164 | 15-288 | **out** — negligible yield, and the first two pull adult-adjacent sub-keywords |

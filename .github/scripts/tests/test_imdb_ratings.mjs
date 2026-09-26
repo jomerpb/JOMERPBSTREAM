@@ -807,6 +807,19 @@ console.log('\n17. the Tags filter only sends keywords that ARE the term');
     'zombie':      [[12377,'zombie'],[210024,'zombie sex'],[263472,'zombie cat'],[1721,'zombie apocalypse'],
                     [289309,'zombie animals'],[192011,'rob zombie']],
     'countryside': [[10235,'countryside'],[221964,'spanish countryside'],[159999,'french countryside']],
+    // TMDB's full first page for the two acronyms the COA chip sends, recorded
+    // live 2026-09-26. Most of it is dictionary words that merely CONTAIN the
+    // two letters, which is what the whole-word rule exists to refuse.
+    'bl': [[363397,'bl'],[328692,'taiwan bl'],[320085,'chinese bl'],[328728,'korean bl'],[312166,'japenese bl'],
+           [324501,'myanmar bl'],[378485,'filipino bl'],[289844,"boys' love (bl)"],[308109,'pinoy bl series'],
+           [2583,'blackout'],[2636,'blues'],[155207,'black gold'],[155488,'black cat'],[155812,'color blindness'],
+           [155843,'black bird'],[156193,'ice block'],[3302,'bloodthirstiness'],[3405,'blow job'],
+           [4252,'black magic'],[157375,'bludgeoning']],
+    'gl': [[356236,'series gl'],[359453,'gl series'],[348072,'chinese gl'],[280003,"girls' love (gl)"],
+           [348887,'gl side couple'],[41405,'glasses'],[44449,'gloves'],[54016,'glue'],[154061,'global'],
+           [190656,'glory hole'],[190813,'glass painting'],[159529,'glider'],[219691,'stained glass window'],
+           [5769,'global warming'],[239682,'golden globe race'],[7330,'glacier'],[193194,'glaciale'],
+           [221762,'snow globe'],[167939,'glass pipe'],[227415,'glamcocks']],
   };
   ctx.fetch = async (url) => {
     const q = decodeURIComponent(String(url).match(/[?&]query=([^&]*)/)?.[1] || '').replace(/\+/g, ' ');
@@ -841,6 +854,22 @@ console.log('\n17. the Tags filter only sends keywords that ARE the term');
   // Qualified forms survive — this is what a prefix-only rule would lose.
   const cs = await S(`resolveKeywordIds("countryside")`);
   check(cs.names.includes('spanish countryside'), 'qualified forms are kept', cs.names.join(' | '));
+  // The two acronyms match a WHOLE WORD. Substring containment kept `glasses`
+  // as gl's sixth keyword; and bl was one TMDB reordering away from blackout,
+  // blues and black magic.
+  const bl = await S(`resolveKeywordIds("bl")`);
+  check(bl.names.length === 9 && bl.names.every(n => /(^|[^a-z])bl([^a-z]|$)/.test(n)),
+        'bl keeps its nine real keywords and nothing else', bl.names.join(' | '));
+  check(bl.names.includes('pinoy bl series') && bl.names.includes('filipino bl'),
+        'including the 7th and 9th, which the 6-keyword cap would have cut', bl.names.join(' | '));
+  const gl = await S(`resolveKeywordIds("gl")`);
+  check(gl.names.length === 5 && !gl.names.some(n => /glass|glove|glue|glob|glory|glid|glac|glam/.test(n)),
+        'gl keeps its five real keywords — no glasses, gloves or glory hole', gl.names.join(' | '));
+  check(gl.names.includes("girls' love (gl)"), 'and still finds girls\' love (gl)');
+  // Longer terms keep the substring rule and its cap: `lgbt` needs `lgbt+` and
+  // `time loop` needs `timeloop`, both of which a whole-word rule would drop.
+  check(S('KW_SHORT_TERM') === 3, 'only terms of 3 letters or fewer take the whole-word rule');
+
   // No terms at all is still an empty query, not a fetch.
   const none = await S(`resolveKeywordIds("")`);
   check(none.ids === '' && none.names.length === 0, 'an empty tag list resolves to nothing');
@@ -933,10 +962,16 @@ console.log('\n19. the COA chip resolves in parallel, is memoised, and is wired 
   check(coa.length === 2, 'the COA chip is on both the TV and the Movie panel', String(coa.length));
   check(coa.length === 2 && coa[0][1] === coa[1][1], 'both send the same terms');
   const sent = coa.length ? coa[0][1].split(',') : [];
-  for (const want of ['coming of age', 'boys love', 'girls love', 'lgbt', 'gay romance'])
-    check(sent.includes(want), `COA sends "${want}"`);
+  // The repo owner narrowed the chip on 2026-09-26 to exactly these six, after
+  // "coming of age" filled the grid with Hunter x Hunter, Stranger Things and
+  // Young Sheldon. The set is pinned whole, so a term cannot drift back in.
+  check(sent.join(',') === 'boys love,bl,girls love,gl,lgbt,gay romance',
+        'COA sends exactly boys love, bl, girls love, gl, lgbt, gay romance', sent.join(','));
+  for (const gone of ['coming of age', 'gay theme', 'queer', 'lesbian', 'homosexuality',
+                      'lesbian relationship', 'transgender'])
+    check(!sent.includes(gone), `COA no longer sends "${gone}"`);
   // Terms measured to return nothing, or to match people's names, stay out.
-  for (const dud of ['yaoi', 'yuri', 'bl'])
+  for (const dud of ['yaoi', 'yuri'])
     check(!sent.includes(dud), `COA does not send "${dud}"`);
 }
 

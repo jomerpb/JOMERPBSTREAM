@@ -4560,7 +4560,24 @@ function resetPageFilter(page) {
 const kwNorm = s => (s||'').toLowerCase().replace(/['\u2019]/g,'').replace(/[^a-z0-9+]/g,'');
 const KEYWORDS_PER_TERM = 6;
 
-// One term was four sequential round trips; the COA chip alone is eleven, and
+// Short terms — the "bl" and "gl" on the COA chip — must match a WHOLE WORD.
+// Containment is fine for "boys love", but a two-letter squash sits inside
+// half the dictionary: TMDB's own page for "gl" carries glasses, gloves, glue,
+// global, glory hole, and for "bl" blackout, blues, black magic, blow job. The
+// substring gate kept `glasses` as gl's sixth keyword, and bl was spared only
+// because TMDB happened to rank its real hits first. A whole-word match keeps
+// `bl`, `taiwan bl`, `pinoy bl series`, `boys' love (bl)`, `girls' love (gl)`,
+// `gl series` and nothing else.
+//
+// A whole-word hit on an acronym cannot drift the way a fuzzy one can, so it
+// skips KEYWORDS_PER_TERM: bl has nine real keywords on TMDB's first page and
+// the cap would cut the 7th and 9th — `filipino bl` and `pinoy bl series`, the
+// latter carrying 12 series. Every whole-word hit is on page 1 (pages 2-3
+// measured: none), so one request per term still covers it.
+const KW_SHORT_TERM = 3;
+const kwTokens = s => (s||'').toLowerCase().replace(/['\u2019]/g,'').split(/[^a-z0-9+]+/).filter(Boolean);
+
+// One term was four sequential round trips; the COA chip alone is six, and
 // every one of them lands BEFORE the grid query can start. So they go out
 // together and each answer is memoised — a TMDB keyword id never changes, and
 // the same chip is re-resolved on every single filter change (ticking a rating
@@ -4579,9 +4596,9 @@ async function keywordsForTerm(term) {
   // and it has to be told apart from a successful search that matched nothing.
   if (!d || !Array.isArray(d.results)) return [];
   const want = kwNorm(term);
-  const matches = d.results
-    .filter(m => kwNorm(m?.name).includes(want))
-    .slice(0, KEYWORDS_PER_TERM);
+  const matches = want.length <= KW_SHORT_TERM
+    ? d.results.filter(m => kwTokens(m?.name).includes(want))
+    : d.results.filter(m => kwNorm(m?.name).includes(want)).slice(0, KEYWORDS_PER_TERM);
   KEYWORD_CACHE.set(term, matches);   // an empty-but-real answer is cached
   return matches;
 }
