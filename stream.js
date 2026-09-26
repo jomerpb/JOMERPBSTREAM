@@ -596,12 +596,12 @@ function loadImdbBrowse() {
 
 // Status, read off IMDb's start and end years.
 //
-// This exists because TMDB cannot answer it. `/discover/tv` has NO status
-// parameter — measured, the Stream tab was only ever force-*labelling* results
-// "Completed" while filtering nothing at all, so ticking Status changed the
-// label on the cards and not which cards you got. Worse, it pushed the whole
-// query off the IMDb index onto TMDB's much smaller one: "TV, 2026, 8.0+,
-// Completed" returned 21 titles that way against 169 candidates in the index.
+// This is how the IMDb browse path answers Status, so that ticking it does not
+// push the whole query off the IMDb index onto TMDB's much smaller one ("TV,
+// 2026, 8.0+, Completed" returned 21 titles that way against 169 candidates in
+// the index). It was written believing `/discover/tv` had NO status parameter.
+// It does — `with_status`, see TMDB_TV_STATUS — and the TMDB path (Country,
+// Tags, Streaming) now uses it; this rule still serves the IMDb path.
 //
 // The one subtlety is the CURRENT year, because IMDb publishes years and not
 // dates. A still-running series carries an ANNOUNCED final year — The Boys is
@@ -1216,7 +1216,11 @@ function fromTMDB(m, type) {
   let status = '';
   if (m.status) {
     const s = m.status;
-    if (s==='Returning Series'||s==='In Production') status='Ongoing';
+    if (s==='Returning Series') status='Ongoing';
+    // TMDB keeps a show "In Production" both before its premiere and, for some,
+    // after it — so it is Upcoming until it airs and Ongoing after. The Status
+    // filter splits it the same way (tvStatusKeep), so card and detail agree.
+    else if (s==='In Production') status = tmdbAired(m.first_air_date || m.release_date) ? 'Ongoing' : 'Upcoming';
     else if (s==='Ended') status='Completed';
     else if (s==='Canceled'||s==='Cancelled') status='Canceled';
     else if (s==='Planned'||s==='In Development') status='Upcoming';
@@ -4519,6 +4523,45 @@ async function applyMangaFilter(page=1) {
 }
 
 // ── TV FILTER ──
+// TMDB's /discover/tv DOES filter on status: `with_status`, pipe-separated for
+// OR — 0 Returning Series, 1 Planned, 2 In Production, 3 Ended, 4 Canceled,
+// 5 Pilot. This path used to claim there was no such parameter, send nothing,
+// and stamp the ticked status onto every card anyway, so "Korea, 2026,
+// Completed" came back led by The Ordinary Jackpot — episode 6 of 10, next one
+// a week out — wearing a "Completed" badge. Measured on that query: with_status=3
+// takes 569 titles to 251, and 702 of 702 rows sampled across KR, JP and global
+// for codes 0, 3, 4 and 1|2 carry the same status on their own detail page (a
+// separate 20-row sample had one just-ended show still listed under 0 — TMDB's
+// discover index can trail a status change briefly).
+//
+// "In Production" (2) is sent for both Ongoing and Upcoming, because TMDB keeps
+// a show there before its premiere (15 of 20 on the KR 2026 list) and, for a
+// few, after it. tvStatusKeep then drops the half that does not belong, using
+// the same aired/unaired rule fromTMDB labels the detail page with.
+const TMDB_TV_STATUS = {returning:[0,2], ended:[3], planned:[1,2], canceled:[4]};
+const TV_STATUS_LABEL = {returning:'Ongoing', ended:'Completed', planned:'Upcoming', canceled:'Canceled'};
+
+function tmdbTvStatusParam(statuses) {
+  const codes = new Set();
+  (statuses || []).forEach(s => (TMDB_TV_STATUS[s] || []).forEach(c => codes.add(c)));
+  return [...codes].sort((a, b) => a - b).join('|');
+}
+
+// Same comparison fromTMDB has always used for "Upcoming": no date, or a date
+// still ahead, has not aired.
+function tmdbAired(d) { return !!d && new Date(d) <= new Date(); }
+
+// An unaired show belongs to Upcoming and nothing else; an aired one belongs to
+// anything but Upcoming. `m` is the raw /discover row, which carries the date.
+// Known leak: with Upcoming AND Completed/Canceled ticked, an aired "In
+// Production" show cannot be told apart from an Ended one without a detail
+// call per card, so it stays in — unlabelled, since two ticks force no label.
+function tvStatusKeep(m, statuses) {
+  if (!statuses?.length) return true;
+  if (!tmdbAired(m?.first_air_date)) return statuses.includes('planned');
+  return statuses.some(s => s !== 'planned');
+}
+
 // Store filter URL base for pagination
 let tvFilterUrl = null;
 let tvFilterStatuses = [];
@@ -4602,10 +4645,11 @@ async function applyTVFilter(page=1) {
 
     // Genre / Year / Min Rating / Status can be answered from IMDb's own data,
     // and that is a materially different list — IMDb and TMDB agree on only 18
-    // of ~33 Thrillers in a measured sample, and TMDB cannot answer Status for
-    // television at all (see imdbStatusOf). Country, Tags and Streaming it
-    // genuinely cannot: IMDb's datasets carry no country, keyword or provider
-    // field, so those go to TMDB's /discover with the IMDb rating cut on top.
+    // of ~33 Thrillers in a measured sample. Status is answered from IMDb's years
+    // here (imdbStatusOf) and from TMDB's with_status below. Country, Tags and
+    // Streaming IMDb genuinely cannot: its datasets carry no country, keyword or
+    // provider field, so those go to TMDB's /discover with the IMDb rating cut
+    // on top.
     if (!countries.length && !tagVal && !providers.length) {
       const done = await applyImdbBrowseFilter('tv', 1,
         {genreIds: genres.map(Number), yearGte: yr.gte, yearLte: yr.lte,
@@ -4644,12 +4688,13 @@ async function applyTVFilter(page=1) {
     }
     if (yr.gte)  url.searchParams.set('first_air_date.gte', yr.gte);
     if (yr.lte)  url.searchParams.set('first_air_date.lte', yr.lte);
-    // NOTE: TMDB's /discover/tv has no real "status" filter parameter — list
-    // results don't even carry the fields fromTMDB needs to compute status.
-    // So (same constraint as the old single-select version) we can only
-    // force-label results with a known status when exactly ONE is checked;
-    // with 0 or 2+ checked there's no reliable single label to apply, so
-    // status is left for fromTMDB to derive normally (may come back blank).
+    // Status is a real server-side cut — see TMDB_TV_STATUS. List rows still
+    // carry no status field, so a card is labelled only when exactly ONE status
+    // is ticked, and then only because the query itself guaranteed it.
+    {
+      const ws = tmdbTvStatusParam(statuses);
+      if (ws) url.searchParams.set('with_status', ws);
+    }
 
     const keywordIds = await resolveKeywordIds(tagVal);
     const matchedEl = document.getElementById('tf-tag-matched');
@@ -4670,8 +4715,7 @@ async function applyTVFilter(page=1) {
   }
 
   try {
-    const statusMap = {'returning':'Ongoing','ended':'Completed','planned':'Upcoming','canceled':'Canceled'};
-    const knownStatus = tvFilterStatuses.length === 1 ? (statusMap[tvFilterStatuses[0]] || '') : '';
+    const knownStatus = tvFilterStatuses.length === 1 ? (TV_STATUS_LABEL[tvFilterStatuses[0]] || '') : '';
     // With a Min Rating active the cut is made on the IMDb number, which TMDB
     // cannot pre-filter — so a page comes back partly disqualified and one page
     // can leave the grid nearly empty. Pull further pages until there is enough
@@ -4681,7 +4725,7 @@ async function applyTVFilter(page=1) {
     do {
       const r = await fetch(`${tvFilterUrl}&page=${cur}`, {signal: AbortSignal.timeout(10000)});
       last = await r.json();
-      const items = (last?.results||[]).map(m => {
+      const items = (last?.results||[]).filter(m => tvStatusKeep(m, tvFilterStatuses)).map(m => {
         const item = fromTMDB(m,'tv');
         if (knownStatus) item.status = knownStatus;
         return item;
@@ -4689,7 +4733,8 @@ async function applyTVFilter(page=1) {
       const genreOk = await filterByImdbGenres(items, tvFilterImdbGenres);
       kept.push(...await filterByMinScore(genreOk, tvFilterMinScore));
       cur++; tries++;
-    } while ((tvFilterMinScore !== undefined || tvFilterImdbGenres.length) && kept.length < FILTER_MIN_CARDS
+    } while ((tvFilterMinScore !== undefined || tvFilterImdbGenres.length || tvFilterStatuses.length)
+             && kept.length < FILTER_MIN_CARDS
              && tries < FILTER_MAX_PAGES && (last?.page||1) < (last?.total_pages||1));
 
     await renderRatedGrid('tv-grid', kept, page > 1, run);
