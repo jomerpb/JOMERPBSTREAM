@@ -416,7 +416,9 @@ built.** `/tv/{id}?append_to_response=external_ids` returns
    `.github/workflows/imdb-ratings.yml` reshapes. One fetch per session, shared
    by every card.
 2. **tmdb_id → tconst** — only TMDB knows this, so it costs one
-   `/external_ids` call per title (~120-190 bytes). The mapping is immutable, so
+   `/external_ids` call per title (~120-190 bytes) — for **TV** that call is now
+   `/tv/{id}?append_to_response=external_ids`, which also carries the card's
+   status (see "Every TV card shows its status"). The mapping is immutable, so
    it is cached in `localStorage` (`imdbIdMap`) permanently. A `''` answer
    ("TMDB has no IMDb id for this") is cached just as hard as a hit; a *network
    failure* is deliberately not cached, or one flaky moment would pin a title to
@@ -791,10 +793,10 @@ is returned as `'ambiguous'` and kept in the result set whichever status was
 asked for; `exactStatusOk` then settles it from the **real release date**, which
 `/find` already returned while building the card. No extra request.
 
-What this still cannot do: **IMDb draws no distinction between a series that
-ended and one that was cancelled**, so Canceled and Completed select the same
-titles. That is worse than a real answer and better than the previous state,
-where neither selected anything.
+What this still cannot do on its own: **IMDb draws no distinction between a
+series that ended and one that was cancelled**, so its candidate lists for
+Canceled and Completed are the same — `verifyTvStatuses` (below) now splits them
+using TMDB's status before anything is painted.
 
 The end year rides in the payload as an **offset from the start year** (`-1`
 meaning still open) rather than as an absolute year: runs are short, so the
@@ -844,13 +846,73 @@ What this does NOT fix, stated up front:
 - **Upcoming + Completed/Canceled ticked together** keeps an aired "In
   Production" show, since it cannot be told from an Ended one without a detail
   call. With two ticked no label is forced, so it is not mislabelled.
-- **The IMDb path (no Country/Tags/Streaming) is unchanged.** Its Completed is
-  sound — 0 of 40 cards per query had a next episode scheduled, across three
-  queries — but its **Ongoing is not**: 18 of the first 40 cards are "Ended" on
-  TMDB (*Yan Can Cook*, *Survival*), because an IMDb row with no end year is not
-  a running show. Routing Status to `with_status` there too would fix it and
-  cost the IMDb catalogue and genre labelling for any query with Status ticked;
-  that is the owner's call and has not been made.
+- **The IMDb path (no Country/Tags/Streaming)** is covered by the next section:
+  its candidates are now checked against TMDB's status before painting.
+  (**Correction:** an earlier version of this bullet said 18 of the first 40
+  "Ongoing" cards were wrong. That sample was sorted with the IMDb rating on the
+  wrong scale, so it read obscure low-vote rows the page never leads with. The
+  page's own order measures 1 of 20 on page 1 and 18 of 100 over five pages —
+  see the table below.)
+
+### Every TV card shows its status, not only under the Status filter
+
+Reported with a K-Drama grid and nothing ticked: no card said Ongoing or
+Completed. A TMDB **list** row carries no status field at all, so a TV card only
+ever printed one that a query had stamped on it (the Status filter, All
+Popular's Returning-only list). Films were never affected — their status is
+derived from the release date.
+
+The status lives on `/tv/{id}`, and that call returns the IMDb id too when asked
+(`append_to_response=external_ids`). So it **replaces** the `/external_ids` call
+every TV card already made instead of adding one (`tvDetailFetch`, shared and
+de-duplicated between the star pass and the status pass):
+
+| | before | after |
+|---|---|---|
+| K-Drama page, cold | 20 `/external_ids`, 0 statuses | **19 `/tv/{id}`, 0 `/external_ids`, 20/20 statuses** |
+| after scrolling 5 pages | — | 100/100 statuses |
+| same grid reopened (warm) | 0 requests | **0 requests**, 20/20 statuses within 0.8 s |
+| bytes per card (gzipped) | 159 | **2,218** — ~43 KB per 20-card page instead of ~3 KB |
+
+The IMDb id is cached forever (`imdbIdMap`); a status is not, because it changes
+at the finale — `tvStatusMap` keeps it for `TV_STATUS_TTL` (24 h) and expired
+entries are dropped on load. **That re-ask is the real added cost: one `/tv/{id}`
+per card per day the grid is opened.** Nothing waits on it: the card paints, and
+the status fills in the way the star does. It also does **not** wait for the
+1.35 MB ratings file (`resolveCardData` runs the two passes independently).
+
+Three things are load-bearing:
+
+- **The slot is always painted on a TV card and hidden when empty**
+  (`.js-status`, filled by `tvShowStatus`) — the same trap the star badge
+  documents: Search, the home rows and the filmography grid never repaint.
+- **`buildGridCard` reads `tvStatusCached`**, which is what keeps a status
+  through a rating-sorted grid's repaint (it rebuilds every card from the item).
+  Test 21 turns red if that read is removed.
+- **A label the query guaranteed wins over the cache**, so a card never
+  contradicts the filter that selected it. The detail page writes the cache, so
+  Back shows what the detail page just did.
+
+**The IMDb path's Status filter now checks every candidate against that same
+status** (`verifyTvStatuses`) and drops a mismatch, because with labels on every
+card IMDb's year-based guess became visible. Measured over the first 100 cards
+in the page's own order:
+
+| IMDb-path query | wrong before the check |
+|---|---|
+| Ongoing, any year | 18 of 100 (1 on page 1, 5 per page by page 3) |
+| Ongoing, 2026 | **49 of 100** — a 2026 series listed 2026–2026 reads as running |
+| Completed, any year | 9 of 97 |
+| Completed, 2026 | 3 of 72 |
+
+After the check, 19/19 and 20/20 cards on page 1 match TMDB. It costs no
+request — the card needed that status to print anyway — but it costs **time**:
+first paint goes from ~950 ms to ~1,390 ms (measured twice each, cold). A show
+whose status cannot be fetched is kept on IMDb's verdict and prints no label.
+Canceled now selects TMDB's Canceled shows rather than every finished one.
+
+Not covered: the home rows and the small cards (`buildSmCard`) carry no status
+slot — they print title and year only.
 
 ### The Streaming filter, and the TV genre hole it exposed
 

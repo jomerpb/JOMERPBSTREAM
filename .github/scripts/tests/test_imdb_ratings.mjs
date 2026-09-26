@@ -481,6 +481,14 @@ console.log('\n14. browse grids are sorted by the DISPLAYED rating, descending')
       const id = parseInt(url.match(/\/(?:tv|movie)\/(\d+)\/external_ids/)[1], 10);
       return { ok: true, json: async () => ({ imdb_id: 'tt' + String(1000 + id).padStart(7, '0') }) };
     }
+    // A TV show's IMDb id now arrives on /tv/{id}?append_to_response=external_ids,
+    // the same call that carries its status (see tvDetailFetch).
+    const tv = url.match(/\/tv\/(\d+)\?/);
+    if (tv) {
+      const id = parseInt(tv[1], 10);
+      return { ok: true, json: async () => ({ id, status: 'Ended', first_air_date: '2020-01-01',
+        external_ids: { imdb_id: 'tt' + String(1000 + id).padStart(7, '0') } }) };
+    }
     throw new Error('unexpected fetch ' + url);
   };
   vm.runInContext('imdbRatingsPromise = null; imdbRatings = null; imdbIdMap = {};', ctx);
@@ -1036,6 +1044,102 @@ console.log('\n20. the TV Status filter reaches TMDB, and a card wears only the 
   vm.runInContext('renderRatedGrid = __realRender;', ctx);
   ctx.document.getElementById = realGet;
   ctx.document.querySelectorAll = realQSA;
+  ctx.fetch = realFetch;
+}
+
+console.log('\n21. every TV card shows its status by default, off the call it already made');
+{
+  // Reported with a K-Drama grid and no filter ticked: not one card said
+  // Ongoing or Completed, because a TMDB list row carries no status and the
+  // card only printed one the Status filter had stamped on it.
+  const realFetch = ctx.fetch, realCreate = ctx.document.createElement;
+  const calls = [];
+  const STATUS = { 11: 'Returning Series', 12: 'Ended', 13: 'In Production', 14: 'Canceled' };
+  const FIRST  = { 11: '2026-09-10', 12: '2026-01-02', 13: '2099-01-01', 14: '2025-03-01' };
+  let failIds = new Set();
+  ctx.fetch = async u => {
+    const url = String(u); calls.push(url);
+    const m = url.match(/\/tv\/(\d+)\?/);
+    if (m) {
+      const id = +m[1];
+      if (failIds.has(id)) throw new Error('offline');
+      return { ok: true, json: async () => ({ id, status: STATUS[id], first_air_date: FIRST[id],
+                                              external_ids: { imdb_id: 'tt' + String(7000 + id).padStart(7, '0') } }) };
+    }
+    throw new Error('unexpected ' + url);
+  };
+  vm.runInContext('tvStatusMap = {}; imdbIdMap = {};', ctx);
+
+  // ONE request answers both questions. The id lookup and the status lookup
+  // race each other on a real grid; they must share the call, not make two.
+  calls.length = 0;
+  const [tc, st] = await vm.runInContext('Promise.all([resolveImdbId("tv", 11), resolveTvStatus(11)])', ctx);
+  check(calls.length === 1, 'the IMDb id and the status come from ONE request', `${calls.length} requests`);
+  check(/\/tv\/11\?.*append_to_response=external_ids/.test(calls[0] || ''), '…/tv/{id} with external_ids appended', calls[0]);
+  check(tc === 'tt0007011' && st === 'Ongoing', 'and both answers are right', `${tc} / ${st}`);
+  calls.length = 0;
+  await vm.runInContext('Promise.all([resolveImdbId("tv", 11), resolveTvStatus(11)])', ctx);
+  check(calls.length === 0, 'asked again the same day: zero requests', `${calls.length}`);
+
+  // The label is the detail page's own mapping, In Production split on airing.
+  check(await S('resolveTvStatus(12)') === 'Completed', 'Ended → Completed');
+  check(await S('resolveTvStatus(13)') === 'Upcoming', 'unaired In Production → Upcoming');
+  check(await S('resolveTvStatus(14)') === 'Canceled', 'Canceled → Canceled');
+
+  // A day later the status is asked again (it changes at the finale); the id
+  // is not (it never changes).
+  vm.runInContext('tvStatusMap["11"][1] -= 25 * 3600 * 1000;', ctx);
+  check(S('tvStatusCached(11)') === undefined, 'a status older than 24h is not trusted');
+  calls.length = 0;
+  await S('resolveTvStatus(11)');
+  check(calls.length === 1, 'so it is fetched once more', `${calls.length}`);
+
+  // A network failure is not cached as an answer.
+  failIds = new Set([15]);
+  check(await S('resolveTvStatus(15)') === null, 'a failed lookup returns null');
+  check(S('tvStatusCached(15)') === undefined, 'and is NOT cached, so the next attempt retries');
+
+  // THE CARD. Built with a recording element so the markup can be read back.
+  const mk = () => { const a = new Map(); return { style: {}, dataset: {}, innerHTML: '',
+    setAttribute: (k, v) => a.set(k, String(v)), getAttribute: k => (a.has(k) ? a.get(k) : null),
+    hasAttribute: k => a.has(k), _a: a }; };
+  ctx.document.createElement = () => mk();
+  const card = item => { ctx.__it = item; return vm.runInContext('buildGridCard(__it)', ctx); };
+
+  const fresh = card({ type: 'tv', id: 99, title: 'Unknown yet', year: '2026', countryFlag: 'Korea' });
+  check(/class="js-status"[^>]* hidden/.test(fresh.innerHTML), 'an unknown TV status paints an EMPTY, hidden slot…');
+  check(fresh.getAttribute('data-status-key') === '99', '…and queues the card for a lookup');
+
+  const known = card({ type: 'tv', id: 12, title: 'Finished', year: '2026' });
+  check(/class="js-status"[^>]*>· Completed</.test(known.innerHTML) && !/js-status"[^>]* hidden/.test(known.innerHTML),
+        'a cached status paints straight into the card — which is what survives a re-sort', known.innerHTML.match(/<span class="js-status".*?<\/span>/)?.[0]);
+  check(known.getAttribute('data-status-key') === null, 'and costs no lookup');
+
+  const guaranteed = card({ type: 'tv', id: 12, title: 'Filtered', status: 'Ongoing' });
+  check(/>· Ongoing</.test(guaranteed.innerHTML), 'a label the query guaranteed wins over the cache, so a card never contradicts its filter');
+
+  const film = card({ type: 'movie', id: 5, title: 'A film', status: 'Completed' });
+  check(film.getAttribute('data-status-key') === null, 'films are left alone — their status comes from the date');
+
+  // The hydration pass fills the slot and UN-HIDES it.
+  const slot = { textContent: '', style: {}, hidden: true };
+  const el = { _a: new Map([['data-status-key', '14']]),
+    getAttribute(k) { return this._a.has(k) ? this._a.get(k) : null; }, setAttribute(k, v) { this._a.set(k, v); },
+    querySelector: q => (q === '.js-status' ? slot : null) };
+  ctx.__el = el;
+  await vm.runInContext('resolveStatusCards([__el])', ctx);
+  check(slot.textContent === '· Canceled' && slot.hidden === false && slot.style.color === '#ef4444',
+        'the hydration pass writes the label, colours it and un-hides it', JSON.stringify(slot));
+
+  // The IMDb path's Status filter now checks each card against that same status.
+  ctx.__items = vm.runInContext('[11,12,13,14,15].map(id => ({type:"tv", id, title:"T"+id}))', ctx);
+  const ongoing = await vm.runInContext('verifyTvStatuses(__items, ["returning"])', ctx);
+  const ids = ongoing.map(i => i.id).join(',');
+  check(ids === '11,15', 'IMDb-path "Ongoing" keeps only TMDB-Ongoing shows (plus one it could not check)', ids);
+  check(ongoing[0].status === 'Ongoing' && !ongoing[1].status,
+        'the checked one carries its label; the unchecked one carries none rather than a guess');
+
+  ctx.document.createElement = realCreate;
   ctx.fetch = realFetch;
 }
 

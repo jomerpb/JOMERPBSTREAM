@@ -173,6 +173,78 @@ function imdbIdStoreSave() {
   }, 800);
 }
 
+// ── TV status on every card ──
+// A TMDB list row carries no status, so a TV card used to print one only when
+// the Status filter had put it there. The status lives on /tv/{id}, and that
+// same call returns the IMDb id when asked (append_to_response=external_ids) —
+// so it REPLACES the /external_ids call a card already made rather than adding
+// one. Measured over 40 K-drama and popular titles: 2,218 bytes gzipped per
+// card against 159, i.e. ~43 KB per 20-card page instead of ~3 KB, for the
+// same request count.
+//
+// The IMDb id never changes, so it is cached forever; a status does (Ongoing →
+// Completed at the finale), so it is cached for TV_STATUS_TTL and then asked
+// again. That re-ask is the one real extra cost: one /tv/{id} per card per day
+// the grid is opened. Nothing waits on it — the card paints first and the
+// status fills in, the same way the IMDb star does.
+const TV_STATUS_STORE = 'tvStatusMap';
+const TV_STATUS_TTL = 24 * 3600 * 1000;
+let tvStatusMap = null;
+function tvStatusStore() {
+  if (tvStatusMap) return tvStatusMap;
+  try { tvStatusMap = JSON.parse(localStorage.getItem(TV_STATUS_STORE) || '{}'); }
+  catch { tvStatusMap = {}; }
+  if (!tvStatusMap || typeof tvStatusMap !== 'object') tvStatusMap = {};
+  // Expired entries are dropped on load, which is what keeps this bounded by
+  // what was browsed in the last day rather than growing forever.
+  const now = Date.now();
+  for (const k of Object.keys(tvStatusMap)) {
+    const e = tvStatusMap[k];
+    if (!Array.isArray(e) || !(now - e[1] < TV_STATUS_TTL)) delete tvStatusMap[k];
+  }
+  return tvStatusMap;
+}
+let tvStatusSaveTimer = null;
+function tvStatusRemember(id, label) {
+  if (!id) return;
+  tvStatusStore()[id] = [label || '', Date.now()];
+  clearTimeout(tvStatusSaveTimer);
+  tvStatusSaveTimer = setTimeout(() => {
+    try { localStorage.setItem(TV_STATUS_STORE, JSON.stringify(tvStatusMap || {})); } catch {}
+  }, 800);
+}
+// undefined = not known yet; '' = known, and TMDB has nothing to print.
+function tvStatusCached(id) {
+  const e = id ? tvStatusStore()[id] : null;
+  return e && Date.now() - e[1] < TV_STATUS_TTL ? e[0] : undefined;
+}
+
+const tvDetailInflight = new Map();
+function tvDetailFetch(id) {
+  if (tvDetailInflight.has(id)) return tvDetailInflight.get(id);
+  const p = tmdb(`/tv/${id}`, {append_to_response: 'external_ids'}).then(d => {
+    // tmdb() swallows failures into null, and a 404 still parses — only a real
+    // show record is remembered, so a flaky moment is never cached as an answer.
+    if (!d || typeof d !== 'object' || !d.id) return null;
+    tvStatusRemember(id, tmdbStatusLabel(d.status, d.first_air_date));
+    if (d.external_ids && 'imdb_id' in d.external_ids) {
+      imdbIdStore()[`tv:${id}`] = d.external_ids.imdb_id || '';
+      imdbIdStoreSave();
+    }
+    return d;
+  }).finally(() => tvDetailInflight.delete(id));
+  tvDetailInflight.set(id, p);
+  return p;
+}
+
+// The label for one show, from the cache or one /tv/{id}. null = could not ask.
+async function resolveTvStatus(id) {
+  const c = tvStatusCached(id);
+  if (c !== undefined) return c;
+  const d = await tvDetailFetch(id);
+  return d ? (tvStatusCached(id) ?? '') : null;
+}
+
 const imdbIdInflight = new Map();   // de-dupe concurrent asks for the same title
 
 async function resolveImdbId(type, tmdbId) {
@@ -182,6 +254,12 @@ async function resolveImdbId(type, tmdbId) {
   if (Object.prototype.hasOwnProperty.call(store, key)) return store[key];
   if (imdbIdInflight.has(key)) return imdbIdInflight.get(key);
   const p = (async () => {
+    // A TV show's id comes from the same /tv/{id} call that carries its status
+    // (see tvDetailFetch), so the card's status arrives with it for free.
+    if (type === 'tv') {
+      await tvDetailFetch(tmdbId);
+      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+    }
     const d = await tmdb(`/${type}/${tmdbId}/external_ids`);
     // Only a real response is cached. A network failure must stay uncached, or
     // one flaky moment pins a title to "no IMDb rating" on this device forever.
@@ -257,22 +335,37 @@ function scoreOf(item) {
 // alone fired 191 external_ids calls in one go — measured, in the browser lane.
 const IMDB_EAGER_CARDS = 24;
 
+const IMDB_PENDING   = '[data-imdb-key]:not([data-imdb-done])';
+const STATUS_PENDING = '[data-status-key]:not([data-status-done])';
+const HYDRATE_PENDING = `${IMDB_PENDING}, ${STATUS_PENDING}`;
+
 const imdbLazyObserver = typeof IntersectionObserver === 'function'
   ? new IntersectionObserver(entries => {
       const hit = entries.filter(e => e.isIntersecting).map(e => e.target);
       hit.forEach(el => imdbLazyObserver.unobserve(el));
-      if (hit.length) resolveImdbCards(hit);
+      if (hit.length) resolveCardData(hit);
     }, { rootMargin: '300px' })
   : null;
 
+// Two independent passes over the same cards. Status does NOT wait for the
+// IMDb ratings file the star needs (1.35 MB, ~20 s on a cold weak-LTE session):
+// it goes out at once, and since a TV card's status call also carries its IMDb
+// id, the star pass behind it finds the id already cached.
+function resolveCardData(cards) {
+  return Promise.all([
+    resolveStatusCards(cards.filter(el => el.matches(STATUS_PENDING))),
+    resolveImdbCards(cards.filter(el => el.matches(IMDB_PENDING))),
+  ]);
+}
+
 async function hydrateImdbScores(root) {
   const scope = root || document;
-  const cards = [...scope.querySelectorAll('[data-imdb-key]:not([data-imdb-done])')];
+  const cards = [...scope.querySelectorAll(HYDRATE_PENDING)];
   // querySelectorAll only walks DESCENDANTS, so a scope element that carries
   // the key itself — the home hero, the detail page's own info block — would
   // never be picked up. Measured: the detail page's star stayed on TMDB's
   // number while the card it was opened from already showed IMDb's.
-  if (scope.nodeType === 1 && scope.matches?.('[data-imdb-key]:not([data-imdb-done])')) {
+  if (scope.nodeType === 1 && scope.matches?.(HYDRATE_PENDING)) {
     cards.unshift(scope);
   }
   if (!cards.length) return;
@@ -280,7 +373,34 @@ async function hydrateImdbScores(root) {
   const lazy  = cards.slice(IMDB_EAGER_CARDS);
   if (imdbLazyObserver) lazy.forEach(el => imdbLazyObserver.observe(el));
   else eager.push(...lazy);
-  return resolveImdbCards(eager);
+  return resolveCardData(eager);
+}
+
+// Put a status into a card's status slot, which is always painted (hidden when
+// empty) for the same reason the star badge is: a card can only be UPDATED in
+// place, and the home rows, Search and the filmography grid never repaint.
+function tvShowStatus(el, label) {
+  if (!el || !label) return false;
+  el.textContent = '· ' + label;
+  el.style.color = STATUS_COLOR[label] || '';
+  el.hidden = false;
+  return true;
+}
+
+async function resolveStatusCards(cards) {
+  if (!cards.length) return;
+  let i = 0;
+  const worker = async () => {
+    while (i < cards.length) {
+      const el = cards[i++];
+      el.setAttribute('data-status-done', '1');
+      try {
+        const label = await resolveTvStatus(el.getAttribute('data-status-key'));
+        if (label) tvShowStatus(el.querySelector('.js-status'), label);
+      } catch {}
+    }
+  };
+  await Promise.all(Array(Math.min(6, cards.length)).fill(0).map(worker));
 }
 
 // Put an IMDb score into a badge that may never have had one. Every surface
@@ -688,6 +808,35 @@ function imdbBrowseQuery({kind, genreIds = [], yearGte, yearLte, minRating, stat
     imdbWeighted(B.rating[b], B.votes[b], B.meanRating) -
     imdbWeighted(B.rating[a], B.votes[a], B.meanRating));
   return out;
+}
+
+// IMDb's years only APPROXIMATE a status, and now that every TV card prints its
+// real one the approximation would be visible. Measured over the first 100 cards
+// a user scrolls through, in this query's own order: "Ongoing" was wrong on 18
+// (any year) and 49 (2026 — a 2026 series with an end year of 2026 reads as
+// still running) — an IMDb row with no end year, or this year's, is not a
+// running show; "Completed" on 9 and 3. So each candidate is checked against
+// the same /tv/{id} status its card would fetch to print anyway — no extra
+// request, since the card is then painted already knowing it — and a mismatch
+// is dropped. The cost is time: first paint lands after that call, measured
+// ~950 ms → ~1,390 ms. A show whose status could not be fetched is kept on
+// IMDb's verdict rather than lost to a network blip, and prints no label.
+async function verifyTvStatuses(items, statuses) {
+  const want = new Set(statuses.map(s => TV_STATUS_LABEL[s]).filter(Boolean));
+  if (!want.size) return items;
+  const keep = new Array(items.length).fill(false);
+  let i = 0;
+  const worker = async () => {
+    while (i < items.length) {
+      const slot = i++, it = items[slot];
+      const label = await resolveTvStatus(it.tmdb_id || it.id).catch(() => null);
+      if (label === null) { keep[slot] = true; continue; }
+      it.status = label;
+      keep[slot] = want.has(label);
+    }
+  };
+  await Promise.all(Array(Math.min(6, items.length)).fill(0).map(worker));
+  return items.filter((_, k) => keep[k]);
 }
 
 // Settle the current-year ambiguity with the real date /find handed back.
@@ -1136,15 +1285,25 @@ function buildGridCard(item) {
   const typeColor = item.type;
   const typeLabel = item.type==='movie' ? 'FILM' : typeLabelShort(item);
 
-  // Status is already mapped to text in fromTMDB/fromAL
-  const statusText = item.status || '';
-  const statusColor = statusText==='Ongoing'?'#22c55e':statusText==='Completed'?'#60a5fa':statusText==='Canceled'?'#ef4444':statusText==='Upcoming'?'#a78bfa':'';
+  // Status is already mapped to text in fromTMDB/fromAL. A TV list row has
+  // none, so a TV card falls back to the status cache (tvStatusCached) — which
+  // is also what keeps it through a rating-sorted grid's repaint, since that
+  // rebuilds every card from the item. A label the query itself guaranteed
+  // (the Status filter, All Popular's Returning-only list) wins over the cache,
+  // so a card never contradicts the filter it was selected by.
+  const isTV = item.type === 'tv';
+  const tvId = isTV ? (item.tmdb_id || item.id) : null;
+  const cached = tvId ? tvStatusCached(tvId) : undefined;
+  const statusText = item.status || cached || '';
+  const statusColor = STATUS_COLOR[statusText] || '';
 
   const metaParts = [];
   if (item.countryFlag) metaParts.push(`<span>${item.countryFlag}</span>`);
   if (item.year)        metaParts.push(`<span>${item.year}</span>`);
   if (item.genre)       metaParts.push(`<span>· ${item.genre}</span>`);
-  if (statusText)       metaParts.push(`<span style="color:${statusColor};font-weight:700;">· ${statusText}</span>`);
+  // Always emitted on a TV card, hidden until there is something to say — see
+  // tvShowStatus().
+  if (statusText || isTV) metaParts.push(`<span class="js-status" style="color:${statusColor};font-weight:700;"${statusText?'':' hidden'}>${statusText?`· ${statusText}`:''}</span>`);
   const meta = metaParts.length ? `<div class="grid-card-meta">${metaParts.join('')}</div>` : '';
   const gsc = scoreOf(item);
 
@@ -1159,6 +1318,9 @@ function buildGridCard(item) {
       </div>
     </div>`;
   markImdbTarget(c, item);
+  // Queue a status lookup only when nothing is known yet. '' in the cache is a
+  // real answer ("TMDB has no status") and is not asked again today.
+  if (tvId && !statusText && cached === undefined) c.setAttribute('data-status-key', tvId);
   c.onclick = (e) => { e.preventDefault(); openDetail(item); };
   return c;
 }
@@ -1200,6 +1362,23 @@ function renderGrid(id, items, append=false) {
 // ═══════════════════════════════════════════
 // TMDB → normalized item
 // ═══════════════════════════════════════════
+// TMDB's own status word → the label a card prints. One mapping for the detail
+// page, the cards and the Status filter, so the three cannot disagree.
+// TMDB keeps a show "In Production" both before its premiere and, for some,
+// after it — so it is Upcoming until it airs and Ongoing after. The Status
+// filter splits it the same way (tvStatusKeep).
+function tmdbStatusLabel(s, firstAir) {
+  if (!s) return '';
+  if (s==='Returning Series') return 'Ongoing';
+  if (s==='In Production') return tmdbAired(firstAir) ? 'Ongoing' : 'Upcoming';
+  if (s==='Ended' || s==='Released') return 'Completed';
+  if (s==='Canceled' || s==='Cancelled') return 'Canceled';
+  if (s==='Planned' || s==='In Development') return 'Upcoming';
+  return s;
+}
+
+const STATUS_COLOR = {Ongoing:'#22c55e', Completed:'#60a5fa', Canceled:'#ef4444', Upcoming:'#a78bfa'};
+
 function fromTMDB(m, type) {
   const title = m.title || m.name || 'Unknown';
   const year  = (m.release_date || m.first_air_date || '').slice(0,4);
@@ -1215,17 +1394,7 @@ function fromTMDB(m, type) {
   // Otherwise derive from dates and in_production flag
   let status = '';
   if (m.status) {
-    const s = m.status;
-    if (s==='Returning Series') status='Ongoing';
-    // TMDB keeps a show "In Production" both before its premiere and, for some,
-    // after it — so it is Upcoming until it airs and Ongoing after. The Status
-    // filter splits it the same way (tvStatusKeep), so card and detail agree.
-    else if (s==='In Production') status = tmdbAired(m.first_air_date || m.release_date) ? 'Ongoing' : 'Upcoming';
-    else if (s==='Ended') status='Completed';
-    else if (s==='Canceled'||s==='Cancelled') status='Canceled';
-    else if (s==='Planned'||s==='In Development') status='Upcoming';
-    else if (s==='Released') status='Completed';
-    else status = s;
+    status = tmdbStatusLabel(m.status, m.first_air_date || m.release_date);
   } else {
     const now = new Date();
     const releaseDate = m.release_date || m.first_air_date || '';
@@ -2460,6 +2629,9 @@ async function openTVDetail(item) {
   const full = fromTMDB(data, 'tv');
   full.tmdb_id = data.id;
   currentItem = full;
+  // The freshest status there is — hand it to the cards, so going Back shows
+  // the same label the detail page just did.
+  if (data.id && data.status) tvStatusRemember(data.id, full.status);
 
   const keywordNames = (data.keywords?.results||[]).map(k=>k.name);
   const tvTags = matchTmdbTags(keywordNames);
@@ -4602,6 +4774,7 @@ async function applyImdbBrowseFilter(kind, page, opts) {
   // it may or may not have come out yet. /find already returned the exact
   // release date, so use it to settle those without another request.
   items = items.filter(it => exactStatusOk(it, st.statuses));
+  if (kind === 'tv' && st.statuses?.length) items = await verifyTvStatuses(items, st.statuses);
   await renderRatedGrid(gridId, items, page > 1, run);
   if (run !== gridRunOf(gridId)) return true;
 
