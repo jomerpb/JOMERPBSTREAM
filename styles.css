@@ -1254,6 +1254,9 @@
 /* ── ORACLE PICK FOR ANY DATE ── */
 #oracle-page .oracle-pick-head{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:var(--text)}
 #oracle-page .oracle-pick-sub{font-size:10px;color:var(--muted);margin-top:2px}
+/* With the date header gone the first game leads the card, so it drops the
+   divider and gap that used to separate it from that header. */
+#oracle-page .pcso-hist-result>.oracle-pick-game-row:first-child{border-top:0;margin-top:0;padding-top:0}
 /* --row-pad-top is a variable because the Look Up lead is positioned against
    this row's PADDING box: an absolute top:0 lands above the padding, putting
    the name exactly this far above the numbers. The lead reads the same value,
