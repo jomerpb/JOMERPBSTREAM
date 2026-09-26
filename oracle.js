@@ -3955,13 +3955,10 @@ function oracleSeedRender(){
   // row carries its own "Cast from…" or ⏳ waiting line.
   out.innerHTML=rows;
 
-  if(noteEl){
-    var notes=[];
-    if(ready<scheduled.length)
-      notes.push('A reading here is cast from the last three draws of the same game, so it cannot exist until the newest of them has been recorded. EZ2 goes blank a day before the rest — it draws every day, so its newest seed is always yesterday.');
-    notes.push('⚠️ For entertainment only. Lottery draws are independent random events — measured walk-forward over 988 real draws this scores 0.73 matches per draw against a random control’s 0.73. It is not a prediction. Play responsibly.');
-    noteEl.innerHTML=notes.map(function(t){ return '<div>'+t+'</div>'; }).join('');
-  }
+  // The disclaimer is static markup at the bottom of the page (#oracle-disclaimer);
+  // only the waiting explanation stays with this card.
+  if(noteEl&&ready<scheduled.length)
+    noteEl.innerHTML='<div>A reading here is cast from the last three draws of the same game, so it cannot exist until the newest of them has been recorded. EZ2 goes blank a day before the rest — it draws every day, so its newest seed is always yesterday.</div>';
 }
 
 (function initOracleSeed(){

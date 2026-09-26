@@ -33,12 +33,12 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260926a"/>
+  <link rel="stylesheet" href="styles.css?v=20260926b"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" href="icon-192.png?v=20260824a"/>
   <link rel="apple-touch-icon" href="icon-192.png?v=20260824a"/>
   <script defer src="stream.js?v=20260926c"></script>
-  <script defer src="oracle.js?v=20260926a"></script>
+  <script defer src="oracle.js?v=20260926b"></script>
   <script defer src="trade.js?v=20260714b"></script>
 </head>
 <body>
@@ -1066,6 +1066,10 @@
      those 📌 recorded picks. -->
 <div class="pcso-history">
   <div class="pcso-history-eyebrow"><span class="pcso-live dot-teal" aria-hidden="true"></span>Oracle Pick Seeded From The Last Result</div>
+  <!-- The picker sits INSIDE the result card, in the slot the date header
+       used to fill — the picker already names the day, so the header only
+       repeated it. -->
+  <div class="pcso-hist-card">
   <div class="pcso-hist-controls">
     <div class="opick-field" id="oracle-seed-field">
       <input type="hidden" id="oracle-seed-date">
@@ -1079,6 +1083,7 @@
   </div>
   <div class="pcso-hist-result" id="oracle-seed-result">
     <span class="pcso-hist-none">Pick a date to cast it from the previous draw.</span>
+  </div>
   </div>
   <div class="oracle-pick-note" id="oracle-seed-note"></div>
 </div>
@@ -1094,6 +1099,7 @@
   </div>
   <!-- Same in-page calendar as the panel above — one tap commits, no OS
        Clear/Cancel/Set dialog. The hidden input still holds the value. -->
+  <div class="pcso-hist-card">
   <div class="pcso-hist-controls">
     <div class="opick-field" id="pcso-hist-field">
       <input type="hidden" id="pcso-hist-date">
@@ -1106,6 +1112,7 @@
     </div>
   </div>
   <div class="pcso-hist-result" id="pcso-hist-result"></div>
+  </div>
 </div>
 
 <!-- ANALYZE MY OWN PERSONAL NUMBERS
@@ -1187,6 +1194,10 @@
 <div id="results"></div>
 
 </details>
+
+<!-- Page-wide disclaimer, last thing on the Oracle page. It used to sit under
+     the seeded card, between the two panels. -->
+<div class="oracle-pick-note oracle-disclaimer" id="oracle-disclaimer">⚠️ For entertainment only. Lottery draws are independent random events — measured walk-forward over 988 real draws this scores 0.73 matches per draw against a random control’s 0.73. It is not a prediction. Play responsibly.</div>
 
 </div>
 <!-- TRADE PAGE -->
